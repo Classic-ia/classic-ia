@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0d14;
+    --surface: #111520;
+    --surface2: #161c2c;
+    --surface3: #1c2438;
+    --border: #252d42;
+    --accent: #e8a020;
+    --green: #2dce6e;
+    --red: #e03535;
+    --yellow: #e8a020;
+    --blue: #3a7bd5;
+    --purple: #9b59b6;
+    --text: #dde2ef;
+    --text2: #6b7a99;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+  }
+  .logo span { color: var(--text2); }
+
+  .header-right {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .filter-group {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .filter-group select, .filter-group input {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 10px;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  #conn-status {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.err { background: var(--red); }
+
+  .btn-refresh {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+    padding: 6px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .btn-refresh:hover { border-color: var(--accent); color: var(--accent); }
+
+  .main { padding: 20px 24px; max-width: 1400px; margin: 0 auto; }
+
+  /* KPIs */
+  .kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .kpi {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .kpi::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--border);
+  }
+  .kpi.accent::before { background: var(--accent); }
+  .kpi.green::before { background: var(--green); }
+  .kpi.red::before { background: var(--red); }
+  .kpi.yellow::before { background: var(--yellow); }
+  .kpi.blue::before { background: var(--blue); }
+  .kpi.purple::before { background: var(--purple); }
+
+  .kpi-label {
+    font-size: 9px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .kpi-value {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .kpi.accent .kpi-value { color: var(--accent); }
+  .kpi.green .kpi-value { color: var(--green); }
+  .kpi.red .kpi-value { color: var(--red); }
+  .kpi.yellow .kpi-value { color: var(--yellow); }
+  .kpi.blue .kpi-value { color: var(--blue); }
+  .kpi.purple .kpi-value { color: var(--purple); }
+
+  /* ALERTAS */
+  .alertas-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+  }
+
+  .alerta-chip {
+    font-size: 11px;
+    font-family: var(--mono);
+    padding: 6px 12px;
+    border-radius: 3px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .alerta-c { background: #2e0808; color: #f08080; border: 1px solid #5a1515; }
+  .alerta-b { background: #2e2200; color: #f0c060; border: 1px solid #5a4000; }
+  .alerta-div { background: #1a1060; color: #8080f0; border: 1px solid #333090; }
+
+  /* CHARTS GRID */
+  .charts-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 20px;
+  }
+
+  .chart-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+  }
+
+  .chart-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 14px;
+  }
+
+  .chart-wrap { position: relative; height: 220px; }
+
+  /* TABELA */
+  .table-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .table-header {
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .table-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  .filter-tabs {
+    display: flex;
+    gap: 4px;
+  }
+
+  .tab {
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+  .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .tab:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+  .table-wrap { overflow-x: auto; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+
+  thead th {
+    background: var(--surface2);
+    padding: 10px 12px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+
+  tbody tr {
+    border-bottom: 1px solid var(--border);
+    transition: background 0.1s;
+  }
+  tbody tr:hover { background: var(--surface2); }
+
+  tbody td {
+    padding: 10px 12px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .td-mono { font-family: var(--mono); }
+
+  .badge-classe {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 3px;
+    letter-spacing: 0.05em;
+  }
+  .bc-a { background: #0d2e1a; color: #2dce6e; }
+  .bc-b { background: #2e1f00; color: #e8a020; }
+  .bc-c { background: #2e0808; color: #e03535; }
+
+  .badge-lib {
+    font-family: var(--mono);
+    font-size: 10px;
+    padding: 3px 7px;
+    border-radius: 3px;
+  }
+  .lib-yes { background: #0d2e1a; color: #2dce6e; }
+  .lib-no { background: #1a1a2e; color: var(--text2); }
+
+  .pct-bar-wrap { display: flex; align-items: center; gap: 6px; }
+  .pct-bar {
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    flex: 1;
+    min-width: 60px;
+    overflow: hidden;
+  }
+  .pct-fill { height: 100%; border-radius: 2px; background: var(--accent); }
+  .pct-fill.danger { background: var(--red); }
+  .pct-fill.warn { background: var(--yellow); }
+
+  .loading {
+    text-align: center;
+    padding: 40px;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 12px;
+  }
+
+  @media (max-width: 900px) {
+    .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+    .charts-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 500px) {
+    .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+    .main { padding: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Classic <span>//</span> CQ — Dashboard</div>
+  <div class="header-right">
+    <div class="filter-group">
+      <select id="filtro-produto" onchange="carregar()">
+        <option value="">Todos os produtos</option>
+        <option value="Bucho Bovino">Bucho Bovino</option>
+        <option value="Tendão">Tendão</option>
+        <option value="Aorta">Aorta</option>
+        <option value="Vergalho">Vergalho</option>
+      </select>
+      <input type="date" id="filtro-inicio" onchange="carregar()">
+      <input type="date" id="filtro-fim" onchange="carregar()">
+    </div>
+    <button class="btn-refresh" onclick="carregar()">↻ Atualizar</button>
+    <div id="conn-status"><div class="dot" id="conn-dot"></div><span id="conn-txt">...</span></div>
+  </div>
+</header>
+
+<div class="main">
+  <!-- KPIs -->
+  <div class="kpi-grid">
+    <div class="kpi accent"><div class="kpi-label">Total Lotes</div><div class="kpi-value" id="kpi-lotes">—</div></div>
+    <div class="kpi blue"><div class="kpi-label">Buchos Analisados</div><div class="kpi-value" id="kpi-buchos">—</div></div>
+    <div class="kpi green"><div class="kpi-label">Lotes Classe A</div><div class="kpi-value" id="kpi-a">—</div></div>
+    <div class="kpi yellow"><div class="kpi-label">Lotes Classe B</div><div class="kpi-value" id="kpi-b">—</div></div>
+    <div class="kpi red"><div class="kpi-label">Lotes Classe C</div><div class="kpi-value" id="kpi-c">—</div></div>
+    <div class="kpi purple"><div class="kpi-label">Desconto Médio</div><div class="kpi-value" id="kpi-desc">—</div></div>
+  </div>
+
+  <!-- ALERTAS -->
+  <div class="alertas-row" id="alertas-row"></div>
+
+  <!-- CHARTS -->
+  <div class="charts-grid">
+    <div class="chart-card">
+      <div class="chart-title">Ranking — % Desconto por Fornecedor</div>
+      <div class="chart-wrap"><canvas id="chart-ranking"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Fermentação por Fornecedor (%)</div>
+      <div class="chart-wrap"><canvas id="chart-ferm"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Distribuição de Defeitos Críticos</div>
+      <div class="chart-wrap"><canvas id="chart-defeitos"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Evolução Mensal — Desconto Médio</div>
+      <div class="chart-wrap"><canvas id="chart-evolucao"></canvas></div>
+    </div>
+  </div>
+
+  <!-- TABELA -->
+  <div class="table-card">
+    <div class="table-header">
+      <div class="table-title">Registros</div>
+      <div class="filter-tabs">
+        <button class="tab active" onclick="filtrarTabela('todos', this)">Todos</button>
+        <button class="tab" onclick="filtrarTabela('A', this)">Classe A</button>
+        <button class="tab" onclick="filtrarTabela('B', this)">Classe B</button>
+        <button class="tab" onclick="filtrarTabela('C', this)">Classe C</button>
+        <button class="tab" onclick="filtrarTabela('liberados', this)">Liberados</button>
+      </div>
+    </div>
+    <div class="table-wrap">
+      <div class="loading" id="loading">Carregando dados...</div>
+      <table id="tabela" style="display:none">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Fornecedor</th>
+            <th>Produto</th>
+            <th>Lote</th>
+            <th>Classe</th>
+            <th>Fermentação</th>
+            <th>% Crítico</th>
+            <th>Qtd Anal.</th>
+            <th>Divergência</th>
+            <th>Liberado</th>
+            <th>Lote Base</th>
+            <th>Analisador</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+      <div class="empty" id="empty" style="display:none">Nenhum registro encontrado</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allData = [];
+let filtroClasse = 'todos';
+let charts = {};
+
+Chart.defaults.color = '#6b7a99';
+Chart.defaults.borderColor = '#252d42';
+Chart.defaults.font.family = 'IBM Plex Mono';
+Chart.defaults.font.size = 11;
+
+async function carregar() {
+  document.getElementById('loading').style.display = 'block';
+  document.getElementById('tabela').style.display = 'none';
+  document.getElementById('empty').style.display = 'none';
+
+  try {
+    let q = db.from('registros_cq').select('*').order('data_cq', { ascending: false }).order('created_at', { ascending: false });
+    const prod = document.getElementById('filtro-produto').value;
+    const ini = document.getElementById('filtro-inicio').value;
+    const fim = document.getElementById('filtro-fim').value;
+    if (prod) q = q.eq('produto', prod);
+    if (ini) q = q.gte('data_cq', ini);
+    if (fim) q = q.lte('data_cq', fim);
+
+    const { data, error } = await q;
+    if (error) throw error;
+
+    allData = data || [];
+    document.getElementById('conn-dot').className = 'dot ok';
+    document.getElementById('conn-txt').textContent = 'ao vivo';
+    renderTudo();
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'dot err';
+    document.getElementById('conn-txt').textContent = 'erro';
+    document.getElementById('loading').textContent = 'Erro ao carregar: ' + e.message;
+    console.error(e);
+  }
+}
+
+function renderTudo() {
+  renderKPIs();
+  renderAlertas();
+  renderCharts();
+  renderTabela();
+}
+
+function renderKPIs() {
+  const d = allData;
+  const totalBuchos = d.reduce((s, r) => s + (r.qtd_analisada || 0), 0);
+  const classA = d.filter(r => r.classificacao === 'A').length;
+  const classB = d.filter(r => r.classificacao === 'B').length;
+  const classC = d.filter(r => r.classificacao === 'C').length;
+  const descMedio = d.length > 0 ? d.reduce((s, r) => s + (r.desconto_critico || 0), 0) / d.length : 0;
+
+  document.getElementById('kpi-lotes').textContent = d.length;
+  document.getElementById('kpi-buchos').textContent = totalBuchos.toLocaleString('pt-BR');
+  document.getElementById('kpi-a').textContent = classA;
+  document.getElementById('kpi-b').textContent = classB;
+  document.getElementById('kpi-c').textContent = classC;
+  document.getElementById('kpi-desc').textContent = descMedio.toFixed(1) + '%';
+}
+
+function renderAlertas() {
+  const row = document.getElementById('alertas-row');
+  const classeC = allData.filter(r => r.classificacao === 'C');
+  const classeB = allData.filter(r => r.classificacao === 'B' && (r.fermentacao || 0) > 0);
+  const diverg = allData.filter(r => r.qtd_declarada && r.qtd_recebida && r.qtd_recebida < r.qtd_declarada);
+
+  let html = '';
+  classeC.slice(0,5).forEach(r => {
+    html += `<div class="alerta-chip alerta-c">🔴 CLASSE C: ${r.fornecedor} — Lote ${r.lote || '?'} (ferm. ${(r.fermentacao||0).toFixed(1)}%)</div>`;
+  });
+  classeB.slice(0,3).forEach(r => {
+    html += `<div class="alerta-chip alerta-b">⚠ CLASSE B: ${r.fornecedor} — Lote ${r.lote || '?'}</div>`;
+  });
+  diverg.slice(0,3).forEach(r => {
+    const diff = (r.qtd_declarada - r.qtd_recebida);
+    html += `<div class="alerta-chip alerta-div">↓ DIV. QTDE: ${r.fornecedor} — Lote ${r.lote || '?'} (faltou ${diff} pcs)</div>`;
+  });
+  if (!html) html = '<div class="alerta-chip" style="color:var(--green);border:1px solid var(--green);background:#0d2e1a">✓ Sem alertas críticos no período</div>';
+  row.innerHTML = html;
+}
+
+function renderCharts() {
+  // Ranking por fornecedor
+  const fornMap = {};
+  allData.forEach(r => {
+    if (!fornMap[r.fornecedor]) fornMap[r.fornecedor] = { desc: [], ferm: [] };
+    fornMap[r.fornecedor].desc.push(r.desconto_critico || 0);
+    fornMap[r.fornecedor].ferm.push(r.fermentacao || 0);
+  });
+  const forns = Object.keys(fornMap).sort((a,b) => {
+    const ma = fornMap[a].desc.reduce((s,v)=>s+v,0)/fornMap[a].desc.length;
+    const mb = fornMap[b].desc.reduce((s,v)=>s+v,0)/fornMap[b].desc.length;
+    return mb - ma;
+  });
+  const avgDesc = forns.map(f => (fornMap[f].desc.reduce((s,v)=>s+v,0)/fornMap[f].desc.length).toFixed(1));
+  const avgFerm = forns.map(f => (fornMap[f].ferm.reduce((s,v)=>s+v,0)/fornMap[f].ferm.length).toFixed(1));
+
+  const rankColors = avgDesc.map(v => v > 25 ? '#e03535' : v > 10 ? '#e8a020' : '#2dce6e');
+  const fermColors = avgFerm.map(v => v > 10 ? '#e03535' : v > 0 ? '#e8a020' : '#2dce6e');
+
+  makeBar('chart-ranking', forns, avgDesc, rankColors, '%');
+  makeBar('chart-ferm', forns, avgFerm, fermColors, '%');
+
+  // Pizza defeitos
+  const totFerm = allData.reduce((s,r) => s + (r.fermentacao||0) * (r.qtd_analisada||1) / 100, 0);
+  const totSF = allData.reduce((s,r) => s + (r.sem_folhas||0) * (r.qtd_analisada||1) / 100, 0);
+  const totFA = allData.reduce((s,r) => s + (r.folhas_arreb||0) * (r.qtd_analisada||1) / 100, 0);
+  const totPed = allData.reduce((s,r) => s + (r.pedaco||0) * (r.qtd_analisada||1) / 100, 0);
+
+  if (charts['chart-defeitos']) charts['chart-defeitos'].destroy();
+  const ctx3 = document.getElementById('chart-defeitos').getContext('2d');
+  charts['chart-defeitos'] = new Chart(ctx3, {
+    type: 'doughnut',
+    data: {
+      labels: ['Fermentação', 'Sem Folhas', 'Folhas Arreb.', 'Pedaço'],
+      datasets: [{
+        data: [totFerm, totSF, totFA, totPed].map(v => Math.round(v)),
+        backgroundColor: ['#e03535','#e8a020','#3a7bd5','#9b59b6'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, padding: 12 } } }
+    }
+  });
+
+  // Evolução mensal
+  const mesMap = {};
+  allData.forEach(r => {
+    if (!r.data_cq) return;
+    const mes = r.data_cq.substring(0, 7);
+    if (!mesMap[mes]) mesMap[mes] = [];
+    mesMap[mes].push(r.desconto_critico || 0);
+  });
+  const meses = Object.keys(mesMap).sort();
+  const avgMes = meses.map(m => (mesMap[m].reduce((s,v)=>s+v,0)/mesMap[m].length).toFixed(1));
+
+  if (charts['chart-evolucao']) charts['chart-evolucao'].destroy();
+  const ctx4 = document.getElementById('chart-evolucao').getContext('2d');
+  charts['chart-evolucao'] = new Chart(ctx4, {
+    type: 'line',
+    data: {
+      labels: meses,
+      datasets: [{
+        label: 'Desconto Médio %',
+        data: avgMes,
+        borderColor: '#e8a020',
+        backgroundColor: 'rgba(232,160,32,0.1)',
+        pointBackgroundColor: '#e8a020',
+        pointRadius: 4,
+        fill: true,
+        tension: 0.3,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { grid: { color: '#252d42' }, ticks: { callback: v => v + '%' } },
+        x: { grid: { color: '#252d42' } }
+      }
+    }
+  });
+}
+
+function makeBar(id, labels, data, colors, suffix='') {
+  if (charts[id]) charts[id].destroy();
+  const ctx = document.getElementById(id).getContext('2d');
+  charts[id] = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{ data, backgroundColor: colors, borderRadius: 3, borderSkipped: false }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: '#252d42' }, ticks: { callback: v => v + suffix } },
+        y: { grid: { color: '#252d42' } }
+      }
+    }
+  });
+}
+
+function renderTabela() {
+  let dados = allData;
+  if (filtroClasse === 'A') dados = dados.filter(r => r.classificacao === 'A');
+  else if (filtroClasse === 'B') dados = dados.filter(r => r.classificacao === 'B');
+  else if (filtroClasse === 'C') dados = dados.filter(r => r.classificacao === 'C');
+  else if (filtroClasse === 'liberados') dados = dados.filter(r => r.liberado);
+
+  document.getElementById('loading').style.display = 'none';
+
+  if (dados.length === 0) {
+    document.getElementById('tabela').style.display = 'none';
+    document.getElementById('empty').style.display = 'block';
+    return;
+  }
+
+  document.getElementById('tabela').style.display = 'table';
+  document.getElementById('empty').style.display = 'none';
+
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = dados.map(r => {
+    const ferm = r.fermentacao || 0;
+    const desc = r.desconto_critico || 0;
+    const fermColor = ferm > 10 ? 'danger' : ferm > 0 ? 'warn' : '';
+    const descColor = desc > 25 ? 'danger' : desc > 10 ? 'warn' : '';
+    const div = r.qtd_declarada && r.qtd_recebida ? (r.qtd_declarada - r.qtd_recebida) : 0;
+    const divTxt = div > 0 ? `<span style="color:var(--red)">-${div} pcs</span>` : '<span style="color:var(--text2)">—</span>';
+    const libBadge = r.liberado ? '<span class="badge-lib lib-yes">✓ Sim</span>' : '<span class="badge-lib lib-no">Não</span>';
+    const loteBase = r.lote_base_producao ? `<span style="color:var(--blue);font-family:var(--mono);font-size:11px">${r.lote_base_producao}</span>` : '—';
+    const dataFmt = r.data_cq ? r.data_cq.split('-').reverse().join('/') : '—';
+
+    return `<tr>
+      <td class="td-mono" style="color:var(--text2);font-size:11px">${dataFmt}</td>
+      <td><strong>${r.fornecedor || '—'}</strong></td>
+      <td style="color:var(--text2);font-size:11px">${r.produto || '—'}</td>
+      <td class="td-mono" style="font-size:11px">${r.lote || '—'}</td>
+      <td><span class="badge-classe bc-${(r.classificacao||'A').toLowerCase()}">CLASSE ${r.classificacao || 'A'}</span></td>
+      <td>
+        <div class="pct-bar-wrap">
+          <span class="td-mono" style="font-size:11px;min-width:36px">${ferm.toFixed(1)}%</span>
+          <div class="pct-bar"><div class="pct-fill ${fermColor}" style="width:${Math.min(ferm,100)}%"></div></div>
+        </div>
+      </td>
+      <td>
+        <div class="pct-bar-wrap">
+          <span class="td-mono" style="font-size:11px;min-width:36px">${desc.toFixed(1)}%</span>
+          <div class="pct-bar"><div class="pct-fill ${descColor}" style="width:${Math.min(desc,100)}%"></div></div>
+        </div>
+      </td>
+      <td class="td-mono" style="font-size:11px">${(r.qtd_analisada||0).toLocaleString('pt-BR')}</td>
+      <td>${divTxt}</td>
+      <td>${libBadge}</td>
+      <td>${loteBase}</td>
+      <td style="color:var(--text2);font-size:11px">${r.analisador || '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarTabela(classe, btn) {
+  filtroClasse = classe;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  renderTabela();
+}
+
+// Real-time
+db.channel('registros_cq').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'registros_cq' }, payload => {
+  allData.unshift(payload.new);
+  renderTudo();
+}).subscribe();
+
+// Init
+const hoje = new Date();
+const ini = new Date(hoje.getFullYear(), hoje.getMonth() - 2, 1);
+document.getElementById('filtro-inicio').value = ini.toISOString().split('T')[0];
+document.getElementById('filtro-fim').value = hoje.toISOString().split('T')[0];
+carregar();
+</script>
+</body>
+</html>

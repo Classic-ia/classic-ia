@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Calculadora Financeira</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0a0d14;
+    --surface: #111520;
+    --surface2: #161c2c;
+    --surface3: #1c2438;
+    --border: #252d42;
+    --accent: #e8a020;
+    --green: #2dce6e;
+    --red: #e03535;
+    --yellow: #e8a020;
+    --blue: #3a7bd5;
+    --text: #dde2ef;
+    --text2: #6b7a99;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding-bottom: 40px; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.1em; }
+  .logo span { color: var(--text2); }
+  #conn-status { font-size: 10px; font-family: var(--mono); color: var(--text2); display: flex; align-items: center; gap: 5px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); }
+  .dot.ok { background: var(--green); }
+
+  .container { max-width: 900px; margin: 0 auto; padding: 24px 16px; }
+
+  .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 28px; }
+
+  .panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+
+  .panel-header {
+    background: var(--surface2);
+    padding: 12px 16px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-body { padding: 16px; }
+
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 5px;
+  }
+  .field input, .field select {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 9px 11px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input[type="number"] { font-family: var(--mono); }
+
+  .btn-buscar {
+    width: 100%;
+    background: var(--blue);
+    color: #fff;
+    border: none;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 11px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-bottom: 16px;
+    transition: background 0.15s;
+  }
+  .btn-buscar:hover { background: #2d6abf; }
+
+  .separador {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 14px 0;
+  }
+
+  .lote-seletor {
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  .lote-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .lote-item:hover { border-color: var(--accent); background: var(--surface2); }
+  .lote-item.selected { border-color: var(--accent); background: rgba(232,160,32,0.08); }
+
+  .lote-info { font-size: 12px; }
+  .lote-nome { font-weight: 600; }
+  .lote-sub { font-size: 10px; color: var(--text2); font-family: var(--mono); margin-top: 2px; }
+
+  .lote-classe-badge {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 7px;
+    border-radius: 3px;
+  }
+  .bc-a { background: #0d2e1a; color: #2dce6e; }
+  .bc-b { background: #2e1f00; color: #e8a020; }
+  .bc-c { background: #2e0808; color: #e03535; }
+
+  /* Resultado */
+  .result-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  .result-row:last-child { border-bottom: none; }
+
+  .result-label { font-size: 11px; font-family: var(--mono); color: var(--text2); text-transform: uppercase; }
+  .result-val { font-family: var(--mono); font-size: 14px; font-weight: 600; }
+
+  .classe-grande {
+    text-align: center;
+    font-family: var(--mono);
+    font-size: 28px;
+    font-weight: 600;
+    padding: 14px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+    letter-spacing: 0.05em;
+  }
+  .cg-a { background: #0d2e1a; color: #2dce6e; border: 1px solid #2dce6e; }
+  .cg-b { background: #2e1f00; color: #e8a020; border: 1px solid #e8a020; }
+  .cg-c { background: #2e0808; color: #e03535; border: 1px solid #e03535; }
+
+  .regua-wrap { margin: 12px 0; }
+  .regua-label { font-size: 10px; font-family: var(--mono); color: var(--text2); text-transform: uppercase; margin-bottom: 6px; }
+  .regua {
+    height: 8px;
+    border-radius: 4px;
+    background: linear-gradient(to right, #2dce6e 0%, #e8a020 33%, #e03535 66%, #8b0000 100%);
+    position: relative;
+  }
+  .regua-pointer {
+    position: absolute;
+    top: -3px;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid var(--accent);
+    transform: translateX(-50%);
+    transition: left 0.3s;
+  }
+
+  .ajuste-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .ajuste-row label { font-size: 10px; font-family: var(--mono); color: var(--text2); text-transform: uppercase; white-space: nowrap; }
+  .ajuste-row input[type="range"] {
+    flex: 1;
+    accent-color: var(--accent);
+  }
+  .ajuste-val { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--accent); min-width: 44px; text-align: right; }
+
+  .btn-aprovar {
+    width: 100%;
+    background: var(--green);
+    color: #000;
+    border: none;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 12px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s;
+    margin-bottom: 8px;
+  }
+  .btn-aprovar:hover { background: #25ba60; }
+  .btn-aprovar:disabled { background: var(--border); color: var(--text2); cursor: not-allowed; }
+
+  .empty-state {
+    text-align: center;
+    padding: 30px 10px;
+    color: var(--text2);
+    font-family: var(--mono);
+    font-size: 11px;
+  }
+
+  /* Histórico */
+  .hist-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  .hist-header {
+    background: var(--surface2);
+    padding: 12px 16px;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .hist-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+  .hist-table th {
+    background: var(--surface2);
+    padding: 9px 12px;
+    text-align: left;
+    font-family: var(--mono);
+    font-size: 9px;
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .hist-table td {
+    padding: 9px 12px;
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .hist-table tr:hover td { background: var(--surface2); }
+
+  .money { font-family: var(--mono); font-weight: 600; color: var(--green); }
+  .money.neg { color: var(--red); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 13px;
+    padding: 12px 20px; border-radius: 6px;
+    transition: transform 0.3s; z-index: 999; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  @media (max-width: 700px) {
+    .layout { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Classic <span>//</span> CQ — Calculadora Financeira</div>
+  <div id="conn-status"><div class="dot" id="conn-dot"></div><span id="conn-txt">...</span></div>
+</header>
+
+<div class="container">
+  <div class="layout">
+
+    <!-- PAINEL ESQUERDO: Busca e seleção -->
+    <div>
+      <div class="panel">
+        <div class="panel-header">Buscar Lote do CQ</div>
+        <div class="panel-body">
+          <div class="field">
+            <label>Fornecedor</label>
+            <input type="text" id="busca-forn" placeholder="Digite o nome...">
+          </div>
+          <div class="field">
+            <label>Produto</label>
+            <select id="busca-produto">
+              <option value="">Todos</option>
+              <option value="Bucho Bovino">Bucho Bovino</option>
+              <option value="Tendão">Tendão</option>
+              <option value="Aorta">Aorta</option>
+              <option value="Vergalho">Vergalho</option>
+            </select>
+          </div>
+          <button class="btn-buscar" onclick="buscar()">🔍 BUSCAR LOTES</button>
+          <div id="lista-lotes"><div class="empty-state">Busque um fornecedor para carregar os lotes</div></div>
+        </div>
+      </div>
+
+      <div style="margin-top:16px">
+        <div class="panel">
+          <div class="panel-header">Dados Financeiros do Lote</div>
+          <div class="panel-body">
+            <div class="field">
+              <label>Preço Unitário (R$)</label>
+              <input type="number" id="preco_unit" placeholder="0,00" step="0.01" oninput="calcFinanceiro()">
+            </div>
+            <div class="field">
+              <label>Unidade de medida</label>
+              <select id="unidade" onchange="calcFinanceiro()">
+                <option value="peca">R$ por peça</option>
+                <option value="kg">R$ por kg</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>Peso total do lote (kg) — se R$/kg</label>
+              <input type="number" id="peso_total" placeholder="0" oninput="calcFinanceiro()">
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAINEL DIREITO: Resultado -->
+    <div>
+      <div id="resultado-panel">
+        <div class="empty-state" style="padding:60px 20px">Selecione um lote para calcular</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="hist-card">
+    <div class="hist-header">
+      <span>Histórico de Decisões Financeiras</span>
+      <span id="hist-count" style="color:var(--accent)">0 registros</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="hist-table">
+        <thead>
+          <tr>
+            <th>Data</th>
+            <th>Fornecedor</th>
+            <th>Lote</th>
+            <th>Produto</th>
+            <th>Classe</th>
+            <th>% CQ</th>
+            <th>% Aprovado</th>
+            <th>Valor Bruto</th>
+            <th>Desconto R$</th>
+            <th>Valor Líquido</th>
+          </tr>
+        </thead>
+        <tbody id="hist-tbody">
+          <tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px;font-family:var(--mono)">Nenhuma decisão registrada ainda</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let loteSelecionado = null;
+let historico = JSON.parse(localStorage.getItem('hist_calc') || '[]');
+let descontoAjustado = 0;
+
+async function testConn() {
+  try {
+    await db.from('registros_cq').select('id').limit(1);
+    document.getElementById('conn-dot').className = 'dot ok';
+    document.getElementById('conn-txt').textContent = 'conectado';
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'dot err';
+    document.getElementById('conn-txt').textContent = 'erro';
+  }
+}
+testConn();
+
+async function buscar() {
+  const forn = document.getElementById('busca-forn').value.trim();
+  const prod = document.getElementById('busca-produto').value;
+  const lista = document.getElementById('lista-lotes');
+  lista.innerHTML = '<div style="color:var(--text2);font-family:var(--mono);font-size:11px;padding:8px">Buscando...</div>';
+
+  try {
+    let q = db.from('registros_cq').select('*').order('data_cq', { ascending: false }).limit(30);
+    if (forn) q = q.ilike('fornecedor', `%${forn}%`);
+    if (prod) q = q.eq('produto', prod);
+    const { data, error } = await q;
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      lista.innerHTML = '<div class="empty-state">Nenhum lote encontrado</div>';
+      return;
+    }
+
+    lista.innerHTML = data.map(r => {
+      const dataFmt = r.data_cq ? r.data_cq.split('-').reverse().join('/') : '—';
+      return `<div class="lote-item" onclick="selecionarLote(${JSON.stringify(r).replace(/"/g, '&quot;')})">
+        <div class="lote-info">
+          <div class="lote-nome">${r.fornecedor || '—'} — ${r.produto || '—'}</div>
+          <div class="lote-sub">${dataFmt} · Lote ${r.lote || '?'} · ${(r.qtd_analisada||0)} pcs</div>
+        </div>
+        <span class="lote-classe-badge bc-${(r.classificacao||'a').toLowerCase()}">CLASSE ${r.classificacao||'A'}</span>
+      </div>`;
+    }).join('');
+  } catch(e) {
+    lista.innerHTML = `<div class="empty-state">Erro: ${e.message}</div>`;
+  }
+}
+
+function selecionarLote(r) {
+  loteSelecionado = r;
+  document.querySelectorAll('.lote-item').forEach(el => el.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+  
+  descontoAjustado = r.desconto_critico || 0;
+  // Ajuste por classe
+  if (r.classificacao === 'C') descontoAjustado = Math.max(descontoAjustado, 33);
+  else if (r.classificacao === 'B') descontoAjustado = Math.max(descontoAjustado, 10);
+
+  calcFinanceiro();
+}
+
+function calcFinanceiro() {
+  if (!loteSelecionado) return;
+  const r = loteSelecionado;
+  const precoUnit = parseFloat(document.getElementById('preco_unit').value) || 0;
+  const unidade = document.getElementById('unidade').value;
+  const pesoTotal = parseFloat(document.getElementById('peso_total').value) || 0;
+
+  const qtd = r.qtd_recebida || r.qtd_analisada || 0;
+  let valorBruto = 0;
+  if (unidade === 'peca') valorBruto = precoUnit * qtd;
+  else valorBruto = precoUnit * pesoTotal;
+
+  const slider = document.getElementById('slider-desc');
+  if (slider) descontoAjustado = parseFloat(slider.value);
+
+  const descontoQual = descontoAjustado;
+  let descontoQtde = 0;
+  let pecasFaltantes = 0;
+  if (r.qtd_declarada && r.qtd_recebida && r.qtd_recebida < r.qtd_declarada) {
+    pecasFaltantes = r.qtd_declarada - r.qtd_recebida;
+    if (unidade === 'peca' && precoUnit > 0) {
+      descontoQtde = pecasFaltantes * precoUnit;
+    }
+  }
+
+  const descontoQualValor = valorBruto * descontoQual / 100;
+  const descontoTotal = descontoQualValor + descontoQtde;
+  const valorLiquido = valorBruto - descontoTotal;
+
+  const classe = r.classificacao || 'A';
+  const ferm = r.fermentacao || 0;
+  const desc = r.desconto_critico || 0;
+  const dataFmt = r.data_cq ? r.data_cq.split('-').reverse().join('/') : '—';
+
+  document.getElementById('resultado-panel').innerHTML = `
+    <div class="classe-grande cg-${classe.toLowerCase()}">CLASSE ${classe}</div>
+    
+    <div class="result-block">
+      <div class="result-row">
+        <span class="result-label">Fornecedor</span>
+        <span class="result-val">${r.fornecedor || '—'}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Produto / Lote</span>
+        <span class="result-val" style="font-family:var(--mono);font-size:12px">${r.produto || '—'} / ${r.lote || '—'}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Data / Analisador</span>
+        <span class="result-val" style="font-family:var(--mono);font-size:12px;color:var(--text2)">${dataFmt} / ${r.analisador || '—'}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Fermentação CQ</span>
+        <span class="result-val" style="color:${ferm > 10 ? 'var(--red)' : ferm > 0 ? 'var(--yellow)' : 'var(--green)'}">${ferm.toFixed(1)}%</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">% Crítico CQ</span>
+        <span class="result-val" style="color:var(--accent)">${desc.toFixed(1)}%</span>
+      </div>
+      ${pecasFaltantes > 0 ? `<div class="result-row">
+        <span class="result-label">⚠ Peças Faltantes</span>
+        <span class="result-val" style="color:var(--red)">${pecasFaltantes} pcs</span>
+      </div>` : ''}
+    </div>
+
+    <div class="regua-wrap">
+      <div class="regua-label">Desconto sugerido pela régua</div>
+      <div class="regua">
+        <div class="regua-pointer" id="regua-pointer" style="left:${Math.min(descontoAjustado/50*100,100)}%"></div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:9px;font-family:var(--mono);color:var(--text2);margin-top:4px">
+        <span>0%</span><span>CLASSE A</span><span>CLASSE B</span><span>CLASSE C</span><span>50%+</span>
+      </div>
+    </div>
+
+    <div class="ajuste-row">
+      <label>Ajuste %</label>
+      <input type="range" id="slider-desc" min="0" max="50" step="0.5" value="${descontoAjustado}" oninput="onSlider(this)">
+      <span class="ajuste-val" id="slider-val">${descontoAjustado.toFixed(1)}%</span>
+    </div>
+
+    ${valorBruto > 0 ? `
+    <div class="result-block">
+      <div class="result-row">
+        <span class="result-label">Valor Bruto</span>
+        <span class="result-val money">R$ ${valorBruto.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">Desconto Qualidade (${descontoAjustado.toFixed(1)}%)</span>
+        <span class="result-val money neg">- R$ ${descontoQualValor.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+      </div>
+      ${descontoQtde > 0 ? `<div class="result-row">
+        <span class="result-label">Desconto Qtde (${pecasFaltantes} pcs)</span>
+        <span class="result-val money neg">- R$ ${descontoQtde.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+      </div>` : ''}
+      <div class="result-row" style="border-top:1px solid var(--accent);margin-top:4px;padding-top:12px">
+        <span class="result-label" style="color:var(--text);font-weight:600">VALOR LÍQUIDO</span>
+        <span class="result-val" style="color:var(--green);font-size:18px">R$ ${valorLiquido.toLocaleString('pt-BR', {minimumFractionDigits:2})}</span>
+      </div>
+    </div>
+    <button class="btn-aprovar" onclick="aprovar(${descontoAjustado}, ${valorBruto}, ${descontoTotal}, ${valorLiquido})">✓ APROVAR E REGISTRAR DECISÃO</button>
+    ` : '<div style="color:var(--text2);font-family:var(--mono);font-size:11px;text-align:center;padding:10px">Informe o preço para ver o cálculo financeiro</div>'}
+  `;
+}
+
+function onSlider(el) {
+  descontoAjustado = parseFloat(el.value);
+  document.getElementById('slider-val').textContent = descontoAjustado.toFixed(1) + '%';
+  const pointer = document.getElementById('regua-pointer');
+  if (pointer) pointer.style.left = Math.min(descontoAjustado/50*100,100) + '%';
+  calcFinanceiro();
+}
+
+function aprovar(descPct, valBruto, descVal, valLiq) {
+  if (!loteSelecionado) return;
+  const r = loteSelecionado;
+  const entry = {
+    data: new Date().toLocaleDateString('pt-BR'),
+    fornecedor: r.fornecedor,
+    lote: r.lote,
+    produto: r.produto,
+    classe: r.classificacao,
+    descCQ: (r.desconto_critico||0).toFixed(1) + '%',
+    descAprovado: descPct.toFixed(1) + '%',
+    valBruto: valBruto,
+    descVal: descVal,
+    valLiq: valLiq
+  };
+  historico.unshift(entry);
+  localStorage.setItem('hist_calc', JSON.stringify(historico));
+  renderHistorico();
+  showToast('✓ Decisão registrada no histórico!', 'success');
+}
+
+function renderHistorico() {
+  const tbody = document.getElementById('hist-tbody');
+  document.getElementById('hist-count').textContent = historico.length + ' registros';
+  if (historico.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;color:var(--text2);padding:20px;font-family:var(--mono)">Nenhuma decisão registrada ainda</td></tr>';
+    return;
+  }
+  tbody.innerHTML = historico.map(h => `
+    <tr>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${h.data}</td>
+      <td><strong>${h.fornecedor}</strong></td>
+      <td style="font-family:var(--mono);font-size:11px">${h.lote || '—'}</td>
+      <td style="color:var(--text2);font-size:11px">${h.produto}</td>
+      <td><span class="lote-classe-badge bc-${(h.classe||'a').toLowerCase()}">CLASSE ${h.classe}</span></td>
+      <td style="font-family:var(--mono)">${h.descCQ}</td>
+      <td style="font-family:var(--mono);color:var(--accent);font-weight:600">${h.descAprovado}</td>
+      <td class="money">R$ ${h.valBruto.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+      <td class="money neg">- R$ ${h.descVal.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+      <td class="money" style="color:var(--green)">R$ ${h.valLiq.toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+    </tr>
+  `).join('');
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+renderHistorico();
+</script>
+</body>
+</html>

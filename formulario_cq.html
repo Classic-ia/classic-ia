@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CQ — Lançamento de Qualidade</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #181c26;
+    --surface2: #1e2433;
+    --border: #2a3044;
+    --accent: #e8a020;
+    --accent2: #e05a2b;
+    --green: #2dce6e;
+    --red: #e03535;
+    --yellow: #e8a020;
+    --blue: #3a7bd5;
+    --text: #e8eaf0;
+    --text2: #8892a4;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    min-height: 100vh;
+    padding-bottom: 40px;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .logo {
+    font-family: var(--mono);
+    font-size: 13px;
+    color: var(--accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .logo span { color: var(--text2); }
+
+  #status-conn {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: var(--text2);
+  }
+  .dot.ok { background: var(--green); }
+  .dot.err { background: var(--red); }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 24px 16px; }
+
+  .section-title {
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .form-section { margin-bottom: 28px; }
+
+  .form-grid { display: grid; gap: 12px; }
+  .col-2 { grid-template-columns: 1fr 1fr; }
+  .col-3 { grid-template-columns: 1fr 1fr 1fr; }
+
+  .field label {
+    display: block;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .field input, .field select, .field textarea {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 14px;
+    padding: 10px 12px;
+    border-radius: 4px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  .field input:focus, .field select:focus, .field textarea:focus {
+    border-color: var(--accent);
+  }
+
+  .field input[type="number"] { font-family: var(--mono); }
+
+  .defeitos-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .defeito-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 12px;
+    transition: border-color 0.15s;
+  }
+
+  .defeito-card.critico { border-left: 3px solid var(--red); }
+  .defeito-card.secundario { border-left: 3px solid var(--border); }
+
+  .defeito-card label {
+    display: block;
+    font-size: 10px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    margin-bottom: 6px;
+  }
+
+  .defeito-card.critico label { color: #e07070; }
+
+  .defeito-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .defeito-row input {
+    flex: 1;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 15px;
+    padding: 7px 10px;
+    border-radius: 3px;
+    outline: none;
+    text-align: right;
+    transition: border-color 0.15s;
+  }
+  .defeito-row input:focus { border-color: var(--accent); }
+
+  .pct-badge {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+    min-width: 46px;
+    text-align: right;
+  }
+
+  .result-panel {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 16px;
+    margin-bottom: 28px;
+  }
+
+  .result-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .result-row:last-child { border-bottom: none; }
+
+  .result-label {
+    font-size: 11px;
+    font-family: var(--mono);
+    color: var(--text2);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .result-value {
+    font-family: var(--mono);
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .classe-badge {
+    font-family: var(--mono);
+    font-size: 18px;
+    font-weight: 600;
+    padding: 6px 16px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .classe-a { background: #0d2e1a; color: var(--green); border: 1px solid var(--green); }
+  .classe-b { background: #2e1f00; color: var(--yellow); border: 1px solid var(--yellow); }
+  .classe-c { background: #2e0808; color: var(--red); border: 1px solid var(--red); }
+
+  .alert-box {
+    padding: 10px 14px;
+    border-radius: 4px;
+    font-size: 12px;
+    font-family: var(--mono);
+    margin-top: 8px;
+  }
+  .alert-c { background: #2e0808; color: #f08080; border: 1px solid #5a1515; }
+  .alert-b { background: #2e2000; color: #f0c060; border: 1px solid #5a3d00; }
+  .alert-ok { background: #0d2e1a; color: #60e090; border: 1px solid #1a5a30; }
+
+  .qty-diverge {
+    background: #2e0808;
+    border: 1px solid #5a1515;
+    color: #f08080;
+    font-family: var(--mono);
+    font-size: 12px;
+    padding: 8px 12px;
+    border-radius: 4px;
+    margin-top: 6px;
+    display: none;
+  }
+
+  .btn-submit {
+    width: 100%;
+    background: var(--accent);
+    color: #000;
+    border: none;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 14px;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background 0.15s, transform 0.1s;
+  }
+  .btn-submit:hover { background: #f0b030; }
+  .btn-submit:active { transform: scale(0.99); }
+  .btn-submit:disabled { background: var(--border); color: var(--text2); cursor: not-allowed; }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 12px 20px;
+    border-radius: 6px;
+    transition: transform 0.3s;
+    z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  select option { background: #1e2433; }
+
+  .liberacao-block {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px;
+  }
+
+  .toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .toggle-label {
+    font-size: 12px;
+    font-family: var(--mono);
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .toggle {
+    position: relative;
+    width: 44px; height: 24px;
+  }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .slider {
+    position: absolute; inset: 0;
+    background: var(--border);
+    border-radius: 24px;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  .slider:before {
+    content: '';
+    position: absolute;
+    width: 18px; height: 18px;
+    left: 3px; top: 3px;
+    background: var(--text2);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle input:checked + .slider { background: var(--green); }
+  .toggle input:checked + .slider:before {
+    transform: translateX(20px);
+    background: #fff;
+  }
+
+  .lote-base-field { margin-top: 10px; display: none; }
+  .lote-base-field.visible { display: block; }
+
+  @media (max-width: 480px) {
+    .col-2, .col-3 { grid-template-columns: 1fr; }
+    .defeitos-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Classic <span>//</span> CQ — Lançamento</div>
+  <div id="status-conn"><div class="dot" id="conn-dot"></div><span id="conn-text">conectando...</span></div>
+</header>
+
+<div class="container">
+
+  <!-- IDENTIFICAÇÃO -->
+  <div class="form-section">
+    <div class="section-title">01 — Identificação</div>
+    <div class="form-grid col-2">
+      <div class="field">
+        <label>Data da Análise</label>
+        <input type="date" id="data_cq">
+      </div>
+      <div class="field">
+        <label>Analisador</label>
+        <input type="text" id="analisador" placeholder="Nome do operador">
+      </div>
+      <div class="field">
+        <label>Fornecedor</label>
+        <input type="text" id="fornecedor" placeholder="Nome do fornecedor">
+      </div>
+      <div class="field">
+        <label>Produto</label>
+        <select id="produto">
+          <option value="Bucho Bovino">Bucho Bovino</option>
+          <option value="Tendão">Tendão</option>
+          <option value="Aorta">Aorta</option>
+          <option value="Vergalho">Vergalho</option>
+          <option value="Miúdos Diversos">Miúdos Diversos</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Lote / NF</label>
+        <input type="text" id="lote" placeholder="Ex: 100">
+      </div>
+      <div class="field">
+        <label>Qtd Analisada</label>
+        <input type="number" id="qtd_analisada" placeholder="0" min="0">
+      </div>
+    </div>
+  </div>
+
+  <!-- CONFERÊNCIA DE QUANTIDADE -->
+  <div class="form-section">
+    <div class="section-title">02 — Conferência de Quantidade</div>
+    <div class="form-grid col-2">
+      <div class="field">
+        <label>Qtd Declarada (NF)</label>
+        <input type="number" id="qtd_declarada" placeholder="0" min="0" oninput="calcDivergencia()">
+      </div>
+      <div class="field">
+        <label>Qtd Recebida (Física)</label>
+        <input type="number" id="qtd_recebida" placeholder="0" min="0" oninput="calcDivergencia()">
+      </div>
+    </div>
+    <div class="qty-diverge" id="qty-alert"></div>
+  </div>
+
+  <!-- DEFEITOS CRÍTICOS -->
+  <div class="form-section">
+    <div class="section-title">03 — Defeitos Críticos (geram desconto)</div>
+    <div class="defeitos-grid">
+      <div class="defeito-card critico">
+        <label>⚠ Fermentação / Pelando</label>
+        <div class="defeito-row">
+          <input type="number" id="fermentacao" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-fermentacao">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card critico">
+        <label>Sem Folhas</label>
+        <div class="defeito-row">
+          <input type="number" id="sem_folhas" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-sem_folhas">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card critico">
+        <label>Folhas Arrebentadas</label>
+        <div class="defeito-row">
+          <input type="number" id="folhas_arreb" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-folhas_arreb">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card critico">
+        <label>Pedaço</label>
+        <div class="defeito-row">
+          <input type="number" id="pedaco" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-pedaco">0,0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DEFEITOS SECUNDÁRIOS -->
+  <div class="form-section">
+    <div class="section-title">04 — Defeitos Secundários (registro)</div>
+    <div class="defeitos-grid">
+      <div class="defeito-card secundario">
+        <label>Rasgado</label>
+        <div class="defeito-row">
+          <input type="number" id="rasgado" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-rasgado">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card secundario">
+        <label>Corte Irregular</label>
+        <div class="defeito-row">
+          <input type="number" id="corte_irr" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-corte_irr">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card secundario">
+        <label>Furado</label>
+        <div class="defeito-row">
+          <input type="number" id="furado" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-furado">0,0%</span>
+        </div>
+      </div>
+      <div class="defeito-card secundario">
+        <label>Sujo</label>
+        <div class="defeito-row">
+          <input type="number" id="sujo" placeholder="0" min="0" oninput="calcTudo()">
+          <span class="pct-badge" id="pct-sujo">0,0%</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RESULTADO AUTOMÁTICO -->
+  <div class="form-section">
+    <div class="section-title">05 — Resultado</div>
+    <div class="result-panel">
+      <div class="result-row">
+        <span class="result-label">Classificação</span>
+        <span class="classe-badge classe-a" id="classe-badge">CLASSE A</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">% Desconto Crítico</span>
+        <span class="result-value" id="desconto-pct" style="color:var(--accent)">0,0%</span>
+      </div>
+      <div class="result-row">
+        <span class="result-label">% Fermentação</span>
+        <span class="result-value" id="ferm-display" style="color:var(--text2)">0,0%</span>
+      </div>
+    </div>
+    <div id="alert-msg"></div>
+  </div>
+
+  <!-- LIBERAÇÃO -->
+  <div class="form-section">
+    <div class="section-title">06 — Liberação para Produção</div>
+    <div class="liberacao-block">
+      <div class="toggle-row">
+        <span class="toggle-label">Liberar este lote para consolidação?</span>
+        <label class="toggle">
+          <input type="checkbox" id="liberado" onchange="toggleLoteBase()">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="lote-base-field" id="lote-base-field">
+        <div class="field" style="margin-top:0">
+          <label>Lote Base de Produção</label>
+          <input type="text" id="lote_base_producao" placeholder="Ex: BCH-12032026">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- OBS -->
+  <div class="form-section">
+    <div class="section-title">07 — Observações</div>
+    <div class="field">
+      <textarea id="obs" rows="3" placeholder="Município de origem, observações gerais..."></textarea>
+    </div>
+  </div>
+
+  <button class="btn-submit" id="btn-salvar" onclick="salvar()">
+    ▶ SALVAR REGISTRO
+  </button>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Set today
+document.getElementById('data_cq').valueAsDate = new Date();
+
+// Auto lote base
+document.getElementById('liberado').addEventListener('change', toggleLoteBase);
+
+// Test connection
+async function testConn() {
+  try {
+    const { error } = await db.from('registros_cq').select('id').limit(1);
+    if (error) throw error;
+    document.getElementById('conn-dot').className = 'dot ok';
+    document.getElementById('conn-text').textContent = 'conectado';
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'dot err';
+    document.getElementById('conn-text').textContent = 'erro de conexão';
+    console.error(e);
+  }
+}
+testConn();
+
+function val(id) { return parseFloat(document.getElementById(id).value) || 0; }
+
+function calcTudo() {
+  const total = val('qtd_analisada');
+  const defeitos = ['fermentacao','sem_folhas','folhas_arreb','pedaco','rasgado','corte_irr','furado','sujo'];
+  defeitos.forEach(d => {
+    const pct = total > 0 ? (val(d) / total * 100) : 0;
+    document.getElementById('pct-' + d).textContent = pct.toFixed(1) + '%';
+  });
+
+  const ferm = total > 0 ? (val('fermentacao') / total * 100) : 0;
+  const descCritico = total > 0 ?
+    ((val('fermentacao') + val('sem_folhas') + val('folhas_arreb') + val('pedaco')) / total * 100) : 0;
+
+  document.getElementById('desconto-pct').textContent = descCritico.toFixed(1) + '%';
+  document.getElementById('ferm-display').textContent = ferm.toFixed(1) + '%';
+
+  let classe = 'A';
+  if (ferm > 10) classe = 'C';
+  else if (ferm > 0 || descCritico >= 15) classe = 'B';
+
+  const badge = document.getElementById('classe-badge');
+  badge.textContent = 'CLASSE ' + classe;
+  badge.className = 'classe-badge classe-' + classe.toLowerCase();
+
+  const alertMsg = document.getElementById('alert-msg');
+  if (classe === 'C') {
+    alertMsg.innerHTML = '<div class="alert-box alert-c">🔴 CLASSE C — Fermentação acima de 10%. Produto rebaixado automaticamente. NÃO liberar para consolidação sem aprovação.</div>';
+  } else if (classe === 'B') {
+    alertMsg.innerHTML = '<div class="alert-box alert-b">⚠ CLASSE B — Fermentação presente ou defeitos críticos elevados. Desconto de 10% sugerido.</div>';
+  } else if (descCritico > 0) {
+    alertMsg.innerHTML = '<div class="alert-box alert-ok">✓ CLASSE A — Sem fermentação. Defeitos dentro do aceitável.</div>';
+  } else {
+    alertMsg.innerHTML = '';
+  }
+}
+
+function calcDivergencia() {
+  const dec = val('qtd_declarada');
+  const rec = val('qtd_recebida');
+  const alerta = document.getElementById('qty-alert');
+  if (dec > 0 && rec > 0 && rec < dec) {
+    const diff = dec - rec;
+    const pct = (diff / dec * 100).toFixed(1);
+    alerta.textContent = `⚠ DIVERGÊNCIA: Faltaram ${diff} peças (${pct}% da NF)`;
+    alerta.style.display = 'block';
+  } else {
+    alerta.style.display = 'none';
+  }
+}
+
+function toggleLoteBase() {
+  const checked = document.getElementById('liberado').checked;
+  const field = document.getElementById('lote-base-field');
+  field.classList.toggle('visible', checked);
+  if (checked) {
+    const hoje = new Date();
+    const d = String(hoje.getDate()).padStart(2,'0');
+    const m = String(hoje.getMonth()+1).padStart(2,'0');
+    const a = hoje.getFullYear();
+    const prod = document.getElementById('produto').value;
+    const prefix = prod === 'Bucho Bovino' ? 'BCH' :
+                   prod === 'Tendão' ? 'TND' :
+                   prod === 'Aorta' ? 'AOR' :
+                   prod === 'Vergalho' ? 'VRG' : 'PRD';
+    document.getElementById('lote_base_producao').value = `${prefix}-${d}${m}${a}`;
+  }
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+async function salvar() {
+  const total = val('qtd_analisada');
+  if (!total || total === 0) { showToast('Informe a quantidade analisada', 'error'); return; }
+  if (!document.getElementById('fornecedor').value.trim()) { showToast('Informe o fornecedor', 'error'); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true;
+  btn.textContent = 'SALVANDO...';
+
+  const ferm = total > 0 ? (val('fermentacao') / total * 100) : 0;
+  const descCritico = total > 0 ? ((val('fermentacao') + val('sem_folhas') + val('folhas_arreb') + val('pedaco')) / total * 100) : 0;
+  let classe = 'A';
+  if (ferm > 10) classe = 'C';
+  else if (ferm > 0 || descCritico >= 15) classe = 'B';
+
+  const payload = {
+    data_cq: document.getElementById('data_cq').value || new Date().toISOString().split('T')[0],
+    analisador: document.getElementById('analisador').value.trim(),
+    fornecedor: document.getElementById('fornecedor').value.trim(),
+    produto: document.getElementById('produto').value,
+    lote: document.getElementById('lote').value.trim(),
+    qtd_declarada: val('qtd_declarada') || null,
+    qtd_recebida: val('qtd_recebida') || null,
+    qtd_analisada: total,
+    fermentacao: parseFloat((val('fermentacao')/total*100).toFixed(2)),
+    sem_folhas: parseFloat((val('sem_folhas')/total*100).toFixed(2)),
+    folhas_arreb: parseFloat((val('folhas_arreb')/total*100).toFixed(2)),
+    pedaco: parseFloat((val('pedaco')/total*100).toFixed(2)),
+    rasgado: parseFloat((val('rasgado')/total*100).toFixed(2)),
+    corte_irr: parseFloat((val('corte_irr')/total*100).toFixed(2)),
+    furado: parseFloat((val('furado')/total*100).toFixed(2)),
+    sujo: parseFloat((val('sujo')/total*100).toFixed(2)),
+    desconto_critico: parseFloat(descCritico.toFixed(2)),
+    classificacao: classe,
+    liberado: document.getElementById('liberado').checked,
+    lote_base_producao: document.getElementById('lote_base_producao').value.trim() || null,
+    obs: document.getElementById('obs').value.trim()
+  };
+
+  try {
+    const { error } = await db.from('registros_cq').insert([payload]);
+    if (error) throw error;
+    showToast('✓ Registro salvo com sucesso!', 'success');
+    limparForm();
+  } catch(e) {
+    showToast('Erro ao salvar: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '▶ SALVAR REGISTRO';
+  }
+}
+
+function limparForm() {
+  ['analisador','fornecedor','lote','obs','lote_base_producao'].forEach(id => document.getElementById(id).value = '');
+  ['qtd_analisada','qtd_declarada','qtd_recebida','fermentacao','sem_folhas','folhas_arreb','pedaco','rasgado','corte_irr','furado','sujo'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('data_cq').valueAsDate = new Date();
+  document.getElementById('liberado').checked = false;
+  document.getElementById('lote-base-field').classList.remove('visible');
+  calcTudo();
+  document.getElementById('qty-alert').style.display = 'none';
+}
+</script>
+</body>
+</html>

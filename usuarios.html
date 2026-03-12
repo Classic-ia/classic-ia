@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Usuários</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+  :root {
+    --bg:#0a0d14;--surface:#111520;--surface2:#161c2c;--border:#252d42;
+    --accent:#e8a020;--green:#2dce6e;--red:#e03535;--blue:#3a7bd5;
+    --yellow:#e8a020;--purple:#9b59b6;--text:#dde2ef;--text2:#6b7a99;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;padding-bottom:40px;}
+  header{background:var(--surface);border-bottom:1px solid var(--border);padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+  .logo{font-family:var(--mono);font-size:13px;color:var(--accent);letter-spacing:0.1em;}
+  .logo span{color:var(--text2);}
+  .header-right{display:flex;align-items:center;gap:12px;}
+  .user-chip{font-family:var(--mono);font-size:11px;color:var(--text2);}
+  .user-chip strong{color:var(--accent);}
+  .btn-nav{background:none;border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;cursor:pointer;text-decoration:none;display:inline-block;}
+  .btn-nav:hover{border-color:var(--text);color:var(--text);}
+  .btn-logout{color:var(--red);border-color:rgba(224,53,53,0.3);}
+  .btn-logout:hover{border-color:var(--red);}
+  .container{max-width:900px;margin:0 auto;padding:24px 16px;}
+  .section-title{font-size:10px;font-family:var(--mono);color:var(--text2);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid var(--border);}
+  .form-section{margin-bottom:28px;}
+  .form-grid{display:grid;gap:12px;}
+  .col-2{grid-template-columns:1fr 1fr;}
+  .col-3{grid-template-columns:1fr 1fr 1fr;}
+  .field label{display:block;font-size:10px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:5px;}
+  .field input,.field select{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:14px;padding:10px 12px;border-radius:4px;outline:none;transition:border-color 0.15s;}
+  .field input:focus,.field select:focus{border-color:var(--accent);}
+  .btn-add{background:var(--accent);color:#000;border:none;font-family:var(--mono);font-size:12px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:12px 20px;border-radius:4px;cursor:pointer;transition:background 0.15s;}
+  .btn-add:hover{background:#f0b030;}
+  .btn-add:disabled{background:var(--border);color:var(--text2);cursor:not-allowed;}
+  .panel{background:var(--surface);border:1px solid var(--border);border-radius:6px;overflow:hidden;}
+  .panel-header{background:var(--surface2);padding:12px 16px;font-size:10px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;}
+  table{width:100%;border-collapse:collapse;}
+  thead th{background:var(--surface2);padding:10px 14px;text-align:left;font-family:var(--mono);font-size:9px;color:var(--text2);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--border);white-space:nowrap;}
+  tbody tr{border-bottom:1px solid var(--border);transition:background 0.1s;}
+  tbody tr:hover{background:var(--surface2);}
+  tbody td{padding:10px 14px;font-size:13px;}
+  .perfil-badge{font-family:var(--mono);font-size:10px;font-weight:600;padding:3px 8px;border-radius:3px;letter-spacing:0.05em;}
+  .p-gestor{background:rgba(232,160,32,0.15);color:#e8a020;}
+  .p-analisador{background:rgba(58,123,213,0.15);color:#3a7bd5;}
+  .p-conferente{background:rgba(45,206,110,0.15);color:#2dce6e;}
+  .p-financeiro{background:rgba(155,89,182,0.15);color:#9b59b6;}
+  .p-qualidade_externo{background:rgba(107,122,153,0.2);color:#8892a4;}
+  .status-badge{font-family:var(--mono);font-size:10px;padding:2px 7px;border-radius:3px;}
+  .s-ativo{background:#0d2e1a;color:#2dce6e;}
+  .s-inativo{background:#2e0808;color:#e03535;}
+  .btn-acao{background:none;border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:10px;padding:4px 8px;border-radius:3px;cursor:pointer;transition:all 0.15s;margin-right:4px;}
+  .btn-acao:hover{border-color:var(--text);color:var(--text);}
+  .btn-acao.danger:hover{border-color:var(--red);color:var(--red);}
+  .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(80px);background:var(--surface);border:1px solid var(--border);color:var(--text);font-family:var(--mono);font-size:13px;padding:12px 20px;border-radius:6px;transition:transform 0.3s;z-index:999;white-space:nowrap;}
+  .toast.show{transform:translateX(-50%) translateY(0);}
+  .toast.success{border-color:var(--green);color:var(--green);}
+  .toast.error{border-color:var(--red);color:var(--red);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.7);display:none;align-items:center;justify-content:center;z-index:200;}
+  .modal-overlay.open{display:flex;}
+  .modal{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:24px;width:100%;max-width:420px;position:relative;}
+  .modal-title{font-size:14px;font-weight:600;margin-bottom:16px;font-family:var(--mono);}
+  .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px;}
+  .btn-cancel{background:none;border:1px solid var(--border);color:var(--text2);font-family:var(--mono);font-size:12px;padding:9px 16px;border-radius:4px;cursor:pointer;}
+  .btn-confirm{background:var(--red);color:#fff;border:none;font-family:var(--mono);font-size:12px;font-weight:600;padding:9px 16px;border-radius:4px;cursor:pointer;}
+  @media(max-width:600px){.col-2,.col-3{grid-template-columns:1fr;}}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Classic <span>//</span> CQ — Usuários</div>
+  <div class="header-right">
+    <span class="user-chip">Olá, <strong id="user-nome">...</strong></span>
+    <a href="index.html" class="btn-nav">← Menu</a>
+    <button class="btn-nav btn-logout" onclick="logout()">Sair</button>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- NOVO USUÁRIO -->
+  <div class="form-section">
+    <div class="section-title">Adicionar Usuário</div>
+    <div class="form-grid col-3" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Nome completo</label>
+        <input type="text" id="novo-nome" placeholder="Nome do usuário">
+      </div>
+      <div class="field">
+        <label>E-mail</label>
+        <input type="email" id="novo-email" placeholder="email@classic.com.br">
+      </div>
+      <div class="field">
+        <label>Perfil</label>
+        <select id="novo-perfil">
+          <option value="analisador">Analisador</option>
+          <option value="conferente">Conferente</option>
+          <option value="financeiro">Financeiro</option>
+          <option value="gestor">Gestor</option>
+          <option value="qualidade_externo">Qualidade Externo</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid col-2" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Senha inicial</label>
+        <input type="text" id="novo-senha" placeholder="Mínimo 6 caracteres">
+      </div>
+      <div style="display:flex;align-items:flex-end;">
+        <button class="btn-add" id="btn-add" onclick="adicionarUsuario()">+ ADICIONAR USUÁRIO</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LISTA -->
+  <div class="form-section">
+    <div class="section-title">Usuários Cadastrados</div>
+    <div class="panel">
+      <div class="panel-header">
+        <span>Lista de usuários</span>
+        <span id="total-usuarios" style="color:var(--accent)">—</span>
+      </div>
+      <div style="overflow-x:auto">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>E-mail</th>
+              <th>Perfil</th>
+              <th>Status</th>
+              <th>Criado em</th>
+              <th>Ações</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-usuarios">
+            <tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text2);font-family:var(--mono)">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal redefinir senha -->
+<div class="modal-overlay" id="modal-senha">
+  <div class="modal">
+    <div class="modal-title">Redefinir Senha</div>
+    <input type="hidden" id="modal-uid">
+    <div class="field">
+      <label>Nova Senha</label>
+      <input type="text" id="modal-nova-senha" placeholder="Nova senha">
+    </div>
+    <div class="modal-actions">
+      <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+      <button class="btn-confirm" style="background:var(--accent);color:#000" onclick="salvarNovaSenha()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// Auth
+function getSessao() {
+  try {
+    const s = JSON.parse(localStorage.getItem('cq_sessao'));
+    if (!s) return null;
+    if ((new Date() - new Date(s.salvoEm)) > 8*3600000) { localStorage.removeItem('cq_sessao'); return null; }
+    return s;
+  } catch { return null; }
+}
+function logout() { localStorage.removeItem('cq_sessao'); window.location.href = 'login.html'; }
+
+const sessao = getSessao();
+if (!sessao) { window.location.href = 'login.html'; }
+else if (sessao.usuario.perfil !== 'gestor') { alert('Acesso restrito ao Gestor'); window.location.href = 'index.html'; }
+else { document.getElementById('user-nome').textContent = sessao.usuario.nome; }
+
+async function hashSenha(senha) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+const PERFIL_LABELS = { gestor:'Gestor', analisador:'Analisador', conferente:'Conferente', financeiro:'Financeiro', qualidade_externo:'Qualidade Externo' };
+
+async function carregarUsuarios() {
+  const { data, error } = await db.from('usuarios').select('*').order('created_at', { ascending: false });
+  if (error) { console.error(error); return; }
+  document.getElementById('total-usuarios').textContent = (data||[]).length + ' usuários';
+  const tbody = document.getElementById('tbody-usuarios');
+  if (!data || data.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text2);font-family:var(--mono)">Nenhum usuário</td></tr>';
+    return;
+  }
+  tbody.innerHTML = data.map(u => {
+    const dt = new Date(u.created_at).toLocaleDateString('pt-BR');
+    return `<tr>
+      <td><strong>${u.nome}</strong></td>
+      <td style="font-family:var(--mono);font-size:12px;color:var(--text2)">${u.email}</td>
+      <td><span class="perfil-badge p-${u.perfil}">${PERFIL_LABELS[u.perfil]||u.perfil}</span></td>
+      <td><span class="status-badge ${u.ativo ? 's-ativo' : 's-inativo'}">${u.ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td style="font-family:var(--mono);font-size:11px;color:var(--text2)">${dt}</td>
+      <td>
+        <button class="btn-acao" onclick="abrirModalSenha('${u.id}')">🔑 Senha</button>
+        <button class="btn-acao danger" onclick="toggleAtivo('${u.id}', ${u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function adicionarUsuario() {
+  const nome = document.getElementById('novo-nome').value.trim();
+  const email = document.getElementById('novo-email').value.trim();
+  const perfil = document.getElementById('novo-perfil').value;
+  const senha = document.getElementById('novo-senha').value;
+  if (!nome || !email || !senha) { showToast('Preencha todos os campos', 'error'); return; }
+  if (senha.length < 6) { showToast('Senha mínima: 6 caracteres', 'error'); return; }
+
+  const btn = document.getElementById('btn-add');
+  btn.disabled = true; btn.textContent = 'SALVANDO...';
+
+  try {
+    const hash = await hashSenha(senha);
+    const { error } = await db.from('usuarios').insert([{ nome, email, perfil, senha_hash: hash }]);
+    if (error) throw error;
+    showToast('✓ Usuário criado!', 'success');
+    ['novo-nome','novo-email','novo-senha'].forEach(id => document.getElementById(id).value = '');
+    carregarUsuarios();
+  } catch(e) {
+    showToast('Erro: ' + (e.message.includes('duplicate') ? 'E-mail já cadastrado' : e.message), 'error');
+  } finally { btn.disabled = false; btn.textContent = '+ ADICIONAR USUÁRIO'; }
+}
+
+async function toggleAtivo(id, atual) {
+  await db.from('usuarios').update({ ativo: !atual }).eq('id', id);
+  carregarUsuarios();
+}
+
+function abrirModalSenha(uid) {
+  document.getElementById('modal-uid').value = uid;
+  document.getElementById('modal-nova-senha').value = '';
+  document.getElementById('modal-senha').classList.add('open');
+}
+function fecharModal() { document.getElementById('modal-senha').classList.remove('open'); }
+
+async function salvarNovaSenha() {
+  const uid = document.getElementById('modal-uid').value;
+  const nova = document.getElementById('modal-nova-senha').value;
+  if (!nova || nova.length < 6) { showToast('Mínimo 6 caracteres', 'error'); return; }
+  const hash = await hashSenha(nova);
+  await db.from('usuarios').update({ senha_hash: hash }).eq('id', uid);
+  showToast('✓ Senha alterada!', 'success');
+  fecharModal();
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+carregarUsuarios();
+</script>
+</body>
+</html>

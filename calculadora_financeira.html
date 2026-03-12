@@ -307,8 +307,13 @@
 <body>
 
 <header>
-  <div class="logo">Classic <span>//</span> CQ — Calculadora Financeira</div>
-  <div id="conn-status"><div class="dot" id="conn-dot"></div><span id="conn-txt">...</span></div>
+  <div class="logo">Classic <span>//</span> CQ — Calculadora</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span id="user-chip" style="font-family:var(--mono);font-size:11px;color:#6b7a99;"></span>
+    <a href="index.html" style="background:none;border:1px solid #252d42;color:#6b7a99;font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;text-decoration:none;">← Menu</a>
+    <button onclick="logout()" style="background:none;border:1px solid rgba(224,53,53,0.3);color:#e03535;font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;cursor:pointer;">Sair</button>
+    <div id="conn-status"><div class="dot" id="conn-dot"></div><span id="conn-txt">...</span></div>
+  </div>
 </header>
 
 <div class="container">
@@ -404,6 +409,21 @@
 <div class="toast" id="toast"></div>
 
 <script>
+// Auth
+function getSessao() {
+  try {
+    const s = JSON.parse(localStorage.getItem('cq_sessao'));
+    if (!s) return null;
+    if ((new Date() - new Date(s.salvoEm)) > 8*3600000) { localStorage.removeItem('cq_sessao'); return null; }
+    return s;
+  } catch { return null; }
+}
+function logout() { localStorage.removeItem('cq_sessao'); window.location.href = 'login.html'; }
+const sessao = getSessao();
+if (!sessao) { window.location.href = 'login.html'; }
+else if (!['financeiro','gestor'].includes(sessao.usuario.perfil)) { alert('Acesso não permitido'); window.location.href = 'index.html'; }
+else { document.getElementById('user-chip').textContent = sessao.usuario.nome; }
+
 const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
 const { createClient } = supabase;

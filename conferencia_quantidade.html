@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Conferência de Quantidade</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+
+  :root {
+    --bg: #0f1117;
+    --surface: #181c26;
+    --surface2: #1e2433;
+    --border: #2a3044;
+    --accent: #e8a020;
+    --green: #2dce6e;
+    --red: #e03535;
+    --yellow: #e8a020;
+    --blue: #3a7bd5;
+    --text: #e8eaf0;
+    --text2: #8892a4;
+    --mono: 'IBM Plex Mono', monospace;
+    --sans: 'IBM Plex Sans', sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; padding-bottom: 40px; }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-family: var(--mono); font-size: 13px; color: var(--accent); letter-spacing: 0.1em; }
+  .logo span { color: var(--text2); }
+  #conn-status { font-size: 10px; font-family: var(--mono); color: var(--text2); display: flex; align-items: center; gap: 5px; }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text2); }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.err { background: var(--red); }
+
+  .container { max-width: 680px; margin: 0 auto; padding: 24px 16px; }
+
+  .section-title {
+    font-size: 10px; font-family: var(--mono); color: var(--text2);
+    letter-spacing: 0.15em; text-transform: uppercase;
+    margin-bottom: 12px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .form-section { margin-bottom: 24px; }
+
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; font-size: 10px; font-family: var(--mono);
+    color: var(--text2); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px;
+  }
+  .field input, .field select {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--sans); font-size: 14px;
+    padding: 10px 12px; border-radius: 4px; outline: none; transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field input[type="number"] { font-family: var(--mono); }
+
+  .col-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .btn-buscar {
+    width: 100%; background: var(--blue); color: #fff; border: none;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 12px; border-radius: 4px; cursor: pointer;
+    transition: background 0.15s; margin-top: 4px;
+  }
+  .btn-buscar:hover { background: #2d6abf; }
+
+  /* Lista de lotes pendentes */
+  .lotes-lista { display: flex; flex-direction: column; gap: 8px; }
+
+  .lote-card {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.15s, background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .lote-card:hover { border-color: var(--accent); background: rgba(232,160,32,0.05); }
+  .lote-card.selected { border-color: var(--accent); background: rgba(232,160,32,0.08); }
+
+  .lote-info { flex: 1; }
+  .lote-nome { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .lote-meta { font-size: 11px; font-family: var(--mono); color: var(--text2); }
+
+  .lote-right { text-align: right; }
+  .badge-classe {
+    font-family: var(--mono); font-size: 10px; font-weight: 600;
+    padding: 3px 8px; border-radius: 3px; letter-spacing: 0.05em; display: block; margin-bottom: 4px;
+  }
+  .bc-a { background: #0d2e1a; color: #2dce6e; }
+  .bc-b { background: #2e1f00; color: #e8a020; }
+  .bc-c { background: #2e0808; color: #e03535; }
+
+  .badge-pend {
+    font-size: 10px; font-family: var(--mono);
+    color: var(--blue); background: rgba(58,123,213,0.12);
+    border: 1px solid rgba(58,123,213,0.3);
+    padding: 2px 7px; border-radius: 3px;
+  }
+  .badge-conf {
+    font-size: 10px; font-family: var(--mono);
+    color: var(--green); background: rgba(45,206,110,0.1);
+    border: 1px solid rgba(45,206,110,0.3);
+    padding: 2px 7px; border-radius: 3px;
+  }
+
+  /* Painel de conferência */
+  .conferencia-panel {
+    background: var(--surface);
+    border: 1px solid var(--accent);
+    border-radius: 6px;
+    overflow: hidden;
+    display: none;
+  }
+  .conferencia-panel.visible { display: block; }
+
+  .conf-header {
+    background: rgba(232,160,32,0.08);
+    border-bottom: 1px solid var(--border);
+    padding: 12px 16px;
+    font-size: 10px; font-family: var(--mono);
+    color: var(--accent); text-transform: uppercase; letter-spacing: 0.1em;
+  }
+
+  .conf-body { padding: 16px; }
+
+  .info-grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+    margin-bottom: 16px;
+  }
+
+  .info-item { }
+  .info-label { font-size: 10px; font-family: var(--mono); color: var(--text2); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 3px; }
+  .info-value { font-size: 13px; font-weight: 600; }
+  .info-value.mono { font-family: var(--mono); }
+
+  .separador { border: none; border-top: 1px solid var(--border); margin: 14px 0; }
+
+  .qtd-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 14px; }
+
+  .diverge-box {
+    padding: 10px 14px; border-radius: 4px;
+    font-family: var(--mono); font-size: 12px;
+    margin-bottom: 14px; display: none;
+  }
+  .diverge-box.negativo { background: #2e0808; color: #f08080; border: 1px solid #5a1515; }
+  .diverge-box.ok { background: #0d2e1a; color: #60e090; border: 1px solid #1a5a30; }
+
+  .responsavel-field { margin-bottom: 14px; }
+
+  .btn-confirmar {
+    width: 100%; background: var(--green); color: #000; border: none;
+    font-family: var(--mono); font-size: 13px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    padding: 13px; border-radius: 4px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-confirmar:hover { background: #25ba60; }
+  .btn-confirmar:disabled { background: var(--border); color: var(--text2); cursor: not-allowed; }
+
+  .empty-state {
+    text-align: center; padding: 40px 20px;
+    color: var(--text2); font-family: var(--mono); font-size: 12px;
+  }
+
+  .loading-state {
+    text-align: center; padding: 24px;
+    color: var(--text2); font-family: var(--mono); font-size: 12px;
+  }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(80px);
+    background: var(--surface); border: 1px solid var(--border);
+    color: var(--text); font-family: var(--mono); font-size: 13px;
+    padding: 12px 20px; border-radius: 6px;
+    transition: transform 0.3s; z-index: 999; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: var(--green); color: var(--green); }
+  .toast.error { border-color: var(--red); color: var(--red); }
+
+  .tabs {
+    display: flex; gap: 4px; margin-bottom: 12px;
+  }
+  .tab {
+    background: none; border: 1px solid var(--border);
+    color: var(--text2); font-family: var(--mono); font-size: 10px;
+    padding: 5px 12px; border-radius: 3px; cursor: pointer;
+    transition: all 0.15s; text-transform: uppercase;
+  }
+  .tab.active { background: var(--accent); color: #000; border-color: var(--accent); }
+  .tab:hover:not(.active) { border-color: var(--text); color: var(--text); }
+
+  @media (max-width: 480px) {
+    .col-2, .qtd-row, .info-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Classic <span>//</span> CQ — Conferência</div>
+  <div style="display:flex;align-items:center;gap:10px;">
+    <span id="user-chip" style="font-family:var(--mono);font-size:11px;color:var(--text2);"></span>
+    <a href="index.html" style="background:none;border:1px solid #2a3044;color:#8892a4;font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;text-decoration:none;">← Menu</a>
+    <button onclick="logout()" style="background:none;border:1px solid rgba(224,53,53,0.3);color:#e03535;font-family:var(--mono);font-size:11px;padding:5px 12px;border-radius:3px;cursor:pointer;">Sair</button>
+  <div id="conn-status"><div class="dot" id="conn-dot"></div><span id="conn-txt">conectando...</span></div>
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- BUSCA -->
+  <div class="form-section">
+    <div class="section-title">01 — Buscar Lotes</div>
+    <div class="col-2">
+      <div class="field">
+        <label>Fornecedor</label>
+        <input type="text" id="busca-forn" placeholder="Nome do fornecedor...">
+      </div>
+      <div class="field">
+        <label>Data (de)</label>
+        <input type="date" id="busca-data">
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab active" onclick="setFiltro('pendentes', this)">Pendentes</button>
+      <button class="tab" onclick="setFiltro('todos', this)">Todos</button>
+      <button class="tab" onclick="setFiltro('conferidos', this)">Conferidos</button>
+    </div>
+    <button class="btn-buscar" onclick="buscar()">🔍 BUSCAR LOTES</button>
+  </div>
+
+  <!-- LISTA DE LOTES -->
+  <div class="form-section">
+    <div class="section-title">02 — Selecionar Lote</div>
+    <div id="lista-lotes">
+      <div class="empty-state">Use a busca acima para localizar os lotes</div>
+    </div>
+  </div>
+
+  <!-- PAINEL DE CONFERÊNCIA -->
+  <div class="form-section">
+    <div class="section-title">03 — Conferência</div>
+    <div class="conferencia-panel" id="conf-panel">
+      <div class="conf-header" id="conf-header">Lote selecionado</div>
+      <div class="conf-body">
+
+        <div class="info-grid" id="conf-info"></div>
+
+        <hr class="separador">
+
+        <div class="qtd-row">
+          <div class="field">
+            <label>Qtd Declarada (NF)</label>
+            <input type="number" id="qtd-declarada" readonly style="background:var(--bg);color:var(--text2)">
+          </div>
+          <div class="field">
+            <label>Qtd Recebida (Física) ✏</label>
+            <input type="number" id="qtd-recebida" placeholder="0" min="0" oninput="calcDiverg()">
+          </div>
+        </div>
+
+        <div class="diverge-box" id="diverge-box"></div>
+
+        <div class="responsavel-field">
+          <div class="field">
+            <label>Responsável pela conferência</label>
+            <input type="text" id="responsavel" placeholder="Seu nome">
+          </div>
+        </div>
+
+        <button class="btn-confirmar" id="btn-confirmar" onclick="confirmar()">
+          ✓ CONFIRMAR CONFERÊNCIA
+        </button>
+
+      </div>
+    </div>
+    <div id="conf-placeholder">
+      <div class="empty-state">Selecione um lote para conferir</div>
+    </div>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// Auth
+function getSessao() {
+  try {
+    const s = JSON.parse(localStorage.getItem('cq_sessao'));
+    if (!s) return null;
+    if ((new Date() - new Date(s.salvoEm)) > 8*3600000) { localStorage.removeItem('cq_sessao'); return null; }
+    return s;
+  } catch { return null; }
+}
+function logout() { localStorage.removeItem('cq_sessao'); window.location.href = 'login.html'; }
+const sessao = getSessao();
+if (!sessao) { window.location.href = 'login.html'; }
+else if (!['conferente','gestor'].includes(sessao.usuario.perfil)) { alert('Acesso não permitido'); window.location.href = 'index.html'; }
+else { document.getElementById('user-chip').textContent = sessao.usuario.nome; }
+
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let loteSelecionado = null;
+let filtroAtual = 'pendentes';
+
+async function testConn() {
+  try {
+    await db.from('registros_cq').select('id').limit(1);
+    document.getElementById('conn-dot').className = 'dot ok';
+    document.getElementById('conn-txt').textContent = 'conectado';
+  } catch(e) {
+    document.getElementById('conn-dot').className = 'dot err';
+    document.getElementById('conn-txt').textContent = 'erro';
+  }
+}
+testConn();
+
+function setFiltro(f, btn) {
+  filtroAtual = f;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+async function buscar() {
+  const lista = document.getElementById('lista-lotes');
+  lista.innerHTML = '<div class="loading-state">Buscando...</div>';
+
+  try {
+    let q = db.from('registros_cq').select('*').order('data_cq', { ascending: false }).order('created_at', { ascending: false }).limit(50);
+
+    const forn = document.getElementById('busca-forn').value.trim();
+    const data = document.getElementById('busca-data').value;
+    if (forn) q = q.ilike('fornecedor', `%${forn}%`);
+    if (data) q = q.gte('data_cq', data);
+
+    if (filtroAtual === 'pendentes') {
+      q = q.or('qtd_recebida.is.null,qtd_recebida.eq.0');
+    } else if (filtroAtual === 'conferidos') {
+      q = q.not('qtd_recebida', 'is', null).gt('qtd_recebida', 0);
+    }
+
+    const { data: rows, error } = await q;
+    if (error) throw error;
+
+    if (!rows || rows.length === 0) {
+      lista.innerHTML = '<div class="empty-state">Nenhum lote encontrado</div>';
+      return;
+    }
+
+    lista.innerHTML = '<div class="lotes-lista">' + rows.map(r => {
+      const dataFmt = r.data_cq ? r.data_cq.split('-').reverse().join('/') : '—';
+      const conferido = r.qtd_recebida && r.qtd_recebida > 0;
+      const statusBadge = conferido
+        ? `<span class="badge-conf">✓ Conferido</span>`
+        : `<span class="badge-pend">Pendente</span>`;
+      const qtdInfo = conferido
+        ? `NF: ${r.qtd_declarada || '?'} pcs · Rec: ${r.qtd_recebida} pcs`
+        : `NF: ${r.qtd_declarada || '?'} pcs · Rec: —`;
+
+      return `<div class="lote-card" onclick="selecionarLote(${JSON.stringify(r).replace(/"/g, '&quot;')}, this)">
+        <div class="lote-info">
+          <div class="lote-nome">${r.fornecedor || '—'} — ${r.produto || '—'}</div>
+          <div class="lote-meta">${dataFmt} · Lote ${r.lote || '?'} · ${qtdInfo}</div>
+        </div>
+        <div class="lote-right">
+          <span class="badge-classe bc-${(r.classificacao||'a').toLowerCase()}">CLASSE ${r.classificacao||'A'}</span>
+          ${statusBadge}
+        </div>
+      </div>`;
+    }).join('') + '</div>';
+
+  } catch(e) {
+    lista.innerHTML = `<div class="empty-state">Erro: ${e.message}</div>`;
+  }
+}
+
+function selecionarLote(r, el) {
+  loteSelecionado = r;
+  document.querySelectorAll('.lote-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+
+  const dataFmt = r.data_cq ? r.data_cq.split('-').reverse().join('/') : '—';
+
+  document.getElementById('conf-header').textContent =
+    `${r.fornecedor || '—'} — Lote ${r.lote || '?'} — ${dataFmt}`;
+
+  document.getElementById('conf-info').innerHTML = `
+    <div class="info-item">
+      <div class="info-label">Fornecedor</div>
+      <div class="info-value">${r.fornecedor || '—'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Produto</div>
+      <div class="info-value">${r.produto || '—'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Lote / NF</div>
+      <div class="info-value mono">${r.lote || '—'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Data CQ</div>
+      <div class="info-value mono">${dataFmt}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Classificação</div>
+      <div class="info-value"><span class="badge-classe bc-${(r.classificacao||'a').toLowerCase()}">CLASSE ${r.classificacao||'A'}</span></div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">Analisador CQ</div>
+      <div class="info-value">${r.analisador || '—'}</div>
+    </div>
+  `;
+
+  document.getElementById('qtd-declarada').value = r.qtd_declarada || '';
+  document.getElementById('qtd-recebida').value = r.qtd_recebida || '';
+  document.getElementById('diverge-box').style.display = 'none';
+  document.getElementById('conf-panel').classList.add('visible');
+  document.getElementById('conf-placeholder').style.display = 'none';
+
+  if (r.qtd_recebida) calcDiverg();
+}
+
+function calcDiverg() {
+  const dec = parseFloat(document.getElementById('qtd-declarada').value) || 0;
+  const rec = parseFloat(document.getElementById('qtd-recebida').value) || 0;
+  const box = document.getElementById('diverge-box');
+
+  if (dec > 0 && rec > 0) {
+    const diff = dec - rec;
+    if (diff > 0) {
+      box.className = 'diverge-box negativo';
+      box.textContent = `⚠ DIVERGÊNCIA: Faltaram ${diff} peças (${(diff/dec*100).toFixed(1)}% da NF)`;
+      box.style.display = 'block';
+    } else if (diff < 0) {
+      box.className = 'diverge-box negativo';
+      box.textContent = `⚠ DIVERGÊNCIA: Recebeu ${Math.abs(diff)} peças a mais que o declarado`;
+      box.style.display = 'block';
+    } else {
+      box.className = 'diverge-box ok';
+      box.textContent = `✓ Quantidade confere com a NF`;
+      box.style.display = 'block';
+    }
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+async function confirmar() {
+  if (!loteSelecionado) return;
+  const qtdRec = parseFloat(document.getElementById('qtd-recebida').value);
+  if (!qtdRec || qtdRec <= 0) { showToast('Informe a quantidade recebida', 'error'); return; }
+
+  const resp = document.getElementById('responsavel').value.trim();
+  if (!resp) { showToast('Informe o responsável pela conferência', 'error'); return; }
+
+  const btn = document.getElementById('btn-confirmar');
+  btn.disabled = true;
+  btn.textContent = 'SALVANDO...';
+
+  try {
+    const { error } = await db.from('registros_cq').update({
+      qtd_recebida: qtdRec,
+      obs: (loteSelecionado.obs ? loteSelecionado.obs + ' | ' : '') + `Conferência: ${resp}`
+    }).eq('id', loteSelecionado.id);
+
+    if (error) throw error;
+
+    showToast('✓ Conferência registrada!', 'success');
+    document.getElementById('conf-panel').classList.remove('visible');
+    document.getElementById('conf-placeholder').style.display = 'block';
+    loteSelecionado = null;
+    document.getElementById('responsavel').value = '';
+    buscar();
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '✓ CONFIRMAR CONFERÊNCIA';
+  }
+}
+
+function showToast(msg, type='') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// Inicializar com os pendentes dos últimos 30 dias
+const dataIni = new Date();
+dataIni.setDate(dataIni.getDate() - 30);
+document.getElementById('busca-data').value = dataIni.toISOString().split('T')[0];
+buscar();
+</script>
+</body>
+</html>

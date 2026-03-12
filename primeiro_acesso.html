@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Primeiro Acesso</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap');
+  :root {
+    --bg:#0a0d14;--surface:#111520;--surface2:#161c2c;--border:#252d42;
+    --accent:#e8a020;--green:#2dce6e;--red:#e03535;--text:#dde2ef;--text2:#6b7a99;
+    --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .wrap{width:100%;max-width:400px;}
+  .logo-area{text-align:center;margin-bottom:32px;}
+  .logo-sub{font-family:var(--mono);font-size:10px;color:var(--text2);letter-spacing:0.2em;text-transform:uppercase;margin-bottom:8px;}
+  .logo-title{font-family:var(--mono);font-size:22px;font-weight:600;color:var(--accent);}
+  .logo-title span{color:var(--text2);font-weight:400;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:28px;position:relative;overflow:hidden;}
+  .card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--accent);}
+  .card-title{font-size:14px;font-weight:600;margin-bottom:6px;}
+  .card-sub{font-size:12px;color:var(--text2);margin-bottom:22px;line-height:1.5;}
+  .field{margin-bottom:14px;}
+  .field label{display:block;font-size:10px;font-family:var(--mono);color:var(--text2);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;}
+  .field input{width:100%;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:14px;padding:11px 13px;border-radius:4px;outline:none;transition:border-color 0.15s;}
+  .field input:focus{border-color:var(--accent);}
+  .senha-wrap{position:relative;}
+  .btn-olho{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--text2);cursor:pointer;font-size:16px;padding:0;}
+  .forca-bar{height:4px;border-radius:2px;background:var(--border);margin-top:6px;overflow:hidden;}
+  .forca-fill{height:100%;border-radius:2px;transition:width 0.3s,background 0.3s;width:0;}
+  .forca-label{font-size:10px;font-family:var(--mono);color:var(--text2);margin-top:4px;}
+  .btn-salvar{width:100%;background:var(--accent);color:#000;border:none;font-family:var(--mono);font-size:13px;font-weight:700;letter-spacing:0.08em;text-transform:uppercase;padding:13px;border-radius:4px;cursor:pointer;transition:background 0.15s;margin-top:6px;}
+  .btn-salvar:hover{background:#f0b030;}
+  .btn-salvar:disabled{background:var(--border);color:var(--text2);cursor:not-allowed;}
+  .msg-box{padding:10px 14px;border-radius:4px;font-family:var(--mono);font-size:12px;margin-top:14px;display:none;}
+  .msg-ok{background:#0d2e1a;color:#2dce6e;border:1px solid #1a5a30;}
+  .msg-err{background:#2e0808;color:#f08080;border:1px solid #5a1515;}
+  .aviso{background:rgba(232,160,32,0.08);border:1px solid rgba(232,160,32,0.2);border-radius:4px;padding:10px 14px;font-size:11px;font-family:var(--mono);color:#e8a020;margin-bottom:20px;line-height:1.6;}
+  .step-done{text-align:center;padding:20px 0;display:none;}
+  .step-done .check{font-size:48px;margin-bottom:12px;}
+  .step-done p{font-size:14px;color:var(--text2);margin-bottom:20px;}
+  .btn-ir{display:inline-block;background:var(--green);color:#000;font-family:var(--mono);font-size:13px;font-weight:700;padding:12px 28px;border-radius:4px;text-decoration:none;letter-spacing:0.08em;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo-area">
+    <div class="logo-sub">Classic Importação e Exportação</div>
+    <div class="logo-title">SISTEMA <span>//</span> CQ</div>
+  </div>
+
+  <div class="card">
+    <!-- FORMULÁRIO -->
+    <div id="form-area">
+      <div class="card-title">Definir Senha do Gestor</div>
+      <div class="card-sub">Use esta página uma única vez para configurar o acesso inicial ao sistema.</div>
+
+      <div class="aviso">
+        ⚠ Após definir a senha, delete este arquivo <strong>primeiro_acesso.html</strong> do GitHub para segurança.
+      </div>
+
+      <div class="field">
+        <label>E-mail do Gestor</label>
+        <input type="email" id="email" value="gestor@classic.com.br" placeholder="gestor@classic.com.br">
+      </div>
+
+      <div class="field">
+        <label>Nova Senha</label>
+        <div class="senha-wrap">
+          <input type="password" id="senha" placeholder="Mínimo 6 caracteres" oninput="verificarForca()">
+          <button class="btn-olho" onclick="toggleSenha('senha')" type="button">👁</button>
+        </div>
+        <div class="forca-bar"><div class="forca-fill" id="forca-fill"></div></div>
+        <div class="forca-label" id="forca-label"></div>
+      </div>
+
+      <div class="field">
+        <label>Confirmar Senha</label>
+        <div class="senha-wrap">
+          <input type="password" id="senha2" placeholder="Repita a senha">
+          <button class="btn-olho" onclick="toggleSenha('senha2')" type="button">👁</button>
+        </div>
+      </div>
+
+      <button class="btn-salvar" id="btn-salvar" onclick="definirSenha()">✓ DEFINIR SENHA E ACESSAR</button>
+      <div class="msg-box" id="msg-box"></div>
+    </div>
+
+    <!-- SUCESSO -->
+    <div class="step-done" id="step-done">
+      <div class="check">✅</div>
+      <p>Senha definida com sucesso!<br>Agora você pode entrar no sistema.</p>
+      <a href="login.html" class="btn-ir">▶ IR PARA O LOGIN</a>
+    </div>
+  </div>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+const { createClient } = supabase;
+const db = createClient(SUPABASE_URL, SUPABASE_KEY);
+
+async function hashSenha(senha) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function toggleSenha(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function verificarForca() {
+  const s = document.getElementById('senha').value;
+  const fill = document.getElementById('forca-fill');
+  const label = document.getElementById('forca-label');
+  let pts = 0;
+  if (s.length >= 6) pts++;
+  if (s.length >= 10) pts++;
+  if (/[A-Z]/.test(s)) pts++;
+  if (/[0-9]/.test(s)) pts++;
+  if (/[^A-Za-z0-9]/.test(s)) pts++;
+  const cores = ['#e03535','#e05a2b','#e8a020','#2dce6e','#1aaa55'];
+  const labels = ['Muito fraca','Fraca','Razoável','Boa','Forte'];
+  fill.style.width = (pts * 20) + '%';
+  fill.style.background = cores[pts-1] || '#252d42';
+  label.textContent = pts > 0 ? labels[pts-1] : '';
+  label.style.color = cores[pts-1] || '#6b7a99';
+}
+
+function mostrarMsg(msg, tipo) {
+  const box = document.getElementById('msg-box');
+  box.textContent = msg;
+  box.className = 'msg-box ' + (tipo === 'ok' ? 'msg-ok' : 'msg-err');
+  box.style.display = 'block';
+}
+
+async function definirSenha() {
+  const email = document.getElementById('email').value.trim();
+  const senha = document.getElementById('senha').value;
+  const senha2 = document.getElementById('senha2').value;
+  const btn = document.getElementById('btn-salvar');
+
+  if (!email) { mostrarMsg('Informe o e-mail', 'err'); return; }
+  if (senha.length < 6) { mostrarMsg('Senha mínima: 6 caracteres', 'err'); return; }
+  if (senha !== senha2) { mostrarMsg('As senhas não coincidem', 'err'); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'SALVANDO...';
+
+  try {
+    const hash = await hashSenha(senha);
+
+    // Verifica se usuário existe
+    const { data: existe } = await db.from('usuarios').select('id').eq('email', email).single();
+
+    let erro;
+    if (existe) {
+      // Atualiza senha
+      const { error } = await db.from('usuarios').update({ senha_hash: hash, ativo: true }).eq('email', email);
+      erro = error;
+    } else {
+      // Cria gestor novo
+      const { error } = await db.from('usuarios').insert([{
+        nome: 'Gestor', email, senha_hash: hash, perfil: 'gestor', ativo: true
+      }]);
+      erro = error;
+    }
+
+    if (erro) throw erro;
+
+    document.getElementById('form-area').style.display = 'none';
+    document.getElementById('step-done').style.display = 'block';
+
+  } catch(e) {
+    mostrarMsg('Erro: ' + e.message, 'err');
+    btn.disabled = false;
+    btn.textContent = '✓ DEFINIR SENHA E ACESSAR';
+  }
+}
+</script>
+</body>
+</html>

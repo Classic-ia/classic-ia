@@ -121,9 +121,10 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   <div class="page-sub">Registre dados de classificação do produto final por carga e frigorífico</div>
 
   <div class="tabs">
-    <div class="tab active" onclick="showTab('novo')">➕ Novo Registro</div>
-    <div class="tab" onclick="showTab('lista');loadLista()">📋 Registros</div>
-    <div class="tab" onclick="showTab('scanner')">📷 Ler Ficha Manual</div>
+    <div class="tab active" onclick="showTab('novo',this)">➕ Novo Registro</div>
+    <div class="tab" onclick="showTab('lista',this);loadLista()">📋 Registros</div>
+    <div class="tab" onclick="showTab('scanner',this)">📷 Ler Ficha Manual</div>
+    <div class="tab" onclick="showTab('importar',this)">📥 Importar CSV</div>
   </div>
 
   <!-- ===== NOVO REGISTRO ===== -->
@@ -223,6 +224,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
           <select id="ls-carga"><option value="">Todas cargas</option></select>
           <select id="ls-class"><option value="">Todas classes</option><option>A</option><option>B</option><option>C</option></select>
           <input type="text" id="ls-search" placeholder="Buscar frigorífico..." oninput="filterLista()" style="width:170px;">
+          <button class="btn-secondary" onclick="exportarCSV()" style="white-space:nowrap;">⬇ Exportar CSV</button>
         </div>
       </div>
       <div id="lista-content"><div class="empty">Carregando...</div></div>
@@ -275,7 +277,44 @@ tr:hover td{background:rgba(255,255,255,0.02);}
   </div>
 </main>
 
-<!-- MODAL de detalhe -->
+  <!-- ===== IMPORTAR CSV ===== -->
+  <div id="tab-importar" class="tab-pane">
+    <div class="form-card">
+      <div style="font-family:'Syne',sans-serif;font-size:14px;font-weight:800;margin-bottom:8px;">📥 Importar Registros via CSV</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:20px;">Importe múltiplos registros de uma planilha. Baixe o modelo, preencha e envie.</div>
+
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+        <button class="btn-secondary" onclick="downloadModelo()">⬇ Baixar Modelo CSV</button>
+        <button class="btn-secondary" onclick="document.getElementById('csv-input').click()">📂 Selecionar Arquivo CSV</button>
+        <input type="file" id="csv-input" accept=".csv,text/csv" style="display:none" onchange="lerCSV(event)">
+      </div>
+
+      <div id="csv-preview" style="display:none;">
+        <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:10px;">
+          Prévia — <span id="csv-count">0</span> registros encontrados
+        </div>
+        <div style="overflow-x:auto;margin-bottom:14px;">
+          <table id="csv-table" style="font-size:11px;"></table>
+        </div>
+        <div id="csv-erros" style="margin-bottom:12px;"></div>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="importarCSV()">💾 Importar Tudo para o Sistema</button>
+          <button class="btn-secondary" onclick="document.getElementById('csv-preview').style.display='none'">Cancelar</button>
+          <span id="csv-status" style="font-size:12px;color:var(--muted);"></span>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;">Colunas do CSV</div>
+        <div style="font-size:12px;color:var(--muted);line-height:2;font-family:'DM Mono',monospace;">
+          numero_carga · data_chegada (YYYY-MM-DD) · frigorifico · lote<br>
+          cnt_frigo · cnt_classic · pcs_a · pcs_b · pcs_c · obs
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL de detalhe -->
 <div class="modal-bg" id="modal-detail">
   <div class="modal">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px;">
@@ -320,11 +359,13 @@ function initForm() {
 }
 
 // ---- TABS ----
-function showTab(name) {
+function showTab(name, el) {
   document.querySelectorAll('.tab-pane').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
   document.getElementById('tab-'+name).classList.add('active');
-  event.target.classList.add('active');
+  // el pode ser o elemento clicado ou undefined (chamado por código)
+  const tabEl = el ? el.closest('.tab') : null;
+  if(tabEl) tabEl.classList.add('active');
 }
 
 // ---- CALC CLASSES ----
@@ -621,9 +662,176 @@ function aplicarDadosFicha() {
   if(scanData.pcs_c!=null) document.getElementById('f-pcs-c').value=scanData.pcs_c;
   if(scanData.obs) document.getElementById('f-obs').value=scanData.obs;
   calcClasses();
-  showTab('novo');
-  document.querySelectorAll('.tab').forEach((t,i)=>{if(i===0)t.classList.add('active');else t.classList.remove('active');});
+  // volta pra aba Novo Registro
+  const firstTab = document.querySelector('.tab');
+  showTab('novo', firstTab);
   showAlert('success','Dados da ficha aplicados ao formulário. Confira e salve!');
+}
+
+// ---- EXPORTAR CSV ----
+function exportarCSV() {
+  if(!listaData.length){ alert('Carregue os registros primeiro'); return; }
+  // Aplica os mesmos filtros ativos
+  const dtIni=document.getElementById('ls-dt-ini').value;
+  const dtFim=document.getElementById('ls-dt-fim').value;
+  const carga=document.getElementById('ls-carga').value;
+  const cls=document.getElementById('ls-class').value;
+  const q=document.getElementById('ls-search').value.toLowerCase();
+  const filtered=listaData.filter(d=>{
+    if(dtIni && d.data_chegada<dtIni) return false;
+    if(dtFim && d.data_chegada>dtFim) return false;
+    if(carga && d.numero_carga!==carga) return false;
+    if(cls && d.classificacao!==cls) return false;
+    if(q && !d.frigorifico?.toLowerCase().includes(q)) return false;
+    return true;
+  });
+  if(!filtered.length){ alert('Nenhum registro para exportar com os filtros atuais'); return; }
+
+  const cols = ['numero_carga','data_chegada','frigorifico','lote','cnt_frigo','cnt_classic',
+                'pcs_a','pct_a','pcs_b','pct_b','pcs_c','pct_c','classificacao','obs','created_at'];
+  const header = cols.join(';');
+  const rows = filtered.map(d =>
+    cols.map(c => {
+      const v = d[c]??'';
+      const s = String(v).replace(/"/g,'""');
+      return s.includes(';')||s.includes('"')||s.includes('\n') ? `"${s}"` : s;
+    }).join(';')
+  );
+  const csv = '\uFEFF' + [header,...rows].join('\r\n'); // BOM UTF-8 para Excel
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url;
+  a.download=`cargas_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ---- IMPORTAR CSV ----
+const CSV_COLS = ['numero_carga','data_chegada','frigorifico','lote','cnt_frigo','cnt_classic','pcs_a','pcs_b','pcs_c','obs'];
+
+function downloadModelo() {
+  const header = CSV_COLS.join(';');
+  const exemplo = ['01','2026-01-15','BOI DOURADO','BCH-01','500','485','300','150','35','Observação opcional'].join(';');
+  const csv = '\uFEFF' + [header, exemplo].join('\r\n');
+  const blob = new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download='modelo_importacao_cargas.csv'; a.click();
+  URL.revokeObjectURL(url);
+}
+
+let csvParsed = [];
+
+function lerCSV(event) {
+  const file = event.target.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result.replace(/^\uFEFF/,''); // remove BOM
+    const sep = text.includes(';') ? ';' : ',';
+    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    if(lines.length < 2){ alert('CSV vazio ou sem dados'); return; }
+
+    const headers = lines[0].split(sep).map(h=>h.trim().toLowerCase().replace(/"/g,''));
+    const erros = [];
+    csvParsed = [];
+
+    for(let i=1;i<lines.length;i++){
+      const vals = splitCSVLine(lines[i], sep);
+      const row = {};
+      headers.forEach((h,idx)=>{ row[h] = (vals[idx]||'').trim(); });
+
+      // validações básicas
+      if(!row.frigorifico){ erros.push(`Linha ${i+1}: frigorífico obrigatório`); continue; }
+      if(!row.data_chegada){ erros.push(`Linha ${i+1}: data_chegada obrigatória`); continue; }
+      if(!row.pcs_a && !row.pcs_b && !row.pcs_c){ erros.push(`Linha ${i+1}: ao menos uma classe (pcs_a/pcs_b/pcs_c) é obrigatória`); continue; }
+
+      const pcsA=parseInt(row.pcs_a)||0, pcsB=parseInt(row.pcs_b)||0, pcsC=parseInt(row.pcs_c)||0;
+      const tot=pcsA+pcsB+pcsC||1;
+      const cls = pcsA/tot>=0.7?'A':pcsA/tot>=0.3?'B':'C';
+
+      csvParsed.push({
+        numero_carga: (row.numero_carga||'01').padStart(2,'0'),
+        data_chegada: row.data_chegada,
+        frigorifico: row.frigorifico.toUpperCase(),
+        lote: row.lote||null,
+        cnt_frigo: parseInt(row.cnt_frigo)||0,
+        cnt_classic: parseInt(row.cnt_classic)||0,
+        pcs_a: pcsA, pct_a: parseFloat((pcsA/tot*100).toFixed(2)),
+        pcs_b: pcsB, pct_b: parseFloat((pcsB/tot*100).toFixed(2)),
+        pcs_c: pcsC, pct_c: parseFloat((pcsC/tot*100).toFixed(2)),
+        classificacao: cls,
+        obs: row.obs||null,
+        usuario_id: usuarioAtual?.id,
+        created_at: new Date().toISOString(),
+      });
+    }
+
+    // Mostra prévia
+    document.getElementById('csv-count').textContent = csvParsed.length;
+    const tbl = document.getElementById('csv-table');
+    const previewCols = ['numero_carga','data_chegada','frigorifico','cnt_classic','pcs_a','pcs_b','pcs_c','classificacao'];
+    tbl.innerHTML = `<thead><tr>${previewCols.map(c=>`<th>${c}</th>`).join('')}</tr></thead>
+      <tbody>${csvParsed.slice(0,10).map(d=>`<tr>${previewCols.map(c=>`<td>${d[c]??''}</td>`).join('')}</tr>`).join('')}
+      ${csvParsed.length>10?`<tr><td colspan="${previewCols.length}" style="text-align:center;color:var(--muted);font-size:11px;">… mais ${csvParsed.length-10} registros</td></tr>`:''}
+      </tbody>`;
+
+    const errEl = document.getElementById('csv-erros');
+    if(erros.length){
+      errEl.innerHTML=`<div class="alert alert-warn" style="font-size:12px;"><b>⚠ ${erros.length} linha(s) ignorada(s):</b><br>${erros.join('<br>')}</div>`;
+    } else { errEl.innerHTML=''; }
+
+    document.getElementById('csv-preview').style.display='block';
+  };
+  reader.readAsText(file,'UTF-8');
+  event.target.value=''; // reset input
+}
+
+function splitCSVLine(line, sep) {
+  // Trata campos com aspas
+  const result=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    if(line[i]==='"'){ if(inQ && line[i+1]==='"'){cur+='"';i++;} else inQ=!inQ; }
+    else if(line[i]===sep && !inQ){ result.push(cur); cur=''; }
+    else cur+=line[i];
+  }
+  result.push(cur);
+  return result;
+}
+
+async function importarCSV() {
+  if(!csvParsed.length){ alert('Nenhum dado válido para importar'); return; }
+  const status = document.getElementById('csv-status');
+  status.textContent = `Importando 0/${csvParsed.length}...`;
+  let ok=0, fail=0;
+  // Envia em lotes de 20
+  const BATCH=20;
+  for(let i=0;i<csvParsed.length;i+=BATCH){
+    const batch = csvParsed.slice(i,i+BATCH);
+    try {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/registros_carga`,{
+        method:'POST',
+        headers:{'apikey':SUPABASE_KEY,'Authorization':'Bearer '+SUPABASE_KEY,'Content-Type':'application/json','Prefer':'return=minimal'},
+        body: JSON.stringify(batch)
+      });
+      if(res.ok){ ok+=batch.length; }
+      else { const d=await res.json(); console.error(d); fail+=batch.length; }
+    } catch(e){ console.error(e); fail+=batch.length; }
+    status.textContent = `Importando ${Math.min(i+BATCH,csvParsed.length)}/${csvParsed.length}...`;
+  }
+  if(fail===0){
+    status.textContent='';
+    document.getElementById('csv-preview').style.display='none';
+    csvParsed=[];
+    showAlert('success',`✅ ${ok} registros importados com sucesso!`);
+    // Mostra na aba de lista
+    const listTab = document.querySelectorAll('.tab')[1];
+    showTab('lista', listTab);
+    loadLista();
+  } else {
+    status.textContent=`⚠ ${ok} importados, ${fail} com erro`;
+  }
 }
 
 // ---- ALERTS ----

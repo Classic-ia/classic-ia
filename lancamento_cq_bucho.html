@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lançamento CQ Bucho — Classic Couros</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap');
+
+:root {
+  --bg:       #08080f;
+  --surface:  #111120;
+  --surface2: #16162a;
+  --border:   #1e1e35;
+  --border2:  #2a2a48;
+  --accent:   #c8a96e;
+  --accent2:  #a07840;
+  --text:     #e0e0f0;
+  --muted:    #555577;
+  --muted2:   #777799;
+  --green:    #27ae60;
+  --amber:    #e69f00;
+  --red:      #e74c3c;
+  --blue:     #0072b2;
+  --ok:       rgba(39,174,96,.12);
+  --ok-b:     rgba(39,174,96,.3);
+  --warn:     rgba(230,159,0,.12);
+  --warn-b:   rgba(230,159,0,.35);
+  --danger:   rgba(231,76,60,.12);
+  --danger-b: rgba(231,76,60,.35);
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+/* ── LAYOUT ── */
+.app-shell { display:flex; flex-direction:column; min-height:100vh; }
+
+/* Header */
+.app-header {
+  background:var(--surface); border-bottom:1px solid var(--border);
+  padding:0 24px; display:flex; align-items:center; gap:16px; height:58px; position:sticky; top:0; z-index:100;
+}
+.app-logo { font-family:'Syne',sans-serif; font-size:15px; font-weight:800; color:var(--accent); letter-spacing:.5px; }
+.app-sep { width:1px; height:24px; background:var(--border); }
+.app-title { font-size:13px; color:var(--muted2); }
+.header-spacer { flex:1; }
+.btn-icon {
+  background:none; border:1px solid var(--border); border-radius:8px;
+  color:var(--muted2); font-size:11px; font-family:'DM Mono',monospace;
+  padding:6px 14px; cursor:pointer; transition:all .2s;
+}
+.btn-icon:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Tabs top */
+.top-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); background:var(--surface); padding:0 24px; }
+.ttab {
+  padding:12px 18px; font-size:12px; font-family:'DM Mono',monospace; font-weight:600;
+  color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;
+  transition:all .2s; white-space:nowrap; background:none; border-top:none; border-left:none; border-right:none;
+}
+.ttab.active { color:var(--accent); border-bottom-color:var(--accent); }
+.ttab:hover:not(.active) { color:var(--muted2); }
+
+/* Main area */
+.main { flex:1; padding:28px 24px; max-width:1100px; margin:0 auto; width:100%; }
+
+/* Cards */
+.card {
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  padding:20px 22px; margin-bottom:18px;
+}
+.card-title {
+  font-family:'Syne',sans-serif; font-size:12px; font-weight:800;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:16px;
+  display:flex; align-items:center; gap:8px;
+}
+.card-title::after { content:''; flex:1; height:1px; background:var(--border); }
+
+/* Grid helpers */
+.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
+.grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
+
+/* Form fields */
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; }
+.field input, .field select, .field textarea {
+  background:var(--bg); border:1px solid var(--border); border-radius:8px;
+  padding:9px 12px; color:var(--text); font-family:'DM Mono',monospace; font-size:12px;
+  transition:border-color .2s; width:100%;
+}
+.field input:focus, .field select:focus, .field textarea:focus {
+  outline:none; border-color:var(--accent);
+}
+.field input[type=number]::-webkit-inner-spin-button { opacity:.4; }
+select option { background:var(--surface); }
+
+/* Paletes */
+.palete-grid {
+  display:grid; grid-template-columns:repeat(8,1fr); gap:8px; margin-top:4px;
+}
+.palete-col { display:flex; flex-direction:column; gap:4px; }
+.palete-label {
+  text-align:center; font-size:9px; font-family:'DM Mono',monospace;
+  color:var(--muted); letter-spacing:.08em; padding:3px;
+  background:var(--surface2); border-radius:4px; border:1px solid var(--border);
+}
+.palete-input {
+  background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:7px 4px; color:var(--text); font-family:'DM Mono',monospace;
+  font-size:13px; font-weight:500; text-align:center; width:100%;
+  transition:border-color .2s;
+}
+.palete-input:focus { outline:none; border-color:var(--accent); }
+.palete-total {
+  background:rgba(200,169,110,.08); border:1px solid rgba(200,169,110,.2);
+  border-radius:6px; padding:7px 4px; color:var(--accent);
+  font-family:'DM Mono',monospace; font-size:13px; font-weight:700; text-align:center;
+}
+
+/* Seção de etapas de contagem */
+.etapas { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
+.etapa-card {
+  background:var(--surface2); border:1px solid var(--border2); border-radius:10px; padding:14px;
+}
+.etapa-title {
+  font-size:9px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--muted2); font-family:'DM Mono',monospace; margin-bottom:10px;
+  display:flex; justify-content:space-between; align-items:center;
+}
+.etapa-lote {
+  font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--text);
+  text-align:center; padding:8px 0;
+}
+.etapa-lote-label { font-size:9px; color:var(--muted); font-family:'DM Mono',monospace; text-align:center; }
+.etapa-diff {
+  display:flex; justify-content:space-between; align-items:center;
+  background:var(--bg); border:1px solid var(--border); border-radius:6px;
+  padding:6px 10px; margin-top:10px; font-size:11px; font-family:'DM Mono',monospace;
+}
+.diff-val { font-weight:700; font-size:14px; }
+.diff-pos { color:var(--green); }
+.diff-neg { color:var(--red); }
+.diff-zero { color:var(--muted); }
+
+/* Condições do produto — checkboxes estilizados */
+.cond-grid {
+  display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
+}
+.cond-item {
+  background:var(--bg); border:1px solid var(--border); border-radius:8px;
+  padding:10px 12px; cursor:pointer; transition:all .2s;
+  display:flex; flex-direction:column; gap:6px;
+}
+.cond-item:hover { border-color:var(--border2); }
+.cond-item.ativo { border-color:rgba(200,169,110,.5); background:rgba(200,169,110,.05); }
+.cond-nome {
+  font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); font-family:'DM Mono',monospace;
+  display:flex; align-items:center; gap:6px;
+}
+.cond-dot { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background .2s; }
+.cond-item.ativo .cond-dot { background:var(--accent); }
+.cond-qtd-wrap { display:flex; gap:0; }
+.cond-qtd {
+  background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  padding:6px 8px; color:var(--text); font-family:'DM Mono',monospace;
+  font-size:14px; font-weight:500; text-align:center; width:100%;
+}
+.cond-qtd:focus { outline:none; border-color:var(--accent); }
+
+/* Painel de resultados */
+.result-row {
+  display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:14px;
+}
+.result-kpi {
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  padding:14px; text-align:center;
+}
+.result-kpi .rlbl { font-size:9px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; font-family:'DM Mono',monospace; margin-bottom:5px; }
+.result-kpi .rval { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
+.result-kpi .rsub { font-size:10px; color:var(--muted); margin-top:4px; }
+
+.situacao-badge {
+  display:inline-block; padding:4px 14px; border-radius:20px; font-size:11px;
+  font-family:'DM Mono',monospace; font-weight:700; letter-spacing:.06em;
+}
+.sit-ok      { background:var(--ok);     border:1px solid var(--ok-b);     color:var(--green); }
+.sit-atencao { background:var(--warn);   border:1px solid var(--warn-b);   color:var(--amber); }
+.sit-critico { background:var(--danger); border:1px solid var(--danger-b); color:var(--red); }
+
+/* Barra de porcentagem */
+.pct-bar-wrap { background:var(--border); border-radius:4px; height:6px; overflow:hidden; margin-top:6px; }
+.pct-bar { height:6px; border-radius:4px; transition:width .4s; }
+
+/* Botões de ação */
+.btn-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px; }
+.btn-primary {
+  background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#08080f;
+  border:none; border-radius:10px; padding:11px 22px; font-family:'Syne',sans-serif;
+  font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.04em;
+  transition:opacity .2s, transform .1s;
+}
+.btn-primary:hover { opacity:.9; transform:translateY(-1px); }
+.btn-secondary {
+  background:none; border:1px solid var(--border); color:var(--muted2);
+  border-radius:10px; padding:10px 18px; font-family:'DM Mono',monospace;
+  font-size:11px; cursor:pointer; transition:all .2s;
+}
+.btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
+.btn-danger {
+  background:none; border:1px solid var(--danger-b); color:var(--red);
+  border-radius:10px; padding:10px 18px; font-family:'DM Mono',monospace;
+  font-size:11px; cursor:pointer; transition:all .2s;
+}
+
+/* Tabela de fechamento */
+.fech-table { width:100%; border-collapse:collapse; font-size:12px; }
+.fech-table th {
+  color:var(--muted); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
+  padding:8px 10px; text-align:left; border-bottom:1px solid var(--border);
+  font-family:'DM Mono',monospace; font-weight:500;
+}
+.fech-table th.num { text-align:right; }
+.fech-table td { padding:10px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; font-family:'DM Mono',monospace; }
+.fech-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.fech-table tr:last-child td { border-bottom:none; }
+.fech-table tr:hover td { background:rgba(255,255,255,.015); }
+.fech-table tfoot td {
+  border-top:2px solid var(--border2); background:var(--surface2);
+  font-weight:700; color:var(--accent); padding:12px 10px;
+}
+
+/* Alert toast */
+.toast {
+  position:fixed; bottom:24px; right:24px; z-index:999;
+  background:var(--surface2); border:1px solid var(--border2);
+  border-radius:12px; padding:14px 18px; font-size:12px; font-family:'DM Mono',monospace;
+  max-width:320px; box-shadow:0 8px 32px rgba(0,0,0,.6);
+  transform:translateY(120%); transition:transform .3s ease;
+}
+.toast.show { transform:translateY(0); }
+.toast.toast-ok { border-color:var(--ok-b); color:var(--green); }
+.toast.toast-err { border-color:var(--danger-b); color:var(--red); }
+
+/* Resumo Cabecalho */
+.resumo-header {
+  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
+  padding:14px 18px; display:flex; gap:24px; flex-wrap:wrap; align-items:center;
+  margin-bottom:18px;
+}
+.rh-item { display:flex; flex-direction:column; gap:2px; }
+.rh-lbl { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; }
+.rh-val { font-size:14px; font-weight:600; font-family:'DM Mono',monospace; color:var(--text); }
+
+/* Seção vazia */
+.empty-state {
+  text-align:center; padding:48px 20px; color:var(--muted);
+  font-family:'DM Mono',monospace; font-size:12px;
+}
+.empty-icon { font-size:36px; margin-bottom:12px; display:block; }
+
+/* Scrollable table */
+.table-wrap { overflow-x:auto; }
+
+/* Mobile */
+@media(max-width:700px) {
+  .main { padding:16px; }
+  .palete-grid { grid-template-columns:repeat(4,1fr); }
+  .etapas { grid-template-columns:1fr; }
+  .cond-grid { grid-template-columns:repeat(2,1fr); }
+  .result-row { grid-template-columns:1fr 1fr; }
+  .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
+}
+
+/* Diff color inline */
+input.is-diff-pos { border-color:rgba(39,174,96,.4); }
+input.is-diff-neg { border-color:rgba(231,76,60,.4); }
+
+/* Highlight required */
+.required-missing { border-color:var(--red) !important; }
+</style>
+</head>
+<body>
+<div class="app-shell">
+
+  <!-- HEADER -->
+  <div class="app-header">
+    <span class="app-logo">CLASSIC</span>
+    <div class="app-sep"></div>
+    <span class="app-title">Controle de Qualidade — Lançamento de Bucho</span>
+    <div class="header-spacer"></div>
+    <button class="btn-icon" onclick="exportarCSV()">⬇ Exportar CSV</button>
+  </div>
+
+  <!-- TABS -->
+  <div class="top-tabs">
+    <button class="ttab active" onclick="showTab('formulario',this)">➕ Novo Lançamento</button>
+    <button class="ttab" onclick="showTab('fechamento',this)">📋 Fechamento da Viagem</button>
+  </div>
+
+  <!-- MAIN -->
+  <div class="main">
+
+    <!-- ══ TAB: FORMULÁRIO ══ -->
+    <div id="tab-formulario">
+
+      <!-- Cabeçalho da viagem -->
+      <div class="card">
+        <div class="card-title">📋 Identificação da Viagem</div>
+        <div class="grid-4">
+          <div class="field">
+            <label>Motorista</label>
+            <input type="text" id="f-motorista" placeholder="Nome completo" oninput="syncHeader()">
+          </div>
+          <div class="field">
+            <label>Data da Viagem</label>
+            <input type="date" id="f-data-viagem" oninput="syncHeader()">
+          </div>
+          <div class="field">
+            <label>Placa do Veículo</label>
+            <input type="text" id="f-placa" placeholder="ABC-1234" style="text-transform:uppercase" oninput="syncHeader()">
+          </div>
+          <div class="field">
+            <label>Peso de Entrada (kg)</label>
+            <input type="number" id="f-peso-entrada" placeholder="0" oninput="syncHeader()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Dados do Frigorifico -->
+      <div class="card">
+        <div class="card-title">🏭 Dados do Frigorifico</div>
+        <div class="grid-4">
+          <div class="field">
+            <label>Frigorifico</label>
+            <input type="text" id="f-frg" list="frg-list" placeholder="Nome do frigorifico" style="text-transform:uppercase" oninput="this.value=this.value.toUpperCase()">
+            <datalist id="frg-list"></datalist>
+          </div>
+          <div class="field">
+            <label>Cidade / Origem</label>
+            <input type="text" id="f-cidade" placeholder="Cidade de coleta">
+          </div>
+          <div class="field">
+            <label>Tipo de Produto</label>
+            <select id="f-tipo">
+              <option value="">Selecione...</option>
+              <option>SALGADO</option>
+              <option>CONGELADO</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>PCR / Requisição</label>
+            <input type="text" id="f-pcr" placeholder="PCR 54513">
+          </div>
+        </div>
+        <div style="margin-top:14px;" class="grid-2">
+          <div class="field">
+            <label>Data de Coleta</label>
+            <input type="date" id="f-data-coleta">
+          </div>
+          <div class="field">
+            <label>Data de Entrada</label>
+            <input type="date" id="f-data-entrada">
+          </div>
+        </div>
+      </div>
+
+      <!-- CONTAGEM INICIAL — PRONTO PARA LAVAR -->
+      <div class="card">
+        <div class="card-title">📦 Contagem Inicial — Pronto para Lavar</div>
+        <div class="palete-grid" id="paletes-inicial">
+          <!-- gerado via JS -->
+        </div>
+        <div style="margin-top:14px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+          <div class="field" style="flex:1;min-width:160px;">
+            <label>Lote Frigo (declarado)</label>
+            <input type="number" id="c-lote-frigo" placeholder="Contagem do frigo" oninput="calcContagens()">
+          </div>
+          <div class="field" style="flex:1;min-width:160px;">
+            <label>Total Contagem Classic</label>
+            <input type="number" id="c-total-classic" placeholder="Calculado" readonly
+              style="background:rgba(200,169,110,.05);border-color:rgba(200,169,110,.2);color:var(--accent);">
+          </div>
+          <div class="field" style="flex:1;min-width:160px;">
+            <label>Diferença</label>
+            <input type="number" id="c-diff" placeholder="—" readonly
+              style="background:var(--surface2);font-weight:700;">
+          </div>
+        </div>
+      </div>
+
+      <!-- ETAPAS: LAVAÇÃO / SEBO -->
+      <div class="card">
+        <div class="card-title">🔄 Etapas de Processamento</div>
+        <div class="etapas">
+
+          <!-- LAVAÇÃO -->
+          <div class="etapa-card">
+            <div class="etapa-title">
+              Lavado para Retirar o Sebo
+            </div>
+            <div class="palete-grid" id="paletes-lavacao" style="grid-template-columns:repeat(4,1fr);"><!-- JS --></div>
+            <div style="margin-top:10px;" class="field">
+              <label>Lote após Lavação</label>
+              <input type="number" id="l-lote" placeholder="0" oninput="calcLavacao()">
+            </div>
+            <div class="etapa-diff">
+              <span style="font-size:10px;color:var(--muted);">Diferença</span>
+              <span class="diff-val" id="l-diff">—</span>
+            </div>
+          </div>
+
+          <!-- PRENSADO / SEBO -->
+          <div class="etapa-card">
+            <div class="etapa-title">
+              Prensado / Sebo
+            </div>
+            <div class="palete-grid" id="paletes-sebo" style="grid-template-columns:repeat(4,1fr);"><!-- JS --></div>
+            <div style="margin-top:10px;" class="field">
+              <label>Lote após Prensagem</label>
+              <input type="number" id="s-lote" placeholder="0" oninput="calcSebo()">
+            </div>
+            <div class="etapa-diff">
+              <span style="font-size:10px;color:var(--muted);">Diferença</span>
+              <span class="diff-val" id="s-diff">—</span>
+            </div>
+          </div>
+
+          <!-- PESOS -->
+          <div class="etapa-card">
+            <div class="etapa-title">Controle de Peso</div>
+            <div class="field" style="margin-bottom:10px;">
+              <label>Peso de Saída (kg)</label>
+              <input type="number" id="p-saida" placeholder="0" oninput="calcPeso()">
+            </div>
+            <div class="field" style="margin-bottom:10px;">
+              <label>Peso de Miúdos (kg)</label>
+              <input type="number" id="p-miudos" placeholder="0" oninput="calcPeso()">
+            </div>
+            <div class="field">
+              <label>Média kg / Peça</label>
+              <input type="number" id="p-media" placeholder="—" readonly
+                style="background:rgba(200,169,110,.05);border-color:rgba(200,169,110,.2);color:var(--accent);">
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONDIÇÕES DO PRODUTO -->
+      <div class="card">
+        <div class="card-title">⚠ Condições do Produto — Não Conformidades</div>
+        <div class="cond-grid" id="cond-grid">
+          <!-- JS gera os 8 campos -->
+        </div>
+        <div style="margin-top:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+          <div class="result-kpi" style="flex:1;min-width:140px;">
+            <div class="rlbl">Total de Problemas</div>
+            <div class="rval" id="total-prob" style="color:var(--amber);">0</div>
+          </div>
+          <div class="result-kpi" style="flex:1;min-width:140px;">
+            <div class="rlbl">% de Problema</div>
+            <div class="rval" id="pct-prob" style="color:var(--amber);">0,00%</div>
+            <div class="pct-bar-wrap"><div class="pct-bar" id="pct-bar" style="background:var(--amber);width:0%"></div></div>
+          </div>
+          <div class="result-kpi" style="flex:1;min-width:140px;">
+            <div class="rlbl">Situação</div>
+            <div style="margin-top:6px;" id="situacao-badge">
+              <span class="situacao-badge sit-ok">—</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OBSERVAÇÕES E AÇÃO -->
+      <div class="card">
+        <div class="card-title">📝 Observações e Finalização</div>
+        <div class="grid-2" style="margin-bottom:14px;">
+          <div class="field">
+            <label>Situação do Lançamento</label>
+            <select id="f-situacao">
+              <option value="">Selecione...</option>
+              <option>CONCLUIDO</option>
+              <option>PENDENTE</option>
+              <option>DEVOLVIDO</option>
+              <option>EM ANÁLISE</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Observações</label>
+            <input type="text" id="f-obs" placeholder="Informações adicionais...">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-primary" onclick="salvarLancamento()">💾 Salvar Lançamento</button>
+          <button class="btn-secondary" onclick="limparFormulario()">↺ Limpar</button>
+        </div>
+        <div id="save-status" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:10px;"></div>
+      </div>
+    </div><!-- /tab-formulario -->
+
+    <!-- ══ TAB: FECHAMENTO ══ -->
+    <div id="tab-fechamento" style="display:none;">
+
+      <!-- Header de resumo da viagem -->
+      <div id="fech-header" class="resumo-header">
+        <div class="rh-item"><div class="rh-lbl">Motorista</div><div class="rh-val" id="fh-motorista">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Data</div><div class="rh-val" id="fh-data">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Placa</div><div class="rh-val" id="fh-placa">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Frigoríficos</div><div class="rh-val" id="fh-nfrg">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Total Frigo</div><div class="rh-val" id="fh-tot-frigo">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Total Classic</div><div class="rh-val" id="fh-tot-classic">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">Diferença Geral</div><div class="rh-val" id="fh-diff" style="color:var(--amber);">—</div></div>
+        <div class="rh-item"><div class="rh-lbl">% Problema Geral</div><div class="rh-val" id="fh-pct" style="color:var(--amber);">—</div></div>
+      </div>
+
+      <!-- KPIs de não conformidades totais -->
+      <div class="card">
+        <div class="card-title">📊 Resumo Qualitativo Total da Viagem</div>
+        <div class="result-row" id="kpi-conds"><!-- JS --></div>
+      </div>
+
+      <!-- Tabela de fechamento -->
+      <div class="card">
+        <div class="card-title">📋 Tabela de Fechamento</div>
+        <div id="fech-body">
+          <div class="empty-state">
+            <span class="empty-icon">📦</span>
+            Nenhum lançamento registrado ainda.<br>Preencha o formulário e salve para ver o fechamento.
+          </div>
+        </div>
+      </div>
+
+      <!-- Cálculo de qualidade -->
+      <div class="card">
+        <div class="card-title">🧮 Cálculo de Qualidade</div>
+        <div class="grid-4" style="margin-bottom:14px;">
+          <div class="result-kpi">
+            <div class="rlbl">Total Lote (Frigo)</div>
+            <div class="rval" id="cq-lote" style="color:var(--muted2);">—</div>
+          </div>
+          <div class="result-kpi">
+            <div class="rlbl">Total Problemas</div>
+            <div class="rval" id="cq-probs" style="color:var(--amber);">—</div>
+          </div>
+          <div class="result-kpi">
+            <div class="rlbl">% Qualidade</div>
+            <div class="rval" id="cq-pct" style="color:var(--amber);">—</div>
+            <div class="pct-bar-wrap"><div class="pct-bar" id="cq-bar" style="background:var(--amber);width:0%"></div></div>
+          </div>
+          <div class="result-kpi">
+            <div class="rlbl">Situação Geral</div>
+            <div style="margin-top:6px;" id="cq-sit"><span class="situacao-badge">—</span></div>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn-secondary" onclick="exportarRelatorio()">📄 Gerar Relatório PDF</button>
+          <button class="btn-secondary" onclick="exportarCSV()">⬇ Exportar CSV</button>
+        </div>
+      </div>
+
+    </div><!-- /tab-fechamento -->
+
+  </div><!-- /main -->
+</div><!-- /app-shell -->
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ────────────────────────────────────
+// CONSTANTES E ESTADO
+// ────────────────────────────────────
+const FRIGOS = ["3G","ABLG","ALEXANDRE","ALIANCA","ALIANÇA","ANGUS","ARABUTA","ASSOCIAÇÃO","ASSOCIAÇÃO CIANORTE","BECKER","BERRANTE","BO DOURADO","BOI DOURADO","BOI GORDO","BOI NOBRE","BOI SUL","BOM SUCESSO","BOSSONI","CALIBRE","CAMPO DO GADO","CAPRINI","CARNE NOBRE","CAVALCANTE","CENTER","CHAPARRAL","COLIDER","DA MATA","DASKO","DIA","DISTRIBUIDORA","D´MATTA","EJ","ENTREPOSTO","ENTREPOSTO SÃO JOSÉ","EP","ESPERANCA","ESTRELA","ESTRELA DO SUL","EURO","FRASSUL","FRIBAL","FRIBAZ","FRIGOBECKER","FRIGODIA","FRIGODINTER","FRIGOINTER","FRIGORAIS","FRIGORINI","FRIGOTERRA","FRIGOVEMA","FRIJACUIPE","FRILEM","FRIMATOS","FRINORA","FRISPAR","FRIZONTE","GOLD","GOLD CARNES","GRANDEBULL","GUSMÃO","HIPER","INTER","IPER","ITAJARA","J GUSMAO","JACOB","JAGUAR","JARAGUA","JEAN","JEAN CARLOS","JPS","JR","JS","KM","KLEIN","LEME","LUZ","LUZENSE","MAGIA","MAGISTRAL","MARCELO SANTOS","MARCIO","MARCIO CAVALCANTE","MATOS","MAX","MBS","MENDES","MG","MG COUROS","MODELO","MONTALFRIG","MORRO AGUDO","MOYA","MUQUEM","NESI","NOBRE","NOSSA SENHORA","NOVA ALIANÇA","NOVA PRATA","ORION","OTJ","OURO VERDE","PAI NOSSO","PARACATU","PRO BOI","PROBOI","RAES","RANK","REAL","RECRISUL","RODEIO","ROSO","ROSSATO","ROSSI","SALTO VELOSO","SCAPINI","SCHAEDLER","SERRA","SERRANO","SIVIERO","SOMA","SÃO FRANCISCO","SÃO GERALDO","SÃO JOSE","SÃO JOSÉ","TALISMA","TERRA","TJ","TMJ","TOTI","VADECAR","VALDEIR","VALE DA PRATA","VALE DO BOI","VELOSO","VEMA","VEREDA","VIANNA","VIDAURRE","VIEIRA","VIOLA","WOLPI","WS"];
+
+const CONDICOES = [
+  { key:'rasgados',  label:'Rasgados',    icon:'✂' },
+  { key:'furados',   label:'Furados',     icon:'🔵' },
+  { key:'pelando',   label:'Pelando',     icon:'⚠' },
+  { key:'sem_folha', label:'Sem Folha',   icon:'📄' },
+  { key:'sujos',     label:'Sujos',       icon:'🔶' },
+  { key:'pedacos',   label:'Pedaços',     icon:'🔩' },
+  { key:'corte_i',   label:'Corte Irr.', icon:'✂' },
+  { key:'folha_e',   label:'Folha Extra', icon:'📋' },
+];
+
+let lancamentos = []; // array de registros salvos
+
+// ────────────────────────────────────
+// INIT
+// ────────────────────────────────────
+(function init(){
+  // Datalist
+  const dl = document.getElementById('frg-list');
+  FRIGOS.forEach(f=>{ const o=document.createElement('option'); o.value=f; dl.appendChild(o); });
+
+  // Data padrão hoje
+  const hoje = new Date().toISOString().slice(0,10);
+  document.getElementById('f-data-viagem').value = hoje;
+  document.getElementById('f-data-coleta').value = hoje;
+  document.getElementById('f-data-entrada').value = hoje;
+
+  // Renderiza paletes
+  renderPaletes('paletes-inicial', 8, 'pi');
+  renderPaletes('paletes-lavacao', 8, 'pl');
+  renderPaletes('paletes-sebo',    8, 'ps');
+
+  // Renderiza condições
+  renderCondicoes();
+})();
+
+function renderPaletes(containerId, n, prefix){
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  for(let i=1;i<=n;i++){
+    el.innerHTML += `
+      <div class="palete-col">
+        <div class="palete-label">PLT ${String(i).padStart(2,'0')}</div>
+        <input class="palete-input" type="number" id="${prefix}-p${i}" placeholder="0"
+          oninput="calcContagens()" min="0">
+      </div>`;
+  }
+}
+
+function renderCondicoes(){
+  const grid = document.getElementById('cond-grid');
+  grid.innerHTML = CONDICOES.map(c=>`
+    <div class="cond-item" id="ci-${c.key}" onclick="toggleCond('${c.key}')">
+      <div class="cond-nome">
+        <span class="cond-dot" id="cd-${c.key}"></span>
+        ${c.icon} ${c.label}
+      </div>
+      <input class="cond-qtd" type="number" id="cq-${c.key}" placeholder="0"
+        min="0" onclick="event.stopPropagation()"
+        oninput="ativarCond('${c.key}');calcCondicoes()">
+    </div>`).join('');
+}
+
+// ────────────────────────────────────
+// TABS
+// ────────────────────────────────────
+function showTab(id, el){
+  document.querySelectorAll('.ttab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('tab-formulario').style.display = id==='formulario'?'':'none';
+  document.getElementById('tab-fechamento').style.display = id==='fechamento'?'':'none';
+  if(el) el.classList.add('active');
+  if(id==='fechamento') renderFechamento();
+}
+
+// ────────────────────────────────────
+// CÁLCULOS
+// ────────────────────────────────────
+function getPaletesSum(prefix, n=8){
+  let sum=0;
+  for(let i=1;i<=n;i++){
+    const el=document.getElementById(`${prefix}-p${i}`);
+    if(el) sum+=parseFloat(el.value)||0;
+  }
+  return sum;
+}
+
+function calcContagens(){
+  const classic = getPaletesSum('pi');
+  document.getElementById('c-total-classic').value = classic||'';
+  const frigo = parseFloat(document.getElementById('c-lote-frigo').value)||0;
+  const diff = classic - frigo;
+  const diffEl = document.getElementById('c-diff');
+  diffEl.value = classic && frigo ? diff : '';
+  diffEl.className = '';
+  if(classic && frigo){
+    diffEl.classList.add(diff>0?'is-diff-pos':diff<0?'is-diff-neg':'');
+  }
+  calcCondicoes();
+}
+
+function calcLavacao(){
+  const classic = getPaletesSum('pl');
+  const lote = parseFloat(document.getElementById('l-lote').value)||0;
+  const diff = classic - lote;
+  const el = document.getElementById('l-diff');
+  if(classic||lote){
+    el.textContent = (diff>=0?'+':'')+diff;
+    el.className = 'diff-val '+(diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero');
+  } else {
+    el.textContent='—'; el.className='diff-val diff-zero';
+  }
+}
+
+function calcSebo(){
+  const classic = getPaletesSum('ps');
+  const lote = parseFloat(document.getElementById('s-lote').value)||0;
+  const diff = classic - lote;
+  const el = document.getElementById('s-diff');
+  if(classic||lote){
+    el.textContent = (diff>=0?'+':'')+diff;
+    el.className = 'diff-val '+(diff>0?'diff-pos':diff<0?'diff-neg':'diff-zero');
+  } else {
+    el.textContent='—'; el.className='diff-val diff-zero';
+  }
+}
+
+function calcPeso(){
+  const entrada = parseFloat(document.getElementById('f-peso-entrada')?.value)||0;
+  const saida   = parseFloat(document.getElementById('p-saida').value)||0;
+  const classic = parseFloat(document.getElementById('c-total-classic').value)||0;
+  if(saida && classic){
+    const media = saida/classic;
+    document.getElementById('p-media').value = media.toFixed(3);
+  } else {
+    document.getElementById('p-media').value = '';
+  }
+}
+
+function toggleCond(key){
+  const item = document.getElementById(`ci-${key}`);
+  const wasAtivo = item.classList.contains('ativo');
+  if(wasAtivo){
+    item.classList.remove('ativo');
+    document.getElementById(`cq-${key}`).value='';
+  } else {
+    item.classList.add('ativo');
+    document.getElementById(`cq-${key}`).focus();
+  }
+  calcCondicoes();
+}
+
+function ativarCond(key){
+  const qtd = parseFloat(document.getElementById(`cq-${key}`).value)||0;
+  const item = document.getElementById(`ci-${key}`);
+  if(qtd>0) item.classList.add('ativo');
+  else item.classList.remove('ativo');
+  calcCondicoes();
+}
+
+function calcCondicoes(){
+  let total=0;
+  CONDICOES.forEach(c=>{
+    total += parseFloat(document.getElementById(`cq-${c.key}`)?.value)||0;
+  });
+  const classic = parseFloat(document.getElementById('c-total-classic').value)||0;
+  const frigo   = parseFloat(document.getElementById('c-lote-frigo').value)||classic;
+  const base    = frigo||classic||1;
+  const pct     = total/base;
+
+  document.getElementById('total-prob').textContent = total.toLocaleString('pt-BR');
+  document.getElementById('pct-prob').textContent   = (pct*100).toFixed(2).replace('.',',')+' %';
+  document.getElementById('pct-bar').style.width    = Math.min(pct*100,100).toFixed(1)+'%';
+  document.getElementById('pct-bar').style.background = pct>0.7?'#e74c3c':pct>0.4?'#e69f00':'#27ae60';
+
+  // Badge situação
+  const badge = document.getElementById('situacao-badge');
+  if(!classic && !frigo){
+    badge.innerHTML='<span class="situacao-badge">—</span>';
+  } else if(pct>0.7){
+    badge.innerHTML='<span class="situacao-badge sit-critico">⚠ CRÍTICO</span>';
+  } else if(pct>0.4){
+    badge.innerHTML='<span class="situacao-badge sit-atencao">ATENÇÃO</span>';
+  } else {
+    badge.innerHTML='<span class="situacao-badge sit-ok">✓ OK</span>';
+  }
+}
+
+// ────────────────────────────────────
+// SYNC HEADER FECHAMENTO
+// ────────────────────────────────────
+function syncHeader(){
+  const mot   = document.getElementById('f-motorista')?.value||'—';
+  const data  = document.getElementById('f-data-viagem')?.value||'—';
+  const placa = document.getElementById('f-placa')?.value||'—';
+  document.getElementById('fh-motorista').textContent = mot;
+  document.getElementById('fh-data').textContent      = data;
+  document.getElementById('fh-placa').textContent     = placa.toUpperCase();
+}
+
+// ────────────────────────────────────
+// SALVAR
+// ────────────────────────────────────
+function salvarLancamento(){
+  const frg = document.getElementById('f-frg').value.trim();
+  if(!frg){ toast('Informe o frigorifico.','err'); return; }
+
+  const classic = parseFloat(document.getElementById('c-total-classic').value)||0;
+  if(!classic){ toast('Preencha a contagem de pelo menos um palete.','err'); return; }
+
+  const condicoes={};
+  let totalProb=0;
+  CONDICOES.forEach(c=>{
+    const v=parseFloat(document.getElementById(`cq-${c.key}`)?.value)||0;
+    condicoes[c.key]=v; totalProb+=v;
+  });
+
+  const frigo = parseFloat(document.getElementById('c-lote-frigo').value)||0;
+  const base  = frigo||classic;
+  const pct   = base ? totalProb/base : 0;
+
+  const reg = {
+    id: Date.now(),
+    motorista:     document.getElementById('f-motorista').value.trim(),
+    data_viagem:   document.getElementById('f-data-viagem').value,
+    placa:         document.getElementById('f-placa').value.trim().toUpperCase(),
+    data_coleta:   document.getElementById('f-data-coleta').value,
+    data_entrada:  document.getElementById('f-data-entrada').value,
+    frigorifico:   frg.toUpperCase(),
+    cidade:        document.getElementById('f-cidade').value.trim(),
+    tipo:          document.getElementById('f-tipo').value,
+    pcr:           document.getElementById('f-pcr').value.trim(),
+    lote_frigo:    frigo,
+    total_classic: classic,
+    diferenca:     classic - frigo,
+    peso_entrada:  parseFloat(document.getElementById('f-peso-entrada').value)||0,
+    peso_saida:    parseFloat(document.getElementById('p-saida').value)||0,
+    peso_miudos:   parseFloat(document.getElementById('p-miudos').value)||0,
+    lote_lavacao:  parseFloat(document.getElementById('l-lote').value)||0,
+    lote_sebo:     parseFloat(document.getElementById('s-lote').value)||0,
+    condicoes,
+    total_problemas: totalProb,
+    pct_problema:   pct,
+    situacao:       document.getElementById('f-situacao').value || calcSituacaoAuto(pct),
+    obs:            document.getElementById('f-obs').value.trim(),
+  };
+
+  lancamentos.push(reg);
+  toast(`✅ ${reg.frigorifico} salvo! (${lancamentos.length} lançamento${lancamentos.length>1?'s':''})`, 'ok');
+  limparFrigo();
+}
+
+function calcSituacaoAuto(pct){
+  if(pct>0.7) return 'CRÍTICO';
+  if(pct>0.4) return 'ATENÇÃO';
+  return 'CONCLUIDO';
+}
+
+function limparFrigo(){
+  // Limpa apenas os dados do frigorifico, mantém motorista/viagem
+  ['f-frg','f-cidade','f-pcr','f-obs','c-lote-frigo','l-lote','s-lote','p-saida','p-miudos'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-tipo').value='';
+  document.getElementById('f-situacao').value='';
+  document.getElementById('c-total-classic').value='';
+  document.getElementById('c-diff').value='';
+  document.getElementById('p-media').value='';
+
+  // Limpa paletes
+  ['pi','pl','ps'].forEach(p=>{
+    for(let i=1;i<=8;i++){
+      const el=document.getElementById(`${p}-p${i}`); if(el) el.value='';
+    }
+  });
+
+  // Limpa condições
+  CONDICOES.forEach(c=>{
+    const el=document.getElementById(`cq-${c.key}`); if(el) el.value='';
+    document.getElementById(`ci-${c.key}`)?.classList.remove('ativo');
+  });
+
+  // Reset displays
+  document.getElementById('l-diff').textContent='—';
+  document.getElementById('l-diff').className='diff-val diff-zero';
+  document.getElementById('s-diff').textContent='—';
+  document.getElementById('s-diff').className='diff-val diff-zero';
+  document.getElementById('total-prob').textContent='0';
+  document.getElementById('pct-prob').textContent='0,00 %';
+  document.getElementById('pct-bar').style.width='0%';
+  document.getElementById('situacao-badge').innerHTML='<span class="situacao-badge sit-ok">—</span>';
+
+  // Data coleta = hoje
+  document.getElementById('f-data-coleta').value=new Date().toISOString().slice(0,10);
+}
+
+function limparFormulario(){
+  limparFrigo();
+  ['f-motorista','f-placa','f-peso-entrada'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('f-data-viagem').value=new Date().toISOString().slice(0,10);
+}
+
+// ────────────────────────────────────
+// FECHAMENTO
+// ────────────────────────────────────
+function renderFechamento(){
+  if(!lancamentos.length){
+    document.getElementById('fech-body').innerHTML=
+      '<div class="empty-state"><span class="empty-icon">📦</span>Nenhum lançamento registrado ainda.<br>Preencha o formulário e salve para ver o fechamento.</div>';
+    renderKpiConds([]);
+    atualizarHeaderFech([]);
+    return;
+  }
+
+  atualizarHeaderFech(lancamentos);
+  renderKpiConds(lancamentos);
+
+  const rows = lancamentos.map((r,i)=>{
+    const sit = r.pct_problema>0.7?'sit-critico':r.pct_problema>0.4?'sit-atencao':'sit-ok';
+    const sitLabel = r.pct_problema>0.7?'CRÍTICO':r.pct_problema>0.4?'ATENÇÃO':(r.situacao||'OK');
+    const diffCls = r.diferenca>0?'style="color:var(--green)"':r.diferenca<0?'style="color:var(--red)"':'';
+    const condsHtml = CONDICOES.map(c=>`<td class="num">${r.condicoes[c.key]||'—'}</td>`).join('');
+    return `<tr>
+      <td>${r.data_coleta||'—'}</td>
+      <td style="color:var(--muted)">${r.cidade||'—'}</td>
+      <td style="font-weight:600">${r.frigorifico}</td>
+      <td>${r.tipo||'—'}</td>
+      <td class="num">${(r.lote_frigo||0).toLocaleString('pt-BR')}</td>
+      <td class="num" style="color:var(--accent)">${(r.total_classic||0).toLocaleString('pt-BR')}</td>
+      <td class="num" ${diffCls}>${r.diferenca>=0?'+':''}${(r.diferenca||0).toLocaleString('pt-BR')}</td>
+      ${condsHtml}
+      <td class="num" style="color:var(--amber);font-weight:700">${(r.total_problemas||0).toLocaleString('pt-BR')}</td>
+      <td class="num" style="color:var(--amber)">${((r.pct_problema||0)*100).toFixed(2).replace('.',',')}%</td>
+      <td><span class="situacao-badge ${sit}">${sitLabel}</span></td>
+      <td style="color:var(--muted);font-size:10px">${r.pcr||'—'}</td>
+      <td><button onclick="removerLancamento(${r.id})" style="background:none;border:1px solid var(--danger-b);border-radius:6px;color:var(--red);font-size:10px;padding:3px 8px;cursor:pointer;">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  // Totais
+  const totFrigo   = lancamentos.reduce((s,r)=>s+(r.lote_frigo||0),0);
+  const totClassic = lancamentos.reduce((s,r)=>s+(r.total_classic||0),0);
+  const totDiff    = totClassic - totFrigo;
+  const totProb    = lancamentos.reduce((s,r)=>s+(r.total_problemas||0),0);
+  const totCondsSum= CONDICOES.map(c=>lancamentos.reduce((s,r)=>s+(r.condicoes[c.key]||0),0));
+  const pctTotal   = totFrigo ? totProb/totFrigo : 0;
+
+  const footCondsHtml = totCondsSum.map(v=>`<td class="num" style="color:var(--amber)">${v.toLocaleString('pt-BR')}</td>`).join('');
+  const diffCls = totDiff>0?'color:var(--green)':totDiff<0?'color:var(--red)':'';
+
+  document.getElementById('fech-body').innerHTML=`
+    <div class="table-wrap">
+    <table class="fech-table">
+      <thead><tr>
+        <th>Data Coleta</th><th>Cidade</th><th>Frigorifico</th><th>Tipo</th>
+        <th class="num">Frigo</th><th class="num">Classic</th><th class="num">Diferença</th>
+        ${CONDICOES.map(c=>`<th class="num">${c.label}</th>`).join('')}
+        <th class="num">Total Prob.</th><th class="num">% Prob.</th><th>Situação</th><th>PCR</th><th></th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="4" style="font-family:'Syne',sans-serif;font-size:11px;">TOTAL QUALITATIVO E QUANTITATIVO DA VIAGEM</td>
+        <td class="num">${totFrigo.toLocaleString('pt-BR')}</td>
+        <td class="num">${totClassic.toLocaleString('pt-BR')}</td>
+        <td class="num" style="${diffCls}">${totDiff>=0?'+':''}${totDiff.toLocaleString('pt-BR')}</td>
+        ${footCondsHtml}
+        <td class="num">${totProb.toLocaleString('pt-BR')}</td>
+        <td class="num">${(pctTotal*100).toFixed(2).replace('.',',')}%</td>
+        <td colspan="3"></td>
+      </tr></tfoot>
+    </table></div>`;
+
+  // CQ cards
+  const pctPct = pctTotal*100;
+  document.getElementById('cq-lote').textContent    = totFrigo.toLocaleString('pt-BR');
+  document.getElementById('cq-probs').textContent   = totProb.toLocaleString('pt-BR');
+  document.getElementById('cq-pct').textContent     = pctPct.toFixed(2).replace('.',',')+' %';
+  document.getElementById('cq-bar').style.width     = Math.min(pctPct,100).toFixed(1)+'%';
+  document.getElementById('cq-bar').style.background= pctPct>70?'#e74c3c':pctPct>40?'#e69f00':'#27ae60';
+
+  const sit = pctPct>70?'sit-critico':pctPct>40?'sit-atencao':'sit-ok';
+  const sitL = pctPct>70?'⚠ CRÍTICO':pctPct>40?'ATENÇÃO':'✓ OK';
+  document.getElementById('cq-sit').innerHTML=`<span class="situacao-badge ${sit}">${sitL}</span>`;
+}
+
+function atualizarHeaderFech(regs){
+  if(!regs.length){ return; }
+  const r0=regs[0];
+  document.getElementById('fh-motorista').textContent = r0.motorista||document.getElementById('f-motorista').value||'—';
+  document.getElementById('fh-data').textContent      = r0.data_viagem||'—';
+  document.getElementById('fh-placa').textContent     = r0.placa||'—';
+  document.getElementById('fh-nfrg').textContent      = regs.length;
+
+  const totFrigo   = regs.reduce((s,r)=>s+(r.lote_frigo||0),0);
+  const totClassic = regs.reduce((s,r)=>s+(r.total_classic||0),0);
+  const totDiff    = totClassic - totFrigo;
+  const totProb    = regs.reduce((s,r)=>s+(r.total_problemas||0),0);
+  const pct        = totFrigo ? totProb/totFrigo : 0;
+
+  document.getElementById('fh-tot-frigo').textContent  = totFrigo.toLocaleString('pt-BR');
+  document.getElementById('fh-tot-classic').textContent= totClassic.toLocaleString('pt-BR');
+  document.getElementById('fh-diff').textContent       = (totDiff>=0?'+':'')+totDiff.toLocaleString('pt-BR');
+  document.getElementById('fh-diff').style.color       = totDiff<0?'var(--red)':'var(--green)';
+  document.getElementById('fh-pct').textContent        = (pct*100).toFixed(2).replace('.',',')+' %';
+}
+
+function renderKpiConds(regs){
+  const kpiEl = document.getElementById('kpi-conds');
+  if(!regs.length){ kpiEl.innerHTML=''; return; }
+  kpiEl.innerHTML = CONDICOES.map(c=>{
+    const total = regs.reduce((s,r)=>s+(r.condicoes[c.key]||0),0);
+    return `<div class="result-kpi">
+      <div class="rlbl">${c.icon} ${c.label}</div>
+      <div class="rval" style="color:${total>0?'var(--amber)':'var(--muted2)'};">${total.toLocaleString('pt-BR')}</div>
+    </div>`;
+  }).join('');
+}
+
+function removerLancamento(id){
+  if(!confirm('Remover este lançamento?')) return;
+  lancamentos = lancamentos.filter(r=>r.id!==id);
+  renderFechamento();
+  toast('Lançamento removido.','ok');
+}
+
+// ────────────────────────────────────
+// EXPORTAR CSV
+// ────────────────────────────────────
+function exportarCSV(){
+  if(!lancamentos.length){ toast('Nenhum lançamento para exportar.','err'); return; }
+  const cols=['data_coleta','data_entrada','frigorifico','cidade','tipo','pcr',
+    'lote_frigo','total_classic','diferenca',
+    ...CONDICOES.map(c=>c.key),
+    'total_problemas','pct_problema','situacao','motorista','data_viagem','placa','peso_entrada','peso_saida','peso_miudos','obs'];
+
+  const header=cols.join(';');
+  const rows=lancamentos.map(r=>{
+    return cols.map(c=>{
+      let v;
+      if(CONDICOES.find(x=>x.key===c)) v=r.condicoes[c]??0;
+      else v=r[c]??'';
+      if(typeof v==='number') v=String(v).replace('.',',');
+      const s=String(v).replace(/"/g,'""');
+      return s.includes(';')||s.includes('"')||s.includes('\n')?`"${s}"`:s;
+    }).join(';');
+  });
+  const csv='\uFEFF'+[header,...rows].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=`lancamento_cq_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ────────────────────────────────────
+// RELATÓRIO PDF
+// ────────────────────────────────────
+function exportarRelatorio(){
+  if(!lancamentos.length){ toast('Nenhum lançamento para gerar relatório.','err'); return; }
+
+  const dataFmt = new Date().toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  const r0=lancamentos[0];
+  const motorista=r0.motorista||'—';
+  const dataViagem=r0.data_viagem||'—';
+  const placa=r0.placa||'—';
+
+  const totFrigo   = lancamentos.reduce((s,r)=>s+(r.lote_frigo||0),0);
+  const totClassic = lancamentos.reduce((s,r)=>s+(r.total_classic||0),0);
+  const totDiff    = totClassic-totFrigo;
+  const totProb    = lancamentos.reduce((s,r)=>s+(r.total_problemas||0),0);
+  const pctTotal   = totFrigo?totProb/totFrigo:0;
+  const nivel      = pctTotal>0.7?'CRÍTICO':pctTotal>0.4?'ATENÇÃO':'DENTRO DO PADRÃO';
+  const corNivel   = pctTotal>0.7?'#c0392b':pctTotal>0.4?'#e67e22':'#27ae60';
+
+  const linhas=lancamentos.map((r,i)=>{
+    const condsHtml=CONDICOES.map(c=>`<td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;">${r.condicoes[c.key]||'—'}</td>`).join('');
+    const pctN=r.pct_problema>0.7?'#c0392b':r.pct_problema>0.4?'#e67e22':'#27ae60';
+    return `<tr>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:600">${i+1}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee">${r.data_coleta||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee">${r.cidade||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:700">${r.frigorifico}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee">${r.tipo||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right">${(r.lote_frigo||0).toLocaleString('pt-BR')}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;color:#2980b9;font-weight:600">${(r.total_classic||0).toLocaleString('pt-BR')}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;color:${r.diferenca<0?'#c0392b':'#27ae60'}">${r.diferenca>=0?'+':''}${(r.diferenca||0).toLocaleString('pt-BR')}</td>
+      ${condsHtml}
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${pctN}">${(r.total_problemas||0).toLocaleString('pt-BR')}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;text-align:right;font-weight:700;color:${pctN}">${((r.pct_problema||0)*100).toFixed(2).replace('.',',')}%</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;font-weight:700;color:${pctN}">${r.situacao||'—'}</td>
+      <td style="padding:7px 10px;border-bottom:1px solid #eee;font-size:10px;color:#777">${r.pcr||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const totCondsSum=CONDICOES.map(c=>lancamentos.reduce((s,r)=>s+(r.condicoes[c.key]||0),0));
+  const footCondsHtml=totCondsSum.map(v=>`<td style="padding:9px 10px;text-align:right;font-weight:700;color:#e67e22">${v.toLocaleString('pt-BR')}</td>`).join('');
+
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Fechamento CQ — ${motorista} — ${dataViagem}</title>
+<style>
+  @page{size:A4 landscape;margin:15mm 12mm;}
+  @media print{.no-print{display:none!important}body{margin:0}}
+  body{font-family:Arial,sans-serif;color:#222;background:#fff;margin:0;padding:20px;font-size:11px;}
+  .btn-print{background:#2980b9;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:20px;margin-right:10px;}
+  .btn-close{background:#777;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:20px;}
+  table{border-collapse:collapse;}
+</style></head><body>
+<div class="no-print" style="padding:10px 0">
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Salvar como PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+</div>
+<div style="border-bottom:3px solid #c8a96e;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;">
+  <div>
+    <div style="font-size:10px;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:3px">Classic Importação e Exportação de Buchos Ltda</div>
+    <h1 style="font-size:18px;font-weight:800;color:#c8a96e;margin:0 0 3px 0">FECHAMENTO DE CONTROLE DE QUALIDADE</h1>
+    <div style="font-size:12px;color:#555">Conferência de bucho recebido — Relato de Não Conformidades</div>
+  </div>
+  <div style="text-align:right;font-size:10px;color:#888">
+    <div style="margin-bottom:2px"><strong>Motorista:</strong> ${motorista}</div>
+    <div style="margin-bottom:2px"><strong>Data:</strong> ${dataViagem}</div>
+    <div style="margin-bottom:2px"><strong>Placa:</strong> ${placa}</div>
+    <div style="color:#aaa">Gerado em ${dataFmt}</div>
+  </div>
+</div>
+
+<!-- RESUMO -->
+<div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px 16px;margin-bottom:18px;display:flex;gap:20px;flex-wrap:wrap;">
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Frigoríficos</div><div style="font-size:18px;font-weight:800;color:#333">${lancamentos.length}</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Total Frigo</div><div style="font-size:18px;font-weight:800;color:#333">${totFrigo.toLocaleString('pt-BR')}</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Total Classic</div><div style="font-size:18px;font-weight:800;color:#2980b9">${totClassic.toLocaleString('pt-BR')}</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Diferença</div><div style="font-size:18px;font-weight:800;color:${totDiff<0?'#c0392b':'#27ae60'}">${totDiff>=0?'+':''}${totDiff.toLocaleString('pt-BR')}</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Total Problemas</div><div style="font-size:18px;font-weight:800;color:#e67e22">${totProb.toLocaleString('pt-BR')}</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">% Problema</div><div style="font-size:18px;font-weight:800;color:${corNivel}">${(pctTotal*100).toFixed(2).replace('.',',')}%</div></div>
+  <div><div style="font-size:9px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Situação Geral</div><div style="font-size:14px;font-weight:800;color:${corNivel}">${nivel}</div></div>
+</div>
+
+<!-- TABELA PRINCIPAL -->
+<table style="width:100%;font-size:9px">
+  <thead><tr style="background:#c8a96e;color:#fff">
+    <th style="padding:7px 8px;text-align:left">#</th>
+    <th style="padding:7px 8px;text-align:left">Data</th>
+    <th style="padding:7px 8px;text-align:left">Cidade</th>
+    <th style="padding:7px 8px;text-align:left">Frigorifico</th>
+    <th style="padding:7px 8px;text-align:left">Tipo</th>
+    <th style="padding:7px 8px;text-align:right">Frigo</th>
+    <th style="padding:7px 8px;text-align:right">Classic</th>
+    <th style="padding:7px 8px;text-align:right">Dif.</th>
+    ${CONDICOES.map(c=>`<th style="padding:7px 8px;text-align:right">${c.label}</th>`).join('')}
+    <th style="padding:7px 8px;text-align:right">Tot.Prob</th>
+    <th style="padding:7px 8px;text-align:right">%</th>
+    <th style="padding:7px 8px;text-align:left">Situação</th>
+    <th style="padding:7px 8px;text-align:left">PCR</th>
+  </tr></thead>
+  <tbody>${linhas}</tbody>
+  <tfoot><tr style="background:#f5f5f5;font-weight:700">
+    <td colspan="5" style="padding:9px 10px">TOTAL QUALITATIVO E QUANTITATIVO DA VIAGEM</td>
+    <td style="padding:9px 10px;text-align:right">${totFrigo.toLocaleString('pt-BR')}</td>
+    <td style="padding:9px 10px;text-align:right;color:#2980b9">${totClassic.toLocaleString('pt-BR')}</td>
+    <td style="padding:9px 10px;text-align:right;color:${totDiff<0?'#c0392b':'#27ae60'}">${totDiff>=0?'+':''}${totDiff.toLocaleString('pt-BR')}</td>
+    ${footCondsHtml}
+    <td style="padding:9px 10px;text-align:right;color:${corNivel}">${totProb.toLocaleString('pt-BR')}</td>
+    <td style="padding:9px 10px;text-align:right;color:${corNivel}">${(pctTotal*100).toFixed(2).replace('.',',')}%</td>
+    <td colspan="2" style="padding:9px 10px;color:${corNivel}">${nivel}</td>
+  </tfoot>
+</table>
+
+<div style="margin-top:30px;border-top:1px solid #ddd;padding-top:12px;display:flex;justify-content:space-between;font-size:9px;color:#aaa">
+  <span>Classic Importação e Exportação de Buchos Ltda · Uso Interno</span>
+  <span>Gerado em ${dataFmt} · Ferramenta de Controle de Qualidade</span>
+</div>
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(!w) toast('Permita pop-ups para este site.','err');
+}
+
+// ────────────────────────────────────
+// TOAST
+// ────────────────────────────────────
+function toast(msg, type='ok'){
+  const el=document.getElementById('toast');
+  el.textContent=msg;
+  el.className='toast show toast-'+(type==='err'?'err':'ok');
+  setTimeout(()=>el.classList.remove('show'),3200);
+}
+</script>
+</body>
+</html>

@@ -282,17 +282,23 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 /* Highlight required */
 .required-missing { border-color:var(--red) !important; }
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
 </head>
 <body>
 <div class="app-shell">
 
   <!-- HEADER -->
   <div class="app-header">
+    <a href="index.html" style="color:var(--muted2);font-size:11px;font-family:'DM Mono',monospace;text-decoration:none;letter-spacing:.08em;margin-right:4px;">← Menu</a>
+    <div class="app-sep"></div>
     <span class="app-logo">CLASSIC</span>
     <div class="app-sep"></div>
     <span class="app-title">Controle de Qualidade — Lançamento de Bucho</span>
     <div class="header-spacer"></div>
-    <button class="btn-icon" onclick="exportarCSV()">⬇ Exportar CSV</button>
+    <span id="huser" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-right:12px;"></span>
+    <button class="btn-icon" onclick="exportarCSV()" style="margin-right:8px;">⬇ Exportar CSV</button>
+    <button class="btn-icon" onclick="fazerLogout()">Sair</button>
   </div>
 
   <!-- TABS -->
@@ -591,7 +597,15 @@ let lancamentos = []; // array de registros salvos
 // ────────────────────────────────────
 // INIT
 // ────────────────────────────────────
-(function init(){
+(async function init(){
+  // Auth guard
+  if (typeof authGuard === 'function') {
+    const perfil = await authGuard();
+    if (!perfil) return;
+    const huser = document.getElementById('huser');
+    if (huser) huser.textContent = perfil.nome;
+  }
+
   // Datalist
   const dl = document.getElementById('frg-list');
   FRIGOS.forEach(f=>{ const o=document.createElement('option'); o.value=f; dl.appendChild(o); });

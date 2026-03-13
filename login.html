@@ -215,15 +215,35 @@ input.error {
   const el = document.getElementById('logoImg');
   if (s) el.src = s; else el.style.display = 'none';
 
-  // Se já tem sessão válida, redirecionar para index
+  // Se já tem sessão válida no localStorage, tentar validar antes de redirecionar
   const raw = localStorage.getItem('cq_sess_v2');
   if (raw) {
     try {
       const sess = JSON.parse(raw);
       if (sess.token && sess.user) {
-        window.location.href = 'index.html';
+        // Mostrar loading e verificar sessão
+        document.body.style.opacity = '0.7';
+        const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+        fetch(`${SB_URL}/rest/v1/cq_sessoes?session_token=eq.${sess.token}&ativa=eq.true`, {
+          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+        }).then(r => r.json()).then(rows => {
+          if (rows && rows.length > 0) {
+            // Sessão válida — redirecionar
+            window.location.href = 'index.html';
+          } else {
+            // Sessão expirada — limpar e mostrar login
+            localStorage.removeItem('cq_sess_v2');
+            document.body.style.opacity = '1';
+          }
+        }).catch(() => {
+          // Sem conexão — redirecionar mesmo assim (offline mode)
+          window.location.href = 'index.html';
+        });
       }
-    } catch {}
+    } catch {
+      localStorage.removeItem('cq_sess_v2');
+    }
   }
 
   // Verificar se veio de sessão expirada

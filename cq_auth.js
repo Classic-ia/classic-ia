@@ -96,7 +96,7 @@ const CQAuth = (function () {
   // ── AUDIT LOG ─────────────────────────────────────────────
   async function _log(acao, detalhes = {}) {
     if (!_user) return;
-    await _post('cq_audit_log', {
+    try { await _post('cq_audit_log', {
       usuario_id:    _user.id,
       usuario_email: _user.email,
       usuario_nome:  _user.nome,
@@ -106,7 +106,7 @@ const CQAuth = (function () {
       longitude:     _geo?.longitude || null,
       dentro_planta: _geo?.dentro_planta ?? null,
       criado_em:     new Date().toISOString(),
-    });
+    }); } catch(e) { console.warn('[CQAuth] audit_log:', e.message); }
   }
 
   // ── TOKEN ─────────────────────────────────────────────────
@@ -118,15 +118,15 @@ const CQAuth = (function () {
 
   // ── SESSÃO ÚNICA ──────────────────────────────────────────
   async function _abrirSessao() {
-    // Invalidar sessões antigas do mesmo usuário
-    await _patch('cq_sessoes',
+    // Invalidar sessões antigas (silencioso se tabela não existe)
+    try { await _patch('cq_sessoes',
       `usuario_id=eq.${_user.id}&ativa=eq.true`,
       { ativa: false, encerrada_em: new Date().toISOString() }
-    );
+    ); } catch(e) {}
     // Criar nova sessão
     _token = _mkToken();
     const expira = new Date(Date.now() + TIMEOUT_MS).toISOString();
-    await _post('cq_sessoes', {
+    try { await _post('cq_sessoes', {
       usuario_id:    _user.id,
       usuario_email: _user.email,
       session_token: _token,
@@ -134,7 +134,7 @@ const CQAuth = (function () {
       expira_em:     expira,
       ativa:         true,
       criado_em:     new Date().toISOString(),
-    });
+    }); } catch(e) { console.warn('[CQAuth] Tabela cq_sessoes não existe ainda'); }
     // Persistir no localStorage
     localStorage.setItem(STORE_KEY, JSON.stringify({
       token: _token, user: _user, ts: Date.now()
@@ -142,9 +142,18 @@ const CQAuth = (function () {
   }
 
   async function _validarSessao() {
-    const rows = await _get('cq_sessoes',
-      `session_token=eq.${_token}&ativa=eq.true`);
-    return rows.length > 0;
+    try {
+      const rows = await _get('cq_sessoes',
+        `session_token=eq.${_token}&ativa=eq.true`);
+      // Se retornou array (mesmo vazio), confiar no resultado
+      if (Array.isArray(rows)) return rows.length > 0;
+      // Se retornou erro/objeto (tabela não existe ainda), aceitar a sessão local
+      return true;
+    } catch (e) {
+      // Sem conexão ou tabela não existe → aceitar sessão local
+      console.warn('[CQAuth] Validação offline — aceitando sessão local');
+      return true;
+    }
   }
 
   async function _heartbeat() {

@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Dashboard de Cargas — Classic Couros</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
@@ -206,6 +208,7 @@ canvas { max-width:100%; }
 <!-- ══ UPLOAD ══ -->
 <div id="screen-upload">
   <header>
+    <a href="index.html" style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:20px;transition:color .2s,border-color .2s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">← Menu Principal</a>
     <div class="eyebrow">Classic Couros · Análise de Recebimento</div>
     <h1>Dashboard<br>de Cargas</h1>
     <p class="desc">Exporte os registros do sistema (CSV) e arraste aqui.<br>O dashboard é gerado localmente, sem enviar dados para internet.</p>
@@ -357,11 +360,25 @@ canvas { max-width:100%; }
   <!-- RANKING -->
   <div id="ranking" class="section">
     <div class="card">
-      <div class="rank-tabs">
-        <button class="rank-tab act-a" id="rtabA" onclick="showRankTab('A')">Classe A</button>
-        <button class="rank-tab"       id="rtabB" onclick="showRankTab('B')">Classe B</button>
-        <button class="rank-tab"       id="rtabC" onclick="showRankTab('C')">Classe C</button>
-        <button class="rank-tab"       id="rtabT" onclick="showRankTab('T')">Volume Total</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:4px;">
+        <div class="rank-tabs" style="margin-bottom:0;">
+          <button class="rank-tab act-a" id="rtabA" onclick="showRankTab('A')">Classe A</button>
+          <button class="rank-tab"       id="rtabB" onclick="showRankTab('B')">Classe B</button>
+          <button class="rank-tab"       id="rtabC" onclick="showRankTab('C')">Classe C</button>
+          <button class="rank-tab"       id="rtabT" onclick="showRankTab('T')">Volume Total</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button onclick="exportRankingExcel()" title="Exportar para Excel"
+            style="display:flex;align-items:center;gap:6px;background:rgba(33,115,70,.15);border:1px solid rgba(33,115,70,.4);border-radius:8px;padding:7px 14px;color:#2e9e5b;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+            Excel
+          </button>
+          <button onclick="exportRankingPDF()" title="Exportar para PDF"
+            style="display:flex;align-items:center;gap:6px;background:rgba(204,74,74,.12);border:1px solid rgba(204,74,74,.35);border-radius:8px;padding:7px 14px;color:#e05555;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+            PDF
+          </button>
+        </div>
       </div>
       <div id="rankBody"></div>
       <div id="btnRelWrap" style="display:none;text-align:center;margin-top:18px">
@@ -445,8 +462,46 @@ function processFile(){
         rows=parseCSV(text);
       } else {
         const data=new Uint8Array(e.target.result);
-        const wb=XLSX.read(data,{type:'array'});
-        rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+        const wb=XLSX.read(data,{type:'array', cellDates:true});
+        // Lê TODAS as abas (exceto RESUMO), cada aba = uma carga
+        const ignorar=/resumo/i;
+        wb.SheetNames.forEach(sheetName=>{
+          if(ignorar.test(sheetName)) return;
+          // Número da carga = nome da aba (ex: "CARGA 01" → "01", "02" → "02")
+          const numCarga=sheetName.replace(/[^0-9]/g,'').padStart(2,'0') || sheetName.trim();
+          const ws=wb.Sheets[sheetName];
+          // Lê como array de arrays para acessar por posição
+          const matrix=XLSX.utils.sheet_to_json(ws,{header:1, defval:null, raw:false});
+          // Estrutura: col A=vazio, B=data, C=frigo, D=cnt_frigo, E=cnt_classic, F=pcs_a, G=%a, H=pcs_b, I=%b, J=pcs_c, K=%c, L=repasse
+          // Índices 0-based: A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7,I=8,J=9,K=10,L=11
+          for(let i=1;i<matrix.length;i++){
+            const r=matrix[i];
+            if(!r || !r[2]) continue; // sem frigorífico
+            const frigo=String(r[2]).trim().toUpperCase();
+            if(!frigo || /^total|^soma|^grand|^repasse/i.test(frigo)) continue;
+            // Data: SheetJS retorna string formatada com raw:false
+            let dataStr='';
+            if(r[1]){
+              const d=new Date(r[1]);
+              if(!isNaN(d)) dataStr=d.toISOString().slice(0,10);
+              else dataStr=String(r[1]).slice(0,10);
+            }
+            const n2=v=>{ if(v===null||v===undefined||v==='') return 0; return parseFloat(String(v).replace(',','.'))||0; };
+            const pcsA=n2(r[5]), pcsB=n2(r[7]), pcsC=n2(r[9]);
+            const tot=pcsA+pcsB+pcsC;
+            if(tot===0) continue;
+            rows.push({
+              numero_carga: numCarga,
+              data_chegada: dataStr,
+              frigorifico: frigo,
+              cnt_frigo: n2(r[3]),
+              cnt_classic: n2(r[4]),
+              pcs_a: pcsA, pcs_b: pcsB, pcs_c: pcsC,
+              pct_a: n2(r[6]), pct_b: n2(r[8]), pct_c: n2(r[10]),
+              obs: String(r[11]||''),
+            });
+          }
+        });
       }
       if(!rows.length){ showErr('Arquivo vazio ou formato não reconhecido.'); return; }
       processRows(rows);
@@ -517,7 +572,7 @@ function processRows(rows){
                (pctA>=70?'A':pctA>=30?'B':'C');
     const cntClassic=n(norm(row,['cnt_classic','cntclassic','classic','contagem_classic']));
     const cntFrigo  =n(norm(row,['cnt_frigo','cntfrigo','frigo','contagem_frigo']));
-    const obs=String(norm(row,['obs','observacoes','observações'])||'');
+    const obs=String(row.obs!==undefined?row.obs:norm(row,['obs','observacoes','observações'])||'');
 
     const parsed={
       numero_carga:numeroCarga, data_chegada:dataChegada, frigorifico,
@@ -545,7 +600,11 @@ function processRows(rows){
     cg.frigorificos[frigorifico].total+=Math.round(tot);
   });
 
-  if(!Object.keys(cargaMap).length){ showErr('Nenhum dado válido encontrado. Verifique se as colunas estão corretas.'); return; }
+  if(!Object.keys(cargaMap).length){
+    const foundCols=rows.length?Object.keys(rows[0]).join(', '):'(nenhuma)';
+    showErr('Nenhum dado válido encontrado.<br><br><b>Colunas detectadas no arquivo:</b><br><span style="font-family:monospace;font-size:11px;color:var(--accent);">'+foundCols+'</span><br><br>Verifique se os nomes batem com: numero_carga, data_chegada, frigorifico, pcs_a, pcs_b, pcs_c');
+    return;
+  }
 
   // Finaliza percentuais por carga
   CARGAS={};
@@ -828,6 +887,7 @@ function showTab(id,btn){
 function buildRanking(frigs){ _rankData=frigs; showRankTab('A'); }
 
 function showRankTab(prod){
+  _currentRankTab=prod;
   ['A','B','C','T'].forEach(p=>{
     const b=document.getElementById('rtab'+p);
     if(!b) return;
@@ -1068,6 +1128,128 @@ function resetApp(){
   document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===0));
   document.querySelectorAll('.section').forEach((s,i)=>s.classList.toggle('active',i===0));
 }
+
+// ── Export Ranking ──
+let _currentRankTab = 'A';
+
+function exportRankingExcel(){
+  if(!_rankData.length){ alert('Carregue um arquivo primeiro.'); return; }
+  const {sorted, isT, prod, colLabel, pctLabel} = getRankSorted(_currentRankTab);
+  if(!sorted.length){ alert('Sem dados para exportar.'); return; }
+
+  const tabLabel = prod==='T'?'Volume Total':'Classe '+prod;
+  const wsData = [[`RANKING — ${tabLabel}`, '', '', ''],
+                  ['Posição', 'Frigorífico', colLabel, pctLabel]];
+  sorted.forEach((f,i)=>{
+    const pos = i===0?'1º Lugar': i===1?'2º Lugar': i===2?'3º Lugar': `${i+1}º`;
+    const val = isT ? f.total : f['pcs_'+prod];
+    const pct = isT ? '—' : f['pct_'+prod].toFixed(1)+'%';
+    wsData.push([pos, f.nome, val, pct]);
+  });
+
+  const wb2 = XLSX.utils.book_new();
+  // Uma aba por classe + total
+  ['A','B','C','T'].forEach(p=>{
+    const {sorted:s2, isT:iT2, colLabel:cl, pctLabel:pl} = getRankSorted(p);
+    const lbl = p==='T'?'Volume Total':'Classe '+p;
+    const data = [['Posição','Frigorífico', cl, pl]];
+    s2.forEach((f,i)=>{
+      const pos = `${i+1}º`;
+      const val = iT2 ? f.total : f['pcs_'+p];
+      const pct = iT2 ? '' : f['pct_'+p].toFixed(1)+'%';
+      data.push([pos, f.nome, val, pct]);
+    });
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    // Larguras
+    ws['!cols'] = [{wch:8},{wch:30},{wch:14},{wch:10}];
+    XLSX.utils.book_append_sheet(wb2, ws, lbl);
+  });
+
+  const hoje = new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb2, `ranking_cargas_${hoje}.xlsx`);
+}
+
+function exportRankingPDF(){
+  if(!_rankData.length){ alert('Carregue um arquivo primeiro.'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const hoje = new Date().toLocaleDateString('pt-BR');
+  const classes = ['A','B','C','T'];
+  const labels  = ['Classe A — Melhor Desempenho','Classe B — Desempenho Intermediário','Classe C — Requer Atenção','Volume Total'];
+  const colors  = [[0,114,178],[230,159,0],[204,121,167],[200,169,110]];
+
+  let startY = 20;
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(14);
+  doc.setTextColor(200,169,110);
+  doc.text('RANKING DE FRIGORÍFICOS — CLASSIC COUROS', 105, 12, {align:'center'});
+  doc.setFontSize(8);
+  doc.setTextColor(150,150,150);
+  doc.text('Gerado em '+hoje, 105, 17, {align:'center'});
+
+  classes.forEach((p,idx)=>{
+    const {sorted, isT, colLabel, pctLabel} = getRankSorted(p);
+    if(!sorted.length) return;
+    const cor = colors[idx];
+
+    doc.autoTable({
+      startY: startY,
+      head: [[labels[idx],'','','']],
+      body: [],
+      theme:'plain',
+      styles:{fontSize:9, fontStyle:'bold', textColor:cor, cellPadding:2},
+      headStyles:{fillColor:false, textColor:cor},
+      margin:{left:14, right:14},
+    });
+    startY = doc.lastAutoTable.finalY + 1;
+
+    const body = sorted.map((f,i)=>{
+      const val = isT ? f.total.toLocaleString('pt-BR') : f['pcs_'+p].toLocaleString('pt-BR');
+      const pct = isT ? '—' : f['pct_'+p].toFixed(1)+'%';
+      return [`${i+1}º`, f.nome, val, pct];
+    });
+
+    doc.autoTable({
+      startY: startY,
+      head: [['#','Frigorífico', colLabel, pctLabel]],
+      body: body,
+      theme:'grid',
+      styles:{fontSize:8, cellPadding:2.5, font:'helvetica'},
+      headStyles:{fillColor:[30,30,30], textColor:[200,169,110], fontStyle:'bold', fontSize:8},
+      alternateRowStyles:{fillColor:[25,25,25]},
+      bodyStyles:{textColor:[220,220,220], fillColor:[18,18,18]},
+      columnStyles:{0:{cellWidth:12,halign:'center'}, 1:{cellWidth:90}, 2:{cellWidth:28,halign:'right'}, 3:{cellWidth:22,halign:'right'}},
+      margin:{left:14, right:14},
+      didDrawCell: (d)=>{
+        // Destaca críticos (Classe C > 40%)
+        if(p==='C' && d.section==='body' && d.column.index===3){
+          const row = sorted[d.row.index];
+          if(row && row.pct_c > 40){
+            doc.setTextColor(231,76,60);
+            doc.text(d.cell.text[0], d.cell.x+d.cell.width-1.5, d.cell.y+d.cell.height/2+0.5, {align:'right'});
+          }
+        }
+      }
+    });
+
+    startY = doc.lastAutoTable.finalY + 8;
+    if(startY > 250 && idx < classes.length-1){ doc.addPage(); startY=15; }
+  });
+
+  const hoje2 = new Date().toISOString().slice(0,10);
+  doc.save(`ranking_cargas_${hoje2}.pdf`);
+}
+
+function getRankSorted(prod){
+  const isT = prod==='T';
+  const sorted = isT
+    ? [..._rankData].filter(f=>f.total>0).sort((a,b)=>b.total-a.total)
+    : [..._rankData].filter(f=>f['pcs_'+prod]>0).sort((a,b)=>b['pct_'+prod]-a['pct_'+prod]);
+  const colLabel = isT?'Total Peças':prod==='A'?'Peças A':'Peças '+prod;
+  const pctLabel = isT?'—':'% do Total';
+  return {sorted, isT, prod, colLabel, pctLabel};
+}
+
 </script>
 </body>
 </html>

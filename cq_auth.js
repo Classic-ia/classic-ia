@@ -40,8 +40,9 @@ const CQAuth = (function () {
   async function _get(tabela, qs) {
     try {
       const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, { headers: _h() });
-      return r.ok ? r.json() : [];
-    } catch { return []; }
+      if (r.ok) return r.json();
+      return null; // distingue erro de array vazio
+    } catch { return null; } // sem conexão
   }
 
   async function _post(tabela, dados) {
@@ -142,16 +143,25 @@ const CQAuth = (function () {
   }
 
   async function _validarSessao() {
+    // Se o token e usuário existem no localStorage, a sessão é válida.
+    // A tabela cq_sessoes é usada para auditoria, não para autenticação primária.
+    // Validação real é feita via Supabase Auth no momento do login.
+    if (!_user || !_token) return false;
+
+    // Opcionalmente, verificar na tabela cq_sessoes se ela existir
     try {
-      const rows = await _get('cq_sessoes',
-        `session_token=eq.${_token}&ativa=eq.true`);
-      // Se retornou array (mesmo vazio), confiar no resultado
-      if (Array.isArray(rows)) return rows.length > 0;
-      // Se retornou erro/objeto (tabela não existe ainda), aceitar a sessão local
+      const r = await fetch(
+        `${SB_URL}/rest/v1/cq_sessoes?session_token=eq.${_token}&ativa=eq.true`,
+        { headers: _h() }
+      );
+      if (r.ok) {
+        const rows = await r.json();
+        return rows.length > 0;
+      }
+      // Tabela não existe (404/400) ou outro erro HTTP → aceitar sessão local
       return true;
-    } catch (e) {
-      // Sem conexão ou tabela não existe → aceitar sessão local
-      console.warn('[CQAuth] Validação offline — aceitando sessão local');
+    } catch {
+      // Sem conexão → aceitar sessão local
       return true;
     }
   }

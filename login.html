@@ -205,7 +205,14 @@ input.error {
     <span>⚠️</span><span id="errTxt"></span>
   </div>
 
-  <div class="version">Classic CQ · v2025 · Jardim Alegre/PR</div>
+  <div id="demoDiv" style="text-align:center;margin-top:16px;">
+  <button onclick="entrarModoDemo()" style="
+    background:none;border:none;color:#1e3a52;cursor:pointer;
+    font-size:11px;font-family:'DM Mono',monospace;
+    text-decoration:underline;padding:4px;
+  ">⚙️ Modo demonstração (sem servidor)</button>
+</div>
+<div class="version">Classic CQ · v2025 · Jardim Alegre/PR</div>
 </div>
 
 <script>
@@ -215,35 +222,29 @@ input.error {
   const el = document.getElementById('logoImg');
   if (s) el.src = s; else el.style.display = 'none';
 
-  // Se já tem sessão válida no localStorage, tentar validar antes de redirecionar
-  const raw = localStorage.getItem('cq_sess_v2');
-  if (raw) {
-    try {
+  // Se já tem sessão no localStorage → ir para o sistema
+  // (o index.html vai validar a sessão e redirecionar de volta se inválida)
+  try {
+    const raw = localStorage.getItem('cq_sess_v2');
+    if (raw) {
       const sess = JSON.parse(raw);
-      if (sess.token && sess.user) {
-        // Mostrar loading e verificar sessão
-        document.body.style.opacity = '0.7';
-        const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
-        const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
-        fetch(`${SB_URL}/rest/v1/cq_sessoes?session_token=eq.${sess.token}&ativa=eq.true`, {
-          headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
-        }).then(r => r.json()).then(rows => {
-          if (rows && rows.length > 0) {
-            // Sessão válida — redirecionar
-            window.location.href = 'index.html';
-          } else {
-            // Sessão expirada — limpar e mostrar login
-            localStorage.removeItem('cq_sess_v2');
-            document.body.style.opacity = '1';
-          }
-        }).catch(() => {
-          // Sem conexão — redirecionar mesmo assim (offline mode)
+      if (sess.token && sess.user && sess.ts) {
+        // Verificar se não expirou pelo timestamp local (1h)
+        const umHora = 60 * 60 * 1000;
+        const idade  = Date.now() - (sess.ts || 0);
+        if (idade < umHora) {
           window.location.href = 'index.html';
-        });
+          return; // parar execução
+        } else {
+          // Expirou localmente — limpar
+          localStorage.removeItem('cq_sess_v2');
+        }
+      } else {
+        localStorage.removeItem('cq_sess_v2');
       }
-    } catch {
-      localStorage.removeItem('cq_sess_v2');
     }
+  } catch {
+    localStorage.removeItem('cq_sess_v2');
   }
 
   // Verificar se veio de sessão expirada
@@ -293,6 +294,22 @@ async function fazerLogin() {
     spin.style.display = 'none';
     txt.textContent = 'Entrar';
   }
+}
+
+function entrarModoDemo() {
+  // Cria sessão local sem validação do servidor
+  const sessaoDemo = {
+    token: 'demo-' + Date.now(),
+    user: {
+      id:     'demo-user-001',
+      email:  'demo@classic.com.br',
+      nome:   'Usuário Demo',
+      perfil: 'gestor',
+    },
+    ts: Date.now(),
+  };
+  localStorage.setItem('cq_sess_v2', JSON.stringify(sessaoDemo));
+  window.location.href = 'index.html';
 }
 
 function mostrarErro(msg) {

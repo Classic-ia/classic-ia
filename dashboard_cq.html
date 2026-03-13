@@ -540,7 +540,7 @@ canvas.tall{max-height:320px;}
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="cq_auth.js"></script>
 <script>
 // === CHART REGISTRY ===
 const _charts = {};
@@ -573,24 +573,63 @@ const chartDefaults = {
 };
 
 // === INIT ===
+const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
 (async () => {
-  await authGuard();
-  if (!perfilAtual) return;
-  document.getElementById('huser').textContent = perfilAtual.nome + ' · ' + perfilAtual.perfil;
-  // default period: last 90 days
+  // Inicializar auth com cq_auth.js
+  const usuario = await CQAuth.init();
+  if (!usuario) return;
+
+  // Preencher header
+  const huser = document.getElementById('huser');
+  if (huser) huser.textContent = (usuario.nome || usuario.email) + ' · ' + (usuario.perfil || '');
+
+  // Período padrão: últimos 90 dias
   const hoje = new Date();
   const de90 = new Date(); de90.setDate(hoje.getDate()-90);
-  document.getElementById('filtDe').value = de90.toISOString().slice(0,10);
-  document.getElementById('filtAte').value = hoje.toISOString().slice(0,10);
+  const filtDe  = document.getElementById('filtDe');
+  const filtAte = document.getElementById('filtAte');
+  if (filtDe)  filtDe.value  = de90.toISOString().slice(0,10);
+  if (filtAte) filtAte.value = hoje.toISOString().slice(0,10);
+
   await carregar();
 })();
 
 // === LOAD ===
 async function carregar() {
   document.getElementById('pageSub').innerHTML = '<span>Carregando…</span>';
-  const { data, error } = await sb.from('registros_cq').select('*').order('created_at', { ascending: false }).limit(1000);
-  if (error) { document.getElementById('pageSub').innerHTML = '<span style="color:var(--err2)">Erro: ' + error.message + '</span>'; return; }
-  todosRegistros = data || [];
+  // Buscar de ambas as tabelas (nova e legada)
+  let todosTemp = [];
+  try {
+    // Tabela nova (registros_cq_inspecao)
+    const r1 = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/rest/v1/registros_cq_inspecao?order=data_inspecao.desc&limit=1000`, {
+      headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw' }
+    });
+    if (r1.ok) {
+      const d1 = await r1.json();
+      // Normalizar campos para compatibilidade
+      todosTemp = (d1 || []).map(r => ({
+        ...r,
+        created_at:       r.criado_em,
+        data_entrada:     r.data_inspecao,
+        qtd_amostra:      r.quantidade_analisada,
+        qtd_total_lote:   r.quantidade_lote,
+        percentual_defeito: r.percentual_defeitos,
+        numero_requisicao: r.lote_atak,
+        liberado_producao: r.status_final === 'aprovado',
+      }));
+    }
+    // Tabela legada (registros_cq) — complementar
+    const r2 = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/rest/v1/registros_cq?order=created_at.desc&limit=500`, {
+      headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw' }
+    });
+    if (r2.ok) {
+      const d2 = await r2.json();
+      todosTemp = [...todosTemp, ...(d2 || [])];
+    }
+  } catch(e) { console.warn('Erro ao buscar dados:', e); }
+  todosRegistros = todosTemp;
   popularFiltrosForn();
   popularFiltrosAnalista();
   aplicarFiltro();

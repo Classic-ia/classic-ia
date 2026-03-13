@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard de Cargas — Classic Couros</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
+
+:root {
+  --bg:      #08080f;
+  --surface: #111120;
+  --border:  #1e1e35;
+  --accent:  #c8a96e;
+  --blue:    #0072B2;
+  --amber:   #E69F00;
+  --magenta: #CC79A7;
+  --green:   #27ae60;
+  --red:     #e74c3c;
+  --text:    #e0e0f0;
+  --muted:   #555577;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Mono', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 36px 20px 60px;
+}
+
+/* ── TELA UPLOAD ── */
+#screen-upload { width:100%; max-width:640px; }
+#screen-dash   { display:none; width:100%; max-width:960px; }
+
+header { text-align:center; margin-bottom:36px; }
+.eyebrow { font-size:10px; letter-spacing:4px; color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
+h1 {
+  font-family:'Syne',sans-serif;
+  font-size:clamp(24px,5vw,40px); font-weight:800; line-height:1.1;
+  background:linear-gradient(100deg,var(--accent),var(--amber),var(--magenta));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px;
+}
+.desc { font-size:12px; color:var(--muted); line-height:1.9; }
+
+/* Drop zone */
+.dropzone {
+  width:100%; border:2px dashed var(--border); border-radius:20px;
+  padding:64px 30px; text-align:center; cursor:pointer;
+  background:var(--surface); margin-bottom:16px;
+  transition:border-color .25s, background .25s;
+}
+.dropzone:hover, .dropzone.drag { border-color:var(--accent); background:rgba(200,169,110,.06); }
+.dropzone.ready { border-color:var(--green); border-style:solid; }
+.drop-icon { font-size:46px; margin-bottom:14px; display:block; }
+.drop-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; margin-bottom:6px; }
+.drop-sub { font-size:11px; color:var(--muted); }
+#xlsxInput { display:none; }
+
+.file-info {
+  display:none; align-items:center; gap:12px;
+  background:rgba(39,174,96,.08); border:1px solid rgba(39,174,96,.3);
+  border-radius:12px; padding:12px 16px; margin-bottom:16px;
+}
+.file-info.show { display:flex; }
+.file-name { font-size:12px; color:var(--green); flex:1; word-break:break-all; }
+.file-size { font-size:10px; color:var(--muted); white-space:nowrap; }
+.file-rm { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; }
+.file-rm:hover { color:var(--red); }
+
+/* Instruções de formato */
+.format-hint {
+  background:var(--surface); border:1px solid var(--border); border-radius:14px;
+  padding:18px 22px; margin-top:12px;
+}
+.format-hint .fh-title { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:12px; }
+.format-hint .fh-cols { display:flex; flex-wrap:wrap; gap:6px; }
+.fh-col { background:rgba(200,169,110,.08); border:1px solid rgba(200,169,110,.2); border-radius:6px; padding:4px 10px; font-size:10px; color:var(--accent); }
+
+.btn-gen {
+  width:100%; padding:16px; border:none; border-radius:14px; cursor:pointer;
+  font-family:'Syne',sans-serif; font-size:15px; font-weight:700; letter-spacing:1px;
+  background:linear-gradient(135deg,var(--accent),#a07840); color:#08080f;
+  transition:opacity .2s, transform .1s;
+}
+.btn-gen:hover:not(:disabled) { opacity:.9; transform:translateY(-1px); }
+.btn-gen:disabled { opacity:.35; cursor:not-allowed; transform:none; }
+
+.err { background:rgba(231,76,60,.1); border:1px solid rgba(231,76,60,.4); border-radius:12px; padding:14px 18px; font-size:12px; color:var(--red); margin-top:14px; display:none; line-height:1.7; }
+.err.show { display:block; }
+
+/* ── DASHBOARD ── */
+.dash-header { text-align:center; margin-bottom:24px; }
+.dash-header h2 {
+  font-family:'Syne',sans-serif; font-size:22px; font-weight:800;
+  background:linear-gradient(90deg,var(--accent),var(--amber),var(--magenta));
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:4px;
+}
+.dash-sub { color:var(--muted); font-size:11px; }
+
+.top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+.btn-back { background:none; border:1px solid var(--border); color:var(--muted); border-radius:10px; padding:8px 16px; font-size:11px; cursor:pointer; font-family:'DM Mono',monospace; transition:border-color .2s,color .2s; }
+.btn-back:hover { border-color:var(--accent); color:var(--accent); }
+
+/* Seletor de carga */
+.carga-wrap { margin-bottom:22px; }
+.carga-label { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; display:block; margin-bottom:8px; }
+.carga-btns { display:flex; gap:8px; flex-wrap:wrap; }
+.cbtn { padding:7px 15px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font-family:'DM Mono',monospace; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; }
+.cbtn-total { background:rgba(200,169,110,.1) !important; border-color:rgba(200,169,110,.4) !important; color:var(--accent) !important; }
+.cbtn-total.active { background:var(--accent) !important; border-color:var(--accent) !important; color:#08080f !important; font-weight:800; }
+.cbtn:not(.cbtn-total):hover { border-color:var(--blue); color:var(--blue); }
+.cbtn:not(.cbtn-total).active { background:var(--blue); border-color:var(--blue); color:#fff; }
+
+/* KPIs */
+.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+.kpi { border-radius:12px; padding:16px; text-align:center; }
+.kpi .lbl { font-size:9px; color:#aaa; letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; }
+.kpi .val { font-size:22px; font-weight:800; line-height:1; margin-bottom:4px; font-family:'Syne',sans-serif; }
+.kpi .sub { font-size:10px; color:#777; }
+.kpi-a  { background:rgba(0,114,178,.12); border:1px solid rgba(0,114,178,.35); }
+.kpi-b  { background:rgba(230,159,0,.12);  border:1px solid rgba(230,159,0,.35); }
+.kpi-c  { background:rgba(204,121,167,.12);border:1px solid rgba(204,121,167,.35); }
+.kpi-tot{ background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); }
+.kpi-c.alerta { background:rgba(231,76,60,.12); border-color:rgba(231,76,60,.45); }
+.kpi-c.alerta .val { color:var(--red) !important; }
+
+/* Barra de qualidade */
+.qualidade-bar { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
+.qual-label { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; white-space:nowrap; }
+.qual-track { flex:1; min-width:160px; background:var(--border); border-radius:6px; height:10px; overflow:hidden; }
+.qual-fill  { height:10px; border-radius:6px; transition:width .5s; }
+.qual-score { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; white-space:nowrap; }
+.qual-desc  { font-size:11px; color:var(--muted); white-space:nowrap; }
+
+/* Tabs */
+.tabs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:18px; }
+.tab { padding:7px 16px; border-radius:20px; border:none; cursor:pointer; font-size:11px; font-weight:600; font-family:'DM Mono',monospace; background:var(--surface); color:var(--muted); transition:all .2s; border:1px solid transparent; }
+.tab.active { background:var(--blue); color:#fff; border-color:var(--blue); }
+.tab.tab-frigo        { border-color:rgba(200,169,110,.3); color:var(--accent); }
+.tab.tab-frigo.active { background:var(--accent); color:#08080f; border-color:var(--accent); }
+.tab.tab-evolucao        { border-color:rgba(230,159,0,.3); color:var(--amber); }
+.tab.tab-evolucao.active { background:var(--amber); color:#111; border-color:var(--amber); }
+.tab.tab-ranking        { border-color:rgba(204,121,167,.3); color:var(--magenta); }
+.tab.tab-ranking.active { background:var(--magenta); color:#fff; border-color:var(--magenta); }
+
+.section { display:none; } .section.active { display:block; }
+.card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
+.card h3 { font-size:13px; color:#ccc; text-align:center; margin-bottom:14px; }
+.legend { display:flex; justify-content:center; gap:18px; margin-top:12px; flex-wrap:wrap; }
+.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#ccc; }
+.legend-swatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
+canvas { max-width:100%; }
+
+/* Ranking */
+.rank-table { width:100%; border-collapse:collapse; font-size:11px; }
+.rank-table th { color:var(--muted); font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
+.rank-table th.num { text-align:right; }
+.rank-table td { padding:9px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; }
+.rank-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.rank-table tr:last-child td { border-bottom:none; }
+.rank-table tr:hover td { background:rgba(255,255,255,.02); }
+.rank-pos { color:var(--muted); font-size:10px; width:28px; }
+.rank-pos.gold   { color:#FFD700; font-weight:800; }
+.rank-pos.silver { color:#C0C0C0; font-weight:800; }
+.rank-pos.bronze { color:#CD7F32; font-weight:800; }
+.rank-name { color:var(--text); font-weight:500; }
+.rank-bar-wrap { width:120px; }
+.rank-bar-bg   { background:var(--border); border-radius:4px; height:6px; overflow:hidden; }
+.rank-bar-fill { height:6px; border-radius:4px; transition:width .4s; }
+.rank-alert td { background:rgba(231,76,60,.05) !important; }
+.rank-alert td:first-child { border-left:3px solid var(--red); }
+.rank-tabs { display:flex; gap:6px; margin-bottom:14px; justify-content:center; flex-wrap:wrap; }
+.rank-tab { padding:5px 14px; border-radius:16px; border:none; cursor:pointer; font-size:10px; font-weight:700; font-family:'DM Mono',monospace; background:var(--border); color:var(--muted); transition:all .2s; }
+.rank-tab.act-a { background:var(--blue);    color:#fff; }
+.rank-tab.act-b { background:var(--amber);   color:#111; }
+.rank-tab.act-c { background:var(--magenta); color:#fff; }
+
+/* Mini tabela de detalhes */
+.detail-table { width:100%; border-collapse:collapse; font-size:11px; margin-top:10px; }
+.detail-table th { color:var(--muted); font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:7px 10px; border-bottom:1px solid var(--border); }
+.detail-table th.num { text-align:right; }
+.detail-table td { padding:8px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; }
+.detail-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
+.detail-table tr:last-child td { border-bottom:none; }
+.badge-cls { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; }
+.badge-A { background:rgba(0,114,178,.2); color:#0072B2; }
+.badge-B { background:rgba(230,159,0,.2); color:#E69F00; }
+.badge-C { background:rgba(204,121,167,.2); color:#CC79A7; }
+
+@media(max-width:600px) {
+  .kpi-row { grid-template-columns:repeat(2,1fr); }
+  .kpi-tot { grid-column:1/-1; }
+}
+</style>
+</head>
+<body>
+
+<!-- ══ UPLOAD ══ -->
+<div id="screen-upload">
+  <header>
+    <div class="eyebrow">Classic Couros · Análise de Recebimento</div>
+    <h1>Dashboard<br>de Cargas</h1>
+    <p class="desc">Exporte os registros do sistema (CSV) e arraste aqui.<br>O dashboard é gerado localmente, sem enviar dados para internet.</p>
+  </header>
+
+  <div class="dropzone" id="dropzone" onclick="document.getElementById('xlsxInput').click()">
+    <span class="drop-icon">📦</span>
+    <div class="drop-title">Arraste a planilha aqui</div>
+    <div class="drop-sub">ou clique para selecionar · .xlsx / .xls / .csv</div>
+  </div>
+  <input type="file" id="xlsxInput" accept=".xlsx,.xls,.csv">
+
+  <div class="file-info" id="fileInfo">
+    <span style="font-size:20px">📋</span>
+    <span class="file-name" id="fileName">—</span>
+    <span class="file-size" id="fileSize">—</span>
+    <button class="file-rm" onclick="removeFile()">✕</button>
+  </div>
+
+  <button class="btn-gen" id="btnGen" disabled onclick="processFile()">
+    ⚡ Gerar Dashboard
+  </button>
+
+  <div class="format-hint" style="margin-bottom:16px;">
+    <div class="fh-title">Colunas esperadas no arquivo</div>
+    <div class="fh-cols">
+      <span class="fh-col">numero_carga</span>
+      <span class="fh-col">data_chegada</span>
+      <span class="fh-col">frigorifico</span>
+      <span class="fh-col">cnt_frigo</span>
+      <span class="fh-col">cnt_classic</span>
+      <span class="fh-col">pcs_a</span>
+      <span class="fh-col">pct_a</span>
+      <span class="fh-col">pcs_b</span>
+      <span class="fh-col">pct_b</span>
+      <span class="fh-col">pcs_c</span>
+      <span class="fh-col">pct_c</span>
+      <span class="fh-col">classificacao</span>
+    </div>
+  </div>
+
+  <div class="err" id="errBox"></div>
+</div>
+
+<!-- ══ DASHBOARD ══ -->
+<div id="screen-dash">
+  <div class="top-bar">
+    <button class="btn-back" onclick="resetApp()">← Nova planilha</button>
+    <div class="eyebrow" style="margin:0">Classic Couros · Ferramenta Interna</div>
+  </div>
+
+  <div class="dash-header">
+    <h2 id="dashTitle">Dashboard de Cargas</h2>
+    <div class="dash-sub" id="dashSub">—</div>
+  </div>
+
+  <!-- Seletor de carga -->
+  <div class="carga-wrap">
+    <span class="carga-label">Selecione a carga</span>
+    <div class="carga-btns" id="cargaBtns"></div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi kpi-a">
+      <div class="lbl">⭐ Classe A · Melhor</div>
+      <div class="val" id="kA" style="color:#0072B2">—</div>
+      <div class="sub" id="sA">—</div>
+    </div>
+    <div class="kpi kpi-b">
+      <div class="lbl">Classe B · Intermediário</div>
+      <div class="val" id="kB" style="color:#E69F00">—</div>
+      <div class="sub" id="sB">—</div>
+    </div>
+    <div class="kpi kpi-c">
+      <div class="lbl">⚠ Classe C · Atenção</div>
+      <div class="val" id="kC" style="color:#CC79A7">—</div>
+      <div class="sub" id="sC">—</div>
+    </div>
+    <div class="kpi kpi-tot">
+      <div class="lbl">Total Recebido</div>
+      <div class="val" id="kT" style="color:var(--text)">—</div>
+      <div class="sub" id="sT">—</div>
+    </div>
+  </div>
+
+  <!-- Índice de qualidade -->
+  <div class="qualidade-bar">
+    <span class="qual-label">Índice de Qualidade</span>
+    <div class="qual-track"><div class="qual-fill" id="qualFill"></div></div>
+    <span class="qual-score" id="qualScore">—</span>
+    <span class="qual-desc"  id="qualDesc">—</span>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active"        onclick="showTab('visao',this)">Visão Geral</button>
+    <button class="tab tab-frigo"     onclick="showTab('frigorificos',this)">🏭 Por Frigorífico</button>
+    <button class="tab"               onclick="showTab('topC',this)">⚠ Top Classe C</button>
+    <button class="tab tab-evolucao"  onclick="showTab('evolucao',this)">Evolução</button>
+    <button class="tab tab-ranking"   onclick="showTab('ranking',this)">Ranking</button>
+    <button class="tab"               onclick="showTab('detalhes',this)">Registros</button>
+  </div>
+
+  <!-- VISÃO GERAL -->
+  <div id="visao" class="section active">
+    <div class="card">
+      <h3>Distribuição Total — Classe A / B / C</h3>
+      <canvas id="pieChart" height="260"></canvas>
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:#0072B2"></div>Classe A</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#E69F00"></div>Classe B</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#CC79A7"></div>Classe C</div>
+      </div>
+    </div>
+    <div class="card"><h3>Composição Percentual</h3><canvas id="barTotal" height="70"></canvas></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+      <div class="card"><h3>Peças por Carga</h3><canvas id="barCargas" height="220"></canvas></div>
+      <div class="card"><h3>Classificação por Carga (%)</h3><canvas id="barCargasPct" height="220"></canvas></div>
+    </div>
+  </div>
+
+  <!-- POR FRIGORÍFICO -->
+  <div id="frigorificos" class="section">
+    <div class="card"><h3>Todos os Frigoríficos — % Classe A (maior = melhor)</h3><canvas id="chartTodos" height="1200"></canvas></div>
+  </div>
+
+  <!-- TOP CLASSE C -->
+  <div id="topC" class="section">
+    <div class="card">
+      <h3 style="color:#CC79A7">⚠ Top 15 — Maior % Classe C (requer atenção)</h3>
+      <canvas id="chartTopC" height="500"></canvas>
+    </div>
+    <div class="card" id="alertasCard">
+      <h3 style="color:var(--red)">🔴 Frigoríficos Críticos — Classe C &gt; 40%</h3>
+      <div id="alertasList"></div>
+    </div>
+  </div>
+
+  <!-- EVOLUÇÃO -->
+  <div id="evolucao" class="section">
+    <div class="card"><h3>% Classe A por Carga</h3><canvas id="chartEvolA" height="160"></canvas></div>
+    <div class="card"><h3>% Classe B por Carga</h3><canvas id="chartEvolB" height="160"></canvas></div>
+    <div class="card"><h3>% Classe C por Carga</h3><canvas id="chartEvolC" height="160"></canvas></div>
+    <div class="card"><h3>Volume Total por Carga (peças Classic)</h3><canvas id="chartEvolTot" height="160"></canvas></div>
+    <div class="card"><h3>Índice de Qualidade por Carga</h3><canvas id="chartEvolIQ" height="160"></canvas></div>
+  </div>
+
+  <!-- RANKING -->
+  <div id="ranking" class="section">
+    <div class="card">
+      <div class="rank-tabs">
+        <button class="rank-tab act-a" id="rtabA" onclick="showRankTab('A')">Classe A</button>
+        <button class="rank-tab"       id="rtabB" onclick="showRankTab('B')">Classe B</button>
+        <button class="rank-tab"       id="rtabC" onclick="showRankTab('C')">Classe C</button>
+        <button class="rank-tab"       id="rtabT" onclick="showRankTab('T')">Volume Total</button>
+      </div>
+      <div id="rankBody"></div>
+      <div id="btnRelWrap" style="display:none;text-align:center;margin-top:18px">
+        <button onclick="gerarRelatorio()" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px">
+          📄 Exportar Relatório — Frigoríficos com Alto % Classe C
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- REGISTROS DETALHADOS -->
+  <div id="detalhes" class="section">
+    <div class="card">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
+        <input type="text" id="filtroFrg" placeholder="Filtrar frigorífico..." oninput="renderDetalhes()"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;flex:1;min-width:160px;">
+        <select id="filtroCls" onchange="renderDetalhes()"
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
+          <option value="">Todas classes</option><option>A</option><option>B</option><option>C</option>
+        </select>
+        <button onclick="exportDetalhesCSV()"
+          style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">
+          ⬇ CSV
+        </button>
+      </div>
+      <div id="detalhesBody" style="overflow-x:auto;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const CA='#0072B2', CB='#E69F00', CC='#CC79A7';
+let charts={}, CARGAS={}, ALL_ROWS=[], currentFile=null;
+let _rankData=[];
+
+// ── Drag & Drop ──
+const dz=document.getElementById('dropzone');
+dz.addEventListener('dragover',e=>{e.preventDefault();dz.classList.add('drag');});
+dz.addEventListener('dragleave',()=>dz.classList.remove('drag'));
+dz.addEventListener('drop',e=>{
+  e.preventDefault(); dz.classList.remove('drag');
+  const f=e.dataTransfer.files[0]; if(f) setFile(f);
+});
+document.getElementById('xlsxInput').addEventListener('change',e=>{
+  if(e.target.files[0]) setFile(e.target.files[0]);
+});
+
+function setFile(f){
+  const ext=f.name.split('.').pop().toLowerCase();
+  if(!['xlsx','xls','csv'].includes(ext)){ showErr('Envie um arquivo .xlsx, .xls ou .csv'); return; }
+  currentFile=f;
+  dz.classList.add('ready');
+  document.getElementById('fileInfo').classList.add('show');
+  document.getElementById('fileName').textContent=f.name;
+  document.getElementById('fileSize').textContent=(f.size/1024).toFixed(1)+' KB';
+  document.getElementById('btnGen').disabled=false;
+  hideErr();
+}
+function removeFile(){
+  currentFile=null; dz.classList.remove('ready');
+  document.getElementById('fileInfo').classList.remove('show');
+  document.getElementById('fileName').textContent='—';
+  document.getElementById('fileSize').textContent='—';
+  document.getElementById('btnGen').disabled=true;
+  document.getElementById('xlsxInput').value='';
+}
+function showErr(m){ const b=document.getElementById('errBox'); b.innerHTML=m; b.classList.add('show'); }
+function hideErr(){ document.getElementById('errBox').classList.remove('show'); }
+
+// ── Lê o arquivo (CSV ou Excel) ──
+function processFile(){
+  if(!currentFile) return;
+  hideErr();
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const ext=currentFile.name.split('.').pop().toLowerCase();
+      let rows=[];
+      if(ext==='csv'){
+        const text=e.target.result.replace(/^\uFEFF/,'');
+        rows=parseCSV(text);
+      } else {
+        const data=new Uint8Array(e.target.result);
+        const wb=XLSX.read(data,{type:'array'});
+        rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});
+      }
+      if(!rows.length){ showErr('Arquivo vazio ou formato não reconhecido.'); return; }
+      processRows(rows);
+    }catch(err){ showErr('Erro ao ler o arquivo: '+err.message); }
+  };
+  reader.onerror=()=>showErr('Falha ao ler o arquivo.');
+  const ext=currentFile.name.split('.').pop().toLowerCase();
+  if(ext==='csv') reader.readAsText(currentFile,'UTF-8');
+  else reader.readAsArrayBuffer(currentFile);
+}
+
+function parseCSV(text){
+  const sep=text.includes(';')?';':',';
+  const lines=text.split(/\r?\n/).filter(l=>l.trim());
+  if(lines.length<2) return [];
+  const headers=splitLine(lines[0],sep).map(h=>h.trim().toLowerCase().replace(/"/g,''));
+  return lines.slice(1).map(l=>{
+    const vals=splitLine(l,sep);
+    const obj={};
+    headers.forEach((h,i)=>{ obj[h]=(vals[i]||'').trim(); });
+    return obj;
+  }).filter(r=>r[headers[0]]!=='');
+}
+function splitLine(line,sep){
+  const res=[]; let cur=''; let inQ=false;
+  for(let i=0;i<line.length;i++){
+    if(line[i]==='"'){if(inQ&&line[i+1]==='"'){cur+='"';i++;}else inQ=!inQ;}
+    else if(line[i]===sep&&!inQ){res.push(cur);cur='';}
+    else cur+=line[i];
+  }
+  res.push(cur); return res;
+}
+
+// ── Normaliza chaves (aceita snake_case e variações) ──
+function norm(row,keys){
+  for(const k of keys){
+    if(row[k]!==undefined) return row[k];
+    const ku=k.replace(/_/g,'').toLowerCase();
+    for(const rk of Object.keys(row)){
+      if(rk.replace(/_/g,'').toLowerCase()===ku) return row[rk];
+    }
+  }
+  return '';
+}
+const n=v=>parseFloat(String(v).replace(',','.'))||0;
+
+// ── Processa linhas e monta estrutura CARGAS ──
+function processRows(rows){
+  ALL_ROWS=[];
+  const cargaMap={};
+
+  rows.forEach(row=>{
+    const frigorifico=String(norm(row,['frigorifico','frigorífico','frigo'])||'').trim().toUpperCase();
+    if(!frigorifico || /^total|^soma|^grand/i.test(frigorifico)) return;
+
+    const numeroCarga=String(norm(row,['numero_carga','numerocarga','carga','num_carga'])||'').padStart(2,'0');
+    const dataChegada=String(norm(row,['data_chegada','data','date'])||'').slice(0,10);
+    const pcsA=n(norm(row,['pcs_a','pcsa','peca_a','peca_a']));
+    const pcsB=n(norm(row,['pcs_b','pcsb','peca_b']));
+    const pcsC=n(norm(row,['pcs_c','pcsc','peca_c']));
+    const tot=pcsA+pcsB+pcsC;
+    if(tot===0) return;
+
+    const pctA=n(norm(row,['pct_a','pcta','percent_a']))||+(pcsA*100/tot).toFixed(2);
+    const pctB=n(norm(row,['pct_b','pctb','percent_b']))||+(pcsB*100/tot).toFixed(2);
+    const pctC=n(norm(row,['pct_c','pctc','percent_c']))||+(pcsC*100/tot).toFixed(2);
+    const cls=String(norm(row,['classificacao','class','cls'])||'').toUpperCase()||
+               (pctA>=70?'A':pctA>=30?'B':'C');
+    const cntClassic=n(norm(row,['cnt_classic','cntclassic','classic','contagem_classic']));
+    const cntFrigo  =n(norm(row,['cnt_frigo','cntfrigo','frigo','contagem_frigo']));
+    const obs=String(norm(row,['obs','observacoes','observações'])||'');
+
+    const parsed={
+      numero_carga:numeroCarga, data_chegada:dataChegada, frigorifico,
+      cnt_frigo:cntFrigo, cnt_classic:cntClassic,
+      pcs_a:Math.round(pcsA), pcs_b:Math.round(pcsB), pcs_c:Math.round(pcsC),
+      pct_a:parseFloat(pctA.toFixed(2)), pct_b:parseFloat(pctB.toFixed(2)), pct_c:parseFloat(pctC.toFixed(2)),
+      classificacao:cls, obs, total:Math.round(tot),
+    };
+    ALL_ROWS.push(parsed);
+
+    // Agrupa por carga
+    const label='Carga '+numeroCarga;
+    if(!cargaMap[label]) cargaMap[label]={
+      frigorificos:{}, total_A:0, total_B:0, total_C:0, total:0,
+      pct_A:0, pct_B:0, pct_C:0, rows:[]
+    };
+    const cg=cargaMap[label];
+    cg.total_A+=Math.round(pcsA); cg.total_B+=Math.round(pcsB); cg.total_C+=Math.round(pcsC);
+    cg.total+=Math.round(tot); cg.rows.push(parsed);
+
+    if(!cg.frigorificos[frigorifico]) cg.frigorificos[frigorifico]={nome:frigorifico,pcs_A:0,pcs_B:0,pcs_C:0,total:0};
+    cg.frigorificos[frigorifico].pcs_A+=Math.round(pcsA);
+    cg.frigorificos[frigorifico].pcs_B+=Math.round(pcsB);
+    cg.frigorificos[frigorifico].pcs_C+=Math.round(pcsC);
+    cg.frigorificos[frigorifico].total+=Math.round(tot);
+  });
+
+  if(!Object.keys(cargaMap).length){ showErr('Nenhum dado válido encontrado. Verifique se as colunas estão corretas.'); return; }
+
+  // Finaliza percentuais por carga
+  CARGAS={};
+  Object.keys(cargaMap).sort().forEach(k=>{
+    const cg=cargaMap[k];
+    const g=cg.total||1;
+    cg.pct_A=+(cg.total_A*100/g).toFixed(2);
+    cg.pct_B=+(cg.total_B*100/g).toFixed(2);
+    cg.pct_C=+(cg.total_C*100/g).toFixed(2);
+    cg.frigorificos=Object.values(cg.frigorificos).map(f=>({
+      ...f,
+      pct_A:+(f.pcs_A*100/f.total).toFixed(2),
+      pct_B:+(f.pcs_B*100/f.total).toFixed(2),
+      pct_C:+(f.pcs_C*100/f.total).toFixed(2),
+    }));
+    CARGAS[k]=cg;
+  });
+
+  buildUI();
+}
+
+// ── Monta dashboard ──
+function buildUI(){
+  document.getElementById('screen-upload').style.display='none';
+  document.getElementById('screen-dash').style.display='block';
+  const keys=Object.keys(CARGAS);
+  document.getElementById('dashTitle').textContent=currentFile.name.replace(/\.[^.]+$/,'').replace(/_/g,' ');
+  document.getElementById('dashSub').textContent=`${keys.length} carga${keys.length>1?'s':''} · ${ALL_ROWS.length} registros`;
+
+  const btnsDiv=document.getElementById('cargaBtns');
+  btnsDiv.innerHTML='';
+
+  const bTotal=document.createElement('button');
+  bTotal.className='cbtn cbtn-total active';
+  bTotal.textContent='★ Total Geral';
+  bTotal.onclick=()=>loadResumoGeral(bTotal);
+  btnsDiv.appendChild(bTotal);
+
+  keys.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='cbtn';
+    b.textContent=k;
+    b.onclick=()=>loadCarga(k,b);
+    btnsDiv.appendChild(b);
+  });
+
+  loadResumoGeral(bTotal);
+}
+
+// ── Resumo Geral ──
+function loadResumoGeral(btn){
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+
+  const keys=Object.keys(CARGAS);
+  let gA=0,gB=0,gC=0,gT=0; const frigoMap={};
+  keys.forEach(k=>{
+    const d=CARGAS[k];
+    gA+=d.total_A; gB+=d.total_B; gC+=d.total_C; gT+=d.total;
+    d.frigorificos.forEach(f=>{
+      if(!frigoMap[f.nome]) frigoMap[f.nome]={nome:f.nome,pcs_A:0,pcs_B:0,pcs_C:0,total:0};
+      frigoMap[f.nome].pcs_A+=f.pcs_A; frigoMap[f.nome].pcs_B+=f.pcs_B;
+      frigoMap[f.nome].pcs_C+=f.pcs_C; frigoMap[f.nome].total+=f.total;
+    });
+  });
+  const allFrigos=Object.values(frigoMap).map(f=>({
+    ...f,
+    pct_A:+(f.pcs_A*100/f.total).toFixed(2),
+    pct_B:+(f.pcs_B*100/f.total).toFixed(2),
+    pct_C:+(f.pcs_C*100/f.total).toFixed(2),
+  }));
+  const d={
+    frigorificos:allFrigos, total_A:gA, total_B:gB, total_C:gC, total:gT,
+    pct_A:+(gA*100/(gT||1)).toFixed(2),
+    pct_B:+(gB*100/(gT||1)).toFixed(2),
+    pct_C:+(gC*100/(gT||1)).toFixed(2),
+    isResumo:true,
+  };
+  renderDash(d);
+  renderEvolucao();
+}
+
+function loadCarga(key,btn){
+  document.querySelectorAll('.cbtn').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDash(CARGAS[key]);
+}
+
+// ── Render principal ──
+function renderDash(d){
+  document.getElementById('kA').textContent=d.pct_A.toFixed(2)+'%';
+  document.getElementById('sA').textContent=d.total_A.toLocaleString('pt-BR')+' peças';
+  document.getElementById('kB').textContent=d.pct_B.toFixed(2)+'%';
+  document.getElementById('sB').textContent=d.total_B.toLocaleString('pt-BR')+' peças';
+  document.getElementById('kC').textContent=d.pct_C.toFixed(2)+'%';
+  document.getElementById('sC').textContent=d.total_C.toLocaleString('pt-BR')+' peças';
+  document.getElementById('kT').textContent=d.total.toLocaleString('pt-BR')+' pçs';
+  document.getElementById('sT').textContent=d.frigorificos.length+' frigoríficos'+(d.isResumo?' · período completo':'');
+
+  // Alerta KPI C
+  const kpiC=document.querySelector('.kpi-c');
+  if(d.pct_C>30){kpiC.classList.add('alerta');document.getElementById('kC').style.color='#e74c3c';}
+  else{kpiC.classList.remove('alerta');document.getElementById('kC').style.color='#CC79A7';}
+
+  // Índice de qualidade
+  const iq=Math.max(0,Math.min(100,(d.pct_A-d.pct_C+100)/2));
+  const iqColor=iq>=60?'#0072B2':iq>=40?'#E69F00':'#e74c3c';
+  const iqDesc=iq>=60?'Boa qualidade':iq>=40?'Qualidade moderada':'⚠ Qualidade crítica';
+  document.getElementById('qualFill').style.width=iq.toFixed(1)+'%';
+  document.getElementById('qualFill').style.background=iqColor;
+  document.getElementById('qualScore').textContent=iq.toFixed(1);
+  document.getElementById('qualScore').style.color=iqColor;
+  document.getElementById('qualDesc').textContent=iqDesc;
+
+  // Destrói charts de carga (não evolução)
+  Object.keys(charts).filter(k=>!k.startsWith('ev_')).forEach(k=>{charts[k].destroy();delete charts[k];});
+  Chart.defaults.color='#888';
+
+  const all=d.frigorificos;
+  const sorted=[...all].sort((a,b)=>b.pct_A-a.pct_A);
+  const top15C=[...all].sort((a,b)=>b.pct_C-a.pct_C).slice(0,15);
+
+  function alpha(hex,n){
+    const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),bv=parseInt(hex.slice(5,7),16);
+    return Array.from({length:n},(_,i)=>`rgba(${r},${g},${bv},${(1-(i/Math.max(n-1,1))*0.4).toFixed(2)})`);
+  }
+
+  // Pizza
+  charts.pie=new Chart(document.getElementById('pieChart'),{
+    type:'doughnut',
+    data:{labels:['Classe A','Classe B','Classe C'],
+      datasets:[{data:[d.pct_A,d.pct_B,d.pct_C],backgroundColor:[CA,CB,CC],borderColor:'#08080f',borderWidth:3}]},
+    options:{plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.parsed.toFixed(2)}%`}}}}
+  });
+
+  // Barra total
+  charts.bar=new Chart(document.getElementById('barTotal'),{
+    type:'bar',
+    data:{labels:[''],datasets:[
+      {label:'Classe A',data:[d.pct_A],backgroundColor:CA},
+      {label:'Classe B',data:[d.pct_B],backgroundColor:CB},
+      {label:'Classe C',data:[d.pct_C],backgroundColor:CC}
+    ]},
+    options:{indexAxis:'y',responsive:true,
+      scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#222'}},y:{stacked:true,grid:{color:'#222'}}},
+      plugins:{legend:{labels:{color:'#ccc'}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.x.toFixed(2)}%`}}}
+    }
+  });
+
+  // Barras por carga (volume)
+  if(d.isResumo){
+    const ckeys=Object.keys(CARGAS);
+    const labC=ckeys;
+    const volA=ckeys.map(k=>CARGAS[k].total_A);
+    const volB=ckeys.map(k=>CARGAS[k].total_B);
+    const volC=ckeys.map(k=>CARGAS[k].total_C);
+    const pA=ckeys.map(k=>CARGAS[k].pct_A);
+    const pB=ckeys.map(k=>CARGAS[k].pct_B);
+    const pC=ckeys.map(k=>CARGAS[k].pct_C);
+
+    charts.cargasVol=new Chart(document.getElementById('barCargas'),{
+      type:'bar',
+      data:{labels:labC,datasets:[
+        {label:'A',data:volA,backgroundColor:CA,borderRadius:4},
+        {label:'B',data:volB,backgroundColor:CB,borderRadius:4},
+        {label:'C',data:volC,backgroundColor:CC,borderRadius:4},
+      ]},
+      options:{responsive:true,scales:{x:{stacked:true,grid:{color:'#222'},ticks:{color:'#888',font:{size:10}}},y:{stacked:true,grid:{color:'#222'},ticks:{color:'#888',callback:v=>v.toLocaleString('pt-BR')}}},plugins:{legend:{labels:{color:'#ccc'}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y.toLocaleString('pt-BR')} pçs`}}}}
+    });
+    charts.cargasPct=new Chart(document.getElementById('barCargasPct'),{
+      type:'bar',
+      data:{labels:labC,datasets:[
+        {label:'A%',data:pA,backgroundColor:CA,borderRadius:4},
+        {label:'B%',data:pB,backgroundColor:CB,borderRadius:4},
+        {label:'C%',data:pC,backgroundColor:CC,borderRadius:4},
+      ]},
+      options:{responsive:true,scales:{x:{stacked:true,max:100,grid:{color:'#222'},ticks:{color:'#888',font:{size:10}}},y:{stacked:true,grid:{color:'#222'},ticks:{color:'#888',callback:v=>v+'%'}}},plugins:{legend:{labels:{color:'#ccc'}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)}%`}}}}
+    });
+  } else {
+    // Destruir se existia
+    ['cargasVol','cargasPct'].forEach(k=>{if(charts[k]){charts[k].destroy();delete charts[k];}});
+    document.getElementById('barCargas').getContext('2d').clearRect(0,0,9999,9999);
+    document.getElementById('barCargasPct').getContext('2d').clearRect(0,0,9999,9999);
+  }
+
+  // Todos frigoríficos
+  document.getElementById('chartTodos').height=Math.max(sorted.length*22,500);
+  charts.todos=new Chart(document.getElementById('chartTodos'),{
+    type:'bar',
+    data:{labels:sorted.map(f=>f.nome),datasets:[
+      {label:'A',data:sorted.map(f=>f.pct_A),backgroundColor:CA},
+      {label:'B',data:sorted.map(f=>f.pct_B),backgroundColor:CB},
+      {label:'C',data:sorted.map(f=>f.pct_C),backgroundColor:CC}
+    ]},
+    options:{indexAxis:'y',responsive:true,
+      scales:{x:{stacked:true,max:100,ticks:{callback:v=>v+'%'},grid:{color:'#222'}},y:{stacked:true,grid:{color:'#1a1a1a'},ticks:{color:'#ccc',font:{size:10}}}},
+      plugins:{legend:{labels:{color:'#ccc'}},tooltip:{callbacks:{label:ctx=>` ${ctx.dataset.label}: ${ctx.parsed.x.toFixed(2)}%`}}}
+    }
+  });
+
+  // Top C
+  document.getElementById('chartTopC').height=Math.max(top15C.length*40,300);
+  charts.topC=new Chart(document.getElementById('chartTopC'),{
+    type:'bar',
+    data:{labels:top15C.map(f=>f.nome),datasets:[{data:top15C.map(f=>f.pct_C),backgroundColor:alpha(CC,top15C.length),borderRadius:6}]},
+    options:{indexAxis:'y',responsive:true,
+      scales:{x:{max:100,ticks:{callback:v=>v+'%'},grid:{color:'#222'}},y:{grid:{color:'#1a1a1a'},ticks:{color:'#ccc',font:{size:11}}}},
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.x.toFixed(2)}% Classe C`}}}
+    }
+  });
+
+  // Alertas críticos (C > 40%)
+  const criticos=all.filter(f=>f.pct_C>40).sort((a,b)=>b.pct_C-a.pct_C);
+  const alertasList=document.getElementById('alertasList');
+  if(!criticos.length){
+    alertasList.innerHTML='<div style="text-align:center;color:var(--muted);font-size:12px;padding:20px;">Nenhum frigorífico com Classe C acima de 40%.</div>';
+  } else {
+    alertasList.innerHTML=criticos.map(f=>`
+      <div style="background:rgba(231,76,60,.06);border-left:3px solid var(--red);border-radius:4px;padding:12px 16px;margin-bottom:8px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;">
+        <span style="font-weight:700;color:var(--red);min-width:200px;">${f.nome}</span>
+        <span style="color:var(--muted);font-size:11px;">${f.total.toLocaleString('pt-BR')} peças</span>
+        <span style="color:#0072B2;font-size:11px;">A: ${f.pct_A.toFixed(1)}%</span>
+        <span style="color:#E69F00;font-size:11px;">B: ${f.pct_B.toFixed(1)}%</span>
+        <span style="color:var(--red);font-size:13px;font-weight:800;">C: ${f.pct_C.toFixed(1)}%</span>
+      </div>`).join('');
+  }
+
+  // Detalhes
+  renderDetalhes();
+
+  // Reset tabs
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.querySelectorAll('.section').forEach((s,i)=>s.classList.toggle('active',i===0));
+
+  buildRanking(all);
+}
+
+// ── Evolução por carga ──
+function renderEvolucao(){
+  ['ev_A','ev_B','ev_C','ev_Tot','ev_IQ'].forEach(id=>{if(charts[id]){charts[id].destroy();delete charts[id];}});
+  const keys=Object.keys(CARGAS);
+  const labels=keys;
+  const pA=keys.map(k=>CARGAS[k].pct_A), pB=keys.map(k=>CARGAS[k].pct_B);
+  const pC=keys.map(k=>CARGAS[k].pct_C);
+  const tots=keys.map(k=>CARGAS[k].total);
+  const iqs=keys.map(k=>+((CARGAS[k].pct_A-CARGAS[k].pct_C+100)/2).toFixed(1));
+
+  const lineOpts=(color,label,data,pct=true)=>({
+    type:'line',
+    data:{labels,datasets:[{label,data,borderColor:color,backgroundColor:color+'22',fill:true,tension:0.3,pointBackgroundColor:color,pointRadius:4}]},
+    options:{responsive:true,scales:{x:{grid:{color:'#222'},ticks:{color:'#888',font:{size:10}}},y:{grid:{color:'#222'},ticks:{color:'#888',callback:v=>pct?v+'%':v.toLocaleString('pt-BR')}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y}${pct?'%':' peças'}`}}}}
+  });
+
+  charts.ev_A  =new Chart(document.getElementById('chartEvolA'),lineOpts(CA,'% Classe A',pA));
+  charts.ev_B  =new Chart(document.getElementById('chartEvolB'),lineOpts(CB,'% Classe B',pB));
+  charts.ev_C  =new Chart(document.getElementById('chartEvolC'),lineOpts(CC,'% Classe C',pC));
+  charts.ev_Tot=new Chart(document.getElementById('chartEvolTot'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'Total',data:tots,backgroundColor:keys.map((_,i)=>`rgba(200,169,110,${0.4+i/keys.length*0.5})`),borderRadius:6}]},
+    options:{responsive:true,scales:{x:{grid:{color:'#222'},ticks:{color:'#888',font:{size:10}}},y:{grid:{color:'#222'},ticks:{color:'#888',callback:v=>v.toLocaleString('pt-BR')}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.parsed.y.toLocaleString('pt-BR')} peças`}}}}
+  });
+  charts.ev_IQ=new Chart(document.getElementById('chartEvolIQ'),{
+    type:'bar',
+    data:{labels,datasets:[{label:'IQ',data:iqs,backgroundColor:iqs.map(v=>v>=60?CA:v>=40?CB:'#e74c3c'),borderRadius:6}]},
+    options:{responsive:true,scales:{x:{grid:{color:'#222'},ticks:{color:'#888',font:{size:10}}},y:{min:0,max:100,grid:{color:'#222'},ticks:{color:'#888',callback:v=>v}}},plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` IQ: ${ctx.parsed.y}`}}}}
+  });
+}
+
+// ── Tabs ──
+function showTab(id,btn){
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+  btn.classList.add('active');
+  if(id==='ranking') showRankTab('A');
+  if(id==='detalhes') renderDetalhes();
+}
+
+// ── Ranking ──
+function buildRanking(frigs){ _rankData=frigs; showRankTab('A'); }
+
+function showRankTab(prod){
+  ['A','B','C','T'].forEach(p=>{
+    const b=document.getElementById('rtab'+p);
+    if(!b) return;
+    b.className='rank-tab'+(p===prod?' act-'+p.toLowerCase():'');
+  });
+  document.getElementById('btnRelWrap').style.display=prod==='C'?'block':'none';
+
+  const isT=prod==='T', isC=prod==='C', isA=prod==='A';
+  const sorted=isT
+    ?[..._rankData].filter(f=>f.total>0).sort((a,b)=>b.total-a.total)
+    :[..._rankData].filter(f=>f['pcs_'+prod]>0).sort((a,b)=>b['pct_'+prod]-a['pct_'+prod]);
+
+  if(!sorted.length){
+    document.getElementById('rankBody').innerHTML='<p style="text-align:center;color:var(--muted);padding:20px;font-size:12px;">Sem dados.</p>';
+    return;
+  }
+
+  const color=isT?'var(--accent)':prod==='A'?CA:prod==='B'?CB:CC;
+  const valKey=isT?'total':'pcs_'+prod;
+  const pctKey=isT?null:'pct_'+prod;
+  const maxVal=sorted[0][valKey];
+
+  const posLabel=i=>i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}º`;
+  const posClass=i=>i===0?'gold':i===1?'silver':i===2?'bronze':'';
+
+  const header=isA
+    ?'<div style="text-align:center;font-size:11px;color:#0072B2;margin-bottom:12px">⭐ Melhor desempenho — maior % Classe A</div>'
+    :isC
+    ?'<div style="text-align:center;font-size:11px;color:#e74c3c;margin-bottom:12px">⚠ Frigoríficos que requerem atenção — maior % Classe C</div>'
+    :'';
+
+  const colLabel=isT?'Total Peças':isA?'Peças A ⭐':isC?'Peças C ⚠':'Peças B';
+
+  const rows=sorted.map((f,i)=>{
+    const critico=isC&&f[pctKey]>40;
+    const val=f[valKey];
+    const pct=pctKey?f[pctKey].toFixed(1)+'%':'—';
+    return `<tr${critico?' class="rank-alert"':''}>
+      <td class="rank-pos ${posClass(i)}">${posLabel(i)}</td>
+      <td class="rank-name" style="${critico?'color:#e74c3c':''}">${f.nome}${critico?' <span style="font-size:10px">⚠</span>':''}</td>
+      <td class="num" style="color:${critico?'#e74c3c':color}">${val.toLocaleString('pt-BR')}</td>
+      <td class="num" style="color:var(--muted)">${pct}</td>
+      <td class="rank-bar-wrap"><div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${(val/maxVal*100).toFixed(1)}%;background:${critico?'#e74c3c':color}"></div></div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('rankBody').innerHTML=`${header}
+    <table class="rank-table">
+      <thead><tr><th>#</th><th>Frigorifico</th><th class="num">${colLabel}</th><th class="num">% do Total</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ── Detalhes / Registros ──
+function renderDetalhes(){
+  const q=(document.getElementById('filtroFrg')?.value||'').toLowerCase();
+  const cls=document.getElementById('filtroCls')?.value||'';
+  const filtered=ALL_ROWS.filter(r=>{
+    if(q&&!r.frigorifico.toLowerCase().includes(q)) return false;
+    if(cls&&r.classificacao!==cls) return false;
+    return true;
+  }).slice(0,200);
+
+  const el=document.getElementById('detalhesBody');
+  if(!filtered.length){el.innerHTML='<div style="text-align:center;color:var(--muted);padding:20px;font-size:12px;">Nenhum registro encontrado.</div>';return;}
+
+  el.innerHTML=`<div style="font-size:10px;color:var(--muted);margin-bottom:8px;">${filtered.length} registros ${ALL_ROWS.length>200?'(máx 200 exibidos)':''}</div>
+  <table class="detail-table">
+    <thead><tr>
+      <th>Carga</th><th>Data</th><th>Frigorifico</th>
+      <th class="num">Classic</th>
+      <th class="num">A%</th><th class="num">B%</th><th class="num">C%</th>
+      <th class="num">Total</th><th>Cls</th>
+    </tr></thead>
+    <tbody>
+    ${filtered.map(r=>`<tr>
+      <td><span style="background:rgba(200,169,110,.1);color:var(--accent);padding:2px 8px;border-radius:6px;font-size:10px;">${r.numero_carga}</span></td>
+      <td style="color:var(--muted);">${r.data_chegada||'—'}</td>
+      <td style="font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${r.frigorifico}</td>
+      <td class="num">${(r.cnt_classic||0).toLocaleString('pt-BR')}</td>
+      <td class="num" style="color:#0072B2;">${r.pct_a?.toFixed(1)}%</td>
+      <td class="num" style="color:#E69F00;">${r.pct_b?.toFixed(1)}%</td>
+      <td class="num" style="color:${r.pct_c>40?'#e74c3c':'#CC79A7'};">${r.pct_c?.toFixed(1)}%</td>
+      <td class="num">${r.total.toLocaleString('pt-BR')}</td>
+      <td><span class="badge-cls badge-${r.classificacao}">${r.classificacao}</span></td>
+    </tr>`).join('')}
+    </tbody>
+  </table>`;
+}
+
+function exportDetalhesCSV(){
+  if(!ALL_ROWS.length) return;
+  const cols=['numero_carga','data_chegada','frigorifico','cnt_frigo','cnt_classic','pcs_a','pct_a','pcs_b','pct_b','pcs_c','pct_c','classificacao','total','obs'];
+  const csv='\uFEFF'+[cols.join(';'),...ALL_ROWS.map(r=>cols.map(c=>{
+    const v=r[c]??''; const s=String(v).replace(/"/g,'""');
+    return s.includes(';')||s.includes('"')||s.includes('\n')?`"${s}"`:s;
+  }).join(';'))].join('\r\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a'); a.href=url;
+  a.download=`cargas_export_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
+// ── Relatório PDF ──
+function gerarRelatorio(){
+  const hoje=new Date();
+  const dataFmt=hoje.toLocaleDateString('pt-BR',{day:'2-digit',month:'long',year:'numeric'});
+  const dataArq=hoje.toISOString().slice(0,10);
+
+  const criticos=[..._rankData].filter(f=>f.pct_C>30).sort((a,b)=>b.pct_C-a.pct_C);
+  const alertas=[..._rankData].filter(f=>f.pct_C>40).sort((a,b)=>b.pct_C-a.pct_C);
+
+  if(!criticos.length){alert('Nenhum frigorífico acima de 30% de Classe C nesta seleção.');return;}
+
+  const linhas=criticos.map((f,i)=>{
+    const nivel=f.pct_C>40?'🔴 Crítico':'🟡 Atenção';
+    const cor=f.pct_C>40?'#c0392b':'#e67e22';
+    return `<tr>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;font-weight:600">${i+1}º</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee">${f.nome}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right;color:#2980b9;font-weight:600">${f.pcs_A.toLocaleString('pt-BR')}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right;color:#e67e22;font-weight:600">${f.pcs_B.toLocaleString('pt-BR')}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right;color:${cor};font-weight:700">${f.pcs_C.toLocaleString('pt-BR')}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right">${f.total.toLocaleString('pt-BR')}</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right">${f.pct_A.toFixed(1)}%</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right">${f.pct_B.toFixed(1)}%</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:right;color:${cor};font-weight:700">${f.pct_C.toFixed(1)}%</td>
+      <td style="padding:9px 14px;border-bottom:1px solid #eee;text-align:center;color:${cor};font-weight:700">${nivel}</td>
+    </tr>`;
+  }).join('');
+
+  const obsIndividuais=alertas.length?`
+    <div style="margin-top:32px">
+      <h2 style="font-family:Arial;font-size:14px;color:#c0392b;border-bottom:2px solid #c0392b;padding-bottom:6px;margin-bottom:16px">3. FRIGORÍFICOS EM NÍVEL CRÍTICO (&gt;40% Classe C)</h2>
+      ${alertas.map(f=>`
+      <div style="background:#fff5f5;border-left:4px solid #c0392b;padding:14px 18px;margin-bottom:14px;border-radius:4px">
+        <div style="font-family:Arial;font-size:13px;font-weight:700;color:#c0392b;margin-bottom:6px">${f.nome}</div>
+        <div style="font-family:Arial;font-size:11px;color:#555;line-height:1.7">
+          Total de peças recebidas: <strong>${f.total.toLocaleString('pt-BR')}</strong><br>
+          Classe A (melhor): <strong style="color:#2980b9">${f.pcs_A.toLocaleString('pt-BR')} peças (${f.pct_A.toFixed(1)}%)</strong><br>
+          Classe B: <strong style="color:#e67e22">${f.pcs_B.toLocaleString('pt-BR')} peças (${f.pct_B.toFixed(1)}%)</strong><br>
+          Classe C (pior): <strong style="color:#c0392b">${f.pcs_C.toLocaleString('pt-BR')} peças (${f.pct_C.toFixed(1)}%)</strong><br>
+          <span style="color:#c0392b;font-weight:600">⚠ ${f.pct_C.toFixed(1)}% das peças recebidas foram Classe C — requer ação corretiva.</span>
+        </div>
+      </div>`).join('')}
+    </div>`:'' ;
+
+  const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Relatório Qualidade Cargas — ${dataArq}</title>
+<style>
+  @page{size:A4;margin:20mm 18mm;}
+  @media print{.no-print{display:none!important}body{margin:0}}
+  body{font-family:Arial,sans-serif;color:#222;background:#fff;margin:0;padding:24px;}
+  .btn-print{background:#2980b9;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:24px;margin-right:10px;}
+  .btn-close{background:#777;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:24px;}
+</style></head><body>
+<div class="no-print" style="padding:12px 0">
+  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Salvar como PDF</button>
+  <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  <span style="font-size:11px;color:#888">No diálogo de impressão, selecione "Salvar como PDF"</span>
+</div>
+<div style="border-bottom:3px solid #c0392b;padding-bottom:16px;margin-bottom:24px">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start">
+    <div>
+      <div style="font-size:11px;color:#888;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Classic Importação e Exportação de Couros Ltda</div>
+      <h1 style="font-size:20px;font-weight:800;color:#c0392b;margin:0 0 4px 0">RELATÓRIO DE QUALIDADE — CARGAS</h1>
+      <div style="font-size:13px;color:#555">Frigoríficos com Alto Índice de Classe C — Ação Requerida</div>
+    </div>
+    <div style="text-align:right">
+      <div style="font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:1px">Emitido em</div>
+      <div style="font-size:13px;font-weight:600;color:#333">${dataFmt}</div>
+    </div>
+  </div>
+</div>
+<div style="background:#fff5f5;border:1px solid #f5c6c6;border-radius:8px;padding:16px 20px;margin-bottom:28px">
+  <h2 style="font-size:13px;font-weight:700;color:#c0392b;margin:0 0 10px 0;text-transform:uppercase">Resumo Executivo</h2>
+  <p style="font-size:12px;color:#444;line-height:1.7;margin:0">
+    Relatório de recebimento de couros bovinos. <strong>Classe C</strong> é a pior classificação.
+    Frigoríficos com mais de <strong>40% Classe C</strong> estão em nível <strong>crítico</strong>.
+  </p>
+  <div style="display:flex;gap:24px;margin-top:14px;flex-wrap:wrap">
+    <div style="background:#fff;border-radius:6px;padding:10px 16px;border:1px solid #eee;min-width:120px">
+      <div style="font-size:10px;color:#aaa;text-transform:uppercase">Em Atenção (&gt;30%)</div>
+      <div style="font-size:22px;font-weight:800;color:#e67e22">${criticos.length}</div>
+      <div style="font-size:10px;color:#888">frigoríficos</div>
+    </div>
+    <div style="background:#fff;border-radius:6px;padding:10px 16px;border:1px solid #eee;min-width:120px">
+      <div style="font-size:10px;color:#aaa;text-transform:uppercase">Em Nível Crítico (&gt;40%)</div>
+      <div style="font-size:22px;font-weight:800;color:#c0392b">${alertas.length}</div>
+      <div style="font-size:10px;color:#888">frigoríficos</div>
+    </div>
+    <div style="background:#fff;border-radius:6px;padding:10px 16px;border:1px solid #eee;min-width:120px">
+      <div style="font-size:10px;color:#aaa;text-transform:uppercase">Total Peças C críticos</div>
+      <div style="font-size:22px;font-weight:800;color:#c0392b">${alertas.reduce((s,f)=>s+f.pcs_C,0).toLocaleString('pt-BR')}</div>
+      <div style="font-size:10px;color:#888">peças</div>
+    </div>
+  </div>
+</div>
+<div style="margin-bottom:32px">
+  <h2 style="font-family:Arial;font-size:14px;color:#333;border-bottom:2px solid #ddd;padding-bottom:6px;margin-bottom:16px">1. FRIGORÍFICOS COM CLASSE C ACIMA DE 30%</h2>
+  <table style="width:100%;border-collapse:collapse;font-size:11px">
+    <thead><tr style="background:#c0392b;color:#fff">
+      <th style="padding:9px 14px;text-align:left">#</th>
+      <th style="padding:9px 14px;text-align:left">Frigorifico</th>
+      <th style="padding:9px 14px;text-align:right">Pçs A</th>
+      <th style="padding:9px 14px;text-align:right">Pçs B</th>
+      <th style="padding:9px 14px;text-align:right">Pçs C</th>
+      <th style="padding:9px 14px;text-align:right">Total</th>
+      <th style="padding:9px 14px;text-align:right">%A</th>
+      <th style="padding:9px 14px;text-align:right">%B</th>
+      <th style="padding:9px 14px;text-align:right">%C</th>
+      <th style="padding:9px 14px;text-align:center">Nível</th>
+    </tr></thead>
+    <tbody>${linhas}</tbody>
+  </table>
+  <div style="font-size:10px;color:#aaa;margin-top:8px">🔴 Crítico = acima de 40% Classe C &nbsp;|&nbsp; 🟡 Atenção = entre 30% e 40% Classe C</div>
+</div>
+${obsIndividuais}
+<div style="margin-top:40px;border-top:1px solid #ddd;padding-top:14px;display:flex;justify-content:space-between;font-size:10px;color:#aaa">
+  <span>Classic Importação e Exportação de Couros Ltda · Uso Interno</span>
+  <span>Gerado em ${dataFmt} · Dashboard de Cargas</span>
+</div>
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const w=window.open(url,'_blank');
+  if(!w) alert('Permita pop-ups para este site e tente novamente.');
+}
+
+function resetApp(){
+  removeFile(); CARGAS={}; ALL_ROWS=[];
+  Object.values(charts).forEach(c=>c.destroy()); charts={};
+  document.getElementById('screen-dash').style.display='none';
+  document.getElementById('screen-upload').style.display='block';
+  document.getElementById('cargaBtns').innerHTML='';
+  document.querySelectorAll('.tab').forEach((t,i)=>t.classList.toggle('active',i===0));
+  document.querySelectorAll('.section').forEach((s,i)=>s.classList.toggle('active',i===0));
+}
+</script>
+</body>
+</html>

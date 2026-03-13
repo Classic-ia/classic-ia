@@ -307,7 +307,7 @@ textarea.field-input {
 /* ──────────────────────────────────────────────────
    FOTOS
 ────────────────────────────────────────────────── */
-.foto-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.foto-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .foto-btn {
   height: 110px;
   background: var(--bg3);
@@ -811,6 +811,14 @@ textarea.field-input {
           <span class="foto-icon">📦</span>
           <span>Foto Produto</span>
         </div>
+        <div class="foto-btn" id="fotoBtnDefeito" onclick="triggerFoto('fotoDefeito')">
+          <input type="file" id="fotoDefeito" accept="image/*" capture="environment"
+            onchange="previewFoto(this,'fotoBtnDefeito','fotoPreviewDefeito')">
+          <img id="fotoPreviewDefeito" style="display:none;">
+          <div class="foto-overlay" id="overlayDefeito" style="display:none;">✓ Defeito</div>
+          <span class="foto-icon">🔍</span>
+          <span>Foto Defeito</span>
+        </div>
       </div>
 
     </div>
@@ -1036,6 +1044,33 @@ function initFornecedores(){
 
   // Gera ID único
   gerarId();
+
+  // Pré-preencher campos vindos do Recebimento (?lote=0046&fornecedor=60111&...)
+  (function preencherDeURL(){
+    const p = new URLSearchParams(window.location.search);
+    const lote      = p.get('lote');
+    const etiqueta  = p.get('etiqueta');
+    const fornCod   = p.get('fornecedor');
+    const produto   = p.get('produto');
+    const qtd       = p.get('qtd');
+    if (lote)     { const el=document.getElementById('f-lote-atak'); if(el) el.value=lote.toUpperCase(); }
+    if (etiqueta) { const el=document.getElementById('f-etiqueta');  if(el) el.value=etiqueta; }
+    if (produto)  { const el=document.getElementById('f-produto');   if(el) el.value=produto; }
+    if (qtd)      { const el=document.getElementById('f-qtd-lote');  if(el) el.value=qtd; }
+    if (fornCod && typeof CQFornecedores !== 'undefined') {
+      const f = CQFornecedores.porCodigo(fornCod);
+      if (f) {
+        document.getElementById('f-fornecedor').value      = f.codigo;
+        document.getElementById('f-fornecedor-nome').value = f.nome;
+        CQFornecedores.renderizar('forn-container', function(sel){
+          document.getElementById('f-fornecedor').value      = sel.codigo;
+          document.getElementById('f-fornecedor-nome').value = sel.nome;
+          updateSaveStatus();
+        }, f);
+      }
+    }
+    if (lote || fornCod) updateSaveStatus();
+  })();
 
   // Data/hora padrão agora
   const now = new Date();
@@ -1264,7 +1299,8 @@ function previewFoto(input, btnId, previewId){
     btn.querySelectorAll('span:not(.foto-overlay)').forEach(s=>s.style.display='none');
     // Salva data
     if(btnId === 'fotoBtnEtiqueta') fotoEtiquetaData = e.target.result;
-    else fotoProdutoData = e.target.result;
+    else if(btnId === 'fotoBtnProduto') fotoProdutoData = e.target.result;
+    else fotoDifeitoData = e.target.result;
   };
   reader.readAsDataURL(file);
 }
@@ -1397,44 +1433,106 @@ async function salvarInspecao(){
   localStorage.setItem('cq_pendentes', JSON.stringify(pendentes));
 
   // Tenta Supabase se online
+  const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
   let salvouOnline = false;
-  if(isOnline && typeof window.sb !== 'undefined'){
+  if(isOnline){
     try{
-      const { error } = await window.sb.from('registros_cq_inspecao').insert([{
-        id_inspecao:          registro.id,
-        data_inspecao:        registro.data_inspecao,
-        hora_inspecao:        registro.hora_inspecao,
-        inspetor:             registro.inspetor,
-        fornecedor:           registro.fornecedor,
-        produto:              registro.produto,
-        lote_atak:            registro.lote_atak,
-        etiqueta:             registro.etiqueta,
-        quantidade_lote:      registro.quantidade_lote,
-        quantidade_analisada: registro.quantidade_analisada,
-        tipo_amostragem:      registro.tipo_amostragem,
-        total_defeitos:       registro.total_defeitos,
-        percentual_defeitos:  registro.percentual_defeitos,
-        classificacao:        registro.classificacao,
-        status_final:         registro.status_final,
-        valor_desconto_pct:   registro.valor_desconto_pct ? parseFloat(registro.valor_desconto_pct) : null,
-        desconto_justificativa: registro.desconto_justificativa,
-        responsavel_decisao:  registro.responsavel_decisao,
-        observacoes:          registro.observacoes,
-        obs_reprovado:        registro.obs_reprovado,
-        defeitos:             registro.defeitos,
-        criado_em:            registro.criado_em,
-      }]);
-      if(!error) {
+      // 1. Upload de fotos para Storage
+      const fotoUrls = { etiqueta: null, produto: null, defeito: null };
+      const fotosDados = [
+        { data: fotoEtiquetaData, key: 'etiqueta' },
+        { data: fotoProdutoData,  key: 'produto' },
+        { data: fotoDifeitoData,  key: 'defeito' },
+      ];
+      for(const f of fotosDados){
+        if(!f.data) continue;
+        try{
+          // Converter base64 para blob
+          const res  = await fetch(f.data);
+          const blob = await res.blob();
+          const path = `inspecao/${registro.id}/${f.key}_${Date.now()}.jpg`;
+          const up = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${path}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': blob.type || 'image/jpeg', 'x-upsert': 'true' },
+            body: blob,
+          });
+          if(up.ok) fotoUrls[f.key] = `${SB_URL}/storage/v1/object/public/cq-fotos/${path}`;
+        } catch(e){ console.warn('Foto upload falhou:', f.key, e); }
+      }
+
+      // 2. Montar payload completo
+      const geo = CQAuth.getGeo() || {};
+      const authData = CQAuth.dadosRegistro();
+      const payload = {
+        id_inspecao:             registro.id,
+        data_inspecao:           registro.data_inspecao,
+        hora_inspecao:           registro.hora_inspecao,
+        inspetor:                registro.inspetor,
+        fornecedor:              registro.fornecedor,
+        fornecedor_codigo:       document.getElementById('f-fornecedor')?.value || null,
+        produto:                 registro.produto,
+        lote_atak:               registro.lote_atak,
+        etiqueta:                registro.etiqueta,
+        quantidade_lote:         registro.quantidade_lote,
+        quantidade_analisada:    registro.quantidade_analisada,
+        tipo_amostragem:         registro.tipo_amostragem,
+        temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
+        placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
+        motorista:               document.getElementById('f-motorista')?.value || null,
+        transportadora:          document.getElementById('f-transportadora')?.value || null,
+        // Defeitos
+        fermentacao:             parseInt(document.getElementById('df-fermentacao')?.value)||0,
+        sem_folhas:              parseInt(document.getElementById('df-sem_folhas')?.value)||0,
+        folhas_arrebentadas:     parseInt(document.getElementById('df-folhas_arrebentadas')?.value)||0,
+        pedaco:                  parseInt(document.getElementById('df-pedaco')?.value)||0,
+        sujo:                    parseInt(document.getElementById('df-sujo')?.value)||0,
+        rasgado:                 parseInt(document.getElementById('df-rasgado')?.value)||0,
+        corte_irregular:         parseInt(document.getElementById('df-corte_irregular')?.value)||0,
+        furado:                  parseInt(document.getElementById('df-furado')?.value)||0,
+        mau_cheiro:              parseInt(document.getElementById('df-mau_cheiro')?.value)||0,
+        contaminacao:            parseInt(document.getElementById('df-contaminacao')?.value)||0,
+        outro_defeito:           parseInt(document.getElementById('df-outro_defeito')?.value)||0,
+        outro_defeito_tipo:      document.getElementById('f-outro-defeito-tipo')?.value || null,
+        total_defeitos:          registro.total_defeitos,
+        percentual_defeitos:     registro.percentual_defeitos,
+        classificacao:           registro.classificacao,
+        status_final:            registro.status_final,
+        responsavel_decisao:     registro.responsavel_decisao,
+        observacoes:             registro.observacoes,
+        obs_reprovado:           registro.obs_reprovado,
+        foto_etiqueta_url:       fotoUrls.etiqueta,
+        foto_produto_url:        fotoUrls.produto,
+        foto_defeito_url:        fotoUrls.defeito,
+        // Auditoria / geo
+        ...authData,
+        offline:                 false,
+        criado_em:               registro.criado_em,
+      };
+
+      // 3. Insert no Supabase
+      const r = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SB_KEY,
+          'Authorization': `Bearer ${SB_KEY}`,
+          'Prefer': 'return=minimal',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if(r.ok) {
         salvouOnline = true;
-        // Registrar no audit log
         await CQAuth.log('create_inspecao', {
-          tabela: 'registros_cq_inspecao',
-          registro_id: registro.id,
-          lote_atak: registro.lote_atak,
-          fornecedor: registro.fornecedor,
+          lote_atak:     registro.lote_atak,
+          fornecedor:    registro.fornecedor,
           classificacao: registro.classificacao,
-          pct_defeito: registro.percentual_defeitos,
+          pct_defeito:   registro.percentual_defeitos,
         });
+      } else {
+        const errTxt = await r.text();
+        console.warn('Supabase error:', errTxt);
       }
     } catch(e){ console.warn('Supabase offline, salvo localmente:', e); }
   }

@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Fornecedores · Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="cq_auth.js"></script>
+<style>
+:root{
+  --bg:#07111c;--bg2:#0d1b2a;--bg3:#162535;--border:#1e3a52;
+  --gold:#c8a96e;--gold2:#e8c987;--blue:#2E6B8A;--blue2:#3d8aad;
+  --text:#e8f0f5;--muted:#5d7f95;
+  --green:#27ae60;--yellow:#f39c12;--red:#e74c3c;--teal:#16a085;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+.layout{display:grid;grid-template-columns:300px 1fr;min-height:calc(100vh - 57px);}
+@media(max-width:700px){.layout{grid-template-columns:1fr;}}
+
+/* SIDEBAR */
+.sidebar{background:var(--bg2);border-right:1px solid var(--border);
+  display:flex;flex-direction:column;height:calc(100vh - 57px);position:sticky;top:57px;}
+.sidebar-top{padding:16px;border-bottom:1px solid var(--border);}
+.sidebar-search{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:13px;padding:9px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.sidebar-search:focus{border-color:var(--blue);}
+.sidebar-list{flex:1;overflow-y:auto;padding:8px;}
+.forn-item{padding:10px 12px;border-radius:8px;cursor:pointer;transition:all .15s;
+  border:1px solid transparent;margin-bottom:4px;}
+.forn-item:hover{background:var(--bg3);border-color:var(--border);}
+.forn-item.active{background:rgba(46,107,138,.15);border-color:var(--blue);}
+.forn-nome{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.forn-cod{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);margin-top:2px;}
+.forn-score{display:flex;align-items:center;gap:6px;margin-top:4px;}
+.score-bar{flex:1;height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;}
+.score-fill{height:100%;border-radius:2px;transition:width .4s;}
+.score-val{font-family:'DM Mono',monospace;font-size:10px;font-weight:700;}
+
+/* MAIN PANEL */
+.main-panel{overflow-y:auto;height:calc(100vh - 57px);}
+.empty-forn{display:flex;flex-direction:column;align-items:center;justify-content:center;
+  height:100%;color:var(--muted);gap:12px;}
+.empty-icon{font-size:64px;opacity:.2;}
+
+/* PROFILE HEADER */
+.profile-header{background:var(--bg2);border-bottom:1px solid var(--border);padding:24px;}
+.profile-title{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.profile-nome{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
+.profile-cod{font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-top:4px;}
+.profile-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:16px;}
+.kpi{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:12px;text-align:center;}
+.kpi-val{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;}
+
+/* SCORE GRANDE */
+.score-grande{display:flex;flex-direction:column;align-items:center;
+  background:var(--bg3);border:2px solid;border-radius:12px;padding:16px 20px;min-width:100px;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);
+  padding:0 20px;background:var(--bg2);}
+.tab{padding:11px 16px;font-size:13px;font-weight:600;color:var(--muted);
+  cursor:pointer;border-bottom:2px solid transparent;transition:all .2s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-panel{display:none;padding:20px;}
+.tab-panel.active{display:block;}
+
+/* CARDS INTERNOS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:18px;margin-bottom:16px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+  color:var(--gold);text-transform:uppercase;letter-spacing:.06em;
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+
+/* TABELAS */
+.tbl{width:100%;border-collapse:collapse;font-size:13px;}
+.tbl th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+.tbl td{padding:9px 10px;border-bottom:1px solid rgba(30,58,82,.4);}
+.tbl tr:last-child td{border-bottom:none;}
+.tbl tr:hover td{background:rgba(46,107,138,.06);}
+
+.cls-badge{display:inline-flex;align-items:center;justify-content:center;
+  width:24px;height:24px;border-radius:50%;font-family:'Syne',sans-serif;
+  font-weight:800;font-size:12px;}
+.cls-A{background:rgba(39,174,96,.2);color:var(--green);}
+.cls-B{background:rgba(243,156,18,.2);color:var(--yellow);}
+.cls-C{background:rgba(231,76,60,.2);color:var(--red);}
+
+/* DEFEITOS BARS */
+.def-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid rgba(30,58,82,.3);}
+.def-row:last-child{border:none;}
+.def-nome{font-size:12px;width:160px;flex-shrink:0;}
+.def-bar-bg{flex:1;height:8px;background:var(--bg3);border-radius:4px;overflow:hidden;}
+.def-bar-fill{height:100%;border-radius:4px;background:var(--red);transition:width .5s;}
+.def-val{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);min-width:60px;text-align:right;}
+
+/* PLANOS DE AÇÃO */
+.acao-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:14px;margin-bottom:10px;}
+.acao-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px;}
+.acao-lote{font-family:'DM Mono',monospace;font-size:11px;color:var(--gold);}
+.acao-data{font-size:11px;color:var(--muted);}
+.acao-prob{font-size:13px;font-weight:600;margin-bottom:4px;}
+.acao-rec{font-size:12px;color:var(--muted);line-height:1.5;}
+.status-chip{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap;}
+.s-aberto    {background:rgba(231,76,60,.15);color:var(--red);}
+.s-comunicado{background:rgba(243,156,18,.15);color:var(--yellow);}
+.s-tratativa {background:rgba(46,107,138,.2);color:#5ec2e8;}
+.s-resolvido {background:rgba(39,174,96,.15);color:var(--green);}
+
+/* FORM NOVO PLANO */
+.form-acao{background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:16px;margin-bottom:16px;}
+.form-acao label{font-size:11px;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.06em;display:block;margin-bottom:5px;}
+.form-acao input,.form-acao textarea,.form-acao select{
+  width:100%;background:var(--bg2);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:13px;padding:9px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;margin-bottom:12px;}
+.form-acao input:focus,.form-acao textarea:focus,.form-acao select:focus{border-color:var(--blue);}
+.form-acao textarea{min-height:70px;resize:vertical;}
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;transition:all .2s;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+
+.empty-tab{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+.loading{display:flex;align-items:center;justify-content:center;gap:10px;
+  padding:40px;color:var(--muted);}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.toast{position:fixed;bottom:24px;right:24px;z-index:200;background:var(--bg3);
+  border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:13px;
+  transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+.mini-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img id="logoImg" src="" alt="" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'">
+  <div>
+    <div class="ht">Classic CQ</div>
+    <div class="hs">Gestão de Fornecedores</div>
+  </div>
+  <div id="cq-user-chip" style="margin-left:auto;margin-right:12px;"></div>
+  <a href="index.html" class="btn-back">← Menu</a>
+</div>
+
+<div class="layout">
+  <!-- SIDEBAR: lista de fornecedores -->
+  <div class="sidebar">
+    <div class="sidebar-top">
+      <input class="sidebar-search" type="text" placeholder="🔍 Buscar fornecedor..."
+        id="searchForn" oninput="filtrarSidebar()">
+    </div>
+    <div class="sidebar-list" id="sidebarList">
+      <div class="loading"><div class="spinner"></div><span>Carregando...</span></div>
+    </div>
+  </div>
+
+  <!-- PAINEL PRINCIPAL -->
+  <div class="main-panel" id="mainPanel">
+    <div class="empty-forn" id="emptyState">
+      <div class="empty-icon">🏭</div>
+      <div style="font-size:15px;font-weight:600;">Selecione um fornecedor</div>
+      <div style="font-size:13px;text-align:center;max-width:280px;">
+        Escolha um fornecedor na lista ao lado para ver histórico, score e gerenciar tratativas.
+      </div>
+    </div>
+    <div id="fornContent" style="display:none;">
+      <!-- Perfil header -->
+      <div class="profile-header">
+        <div class="profile-title">
+          <div>
+            <div class="profile-nome" id="pfNome">—</div>
+            <div class="profile-cod" id="pfCod">—</div>
+          </div>
+          <div class="score-grande" id="pfScoreBox">
+            <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;" id="pfScoreNum">—</div>
+            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">Score CQ</div>
+          </div>
+        </div>
+        <div class="profile-kpis" id="pfKpis"></div>
+      </div>
+
+      <!-- Tabs -->
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('historico')">📋 Histórico</div>
+        <div class="tab" onclick="switchTab('defeitos')">⚠️ Defeitos</div>
+        <div class="tab" onclick="switchTab('acoes')">📣 Plano de Ação</div>
+      </div>
+
+      <!-- TAB: Histórico de Lotes -->
+      <div class="tab-panel active" id="tab-historico">
+        <div class="card">
+          <div class="card-title">📦 Histórico de Lotes</div>
+          <div class="table-wrap" style="overflow-x:auto;">
+            <table class="tbl">
+              <thead><tr>
+                <th>Lote</th><th>Data</th><th>Produto</th>
+                <th style="text-align:right">Amostra</th>
+                <th style="text-align:right">Defeitos</th>
+                <th style="text-align:right">% Def</th>
+                <th>Classe</th><th>Status</th><th>Inspetor</th>
+              </tr></thead>
+              <tbody id="tbHistorico">
+                <tr><td colspan="9" class="empty-tab">Selecione um fornecedor</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Defeitos Frequentes -->
+      <div class="tab-panel" id="tab-defeitos">
+        <div class="card">
+          <div class="card-title">⚠️ Defeitos Mais Frequentes</div>
+          <div id="defeitosChart"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">📊 Distribuição por Classe</div>
+          <div id="classeChart"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Plano de Ação -->
+      <div class="tab-panel" id="tab-acoes">
+        <!-- Formulário novo plano -->
+        <div class="card">
+          <div class="card-title">+ Nova Tratativa / Cobrança</div>
+          <div class="form-acao" id="formAcao">
+            <div class="mini-grid">
+              <div>
+                <label>Lote Referência</label>
+                <input type="text" id="a-lote" placeholder="Ex: 0046"
+                  style="text-transform:uppercase;">
+              </div>
+              <div>
+                <label>Data</label>
+                <input type="date" id="a-data">
+              </div>
+            </div>
+            <label>Problema Identificado *</label>
+            <textarea id="a-problema" placeholder="Descreva o problema de qualidade encontrado...
+Ex: Percentual elevado de fermentação (18%) — lote 0046"></textarea>
+            <label>Recomendação Técnica *</label>
+            <textarea id="a-recomendacao" placeholder="Descreva as ações corretivas recomendadas...
+Ex: Reduzir intervalo entre abertura do omaso e congelamento. Verificar temperatura na câmara fria."></textarea>
+            <label>Status</label>
+            <select id="a-status">
+              <option value="aberto">Aberto</option>
+              <option value="comunicado">Comunicado ao Fornecedor</option>
+              <option value="em_tratativa">Em Tratativa</option>
+              <option value="resolvido">Resolvido</option>
+            </select>
+            <button class="btn btn-primary" onclick="salvarAcao()" id="btnSalvarAcao">
+              💬 Registrar Tratativa
+            </button>
+          </div>
+        </div>
+
+        <!-- Lista de planos -->
+        <div class="card">
+          <div class="card-title">📋 Histórico de Tratativas</div>
+          <div id="listaAcoes">
+            <div class="loading"><div class="spinner"></div><span>Carregando...</span></div>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /fornContent -->
+  </div><!-- /mainPanel -->
+</div><!-- /layout -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+const DEF_LABELS = {
+  fermentacao:'Fermentação', sem_folhas:'Sem Folhas',
+  folhas_arrebentadas:'Folhas Arrebentadas', pedaco:'Pedaço',
+  sujo:'Sujo/Despojo', rasgado:'Rasgado', corte_irregular:'Corte Irregular',
+  furado:'Furado', mau_cheiro:'Mau Cheiro', contaminacao:'Contaminação',
+  outro_defeito:'Outro Defeito'
+};
+
+let todosInspecoes = [];
+let fornAtual = null;
+let todosForns = [];
+
+// ── INIT ──────────────────────────────────────────────────────
+(async function(){
+  const s = localStorage.getItem('classic_logo');
+  if(s) document.getElementById('logoImg').src = s;
+
+  await CQAuth.init({ perfisPermitidos: ['gestor','analisador','qualidade_externo','financeiro'] });
+
+  carregarDados();
+})();
+
+const hdrs = () => ({ 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY });
+
+async function sbGet(tabela, qs='') {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, { headers: hdrs() });
+  return r.ok ? r.json() : [];
+}
+
+async function sbPost(tabela, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}`, {
+    method:'POST',
+    headers:{...hdrs(),'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify(dados)
+  });
+  return r.ok;
+}
+
+async function sbPatch(tabela, qs, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, {
+    method:'PATCH',
+    headers:{...hdrs(),'Content-Type':'application/json','Prefer':'return=minimal'},
+    body: JSON.stringify(dados)
+  });
+  return r.ok;
+}
+
+// ── CARREGAR DADOS ────────────────────────────────────────────
+async function carregarDados() {
+  todosInspecoes = await sbGet('registros_cq_inspecao', 'order=data_inspecao.desc&limit=2000');
+
+  // Agrupar por fornecedor
+  const fornMap = {};
+  todosInspecoes.forEach(i => {
+    if (!i.fornecedor) return;
+    if (!fornMap[i.fornecedor]) fornMap[i.fornecedor] = {
+      nome: i.fornecedor, cod: i.fornecedor_codigo || '',
+      lotes: 0, totalAmst: 0, totalDef: 0, pcts: [], A:0, B:0, C:0
+    };
+    const v = fornMap[i.fornecedor];
+    v.lotes++;
+    v.totalAmst += i.quantidade_analisada || 0;
+    v.totalDef  += i.total_defeitos || 0;
+    if (i.percentual_defeitos != null) v.pcts.push(i.percentual_defeitos);
+    const cls = i.classificacao;
+    if (cls === 'A') v.A++;
+    else if (cls === 'B') v.B++;
+    else if (cls === 'C') v.C++;
+  });
+
+  todosForns = Object.values(fornMap).map(v => {
+    const avg = v.pcts.length ? v.pcts.reduce((a,b)=>a+b,0)/v.pcts.length : 0;
+    const tot = v.lotes || 1;
+    const score = Math.max(0, Math.min(100, Math.round(
+      100 - (v.C/tot*50) - (v.B/tot*20) + (v.A/tot*20)
+    )));
+    return { ...v, avg, score };
+  }).sort((a,b) => b.score - a.score);
+
+  renderSidebar(todosForns);
+}
+
+// ── SIDEBAR ───────────────────────────────────────────────────
+function renderSidebar(forns) {
+  if (!forns.length) {
+    document.getElementById('sidebarList').innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:13px">Nenhum dado de inspeção</div>';
+    return;
+  }
+  document.getElementById('sidebarList').innerHTML = forns.map(f => {
+    const cor = f.score >= 70 ? 'var(--green)' : f.score >= 40 ? 'var(--yellow)' : 'var(--red)';
+    return `<div class="forn-item" id="si-${CSS.escape(f.nome)}" onclick="selecionarForn('${encodeURIComponent(f.nome)}')">
+      <div class="forn-nome" title="${f.nome}">${f.nome}</div>
+      ${f.cod ? `<div class="forn-cod">${f.cod}</div>` : ''}
+      <div class="forn-score">
+        <div class="score-bar"><div class="score-fill" style="width:${f.score}%;background:${cor}"></div></div>
+        <span class="score-val" style="color:${cor}">${f.score}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrarSidebar() {
+  const q = document.getElementById('searchForn').value.toLowerCase();
+  const filtrado = q ? todosForns.filter(f => f.nome.toLowerCase().includes(q)) : todosForns;
+  renderSidebar(filtrado);
+}
+
+// ── SELECIONAR FORNECEDOR ─────────────────────────────────────
+async function selecionarForn(nomeEnc) {
+  const nome = decodeURIComponent(nomeEnc);
+  fornAtual = todosForns.find(f => f.nome === nome);
+  if (!fornAtual) return;
+
+  // Ativar item na sidebar
+  document.querySelectorAll('.forn-item').forEach(el => el.classList.remove('active'));
+  const si = document.getElementById('si-' + CSS.escape(nome));
+  if (si) si.classList.add('active');
+
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('fornContent').style.display = 'block';
+
+  const cor = fornAtual.score >= 70 ? 'var(--green)' : fornAtual.score >= 40 ? 'var(--yellow)' : 'var(--red)';
+
+  document.getElementById('pfNome').textContent = fornAtual.nome;
+  document.getElementById('pfCod').textContent  = fornAtual.cod ? `Código: ${fornAtual.cod}` : 'Sem código ATAK';
+
+  const sb = document.getElementById('pfScoreBox');
+  sb.style.borderColor = cor;
+  document.getElementById('pfScoreNum').style.color = cor;
+  document.getElementById('pfScoreNum').textContent = fornAtual.score;
+
+  // KPIs
+  const corPct = fornAtual.avg > 12 ? 'var(--red)' : fornAtual.avg > 5 ? 'var(--yellow)' : 'var(--green)';
+  document.getElementById('pfKpis').innerHTML = [
+    { val: fornAtual.lotes, label:'Lotes CQ', cor:'var(--gold)' },
+    { val: fornAtual.totalAmst.toLocaleString('pt-BR'), label:'Peças Analisadas', cor:'var(--text)' },
+    { val: fornAtual.avg.toFixed(1)+'%', label:'% Médio Defeito', cor: corPct },
+    { val: fornAtual.A, label:'Classe A', cor:'var(--green)' },
+    { val: fornAtual.B, label:'Classe B', cor:'var(--yellow)' },
+    { val: fornAtual.C, label:'Classe C', cor:'var(--red)' },
+  ].map(k => `<div class="kpi">
+    <div class="kpi-val" style="color:${k.cor}">${k.val}</div>
+    <div class="kpi-label">${k.label}</div>
+  </div>`).join('');
+
+  renderHistorico(nome);
+  renderDefeitos(nome);
+  await carregarAcoes(nome);
+
+  // Preencher lote no form de ação com o lote mais recente
+  const recente = todosInspecoes.find(i => i.fornecedor === nome);
+  if (recente) document.getElementById('a-lote').value = recente.lote_atak || '';
+  document.getElementById('a-data').value = new Date().toISOString().split('T')[0];
+}
+
+// ── HISTÓRICO ─────────────────────────────────────────────────
+function renderHistorico(nome) {
+  const lotes = todosInspecoes.filter(i => i.fornecedor === nome);
+  if (!lotes.length) {
+    document.getElementById('tbHistorico').innerHTML = '<tr><td colspan="9" class="empty-tab">Sem inspeções registradas</td></tr>';
+    return;
+  }
+  document.getElementById('tbHistorico').innerHTML = lotes.map(l => {
+    const pct = (l.percentual_defeitos || l.percentual_defeito || 0).toFixed(1);
+    const cor = pct > 12 ? 'var(--red)' : pct > 5 ? 'var(--yellow)' : 'var(--green)';
+    const cls = l.classificacao || '?';
+    const st  = l.status_final || '—';
+    return `<tr>
+      <td><span style="font-family:'DM Mono',monospace;color:var(--gold);font-size:12px">${l.lote_atak||'—'}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${l.data_inspecao||'—'}</td>
+      <td style="font-size:12px">${(l.produto||'').slice(0,20)}</td>
+      <td class="mono" style="text-align:right">${(l.quantidade_analisada||0).toLocaleString('pt-BR')}</td>
+      <td class="mono" style="text-align:right">${(l.total_defeitos||0).toLocaleString('pt-BR')}</td>
+      <td style="text-align:right"><span style="font-weight:700;color:${cor}">${pct}%</span></td>
+      <td style="text-align:center"><span class="cls-badge cls-${cls}">${cls}</span></td>
+      <td style="font-size:11px">${st}</td>
+      <td style="font-size:12px;color:var(--muted)">${l.inspetor||'—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── DEFEITOS ──────────────────────────────────────────────────
+function renderDefeitos(nome) {
+  const lotes = todosInspecoes.filter(i => i.fornecedor === nome);
+  const totais = {};
+  let totalGeral = 0;
+  Object.keys(DEF_LABELS).forEach(k => { totais[k] = 0; });
+  lotes.forEach(l => { Object.keys(DEF_LABELS).forEach(k => { totais[k] += l[k]||0; totalGeral += l[k]||0; }); });
+
+  const sorted = Object.entries(totais).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const maxVal = sorted[0]?.[1] || 1;
+
+  document.getElementById('defeitosChart').innerHTML = sorted.length
+    ? sorted.map(([k,v]) => `
+      <div class="def-row">
+        <div class="def-nome">${DEF_LABELS[k]}</div>
+        <div class="def-bar-bg"><div class="def-bar-fill" style="width:${Math.round(v/maxVal*100)}%"></div></div>
+        <div class="def-val">${v.toLocaleString('pt-BR')} pçs</div>
+      </div>`).join('')
+    : '<div class="empty-tab">Sem defeitos registrados</div>';
+
+  // Distribuição de classes
+  const tot = lotes.length || 1;
+  const clsDist = [
+    { cls:'A', n: fornAtual.A, cor:'var(--green)' },
+    { cls:'B', n: fornAtual.B, cor:'var(--yellow)' },
+    { cls:'C', n: fornAtual.C, cor:'var(--red)' },
+  ];
+  document.getElementById('classeChart').innerHTML = `
+    <div style="display:flex;gap:12px;align-items:flex-end;height:80px;margin-bottom:8px;">
+      ${clsDist.map(c => `
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;">
+          <span style="font-family:'DM Mono',monospace;font-size:12px;color:${c.cor}">${c.n}</span>
+          <div style="width:100%;background:${c.cor};border-radius:4px 4px 0 0;
+            height:${Math.round(c.n/tot*70)+10}px;opacity:.8;"></div>
+        </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:12px;">
+      ${clsDist.map(c => `
+        <div style="flex:1;text-align:center;font-size:11px;font-weight:700;color:${c.cor}">
+          Classe ${c.cls}<br>${Math.round(c.n/tot*100)}%
+        </div>`).join('')}
+    </div>`;
+}
+
+// ── PLANOS DE AÇÃO ────────────────────────────────────────────
+async function carregarAcoes(nome) {
+  document.getElementById('listaAcoes').innerHTML = '<div class="loading"><div class="spinner"></div><span>Carregando...</span></div>';
+  const rows = await sbGet('cq_planos_acao', `fornecedor=eq.${encodeURIComponent(nome)}&order=criado_em.desc`);
+  renderAcoes(rows);
+}
+
+function renderAcoes(rows) {
+  if (!rows.length) {
+    document.getElementById('listaAcoes').innerHTML = '<div class="empty-tab">Nenhuma tratativa registrada</div>';
+    return;
+  }
+  const ST = { aberto:'s-aberto', comunicado:'s-comunicado', em_tratativa:'s-tratativa', resolvido:'s-resolvido' };
+  const SL = { aberto:'Aberto', comunicado:'Comunicado', em_tratativa:'Em Tratativa', resolvido:'Resolvido' };
+  document.getElementById('listaAcoes').innerHTML = rows.map(r => {
+    const dt = r.data_acao || r.criado_em?.split('T')[0] || '—';
+    return `<div class="acao-card">
+      <div class="acao-header">
+        <div>
+          <div class="acao-lote">${r.lote_atak ? 'Lote ' + r.lote_atak : 'Sem lote'} · ${dt}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="status-chip ${ST[r.status]||'s-aberto'}">${SL[r.status]||r.status}</span>
+          ${r.status !== 'resolvido' ? `
+            <select onchange="atualizarStatus('${r.id}', this.value)"
+              style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;
+                     color:var(--text);font-size:11px;padding:4px 6px;outline:none;cursor:pointer;">
+              <option value="aberto" ${r.status==='aberto'?'selected':''}>Aberto</option>
+              <option value="comunicado" ${r.status==='comunicado'?'selected':''}>Comunicado</option>
+              <option value="em_tratativa" ${r.status==='em_tratativa'?'selected':''}>Em Tratativa</option>
+              <option value="resolvido" ${r.status==='resolvido'?'selected':''}>Resolvido</option>
+            </select>` : ''}
+        </div>
+      </div>
+      <div class="acao-prob">⚠️ ${r.problema}</div>
+      <div class="acao-rec">→ ${r.recomendacao}</div>
+      ${r.usuario_nome ? `<div style="font-size:10px;color:var(--muted);margin-top:6px">Registrado por: ${r.usuario_nome}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+async function salvarAcao() {
+  const prob = document.getElementById('a-problema').value.trim();
+  const rec  = document.getElementById('a-recomendacao').value.trim();
+  if (!prob || !rec) { toast('Preencha problema e recomendação'); return; }
+
+  const btn = document.getElementById('btnSalvarAcao');
+  btn.textContent = '⏳ Salvando...'; btn.disabled = true;
+
+  const user = CQAuth.getUser();
+  const ok = await sbPost('cq_planos_acao', {
+    fornecedor:    fornAtual.nome,
+    fornecedor_cod:fornAtual.cod,
+    lote_atak:     document.getElementById('a-lote').value.toUpperCase() || null,
+    data_acao:     document.getElementById('a-data').value,
+    problema:      prob,
+    recomendacao:  rec,
+    status:        document.getElementById('a-status').value,
+    usuario_nome:  user?.nome || null,
+    usuario_email: user?.email || null,
+    criado_em:     new Date().toISOString(),
+  });
+
+  if (ok) {
+    toast('✅ Tratativa registrada');
+    document.getElementById('a-problema').value = '';
+    document.getElementById('a-recomendacao').value = '';
+    document.getElementById('a-status').value = 'aberto';
+    await CQAuth.log('create_plano_acao', { fornecedor: fornAtual.nome, lote: document.getElementById('a-lote').value });
+    await carregarAcoes(fornAtual.nome);
+  } else {
+    toast('Erro ao salvar. Tente novamente.');
+  }
+
+  btn.textContent = '💬 Registrar Tratativa'; btn.disabled = false;
+}
+
+async function atualizarStatus(id, status) {
+  const ok = await sbPatch('cq_planos_acao', `id=eq.${id}`, { status, atualizado_em: new Date().toISOString() });
+  if (ok) { toast('✅ Status atualizado'); await carregarAcoes(fornAtual.nome); }
+  else toast('Erro ao atualizar');
+}
+
+// ── TABS ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['historico','defeitos','acoes'];
+    t.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'tab-' + tab)
+  );
+}
+
+// ── TOAST ─────────────────────────────────────────────────────
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_tt); _tt = setTimeout(()=>el.classList.remove('show'),3000);
+}
+</script>
+</body>
+</html>

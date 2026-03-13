@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Recebimento de Lote · Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#0e0e0e; --bg2:#141414; --bg3:#1a1a1a; --bg4:#222;
+  --border:#2a2a2a; --border2:#333;
+  --accent:#c8a96e; --accent2:#e2c98a; --accent3:rgba(200,169,110,.1);
+  --text:#e8e3da; --muted:#666; --muted2:#888;
+  --green:#2ecc71; --green2:rgba(46,204,113,.15); --green3:rgba(46,204,113,.35);
+  --yellow:#f39c12; --yellow2:rgba(243,156,18,.15); --yellow3:rgba(243,156,18,.35);
+  --red:#e74c3c; --red2:rgba(231,76,60,.15); --red3:rgba(231,76,60,.35);
+  --blue:#2E6B8A; --blue2:#3d8aad;
+  --radius:12px; --radius-sm:8px;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{-webkit-text-size-adjust:100%;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;
+  min-height:100vh;padding-bottom:100px;}
+
+/* HEADER */
+.header{background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:12px 16px;display:flex;align-items:center;gap:12px;
+  position:sticky;top:0;z-index:100;}
+.header-logo{height:32px;width:auto;border-radius:6px;}
+.header-info{flex:1;}
+.header-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--accent);}
+.header-sub{font-size:10px;color:var(--muted2);margin-top:1px;}
+.header-right{display:flex;align-items:center;gap:8px;}
+.back-link{font-size:12px;color:var(--muted2);text-decoration:none;
+  padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);
+  transition:all .2s;}
+.back-link:hover{color:var(--text);border-color:var(--border2);}
+
+/* REC ID BADGE */
+.rec-id-badge{font-family:'DM Mono',monospace;font-size:10px;color:var(--accent);
+  background:var(--accent3);border:1px solid rgba(200,169,110,.2);
+  border-radius:20px;padding:4px 10px;}
+
+/* MAIN */
+.main{max-width:600px;margin:0 auto;padding:16px;}
+
+/* STATUS BAR */
+.status-bar{display:flex;gap:6px;margin-bottom:20px;overflow-x:auto;padding-bottom:2px;}
+.step{display:flex;align-items:center;gap:6px;white-space:nowrap;
+  font-size:11px;color:var(--muted);padding:6px 10px;
+  background:var(--bg3);border:1px solid var(--border);border-radius:20px;}
+.step.active{background:var(--accent3);border-color:rgba(200,169,110,.3);color:var(--accent);font-weight:600;}
+.step.done{background:var(--green2);border-color:var(--green3);color:var(--green);}
+.step-num{width:18px;height:18px;border-radius:50%;background:var(--border);
+  display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0;}
+.step.active .step-num{background:var(--accent);color:#1a1200;}
+.step.done .step-num{background:var(--green);color:#0a1a0a;}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
+  margin-bottom:14px;overflow:hidden;}
+.card-header{display:flex;align-items:center;gap:10px;padding:14px 16px;
+  border-bottom:1px solid var(--border);background:var(--bg3);}
+.card-icon{font-size:18px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;flex:1;}
+.card-num{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);
+  background:var(--bg4);border:1px solid var(--border);border-radius:4px;padding:2px 7px;}
+.card-body{padding:16px;}
+
+/* CAMPOS */
+.field{margin-bottom:14px;}
+.field:last-child{margin-bottom:0;}
+.field-label{font-size:11px;font-weight:600;color:var(--muted2);
+  text-transform:uppercase;letter-spacing:.07em;display:block;margin-bottom:6px;}
+.field-label .req{color:var(--accent);}
+.field-input{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--text);font-size:15px;
+  padding:12px 14px;outline:none;font-family:'DM Sans',sans-serif;
+  transition:border .2s;-webkit-appearance:none;}
+.field-input:focus{border-color:var(--accent);}
+.field-input.error{border-color:var(--red);}
+.field-input[readonly]{color:var(--muted2);cursor:not-allowed;}
+.field-hint{font-size:10px;color:var(--muted);margin-top:4px;}
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+
+/* TEMPERATURA BADGE */
+.temp-badge{display:inline-flex;align-items:center;gap:6px;
+  font-size:12px;margin-top:5px;font-weight:600;padding:3px 8px;border-radius:4px;}
+.temp-ok{background:var(--green2);color:var(--green);}
+.temp-warn{background:var(--yellow2);color:var(--yellow);}
+.temp-err{background:var(--red2);color:var(--red);}
+
+/* CAMPO COM BOTÃO CÂMERA */
+.input-cam{display:flex;gap:8px;align-items:stretch;}
+.input-cam .field-input{flex:1;}
+.btn-cam{background:var(--bg3);border:1.5px solid var(--border);border-radius:var(--radius-sm);
+  padding:0 14px;cursor:pointer;color:var(--muted2);font-size:20px;
+  transition:all .2s;flex-shrink:0;display:flex;align-items:center;}
+.btn-cam:hover{border-color:var(--blue);color:var(--text);}
+
+/* FOTOS */
+.foto-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.foto-btn{position:relative;aspect-ratio:4/3;border:2px dashed var(--border);
+  border-radius:var(--radius-sm);display:flex;flex-direction:column;
+  align-items:center;justify-content:center;cursor:pointer;
+  transition:all .2s;overflow:hidden;background:var(--bg3);}
+.foto-btn:hover{border-color:var(--accent);background:var(--accent3);}
+.foto-btn.has-foto{border-style:solid;border-color:var(--accent);}
+.foto-btn input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;}
+.foto-btn img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:calc(var(--radius-sm) - 2px);}
+.foto-overlay{position:absolute;bottom:0;left:0;right:0;background:rgba(0,0,0,.7);
+  color:var(--accent);font-size:10px;text-align:center;padding:4px;display:none;}
+.foto-btn.has-foto .foto-overlay{display:block;}
+.foto-icon{font-size:24px;margin-bottom:4px;}
+.foto-label{font-size:10px;color:var(--muted2);}
+
+/* OCR MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:200;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:24px;max-width:420px;width:100%;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:16px;
+  margin-bottom:16px;display:flex;justify-content:space-between;align-items:center;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+.ocr-preview{background:var(--bg3);border-radius:8px;overflow:hidden;
+  margin-bottom:14px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;}
+.ocr-preview img{width:100%;height:100%;object-fit:contain;}
+.ocr-resultado{margin-bottom:12px;}
+.ocr-resultado label{font-size:11px;color:var(--muted2);margin-bottom:6px;display:block;}
+.ocr-linha{display:flex;gap:8px;}
+.ocr-input{flex:1;background:var(--bg3);border:1px solid var(--blue);border-radius:8px;
+  padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;}
+.btn-ocr-usar{padding:10px 16px;background:var(--green);border:none;border-radius:8px;
+  color:white;font-size:13px;font-weight:700;cursor:pointer;}
+.ocr-status{font-size:11px;color:var(--accent);margin-top:4px;}
+
+/* SAVE BAR */
+.save-bar{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);
+  border-top:1px solid var(--border);padding:12px 16px;z-index:200;
+  display:flex;gap:10px;align-items:center;}
+.save-status{flex:1;font-size:11px;color:var(--muted);}
+.btn-save{height:52px;min-width:180px;background:linear-gradient(135deg,var(--accent),var(--accent2));
+  border:none;border-radius:var(--radius-sm);color:#1a1200;font-size:15px;font-weight:800;
+  cursor:pointer;letter-spacing:.04em;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  box-shadow:0 4px 18px rgba(200,169,110,.25);}
+.btn-save:active{transform:scale(.97);}
+.btn-save:disabled{background:var(--bg3);color:var(--muted);box-shadow:none;cursor:not-allowed;}
+
+/* TOAST */
+.toast{position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--bg4);color:var(--text);border:1px solid var(--border2);
+  border-radius:var(--radius-sm);padding:10px 18px;font-size:13px;z-index:300;
+  opacity:0;transition:all .3s;pointer-events:none;white-space:nowrap;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* MODAL SUCESSO */
+.modal-sucesso{position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:300;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-sucesso.show{display:flex;}
+.sucesso-box{background:var(--bg2);border:1px solid var(--green3);border-radius:14px;
+  padding:32px 24px;max-width:360px;width:100%;text-align:center;}
+.sucesso-icon{font-size:52px;margin-bottom:12px;}
+.sucesso-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;
+  color:var(--green);margin-bottom:6px;}
+.sucesso-id{font-family:'DM Mono',monospace;font-size:14px;color:var(--accent);margin:10px 0;}
+.sucesso-btns{display:flex;flex-direction:column;gap:8px;margin-top:20px;}
+.btn-novo{padding:13px;background:var(--accent);border:none;border-radius:var(--radius-sm);
+  color:#1a1200;font-size:14px;font-weight:800;cursor:pointer;font-family:'Syne',sans-serif;}
+.btn-inspecionar{padding:11px;background:var(--green2);border:1px solid var(--green3);
+  border-radius:var(--radius-sm);color:var(--green);font-size:14px;font-weight:700;cursor:pointer;}
+.btn-fechar{padding:11px;background:transparent;border:1px solid var(--border);
+  border-radius:var(--radius-sm);color:var(--muted2);font-size:13px;cursor:pointer;}
+
+/* LISTA DE RECEBIMENTOS */
+.rec-list{margin-top:20px;}
+.rec-list-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.rec-list-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--accent);}
+.rec-item{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+  padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;
+  cursor:pointer;transition:all .2s;}
+.rec-item:hover{border-color:var(--border2);}
+.rec-item-id{font-family:'DM Mono',monospace;font-size:11px;color:var(--accent);flex-shrink:0;}
+.rec-item-info{flex:1;min-width:0;}
+.rec-item-forn{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rec-item-meta{font-size:11px;color:var(--muted2);margin-top:2px;}
+.status-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:4px;white-space:nowrap;}
+.s-pendente{background:var(--yellow2);color:var(--yellow);}
+.s-inspecionado{background:var(--green2);color:var(--green);}
+
+.empty-list{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img class="header-logo" id="logoImg" src="" alt="" onerror="this.style.display='none'">
+  <div class="header-info">
+    <div class="header-title">Recebimento de Lote</div>
+    <div class="header-sub">Classic CQ · Registro de Chegada</div>
+  </div>
+  <div class="header-right">
+    <div id="cq-user-chip"></div>
+    <a href="index.html" class="back-link">← Menu</a>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Badge do ID -->
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+    <div>
+      <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;">Novo Recebimento</div>
+      <div style="font-size:12px;color:var(--muted2);margin-top:2px;">Registre a chegada da carga antes da inspeção</div>
+    </div>
+    <div class="rec-id-badge" id="recId">REC-———</div>
+  </div>
+
+  <!-- STATUS STEPS -->
+  <div class="status-bar">
+    <div class="step active" id="step1"><div class="step-num">1</div> Recebimento</div>
+    <div class="step" id="step2"><div class="step-num">2</div> Inspeção CQ</div>
+    <div class="step" id="step3"><div class="step-num">3</div> Decisão</div>
+    <div class="step" id="step4"><div class="step-num">4</div> Concluído</div>
+  </div>
+
+  <!-- ① FORNECEDOR / PRODUTO / LOTE -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">🏭</span>
+      <span class="card-title">Fornecedor e Produto</span>
+      <span class="card-num">01</span>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label class="field-label">Fornecedor / Frigorífico <span class="req">*</span></label>
+        <div id="forn-container"></div>
+        <input type="hidden" id="f-forn-cod">
+        <input type="hidden" id="f-forn-nome">
+      </div>
+      <div class="field">
+        <label class="field-label">Produto <span class="req">*</span></label>
+        <select class="field-input" id="f-produto" onchange="checkSave()">
+          <option value="">Selecione o produto...</option>
+          <option value="Omaso Bovino — Salgado">Omaso Bovino — Salgado</option>
+          <option value="Omaso Bovino — Fresco">Omaso Bovino — Fresco</option>
+          <option value="Omaso Bovino — Congelado">Omaso Bovino — Congelado</option>
+          <option value="Aorta Bovina">Aorta Bovina</option>
+          <option value="Tendão Bovino">Tendão Bovino</option>
+          <option value="Rúmen Bovino">Rúmen Bovino</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div class="grid-2">
+        <div class="field">
+          <label class="field-label">Lote ATAK <span class="req">*</span></label>
+          <div class="input-cam">
+            <input class="field-input" type="text" id="f-lote"
+              placeholder="Ex: 0046" autocomplete="off"
+              style="text-transform:uppercase" oninput="checkSave()">
+            <button class="btn-cam" onclick="abrirOCR('lote')" title="Fotografar etiqueta">📷</button>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Nº Etiqueta <span class="req">*</span></label>
+          <div class="input-cam">
+            <input class="field-input" type="text" id="f-etiqueta"
+              placeholder="101-001-XXXXX" oninput="checkSave()">
+            <button class="btn-cam" onclick="abrirOCR('etiqueta')" title="Fotografar etiqueta">📷</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ② QUANTIDADE E PESO -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">⚖️</span>
+      <span class="card-title">Quantidade e Peso</span>
+      <span class="card-num">02</span>
+    </div>
+    <div class="card-body">
+      <div class="grid-2">
+        <div class="field">
+          <label class="field-label">Quantidade de Peças <span class="req">*</span></label>
+          <input class="field-input" type="number" id="f-qtd"
+            placeholder="0" inputmode="numeric" min="1" oninput="checkSave()">
+        </div>
+        <div class="field">
+          <label class="field-label">Peso Total (kg)</label>
+          <input class="field-input" type="number" id="f-peso"
+            placeholder="0.00" inputmode="decimal" step="0.1">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">🌡️ Temperatura de Chegada (°C)</label>
+        <input class="field-input" type="number" id="f-temperatura"
+          placeholder="Ex: -2.5" step="0.1" inputmode="decimal"
+          style="max-width:180px" oninput="checkTemperatura()">
+        <div id="temp-badge" style="margin-top:6px;display:none;"></div>
+        <div class="field-hint">Salgado ≤ 4°C · Congelado ≤ -12°C · Fresco ≤ 2°C</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ③ TRANSPORTE -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">🚚</span>
+      <span class="card-title">Identificação do Transporte</span>
+      <span class="card-num">03</span>
+    </div>
+    <div class="card-body">
+      <div class="grid-2">
+        <div class="field">
+          <label class="field-label">Placa do Caminhão</label>
+          <input class="field-input" type="text" id="f-placa"
+            placeholder="ABC-1234" style="text-transform:uppercase" autocomplete="off">
+        </div>
+        <div class="field">
+          <label class="field-label">Motorista</label>
+          <input class="field-input" type="text" id="f-motorista"
+            placeholder="Nome do motorista">
+        </div>
+      </div>
+      <div class="field">
+        <label class="field-label">Transportadora</label>
+        <input class="field-input" type="text" id="f-transportadora"
+          placeholder="Nome da transportadora">
+      </div>
+    </div>
+  </div>
+
+  <!-- ④ EVIDÊNCIAS FOTOGRÁFICAS -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">📷</span>
+      <span class="card-title">Evidências Fotográficas</span>
+      <span class="card-num">04</span>
+    </div>
+    <div class="card-body">
+      <div class="foto-grid">
+        <div class="foto-btn" id="fotoBtnEtiqueta">
+          <input type="file" accept="image/*" capture="environment"
+            onchange="previewFoto(this,'fotoBtnEtiqueta','fotoEtqImg','overlayEtq','fotoEtqUrl')">
+          <img id="fotoEtqImg" style="display:none">
+          <div class="foto-overlay" id="overlayEtq">✓ Etiqueta</div>
+          <span class="foto-icon">🏷️</span>
+          <span class="foto-label">Foto da Etiqueta</span>
+        </div>
+        <div class="foto-btn" id="fotoBtnCarga">
+          <input type="file" accept="image/*" capture="environment"
+            onchange="previewFoto(this,'fotoBtnCarga','fotoCrgImg','overlayCrg','fotoCrgUrl')">
+          <img id="fotoCrgImg" style="display:none">
+          <div class="foto-overlay" id="overlayCrg">✓ Carga</div>
+          <span class="foto-icon">📦</span>
+          <span class="foto-label">Foto da Carga</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ⑤ OBSERVAÇÕES -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-icon">📝</span>
+      <span class="card-title">Observações</span>
+      <span class="card-num">05</span>
+    </div>
+    <div class="card-body">
+      <textarea class="field-input" id="f-obs"
+        placeholder="Condições gerais da carga, lacre, embalagem, ocorrências no recebimento..."
+        style="min-height:80px;resize:vertical;"></textarea>
+    </div>
+  </div>
+
+  <!-- LISTA DE RECEBIMENTOS RECENTES -->
+  <div class="rec-list">
+    <div class="rec-list-header">
+      <div class="rec-list-title">📋 Recebimentos Recentes</div>
+      <div style="font-size:11px;color:var(--muted)">últimos 20</div>
+    </div>
+    <div id="recList">
+      <div class="empty-list">Carregando...</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SAVE BAR -->
+<div class="save-bar">
+  <div class="save-status" id="saveStatus">Preencha fornecedor, produto, lote e quantidade</div>
+  <button class="btn-save" id="btnSave" onclick="salvar()" disabled>
+    ✅ Registrar Recebimento
+  </button>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- MODAL OCR -->
+<div class="modal-overlay" id="ocrModal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="ocrTitulo">📷 Fotografar Etiqueta</span>
+      <button class="modal-close" onclick="fecharOCR()">✕</button>
+    </div>
+    <div class="ocr-preview" id="ocrPreview">
+      <span style="color:var(--muted);font-size:13px">Nenhuma foto ainda</span>
+    </div>
+    <input type="file" id="ocrInput" accept="image/*" capture="environment"
+      style="display:none" onchange="processarOCR(this)">
+    <div style="display:flex;gap:8px;margin-bottom:12px;">
+      <button onclick="document.getElementById('ocrInput').click()"
+        style="flex:1;padding:12px;background:var(--blue);border:none;border-radius:8px;
+               color:white;font-size:13px;font-weight:600;cursor:pointer;">📷 Câmera</button>
+      <button onclick="document.getElementById('ocrInput').removeAttribute('capture');document.getElementById('ocrInput').click()"
+        style="flex:1;padding:12px;background:var(--bg3);border:1px solid var(--border);
+               border-radius:8px;color:var(--text);font-size:13px;cursor:pointer;">🖼️ Galeria</button>
+    </div>
+    <div id="ocrResultArea" style="display:none;" class="ocr-resultado">
+      <label>Número identificado: <span id="ocrStatus" style="color:var(--accent)"></span></label>
+      <div class="ocr-linha">
+        <input type="text" class="ocr-input" id="ocrTexto" placeholder="Verifique e corrija se necessário">
+        <button class="btn-ocr-usar" onclick="confirmarOCR()">✓ Usar</button>
+      </div>
+    </div>
+    <div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px;">
+      Tesseract OCR · identifica automaticamente o número da etiqueta
+    </div>
+  </div>
+</div>
+
+<!-- MODAL SUCESSO -->
+<div class="modal-sucesso" id="modalSucesso">
+  <div class="sucesso-box">
+    <div class="sucesso-icon">✅</div>
+    <div class="sucesso-title">Recebimento Registrado!</div>
+    <div style="font-size:13px;color:var(--muted2);">Número gerado:</div>
+    <div class="sucesso-id" id="sucIdRecebimento">—</div>
+    <div style="font-size:12px;color:var(--muted2);margin-top:6px;" id="sucFornNome"></div>
+    <div class="sucesso-btns">
+      <button class="btn-inspecionar" onclick="irParaInspecao()">🔍 Iniciar Inspeção deste Lote</button>
+      <button class="btn-novo" onclick="novoRecebimento()">+ Novo Recebimento</button>
+      <button class="btn-fechar" onclick="fecharSucesso()">Fechar</button>
+    </div>
+  </div>
+</div>
+
+<script src="cq_fornecedores.js"></script>
+<script>
+const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+let usuario = null;
+let ocrCampo = null;
+let fotoUrls = { etiqueta: null, carga: null };
+let ultimoRecebimento = null;
+
+// ── INIT ──────────────────────────────────────────────────────
+(async function(){
+  const s = localStorage.getItem('classic_logo');
+  if(s) document.getElementById('logoImg').src = s;
+
+  usuario = await CQAuth.init({ perfisPermitidos: ['gestor','analisador','conferente'] });
+  if (!usuario) return;
+
+  gerarId();
+
+  // Componente de busca de fornecedor
+  if (typeof CQFornecedores !== 'undefined') {
+    CQFornecedores.renderizar('forn-container', function(f) {
+      document.getElementById('f-forn-cod').value  = f.codigo;
+      document.getElementById('f-forn-nome').value = f.nome;
+      checkSave();
+    });
+  }
+
+  carregarRecentes();
+})();
+
+// ── ID ÚNICO ──────────────────────────────────────────────────
+function gerarId() {
+  const now = new Date();
+  const y   = String(now.getFullYear()).slice(2);
+  const m   = String(now.getMonth()+1).padStart(2,'0');
+  const d   = String(now.getDate()).padStart(2,'0');
+  const h   = String(now.getHours()).padStart(2,'0');
+  const mi  = String(now.getMinutes()).padStart(2,'0');
+  const rnd = String(Math.floor(Math.random()*900)+100);
+  const id  = `REC-${y}${m}${d}-${h}${mi}-${rnd}`;
+  document.getElementById('recId').textContent = id;
+  return id;
+}
+
+// ── TEMPERATURA ────────────────────────────────────────────────
+function checkTemperatura() {
+  const t  = parseFloat(document.getElementById('f-temperatura').value);
+  const pr = document.getElementById('f-produto').value.toLowerCase();
+  const el = document.getElementById('temp-badge');
+  if (isNaN(t)) { el.style.display='none'; return; }
+
+  let lim = 4, tipo = 'Salgado';
+  if (pr.includes('congelado')) { lim = -12; tipo = 'Congelado'; }
+  else if (pr.includes('fresco')) { lim = 2; tipo = 'Fresco'; }
+
+  el.style.display = 'inline-flex';
+  if (t <= lim) {
+    el.className = 'temp-badge temp-ok';
+    el.textContent = `✓ Dentro do limite (${tipo} ≤ ${lim}°C)`;
+  } else {
+    el.className = 'temp-badge temp-err';
+    el.textContent = `⚠ Acima do limite! (${tipo} ≤ ${lim}°C)`;
+  }
+}
+
+// ── FOTOS ─────────────────────────────────────────────────────
+function previewFoto(input, btnId, imgId, overlayId, urlKey) {
+  const file = input.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const img = document.getElementById(imgId);
+  img.src = url;
+  img.style.display = 'block';
+  document.getElementById(overlayId).style.display = 'block';
+  document.getElementById(btnId).classList.add('has-foto');
+  // Guardar referência ao arquivo para upload
+  fotoUrls[urlKey === 'fotoEtqUrl' ? 'etiqueta' : 'carga'] = { file, url };
+}
+
+// ── OCR ───────────────────────────────────────────────────────
+function abrirOCR(campo) {
+  ocrCampo = campo;
+  const titulos = { lote: '📷 Fotografar — Lote ATAK', etiqueta: '📷 Fotografar — Nº Etiqueta' };
+  document.getElementById('ocrTitulo').textContent = titulos[campo] || '📷 Fotografar';
+  document.getElementById('ocrPreview').innerHTML = '<span style="color:var(--muted);font-size:13px">Nenhuma foto ainda</span>';
+  document.getElementById('ocrResultArea').style.display = 'none';
+  document.getElementById('ocrInput').value = '';
+  document.getElementById('ocrModal').classList.add('show');
+}
+function fecharOCR() { document.getElementById('ocrModal').classList.remove('show'); }
+
+function processarOCR(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    document.getElementById('ocrPreview').innerHTML =
+      `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain">`;
+    document.getElementById('ocrStatus').textContent = '⏳ Processando...';
+    document.getElementById('ocrResultArea').style.display = 'block';
+    document.getElementById('ocrTexto').value = '';
+
+    function runTess(src) {
+      Tesseract.recognize(src, 'eng', { logger: m => {
+        if (m.status === 'recognizing text')
+          document.getElementById('ocrStatus').textContent = `${Math.round(m.progress*100)}%`;
+      }}).then(({ data: { text } }) => {
+        document.getElementById('ocrStatus').textContent = '';
+        let val = '';
+        if (ocrCampo === 'etiqueta') {
+          const m = text.match(/101[-\s]?001[-\s]?\d{4,6}/i);
+          val = m ? m[0].replace(/\s/g,'') : text.replace(/[^\d\-]/g,' ').trim().split(/\s+/)[0]||'';
+        } else {
+          const m = text.match(/\b(\d{4})\b/);
+          val = m ? m[1] : text.replace(/\D/g,'').slice(0,6);
+        }
+        document.getElementById('ocrTexto').value = val.trim();
+        if (val) setTimeout(()=>document.getElementById('ocrTexto').select(),50);
+      }).catch(()=>{
+        document.getElementById('ocrStatus').textContent = 'Digite manualmente';
+        document.getElementById('ocrTexto').focus();
+      });
+    }
+
+    if (typeof Tesseract !== 'undefined') { runTess(e.target.result); }
+    else {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/tesseract.js/5.0.4/tesseract.min.js';
+      s.onload  = () => runTess(e.target.result);
+      s.onerror = () => { document.getElementById('ocrStatus').textContent='OCR indisponível — digite manualmente'; document.getElementById('ocrTexto').focus(); };
+      document.head.appendChild(s);
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+function confirmarOCR() {
+  const val   = document.getElementById('ocrTexto').value.trim();
+  const campo = ocrCampo === 'lote' ? 'f-lote' : 'f-etiqueta';
+  if (val) {
+    document.getElementById(campo).value = ocrCampo==='lote' ? val.toUpperCase() : val;
+    checkSave();
+  }
+  fecharOCR();
+}
+document.getElementById('ocrModal').addEventListener('click', e => {
+  if (e.target === document.getElementById('ocrModal')) fecharOCR();
+});
+
+// ── VALIDAÇÃO / SAVE ──────────────────────────────────────────
+function checkSave() {
+  const forn = document.getElementById('f-forn-nome').value;
+  const prod = document.getElementById('f-produto').value;
+  const lote = document.getElementById('f-lote').value;
+  const etiq = document.getElementById('f-etiqueta').value;
+  const qtd  = document.getElementById('f-qtd').value;
+  const ok   = forn && prod && lote && etiq && qtd;
+  document.getElementById('btnSave').disabled = !ok;
+  document.getElementById('saveStatus').textContent = ok
+    ? '✓ Pronto para registrar'
+    : 'Preencha fornecedor, produto, lote, etiqueta e quantidade';
+}
+
+async function salvar() {
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = '⏳ Salvando...';
+
+  const id = document.getElementById('recId').textContent;
+  const geo = CQAuth.getGeo() || {};
+
+  // Upload fotos
+  const photos = {};
+  for (const [key, item] of Object.entries(fotoUrls)) {
+    if (!item?.file) continue;
+    try {
+      const path = `recebimento/${id}/${key}_${Date.now()}.jpg`;
+      const r = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${path}`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${SB_KEY}`, 'Content-Type': item.file.type, 'x-upsert': 'true' },
+        body: item.file,
+      });
+      if (r.ok) photos[key] = `${SB_URL}/storage/v1/object/public/cq-fotos/${path}`;
+    } catch {}
+  }
+
+  const payload = {
+    id_recebimento:   id,
+    fornecedor:       document.getElementById('f-forn-nome').value,
+    fornecedor_cod:   document.getElementById('f-forn-cod').value,
+    produto:          document.getElementById('f-produto').value,
+    lote_atak:        document.getElementById('f-lote').value.toUpperCase(),
+    etiqueta:         document.getElementById('f-etiqueta').value,
+    quantidade_lote:  parseInt(document.getElementById('f-qtd').value) || 0,
+    peso_kg:          parseFloat(document.getElementById('f-peso').value) || null,
+    temperatura:      parseFloat(document.getElementById('f-temperatura').value) || null,
+    placa_caminhao:   document.getElementById('f-placa').value.toUpperCase() || null,
+    motorista:        document.getElementById('f-motorista').value || null,
+    transportadora:   document.getElementById('f-transportadora').value || null,
+    foto_etiqueta_url: photos.etiqueta || null,
+    foto_carga_url:   photos.carga || null,
+    observacoes:      document.getElementById('f-obs').value || null,
+    status:           'pendente_inspecao',
+    usuario_nome:     usuario?.nome || null,
+    usuario_email:    usuario?.email || null,
+    latitude:         geo.latitude  || null,
+    longitude:        geo.longitude || null,
+    criado_em:        new Date().toISOString(),
+  };
+
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/cq_recebimentos`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}`,
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(payload),
+    });
+
+    if (r.ok || !navigator.onLine) {
+      ultimoRecebimento = payload;
+      await CQAuth.log('create_recebimento', { id_recebimento: id, lote_atak: payload.lote_atak, fornecedor: payload.fornecedor });
+      document.getElementById('sucIdRecebimento').textContent = id;
+      document.getElementById('sucFornNome').textContent = payload.fornecedor + ' · ' + payload.produto;
+      document.getElementById('modalSucesso').classList.add('show');
+      carregarRecentes();
+    } else {
+      const err = await r.text();
+      toast('Erro ao salvar: ' + err.slice(0,80));
+      btn.disabled = false;
+      btn.textContent = '✅ Registrar Recebimento';
+    }
+  } catch(e) {
+    // Offline — salvar localmente
+    ultimoRecebimento = payload;
+    document.getElementById('sucIdRecebimento').textContent = id;
+    document.getElementById('sucFornNome').textContent = payload.fornecedor + ' · ' + payload.produto;
+    document.getElementById('modalSucesso').classList.add('show');
+  }
+}
+
+// ── MODAL SUCESSO ─────────────────────────────────────────────
+function irParaInspecao() {
+  if (!ultimoRecebimento) return;
+  const params = new URLSearchParams({
+    lote:      ultimoRecebimento.lote_atak,
+    etiqueta:  ultimoRecebimento.etiqueta,
+    fornecedor:ultimoRecebimento.fornecedor_cod,
+    produto:   ultimoRecebimento.produto,
+    qtd:       ultimoRecebimento.quantidade_lote,
+  });
+  window.location.href = 'inspecao_qualidade.html?' + params.toString();
+}
+
+function novoRecebimento() {
+  document.getElementById('modalSucesso').classList.remove('show');
+  limpar();
+  gerarId();
+}
+function fecharSucesso() {
+  document.getElementById('modalSucesso').classList.remove('show');
+}
+
+function limpar() {
+  ['f-produto','f-lote','f-etiqueta','f-qtd','f-peso','f-temperatura',
+   'f-placa','f-motorista','f-transportadora','f-obs'].forEach(id=>{
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  fotoUrls = { etiqueta: null, carga: null };
+  document.getElementById('fotoEtqImg').style.display = 'none';
+  document.getElementById('fotoCrgImg').style.display = 'none';
+  document.getElementById('fotoBtnEtiqueta').classList.remove('has-foto');
+  document.getElementById('fotoBtnCarga').classList.remove('has-foto');
+  document.getElementById('temp-badge').style.display = 'none';
+  if (typeof CQFornecedores !== 'undefined') CQFornecedores.limpar('forn-container');
+  document.getElementById('f-forn-cod').value = '';
+  document.getElementById('f-forn-nome').value = '';
+  checkSave();
+}
+
+// ── RECENTES ──────────────────────────────────────────────────
+async function carregarRecentes() {
+  try {
+    const r = await fetch(`${SB_URL}/rest/v1/cq_recebimentos?order=criado_em.desc&limit=20`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }
+    });
+    if (!r.ok) { document.getElementById('recList').innerHTML = '<div class="empty-list">Nenhum recebimento registrado</div>'; return; }
+    const rows = await r.json();
+    if (!rows.length) { document.getElementById('recList').innerHTML = '<div class="empty-list">Nenhum recebimento ainda</div>'; return; }
+
+    const STATUS = { pendente_inspecao:'s-pendente', inspecionado:'s-inspecionado' };
+    const LABEL  = { pendente_inspecao:'Aguardando Inspeção', inspecionado:'Inspecionado' };
+
+    document.getElementById('recList').innerHTML = rows.map(r => {
+      const dt = new Date(r.criado_em).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+      const st = r.status || 'pendente_inspecao';
+      return `<div class="rec-item" onclick="abrirRec('${r.id_recebimento}','${r.lote_atak}','${encodeURIComponent(r.fornecedor_cod||'')}','${encodeURIComponent(r.produto||'')}','${r.quantidade_lote||0}','${encodeURIComponent(r.etiqueta||'')}')">
+        <div class="rec-item-id">${r.id_recebimento}</div>
+        <div class="rec-item-info">
+          <div class="rec-item-forn">${r.fornecedor}</div>
+          <div class="rec-item-meta">${r.produto} · Lote ${r.lote_atak} · ${dt}</div>
+        </div>
+        <span class="status-badge ${STATUS[st]||'s-pendente'}">${LABEL[st]||st}</span>
+      </div>`;
+    }).join('');
+  } catch {
+    document.getElementById('recList').innerHTML = '<div class="empty-list">Sem conexão</div>';
+  }
+}
+
+function abrirRec(id, lote, forn, prod, qtd, etiq) {
+  if (confirm(`Iniciar inspeção para:\nLote ${lote}?`)) {
+    const params = new URLSearchParams({ lote, fornecedor: decodeURIComponent(forn), produto: decodeURIComponent(prod), qtd, etiqueta: decodeURIComponent(etiq) });
+    window.location.href = 'inspecao_qualidade.html?' + params.toString();
+  }
+}
+
+// ── TOAST ─────────────────────────────────────────────────────
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(()=>el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

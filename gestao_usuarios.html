@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Usuários · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+.container{max-width:900px;margin:0 auto;padding:24px 20px 80px;}
+
+.page-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px;flex-wrap:wrap;gap:12px;}
+.page-title{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
+
+.btn{padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;display:inline-flex;align-items:center;gap:8px;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+.btn-danger{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:var(--red);}
+.btn-danger:hover{background:rgba(231,76,60,.25);}
+.btn-sm{padding:6px 12px;font-size:12px;}
+
+/* CARDS DE PERFIL */
+.perfil-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:28px;}
+.perfil-card{background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;
+  padding:14px;text-align:center;cursor:pointer;transition:all .2s;}
+.perfil-card:hover{border-color:var(--blue);}
+.perfil-card.active{border-color:var(--gold);background:rgba(200,169,110,.08);}
+.perfil-icon{font-size:24px;margin-bottom:6px;}
+.perfil-nome{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);}
+.perfil-desc{font-size:10px;color:var(--muted);margin-top:3px;}
+.perfil-count{font-size:18px;font-weight:800;color:var(--text);margin-top:6px;}
+
+/* TABELA */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between;}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 12px;text-align:left;border-bottom:1px solid var(--border);}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.4);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:10px 12px;vertical-align:middle;}
+tbody tr:last-child{border-bottom:none;}
+
+.avatar{width:32px;height:32px;border-radius:50%;background:var(--blue);
+  display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:13px;color:white;flex-shrink:0;}
+.perfil-badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;}
+.p-gestor        {background:rgba(200,169,110,.15);color:var(--gold);}
+.p-analisador    {background:rgba(46,107,138,.2);color:#5ec2e8;}
+.p-conferente    {background:rgba(22,160,133,.15);color:#1abc9c;}
+.p-financeiro    {background:rgba(142,68,173,.15);color:#b07fd3;}
+.p-qualidade_externo{background:rgba(243,156,18,.15);color:var(--yellow);}
+.status-dot{width:7px;height:7px;border-radius:50%;display:inline-block;margin-right:5px;}
+.dot-on{background:var(--green);}
+.dot-off{background:var(--muted);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:28px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+
+.field{margin-bottom:16px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:6px;}
+.field input,.field select{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.field input:focus,.field select:focus{border-color:var(--blue);}
+.field .hint{font-size:11px;color:var(--muted);margin-top:4px;}
+
+.modal-actions{display:flex;gap:10px;margin-top:20px;justify-content:flex-end;}
+
+/* ALERTA */
+.alert{padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px;
+  display:flex;align-items:center;gap:10px;}
+.alert-info{background:rgba(46,107,138,.15);border:1px solid var(--border);color:var(--text);}
+.alert-warn{background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.3);color:var(--yellow);}
+
+/* AUDIT TAB */
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:9px 18px;font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;
+  border-bottom:2px solid transparent;transition:all .2s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--gold);border-bottom-color:var(--gold);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+.empty{text-align:center;padding:40px;color:var(--muted);font-size:13px;}
+.toast{position:fixed;bottom:24px;right:24px;z-index:200;background:var(--bg3);
+  border:1px solid var(--border);border-radius:10px;padding:12px 20px;font-size:13px;
+  transform:translateY(80px);opacity:0;transition:all .3s;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+.loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px;color:var(--muted);}
+.spinner{width:18px;height:18px;border:2px solid var(--border);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img id="logoImg" src="" alt="" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'">
+  <div>
+    <div class="ht">Classic CQ</div>
+    <div class="hs">Gestão de Usuários · Somente Gestores</div>
+  </div>
+  <div id="cq-user-chip" style="margin-left:auto;margin-right:12px;display:flex;align-items:center;gap:8px;"></div>
+  <a href="index.html" class="btn-back">← Menu</a>
+</div>
+
+<div class="container">
+
+  <div class="page-hd">
+    <div class="page-title">👥 Usuários do Sistema</div>
+    <button class="btn btn-primary" onclick="abrirModal()">+ Novo Usuário</button>
+  </div>
+
+  <div class="alert alert-info" style="margin-bottom:20px;">
+    ℹ️ Usuários criados aqui recebem acesso ao sistema CQ. O e-mail de boas-vindas com a senha temporária é enviado automaticamente pelo Supabase.
+  </div>
+
+  <!-- Resumo por perfil -->
+  <div class="perfil-grid" id="perfilGrid">
+    <div class="loading"><div class="spinner"></div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" onclick="switchTab('usuarios')">Usuários</div>
+    <div class="tab" onclick="switchTab('audit')">Log de Auditoria</div>
+    <div class="tab" onclick="switchTab('sessoes')">Sessões Ativas</div>
+  </div>
+
+  <!-- TAB: USUARIOS -->
+  <div class="tab-panel active" id="tab-usuarios">
+    <div class="card">
+      <div class="card-title">
+        <span>Lista de Usuários</span>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input type="text" id="searchUser" placeholder="🔍 Buscar..."
+            style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+                   color:var(--text);padding:7px 12px;font-size:12px;outline:none;width:200px;"
+            oninput="filtrarUsuarios()">
+          <select id="filterPerfil" onchange="filtrarUsuarios()"
+            style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;
+                   color:var(--text);padding:7px 12px;font-size:12px;outline:none;">
+            <option value="">Todos os perfis</option>
+            <option value="gestor">Gestor</option>
+            <option value="analisador">Analisador</option>
+            <option value="conferente">Conferente</option>
+            <option value="financeiro">Financeiro</option>
+            <option value="qualidade_externo">Qualidade Externo</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Usuário</th>
+            <th>E-mail</th>
+            <th>Perfil</th>
+            <th>Status</th>
+            <th>Último Login</th>
+            <th>Ações</th>
+          </tr></thead>
+          <tbody id="tbodyUsuarios">
+            <tr><td colspan="6" class="empty"><div class="loading"><div class="spinner"></div><span>Carregando...</span></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: AUDIT LOG -->
+  <div class="tab-panel" id="tab-audit">
+    <div class="card">
+      <div class="card-title">Log de Auditoria <span style="font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);font-weight:400;">últimas 200 ações</span></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Data/Hora</th><th>Usuário</th><th>Ação</th>
+            <th>Lote</th><th>Localização</th>
+          </tr></thead>
+          <tbody id="tbodyAudit">
+            <tr><td colspan="5" class="empty">Clique na aba para carregar</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SESSÕES -->
+  <div class="tab-panel" id="tab-sessoes">
+    <div class="card">
+      <div class="card-title">Sessões Ativas Agora</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Usuário</th><th>Início</th><th>Último Acesso</th><th>Expira</th><th>Dispositivo</th><th>Ação</th>
+          </tr></thead>
+          <tbody id="tbodySessoes">
+            <tr><td colspan="6" class="empty">Clique na aba para carregar</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODAL: CRIAR/EDITAR USUÁRIO -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalTitulo">Novo Usuário</span>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+
+    <input type="hidden" id="f-user-id">
+
+    <div class="field">
+      <label>Nome Completo *</label>
+      <input type="text" id="f-nome" placeholder="Ex: Maria Silva">
+    </div>
+    <div class="field">
+      <label>E-mail *</label>
+      <input type="email" id="f-email" placeholder="usuario@classic.com.br">
+      <div class="hint">Será o login de acesso ao sistema</div>
+    </div>
+    <div class="field" id="field-senha">
+      <label>Senha Temporária *</label>
+      <input type="text" id="f-senha" placeholder="Mínimo 8 caracteres">
+      <div class="hint">O usuário deve trocar no primeiro acesso</div>
+    </div>
+    <div class="field">
+      <label>Perfil de Acesso *</label>
+      <select id="f-perfil">
+        <option value="">Selecione...</option>
+        <option value="gestor">Gestor — acesso total</option>
+        <option value="analisador">Analisador — cria inspeções</option>
+        <option value="conferente">Conferente — somente visualização</option>
+        <option value="financeiro">Financeiro — dashboards e relatórios</option>
+        <option value="qualidade_externo">Qualidade Externo — acesso externo</option>
+      </select>
+    </div>
+
+    <div id="editarAlerta" class="alert alert-warn" style="display:none;">
+      ⚠️ Ao editar, apenas nome e perfil são atualizados. Para redefinir a senha, use a função de reset abaixo.
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()" id="btnSalvarUser">Criar Usuário</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+// Nota: criação de usuário via API Admin requer Service Role Key
+// Este campo deve ser configurado apenas em ambiente seguro
+// Para produção, criar endpoint serverless no Supabase Edge Functions
+const SB_SERVICE = ''; // Preencher com Service Role Key — NUNCA expor em produção
+
+const PERFIS = {
+  gestor:           { icon:'👑', label:'Gestor',           cor:'var(--gold)' },
+  analisador:       { icon:'🔬', label:'Analisador',       cor:'#5ec2e8' },
+  conferente:       { icon:'📋', label:'Conferente',       cor:'#1abc9c' },
+  financeiro:       { icon:'💰', label:'Financeiro',       cor:'#b07fd3' },
+  qualidade_externo:{ icon:'🌐', label:'Qualidade Ext.',   cor:'var(--yellow)' },
+};
+
+let todosUsuarios = [];
+let auditCarregado = false;
+let sessoesCarregadas = false;
+
+// ── INIT ──────────────────────────────────────────────────────
+(async function(){
+  const s = localStorage.getItem('classic_logo');
+  const el = document.getElementById('logoImg');
+  if (s) el.src = s;
+
+  // Auth — apenas gestores
+  const user = await CQAuth.init({ perfisPermitidos: ['gestor'] });
+  if (!user) return;
+
+  carregarUsuarios();
+})();
+
+// ── SUPABASE HELPERS ──────────────────────────────────────────
+const hdrs = () => ({ 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' });
+
+async function sbGet(tabela, qs = '') {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, { headers: hdrs() });
+  return r.ok ? r.json() : [];
+}
+async function sbPost(tabela, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}`, {
+    method:'POST', headers:{...hdrs(),'Prefer':'return=representation'}, body: JSON.stringify(dados)
+  });
+  return { ok: r.ok, data: await r.json() };
+}
+async function sbPatch(tabela, qs, dados) {
+  const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, {
+    method:'PATCH', headers:{...hdrs(),'Prefer':'return=minimal'}, body: JSON.stringify(dados)
+  });
+  return r.ok;
+}
+
+// ── CARREGAR USUÁRIOS ─────────────────────────────────────────
+async function carregarUsuarios() {
+  const rows = await sbGet('cq_usuarios', 'order=nome.asc');
+  todosUsuarios = rows;
+
+  // Cards de perfil
+  const contagem = {};
+  Object.keys(PERFIS).forEach(p => contagem[p] = 0);
+  rows.forEach(u => { if (contagem[u.perfil] !== undefined) contagem[u.perfil]++; });
+
+  document.getElementById('perfilGrid').innerHTML = Object.entries(PERFIS).map(([k, p]) => `
+    <div class="perfil-card" onclick="filtrarPorPerfil('${k}')">
+      <div class="perfil-icon">${p.icon}</div>
+      <div class="perfil-nome">${p.label}</div>
+      <div class="perfil-count">${contagem[k] || 0}</div>
+    </div>`).join('');
+
+  renderTabela(rows);
+}
+
+function renderTabela(rows) {
+  const tbody = document.getElementById('tbodyUsuarios');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Nenhum usuário encontrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(u => {
+    const ini = (u.nome || u.email)[0].toUpperCase();
+    const p = PERFIS[u.perfil] || { icon:'👤', label: u.perfil, cor:'var(--muted)' };
+    const ativo = u.ativo !== false;
+    const ultimoLogin = u.ultimo_login
+      ? new Date(u.ultimo_login).toLocaleString('pt-BR', {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'})
+      : '—';
+    return `<tr>
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="avatar">${ini}</div>
+          <div>
+            <div style="font-weight:600">${u.nome}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${u.email}</td>
+      <td><span class="perfil-badge p-${u.perfil}">${p.icon} ${p.label}</span></td>
+      <td>
+        <span class="status-dot ${ativo?'dot-on':'dot-off'}"></span>
+        ${ativo ? 'Ativo' : 'Inativo'}
+      </td>
+      <td style="font-size:12px;color:var(--muted)">${ultimoLogin}</td>
+      <td>
+        <div style="display:flex;gap:6px;">
+          <button class="btn btn-outline btn-sm" onclick="editarUsuario('${u.id}')">✏️ Editar</button>
+          <button class="btn btn-sm" onclick="toggleAtivo('${u.id}',${ativo})"
+            style="background:${ativo?'rgba(231,76,60,.12)':'rgba(39,174,96,.12)'};
+                   border:1px solid ${ativo?'rgba(231,76,60,.3)':'rgba(39,174,96,.3)'};
+                   color:${ativo?'var(--red)':'var(--green)'};">
+            ${ativo ? '🔒 Desativar' : '✅ Ativar'}
+          </button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarUsuarios() {
+  const q = document.getElementById('searchUser').value.toLowerCase();
+  const p = document.getElementById('filterPerfil').value;
+  const filtrado = todosUsuarios.filter(u =>
+    (!q || u.nome.toLowerCase().includes(q) || u.email.toLowerCase().includes(q)) &&
+    (!p || u.perfil === p)
+  );
+  renderTabela(filtrado);
+}
+
+function filtrarPorPerfil(perfil) {
+  document.getElementById('filterPerfil').value = perfil;
+  filtrarUsuarios();
+  document.querySelectorAll('.perfil-card').forEach(c => c.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+}
+
+// ── MODAL ─────────────────────────────────────────────────────
+function abrirModal(usuario = null) {
+  document.getElementById('f-user-id').value = '';
+  document.getElementById('f-nome').value = '';
+  document.getElementById('f-email').value = '';
+  document.getElementById('f-senha').value = '';
+  document.getElementById('f-perfil').value = '';
+  document.getElementById('editarAlerta').style.display = 'none';
+  document.getElementById('field-senha').style.display = 'block';
+  document.getElementById('modalTitulo').textContent = 'Novo Usuário';
+  document.getElementById('btnSalvarUser').textContent = 'Criar Usuário';
+
+  if (usuario) {
+    document.getElementById('f-user-id').value  = usuario.id;
+    document.getElementById('f-nome').value     = usuario.nome;
+    document.getElementById('f-email').value    = usuario.email;
+    document.getElementById('f-perfil').value   = usuario.perfil;
+    document.getElementById('field-senha').style.display = 'none';
+    document.getElementById('editarAlerta').style.display = 'flex';
+    document.getElementById('modalTitulo').textContent = 'Editar Usuário';
+    document.getElementById('btnSalvarUser').textContent = 'Salvar Alterações';
+  }
+
+  document.getElementById('modal').classList.add('show');
+  document.getElementById('f-nome').focus();
+}
+
+function editarUsuario(id) {
+  const u = todosUsuarios.find(x => x.id === id);
+  if (u) abrirModal(u);
+}
+
+function fecharModal() {
+  document.getElementById('modal').classList.remove('show');
+}
+
+async function salvarUsuario() {
+  const id    = document.getElementById('f-user-id').value;
+  const nome  = document.getElementById('f-nome').value.trim();
+  const email = document.getElementById('f-email').value.trim();
+  const senha = document.getElementById('f-senha').value.trim();
+  const perfil= document.getElementById('f-perfil').value;
+
+  if (!nome || !email || !perfil) { toast('Preencha todos os campos obrigatórios'); return; }
+
+  const btn = document.getElementById('btnSalvarUser');
+  btn.textContent = '⏳ Salvando...';
+  btn.disabled = true;
+
+  try {
+    if (id) {
+      // EDITAR: atualizar tabela cq_usuarios
+      const ok = await sbPatch('cq_usuarios', `id=eq.${id}`,
+        { nome, perfil, atualizado_em: new Date().toISOString() });
+      if (ok) {
+        toast(`✅ ${nome} atualizado`);
+        fecharModal();
+        carregarUsuarios();
+      } else {
+        toast('Erro ao salvar. Tente novamente.');
+      }
+    } else {
+      // CRIAR: inserir na tabela cq_usuarios (o usuário Auth deve ser criado manualmente)
+      if (!senha || senha.length < 8) { toast('Senha deve ter mínimo 8 caracteres'); btn.disabled=false; btn.textContent='Criar Usuário'; return; }
+
+      const { ok, data } = await sbPost('cq_usuarios', {
+        email, nome, perfil, ativo: true,
+        criado_em: new Date().toISOString()
+      });
+
+      if (ok) {
+        toast(`✅ ${nome} cadastrado. Crie o login no Supabase Auth com este e-mail.`);
+        fecharModal();
+        carregarUsuarios();
+        // Mostrar instrução
+        setTimeout(() => {
+          alert(`Usuário ${nome} cadastrado na tabela.\n\nPara ativar o login:\n1. Acesse Supabase → Authentication → Users\n2. Clique em "Invite user"\n3. Use o e-mail: ${email}\n4. Defina o perfil nos metadados: {"nome":"${nome}","perfil":"${perfil}"}`);
+        }, 500);
+      } else {
+        toast('Erro ao criar usuário: ' + JSON.stringify(data).slice(0,100));
+      }
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = id ? 'Salvar Alterações' : 'Criar Usuário';
+  }
+}
+
+async function toggleAtivo(id, ativo) {
+  const u = todosUsuarios.find(x => x.id === id);
+  const acao = ativo ? 'desativar' : 'ativar';
+  if (!confirm(`${acao.charAt(0).toUpperCase()+acao.slice(1)} ${u?.nome || 'este usuário'}?`)) return;
+  const ok = await sbPatch('cq_usuarios', `id=eq.${id}`, { ativo: !ativo });
+  if (ok) { toast(`✅ Usuário ${ativo?'desativado':'ativado'}`); carregarUsuarios(); }
+  else toast('Erro ao alterar status');
+}
+
+// ── AUDIT LOG ─────────────────────────────────────────────────
+async function carregarAudit() {
+  if (auditCarregado) return;
+  document.getElementById('tbodyAudit').innerHTML =
+    '<tr><td colspan="5"><div class="loading"><div class="spinner"></div><span>Carregando...</span></div></td></tr>';
+
+  const rows = await sbGet('cq_audit_log', 'order=criado_em.desc&limit=200');
+  auditCarregado = true;
+
+  const ACAO_ICON = {
+    login: '🔑', logout: '🚪', session_expired: '⏰',
+    create_inspecao: '✅', edit_inspecao: '✏️', view_relatorio: '📋'
+  };
+
+  document.getElementById('tbodyAudit').innerHTML = rows.length ? rows.map(r => {
+    const dt = new Date(r.criado_em).toLocaleString('pt-BR',
+      {day:'2-digit',month:'2-digit',year:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const geo = r.dentro_planta === true ? '🟢 Na planta' :
+                r.dentro_planta === false ? '🟡 Fora' : '—';
+    let det = {};
+    try { det = JSON.parse(r.detalhes || '{}'); } catch {}
+    return `<tr>
+      <td class="mono" style="font-size:11px;color:var(--muted)">${dt}</td>
+      <td style="font-size:12px">${r.usuario_nome || r.usuario_email || '—'}</td>
+      <td>${ACAO_ICON[r.acao] || '•'} ${r.acao}</td>
+      <td class="mono" style="font-size:11px;color:var(--gold)">${det.lote_atak || '—'}</td>
+      <td style="font-size:11px">${geo}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="5" class="empty">Nenhuma ação registrada.</td></tr>';
+}
+
+// ── SESSÕES ATIVAS ─────────────────────────────────────────────
+async function carregarSessoes() {
+  if (sessoesCarregadas) return;
+  document.getElementById('tbodySessoes').innerHTML =
+    '<tr><td colspan="6"><div class="loading"><div class="spinner"></div><span>Carregando...</span></div></td></tr>';
+
+  const rows = await sbGet('cq_sessoes', 'ativa=eq.true&order=ultimo_acesso.desc');
+  sessoesCarregadas = true;
+
+  document.getElementById('tbodySessoes').innerHTML = rows.length ? rows.map(r => {
+    const inicio = new Date(r.criado_em).toLocaleString('pt-BR',
+      {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const ultimo = new Date(r.ultimo_acesso).toLocaleString('pt-BR',
+      {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const expira = new Date(r.expira_em);
+    const expirou = expira < new Date();
+    const expiraStr = expira.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+    const ua = (r.dispositivo || '').slice(0,50);
+    return `<tr>
+      <td style="font-size:12px">${r.usuario_email}</td>
+      <td class="mono" style="font-size:11px;color:var(--muted)">${inicio}</td>
+      <td class="mono" style="font-size:11px">${ultimo}</td>
+      <td style="font-size:11px;color:${expirou?'var(--red)':'var(--green)'}">${expiraStr} ${expirou?'(expirou)':''}</td>
+      <td style="font-size:10px;color:var(--muted)">${ua}</td>
+      <td>
+        <button class="btn btn-danger btn-sm" onclick="encerrarSessao('${r.id}')">
+          Encerrar
+        </button>
+      </td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6" class="empty">Nenhuma sessão ativa.</td></tr>';
+}
+
+async function encerrarSessao(id) {
+  if (!confirm('Encerrar esta sessão forçará logout do usuário.')) return;
+  const ok = await sbPatch('cq_sessoes', `id=eq.${id}`,
+    { ativa: false, encerrada_em: new Date().toISOString() });
+  if (ok) { toast('Sessão encerrada'); sessoesCarregadas = false; carregarSessoes(); }
+}
+
+// ── TABS ──────────────────────────────────────────────────────
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['usuarios','audit','sessoes'];
+    t.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p =>
+    p.classList.toggle('active', p.id === 'tab-' + tab)
+  );
+  if (tab === 'audit')   carregarAudit();
+  if (tab === 'sessoes') carregarSessoes();
+}
+
+// ── HELPERS ───────────────────────────────────────────────────
+let _tt;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(_tt);
+  _tt = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal')) fecharModal();
+});
+</script>
+</body>
+</html>

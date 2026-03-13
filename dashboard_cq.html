@@ -178,6 +178,16 @@ canvas.tall{max-height:320px;}
 .tab:hover{color:var(--text);}
 .tab.active{color:var(--accent);border-bottom-color:var(--accent);}
 .tab-panel{display:none;}
+.alerta-card{border-radius:10px;padding:12px 16px;display:flex;align-items:center;gap:12px;margin-bottom:8px;animation:slideIn .3s ease;}
+.alerta-critico{background:rgba(231,76,60,.12);border:1px solid rgba(231,76,60,.35);}
+.alerta-atencao{background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.3);}
+.alerta-icon{font-size:22px;flex-shrink:0;}
+.alerta-body{flex:1;}
+.alerta-title{font-weight:700;font-size:13px;}
+.alerta-meta{font-size:11px;color:var(--muted);margin-top:2px;}
+.alerta-critico .alerta-title{color:var(--err2,#e74c3c);}
+.alerta-atencao .alerta-title{color:var(--warn2,#f39c12);}
+@keyframes slideIn{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
 .tab-panel.active{display:block;}
 
 /* TIMELINE */
@@ -272,10 +282,16 @@ canvas.tall{max-height:320px;}
   <div class="alertas" id="alertas"></div>
 
   <!-- TABS -->
+  <!-- PAINEL DE ALERTAS -->
+  <div id="painelAlertas" style="display:none;margin-bottom:16px;"></div>
+
   <div class="tabs">
     <div class="tab active" onclick="switchTab('visao-geral',this)">Visão Geral</div>
     <div class="tab" onclick="switchTab('fornecedores',this)">Por Fornecedor</div>
+    <div class="tab" onclick="switchTab('volume',this)">Volume Recebido</div>
     <div class="tab" onclick="switchTab('defeitos',this)">Índice de Defeitos</div>
+    <div class="tab" onclick="switchTab('tendencia',this)">Tendência</div>
+    <div class="tab" onclick="switchTab('timeline',this)">Fornecedor / Tempo</div>
     <div class="tab" onclick="switchTab('analisadores',this)">Por Analisador</div>
     <div class="tab" onclick="switchTab('registros',this)">Registros</div>
   </div>
@@ -336,6 +352,53 @@ canvas.tall{max-height:320px;}
     </div>
   </div>
 
+  <!-- TAB: VOLUME RECEBIDO -->
+  <div class="tab-panel" id="tab-volume">
+    <div class="sec-hd"><div class="sec-title">Volume Recebido por Fornecedor</div></div>
+
+    <!-- KPIs -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:24px;" id="volSumCards"></div>
+
+    <!-- Gráficos: linha 1 -->
+    <div class="charts-grid" style="margin-bottom:20px;">
+      <div class="card">
+        <div class="card-title">① Volume Total por Fornecedor <span class="card-sub">top 10 · peças</span></div>
+        <canvas id="chartVolTotal" class="tall"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">② % Classe C por Fornecedor <span class="card-sub">quanto veio ruim</span></div>
+        <canvas id="chartVolPctC" class="tall"></canvas>
+      </div>
+    </div>
+
+    <!-- Gráfico full: stacked ABC -->
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title">③ Peças A / B / C por Fornecedor <span class="card-sub">top 10 · composição</span></div>
+      <canvas id="chartVolABC" style="max-height:320px;"></canvas>
+    </div>
+
+    <!-- Tabela ranking -->
+    <div class="card">
+      <div class="card-title">Ranking Completo <span class="card-sub">ordenar por coluna</span></div>
+      <div class="table-wrap">
+        <table class="rank-table" id="tblVolume">
+          <thead><tr>
+            <th>#</th>
+            <th>Fornecedor</th>
+            <th style="text-align:right;cursor:pointer" onclick="volSort('total')">Peças ↕</th>
+            <th style="text-align:right;cursor:pointer;color:var(--ok2)" onclick="volSort('A')">Classe A ↕</th>
+            <th style="text-align:right;cursor:pointer;color:var(--warn2)" onclick="volSort('B')">Classe B ↕</th>
+            <th style="text-align:right;cursor:pointer;color:var(--err2)" onclick="volSort('C')">Classe C ↕</th>
+            <th style="text-align:right;cursor:pointer;color:var(--err2)" onclick="volSort('pctC')">% C ↕</th>
+            <th style="text-align:right;cursor:pointer" onclick="volSort('lotes')">Lotes ↕</th>
+            <th>Situação</th>
+          </tr></thead>
+          <tbody id="tbodyVolume"><tr><td colspan="9" class="empty">—</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
   <!-- TAB: DEFEITOS -->
   <div class="tab-panel" id="tab-defeitos">
     <div class="sec-hd"><div class="sec-title">Índice de Defeitos</div></div>
@@ -365,6 +428,52 @@ canvas.tall{max-height:320px;}
             <th>% Médio Defeito</th><th>Pior Fornecedor</th>
           </tr></thead>
           <tbody id="tbodyDefeitos"><tr><td colspan="7" class="empty">—</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: TENDÊNCIA SEMANAL -->
+  <div class="tab-panel" id="tab-tendencia">
+    <div class="sec-hd"><div class="sec-title">Tendência de Qualidade</div></div>
+    <div class="charts-grid" style="margin-bottom:20px;">
+      <div class="card">
+        <div class="card-title">% Médio de Defeitos — Semanal <span class="card-sub">últimas 12 semanas</span></div>
+        <canvas id="chartTendPct"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Lotes por Semana <span class="card-sub">volume de inspeções</span></div>
+        <canvas id="chartTendLotes"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Distribuição A/B/C por Semana <span class="card-sub">composição semanal</span></div>
+      <canvas id="chartTendABC" style="max-height:280px;"></canvas>
+    </div>
+  </div>
+
+  <!-- TAB: FORNECEDOR AO LONGO DO TEMPO -->
+  <div class="tab-panel" id="tab-timeline">
+    <div class="sec-hd"><div class="sec-title">Fornecedor ao Longo do Tempo</div></div>
+    <div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+      <select class="filter-sel" id="timelineForn" onchange="renderTimeline()" style="min-width:260px;">
+        <option value="">Selecione um fornecedor…</option>
+      </select>
+      <span style="font-size:12px;color:var(--muted)">Veja se o fornecedor está melhorando ou piorando</span>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">% Defeito por Lote <span class="card-sub">cronológico</span></div>
+      <canvas id="chartTimelinePct" style="max-height:260px;"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Últimos Lotes — <span id="timelineFornNome" style="color:var(--accent)">selecione acima</span></div>
+      <div class="table-wrap">
+        <table class="rank-table" id="tblTimeline">
+          <thead><tr>
+            <th>Data</th><th>Lote</th><th>Amostra</th>
+            <th>Defeitos</th><th>% Def</th><th>Classe</th><th>Inspetor</th>
+          </tr></thead>
+          <tbody id="tbodyTimeline"><tr><td colspan="7" class="empty">Selecione um fornecedor acima</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -529,6 +638,7 @@ function aplicarFiltro() {
   renderKPIs();
   renderAlertas();
   renderVisaoGeral();
+  renderAlertas(dadosFiltrados);
   renderFornecedores();
   renderDefeitos();
   renderAnalisadores();
@@ -621,7 +731,10 @@ function switchTab(id, el) {
   document.getElementById('tab-'+id).classList.add('active');
   // Re-render charts on tab switch to fix canvas sizing
   if (id==='fornecedores') renderFornecedores();
+  if (id==='volume') renderVolume();
   if (id==='defeitos') renderDefeitos();
+  if (id==='tendencia') renderTendencia();
+  if (id==='timeline') renderTimeline();
   if (id==='analisadores') renderAnalisadores();
 }
 
@@ -729,6 +842,259 @@ function renderVisaoGeral() {
       plugins:{legend:{labels:{color:'#666',font:{size:10,family:'DM Mono,monospace'}}}}}
   });
 }
+
+// === ALERTAS AUTOMÁTICOS ===
+function renderAlertas(dados) {
+  const painel = document.getElementById('painelAlertas');
+  if (!painel) return;
+
+  const alertas = [];
+  const agora = new Date();
+  const limite30 = new Date(agora - 30 * 86400000);
+
+  // Agrupar por fornecedor — últimos 30 dias
+  const porForn = {};
+  dados.forEach(x => {
+    if (!x.fornecedor) return;
+    if (!x.data_entrada) return;
+    const d = new Date(x.data_entrada.split('/').reverse().join('-') + 'T00:00:00');
+    if (isNaN(d) || d < limite30) return;
+    if (!porForn[x.fornecedor]) porForn[x.fornecedor] = [];
+    porForn[x.fornecedor].push(x);
+  });
+
+  Object.entries(porForn).forEach(([forn, lotes]) => {
+    const pct = (x) => x.percentual_defeito || x.percentual_defeitos || 0;
+
+    // Alerta 1: % defeito > 30% em qualquer lote
+    const criticos = lotes.filter(x => pct(x) > 30);
+    criticos.forEach(x => {
+      alertas.push({
+        nivel: 'critico',
+        title: `⛔ ${forn.slice(0,35)} — Lote ${x.lote_atak}: ${pct(x).toFixed(1)}% de defeito`,
+        meta: `Acima de 30% — lote deve ser bloqueado · ${x.data_entrada || ''}`,
+      });
+    });
+
+    // Alerta 2: 3+ lotes C consecutivos
+    const ordenados = lotes.sort((a,b) => {
+      const da = new Date((a.data_entrada||'').split('/').reverse().join('-'));
+      const db = new Date((b.data_entrada||'').split('/').reverse().join('-'));
+      return db - da;
+    });
+    const cls = ordenados.map(x => x.classificacao || (pct(x)<=5?'A':pct(x)<=15?'B':'C'));
+    const ultimosTres = cls.slice(0, 3);
+    if (ultimosTres.length >= 3 && ultimosTres.every(c => c === 'C')) {
+      if (!alertas.find(a => a.title.includes(forn) && a.title.includes('consecutivos'))) {
+        alertas.push({
+          nivel: 'critico',
+          title: `🚨 ${forn.slice(0,35)} — 3 lotes Classe C consecutivos`,
+          meta: 'Fornecedor em situação crítica nos últimos 30 dias — ação comercial necessária',
+        });
+      }
+    } else if (ultimosTres.filter(c => c === 'C').length >= 2) {
+      if (!alertas.find(a => a.title.includes(forn) && a.title.includes('atenção'))) {
+        alertas.push({
+          nivel: 'atencao',
+          title: `⚠️ ${forn.slice(0,35)} — 2 lotes Classe C recentes`,
+          meta: 'Monitorar próximos lotes — risco de piora de qualidade',
+        });
+      }
+    }
+
+    // Alerta 3: % médio alto (>15%) em mais de 2 lotes
+    if (lotes.length >= 2) {
+      const media = lotes.reduce((s,x)=>s+pct(x),0) / lotes.length;
+      if (media > 15 && !alertas.find(a => a.title.includes(forn) && a.title.includes('média'))) {
+        alertas.push({
+          nivel: 'atencao',
+          title: `📊 ${forn.slice(0,35)} — Média ${media.toFixed(1)}% de defeito`,
+          meta: `${lotes.length} lotes nos últimos 30 dias — média acima de 15%`,
+        });
+      }
+    }
+  });
+
+  if (!alertas.length) {
+    painel.style.display = 'none';
+    return;
+  }
+
+  // Ordenar: críticos primeiro
+  alertas.sort((a,b) => (a.nivel === 'critico' ? -1 : 1));
+
+  painel.style.display = 'block';
+  painel.innerHTML = `
+    <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--err2,#e74c3c);
+      text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px;">
+      🚨 ${alertas.length} Alerta${alertas.length>1?'s':''} Ativo${alertas.length>1?'s':''}
+    </div>
+    ${alertas.slice(0,6).map(a => `
+      <div class="alerta-card alerta-${a.nivel}">
+        <div class="alerta-body">
+          <div class="alerta-title">${a.title}</div>
+          <div class="alerta-meta">${a.meta}</div>
+        </div>
+      </div>`).join('')}
+    ${alertas.length > 6 ? `<div style="font-size:11px;color:var(--muted);padding:4px 0">+ ${alertas.length-6} alertas adicionais</div>` : ''}
+  `;
+}
+
+// === VOLUME RECEBIDO ===
+let volSortCol = 'total';
+let volSortAsc = false;
+let volListCache = [];
+
+function renderVolume() {
+  const r = dadosFiltrados;
+  const COK   = 'rgba(56,201,120,0.8)';
+  const CWARN = 'rgba(240,196,25,0.8)';
+  const CERR  = 'rgba(231,76,60,0.8)';
+
+  // Agrupa por fornecedor
+  const map = {};
+  r.forEach(x => {
+    if (!x.fornecedor) return;
+    if (!map[x.fornecedor]) map[x.fornecedor] = { lotes:0, total:0, A:0, B:0, C:0 };
+    const v = map[x.fornecedor];
+    v.lotes++;
+    const qtd = x.qtd_total_lote || x.qtd_declarada || x.qtd_total || x.qtd_amostra || 0;
+    v.total += qtd;
+    const cls = (x.classificacao||'').toUpperCase();
+    if      (cls === 'A') v.A += qtd;
+    else if (cls === 'B') v.B += qtd;
+    else if (cls === 'C') v.C += qtd;
+  });
+
+  volListCache = Object.entries(map).map(([nome, v]) => ({
+    nome, ...v,
+    pctA: v.total > 0 ? v.A / v.total * 100 : 0,
+    pctC: v.total > 0 ? v.C / v.total * 100 : 0,
+  }));
+
+  // KPI cards
+  const totalGeral = volListCache.reduce((s,f)=>s+f.total,0);
+  const totalA = volListCache.reduce((s,f)=>s+f.A,0);
+  const totalB = volListCache.reduce((s,f)=>s+f.B,0);
+  const totalC = volListCache.reduce((s,f)=>s+f.C,0);
+  const pctCGeral = totalGeral > 0 ? (totalC/totalGeral*100).toFixed(1) : 0;
+
+  document.getElementById('volSumCards').innerHTML = [
+    { label:'Total Recebido',  val: totalGeral.toLocaleString('pt-BR') + ' pçs', cor:'var(--accent)' },
+    { label:'Classe A',        val: totalA.toLocaleString('pt-BR') + ' pçs',     cor:'var(--ok2)' },
+    { label:'Classe B',        val: totalB.toLocaleString('pt-BR') + ' pçs',     cor:'var(--warn2)' },
+    { label:'Classe C',        val: totalC.toLocaleString('pt-BR') + ' pçs',     cor:'var(--err2)' },
+    { label:'% Classe C geral',val: pctCGeral + '%',                              cor: pctCGeral > 15 ? 'var(--err2)' : 'var(--warn2)' },
+    { label:'Fornecedores',    val: volListCache.length,                          cor:'var(--accent)' },
+  ].map(c => `
+    <div class="card" style="padding:12px 14px;text-align:center;">
+      <div style="font-family:'Syne',sans-serif;font-weight:800;font-size:18px;color:${c.cor};line-height:1.2">${c.val}</div>
+      <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:5px">${c.label}</div>
+    </div>`).join('');
+
+  renderVolTabela();
+
+  const top10 = [...volListCache].sort((a,b)=>b.total-a.total).slice(0,10);
+  const labels10 = top10.map(f => f.nome.length>16 ? f.nome.slice(0,16)+'…' : f.nome);
+
+  // ① Volume total
+  makeChart('chartVolTotal', {
+    type:'bar',
+    data:{
+      labels: labels10,
+      datasets:[{ label:'Total peças', data: top10.map(f=>f.total),
+        backgroundColor: top10.map(f => f.pctC>20?CERR : f.pctC>5?CWARN : COK),
+        borderRadius:3, borderSkipped:false }]
+    },
+    options:{ indexAxis:'y', plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: ctx => ' ' + ctx.raw.toLocaleString('pt-BR') + ' pçs' } } },
+      scales:{ x:{ ticks:{color:'#5d7f95',callback:v=>v.toLocaleString('pt-BR')}, grid:{color:'rgba(255,255,255,.04)'} },
+               y:{ ticks:{color:'#8bafc4',font:{size:10}} } } }
+  });
+
+  // ② % Classe C — ordenado do pior para o melhor
+  const topC = [...volListCache].filter(f=>f.total>0).sort((a,b)=>b.pctC-a.pctC).slice(0,10);
+  makeChart('chartVolPctC', {
+    type:'bar',
+    data:{
+      labels: topC.map(f => f.nome.length>16 ? f.nome.slice(0,16)+'…' : f.nome),
+      datasets:[{ label:'% Classe C', data: topC.map(f=>+f.pctC.toFixed(1)),
+        backgroundColor: topC.map(f => f.pctC>20?CERR : f.pctC>5?CWARN : COK),
+        borderRadius:3, borderSkipped:false }]
+    },
+    options:{ indexAxis:'y', plugins:{ legend:{display:false},
+      tooltip:{ callbacks:{ label: ctx => ' ' + ctx.raw + '%' } } },
+      scales:{ x:{ max:100, ticks:{color:'#5d7f95',callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,.04)'} },
+               y:{ ticks:{color:'#8bafc4',font:{size:10}} } } }
+  });
+
+  // ③ Stacked A/B/C
+  makeChart('chartVolABC', {
+    type:'bar',
+    data:{
+      labels: labels10,
+      datasets:[
+        { label:'Classe A', data: top10.map(f=>f.A), backgroundColor: COK,   borderRadius:0, borderSkipped:false, stack:'s' },
+        { label:'Classe B', data: top10.map(f=>f.B), backgroundColor: CWARN, borderRadius:0, borderSkipped:false, stack:'s' },
+        { label:'Classe C', data: top10.map(f=>f.C), backgroundColor: CERR,  borderRadius:[0,3,3,0], borderSkipped:false, stack:'s' },
+      ]
+    },
+    options:{ indexAxis:'y',
+      plugins:{ legend:{ labels:{color:'#8bafc4',font:{size:11}} },
+        tooltip:{ callbacks:{ label: ctx => ctx.dataset.label + ': ' + ctx.raw.toLocaleString('pt-BR') + ' pçs' } } },
+      scales:{
+        x:{ stacked:true, ticks:{color:'#5d7f95',callback:v=>v.toLocaleString('pt-BR')}, grid:{color:'rgba(255,255,255,.04)'} },
+        y:{ stacked:true, ticks:{color:'#8bafc4',font:{size:10}} }
+      }
+    }
+  });
+}
+
+function volSort(col) {
+  if (volSortCol === col) volSortAsc = !volSortAsc;
+  else { volSortCol = col; volSortAsc = false; }
+  renderVolTabela();
+}
+
+function renderVolTabela() {
+  const sorted = [...volListCache].sort((a,b) => {
+    const av = a[volSortCol]||0, bv = b[volSortCol]||0;
+    return volSortAsc ? av-bv : bv-av;
+  });
+
+  const tbody = document.getElementById('tbodyVolume');
+  tbody.innerHTML = sorted.map((f,i) => {
+    const pctC = f.pctC.toFixed(1);
+    const pctA = f.pctA.toFixed(1);
+    const cor  = f.pctC>20?'var(--err2)':f.pctC>5?'var(--warn2)':'var(--ok2)';
+    const sit  = f.pctC>20 ? ['CRÍTICO','var(--err2)','rgba(231,76,60,.12)']
+               : f.pctC>5  ? ['REGULAR','var(--warn2)','rgba(240,196,25,.12)']
+               : f.total>0 ? ['BOM','var(--ok2)','rgba(56,201,120,.12)']
+               : ['—','var(--muted)','transparent'];
+    // barra pctC
+    const barW = Math.min(100, f.pctC * 5);
+    return `<tr>
+      <td class="mono" style="color:var(--muted)">${i+1}</td>
+      <td style="font-weight:500;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${f.nome}">${f.nome}</td>
+      <td class="mono" style="text-align:right;font-weight:600">${f.total.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="text-align:right;color:var(--ok2)">${f.A.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="text-align:right;color:var(--warn2)">${f.B.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="text-align:right;color:var(--err2)">${f.C.toLocaleString('pt-BR')}</td>
+      <td style="min-width:110px">
+        <div style="display:flex;align-items:center;gap:6px">
+          <div style="flex:1;height:5px;background:var(--bg3);border-radius:3px;overflow:hidden">
+            <div style="height:100%;width:${barW}%;background:${cor};border-radius:3px"></div>
+          </div>
+          <span style="font-family:'DM Mono',monospace;font-size:11px;color:${cor};min-width:34px;text-align:right">${pctC}%</span>
+        </div>
+      </td>
+      <td class="mono" style="text-align:right">${f.lotes}</td>
+      <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;
+        background:${sit[2]};color:${sit[1]}">${sit[0]}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="empty">Nenhum dado disponível.</td></tr>';
+}
+
 
 // === FORNECEDORES ===
 function renderFornecedores() {
@@ -901,6 +1267,147 @@ function renderDefeitos() {
       <td style="font-size:11px;color:var(--muted)">${worst?`${worst[0]} (${worst[1]}x)`:'—'}</td>
     </tr>`;
   }).join('') || '<tr><td colspan="7" class="empty">Nenhum defeito registrado.</td></tr>';
+}
+
+
+// === TENDÊNCIA SEMANAL ===
+function renderTendencia() {
+  const r = dadosFiltrados;
+  // Agrupar por semana ISO
+  const semMap = {};
+  r.forEach(x => {
+    if (!x.data_entrada) return;
+    const d = new Date(x.data_entrada.split('/').reverse().join('-') + 'T00:00:00');
+    if (isNaN(d)) return;
+    // Semana: YYYY-Www
+    const jan1 = new Date(d.getFullYear(), 0, 1);
+    const wk = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+    const key = d.getFullYear() + '-S' + String(wk).padStart(2,'0');
+    if (!semMap[key]) semMap[key] = { lotes:0, pcts:[], A:0, B:0, C:0 };
+    const v = semMap[key];
+    v.lotes++;
+    if (x.percentual_defeito != null) v.pcts.push(x.percentual_defeito);
+    if (x.classificacao === 'A') v.A++;
+    else if (x.classificacao === 'B') v.B++;
+    else if (x.classificacao === 'C') v.C++;
+  });
+
+  const semanas = Object.keys(semMap).sort().slice(-12);
+  const labels  = semanas.map(s => s.replace('-S', ' Sem '));
+  const medias  = semanas.map(s => {
+    const p = semMap[s].pcts;
+    return p.length ? +(p.reduce((a,b)=>a+b,0)/p.length).toFixed(2) : 0;
+  });
+
+  const COK = 'rgba(56,201,120,0.7)', CWARN = 'rgba(240,196,25,0.7)', CERR = 'rgba(231,76,60,0.7)';
+
+  makeChart('chartTendPct', {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'% médio defeito', data: medias,
+      borderColor:'#c8a96e', backgroundColor:'rgba(200,169,110,0.1)',
+      borderWidth:2, pointRadius:4, pointBackgroundColor:'#c8a96e', fill:true, tension:0.3
+    }]},
+    options:{ plugins:{ legend:{display:false} },
+      scales:{ y:{ beginAtZero:true, ticks:{color:'#5d7f95',callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,.04)'} },
+               x:{ ticks:{color:'#5d7f95',font:{size:10}} } } }
+  });
+
+  makeChart('chartTendLotes', {
+    type:'bar',
+    data:{ labels, datasets:[{
+      label:'Lotes', data: semanas.map(s => semMap[s].lotes),
+      backgroundColor:'rgba(46,107,138,0.7)', borderRadius:3
+    }]},
+    options:{ plugins:{ legend:{display:false} },
+      scales:{ y:{ beginAtZero:true, ticks:{color:'#5d7f95'}, grid:{color:'rgba(255,255,255,.04)'} },
+               x:{ ticks:{color:'#5d7f95',font:{size:10}} } } }
+  });
+
+  makeChart('chartTendABC', {
+    type:'bar',
+    data:{ labels, datasets:[
+      { label:'A', data: semanas.map(s=>semMap[s].A), backgroundColor:COK, borderRadius:0, stack:'s' },
+      { label:'B', data: semanas.map(s=>semMap[s].B), backgroundColor:CWARN, borderRadius:0, stack:'s' },
+      { label:'C', data: semanas.map(s=>semMap[s].C), backgroundColor:CERR, borderRadius:[0,3,3,0], stack:'s' },
+    ]},
+    options:{ plugins:{ legend:{ labels:{color:'#8bafc4'} } },
+      scales:{ x:{ stacked:true, ticks:{color:'#5d7f95',font:{size:10}} },
+               y:{ stacked:true, beginAtZero:true, ticks:{color:'#5d7f95'} } } }
+  });
+}
+
+// === FORNECEDOR AO LONGO DO TEMPO ===
+function renderTimeline() {
+  const r = dadosFiltrados;
+
+  // Popular select de fornecedores
+  const sel = document.getElementById('timelineForn');
+  const fornAtual = sel.value;
+  const forns = [...new Set(r.map(x=>x.fornecedor).filter(Boolean))].sort();
+  sel.innerHTML = '<option value="">Selecione um fornecedor…</option>' +
+    forns.map(f => `<option value="${f}" ${f===fornAtual?'selected':''}>${f}</option>`).join('');
+
+  const forn = sel.value;
+  if (!forn) return;
+
+  document.getElementById('timelineFornNome').textContent = forn;
+
+  // Filtrar e ordenar por data
+  const dados = r.filter(x => x.fornecedor === forn && x.data_entrada)
+    .map(x => ({
+      ...x,
+      _d: new Date(x.data_entrada.split('/').reverse().join('-') + 'T00:00:00')
+    }))
+    .filter(x => !isNaN(x._d))
+    .sort((a,b) => a._d - b._d);
+
+  if (!dados.length) {
+    document.getElementById('tbodyTimeline').innerHTML =
+      '<tr><td colspan="7" class="empty">Sem dados para este fornecedor.</td></tr>';
+    return;
+  }
+
+  const labels = dados.map(x => x.data_entrada);
+  const pcts   = dados.map(x => x.percentual_defeito || 0);
+  const COK = '#27ae60', CWARN = '#f39c12', CERR = '#e74c3c';
+
+  makeChart('chartTimelinePct', {
+    type:'line',
+    data:{ labels, datasets:[{
+      label:'% defeito', data: pcts,
+      borderColor:'#c8a96e',
+      backgroundColor: ctx => {
+        const v = pcts[ctx.dataIndex];
+        return v>12?'rgba(231,76,60,0.15)':v>5?'rgba(240,196,25,0.15)':'rgba(56,201,120,0.15)';
+      },
+      pointBackgroundColor: pcts.map(v => v>12?CERR:v>5?CWARN:COK),
+      pointRadius:5, borderWidth:2, fill:false, tension:0.2
+    }]},
+    options:{
+      plugins:{ legend:{display:false},
+        annotation: pcts.length > 1 ? {} : undefined },
+      scales:{ y:{ beginAtZero:true, ticks:{color:'#5d7f95',callback:v=>v+'%'}, grid:{color:'rgba(255,255,255,.04)'} },
+               x:{ ticks:{color:'#5d7f95',font:{size:10},maxRotation:45} } }
+    }
+  });
+
+  // Tabela
+  const tbody = document.getElementById('tbodyTimeline');
+  tbody.innerHTML = [...dados].reverse().slice(0,20).map(x => {
+    const pct = (x.percentual_defeito||0).toFixed(1);
+    const cor = x.percentual_defeito>12?CERR:x.percentual_defeito>5?CWARN:COK;
+    const cls = x.classificacao||'—';
+    return `<tr>
+      <td class="mono" style="color:var(--muted)">${x.data_entrada||'—'}</td>
+      <td class="mono" style="color:var(--accent)">${x.lote_atak||'—'}</td>
+      <td class="mono">${(x.qtd_amostra||0).toLocaleString('pt-BR')}</td>
+      <td class="mono">${(x.total_defeitos||0).toLocaleString('pt-BR')}</td>
+      <td><span style="font-weight:700;color:${cor}">${pct}%</span></td>
+      <td><span style="font-family:'Syne',sans-serif;font-weight:800;font-size:13px;color:${cor}">${cls}</span></td>
+      <td style="color:var(--muted);font-size:12px">${x.analisador||'—'}</td>
+    </tr>`;
+  }).join('');
 }
 
 // === ANALISADORES ===

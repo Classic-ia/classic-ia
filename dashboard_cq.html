@@ -539,15 +539,25 @@ canvas.tall{max-height:320px;}
 
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="cq_auth.js"></script>
 <script>
 // === CHART REGISTRY ===
+// Registrar plugin datalabels (obrigatório no Chart.js 4)
+if (typeof Chart !== 'undefined' && typeof ChartDataLabels !== 'undefined') {
+  Chart.register(ChartDataLabels);
+}
 const _charts = {};
 function makeChart(id, config) {
   if (_charts[id]) _charts[id].destroy();
   const ctx = document.getElementById(id)?.getContext('2d');
   if (!ctx) return null;
+  // Desabilitar datalabels por padrão em todos os gráficos (só ativar quando necessário)
+  if (config.plugins === undefined) config.plugins = {};
+  if (!config.plugins?.datalabels) {
+    if (!config.options) config.options = {};
+    if (!config.options.plugins) config.options.plugins = {};
+    config.options.plugins.datalabels = { display: false };
+  }
   _charts[id] = new Chart(ctx, config);
   return _charts[id];
 }
@@ -613,14 +623,28 @@ async function carregar() {
         ...r,
         created_at:       r.criado_em,
         data_entrada:     r.data_inspecao,
-        qtd_amostra:      r.quantidade_analisada,
-        qtd_total_lote:   r.quantidade_lote,
-        percentual_defeito: r.percentual_defeitos,
-        numero_requisicao: r.lote_atak,
-        liberado_producao: r.status_final === 'aprovado',
+        qtd_amostra:      r.quantidade_analisada      || r.qtd_amostra,
+        qtd_total_lote:   r.quantidade_lote           || r.qtd_total_lote,
+        percentual_defeito: r.percentual_defeitos     ?? r.percentual_defeito,
+        numero_requisicao: r.lote_atak                || r.numero_requisicao,
+        liberado_producao: r.status_final === 'aprovado' || r.liberado_producao,
+        // Normalizar classificacao: garantir sempre A, B ou C
+        classificacao: (function(pct, cls) {
+          if (cls === 'A' || cls === 'B' || cls === 'C') return cls;
+          const p = parseFloat(pct) || 0;
+          return p <= 5 ? 'A' : p <= 15 ? 'B' : 'C';
+        })(r.percentual_defeitos ?? r.percentual_defeito, r.classificacao),
       }));
     }
-    // Tabela legada (registros_cq) — complementar
+    // Volume real: tabela de recebimentos
+    try {
+      const rRec = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/rest/v1/cq_recebimentos?order=criado_em.desc&limit=2000`, {
+        headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw' }
+      });
+      window._recebimentos = rRec.ok ? (await rRec.json()) : [];
+    } catch(e) { window._recebimentos = []; }
+
+        // Tabela legada (registros_cq) — complementar
     const r2 = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/rest/v1/registros_cq?order=created_at.desc&limit=500`, {
       headers: { 'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw', 'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw' }
     });
@@ -991,18 +1015,37 @@ function renderVolume() {
   const CERR  = 'rgba(231,76,60,0.8)';
 
   // Agrupa por fornecedor
+  // Fonte primária: cq_recebimentos (volume real declarado)
+  // Fonte secundária: inspeções (com classificação A/B/C)
+  const recMap = {}; // fornecedor → volume total recebido
+  (window._recebimentos || []).forEach(rec => {
+    if (!rec.fornecedor) return;
+    if (!recMap[rec.fornecedor]) recMap[rec.fornecedor] = 0;
+    recMap[rec.fornecedor] += rec.quantidade_lote || 0;
+  });
+
   const map = {};
   r.forEach(x => {
     if (!x.fornecedor) return;
     if (!map[x.fornecedor]) map[x.fornecedor] = { lotes:0, total:0, A:0, B:0, C:0 };
     const v = map[x.fornecedor];
     v.lotes++;
-    const qtd = x.qtd_total_lote || x.qtd_declarada || x.qtd_total || x.qtd_amostra || 0;
+    // Volume por inspeção: usar qtd_total_lote (quantidade do lote, não da amostra)
+    const qtdLote = x.quantidade_lote || x.qtd_total_lote || x.qtd_declarada || 0;
+    const qtdAmos = x.qtd_amostra || x.quantidade_analisada || 0;
+    const qtd = qtdLote || qtdAmos;
     v.total += qtd;
     const cls = (x.classificacao||'').toUpperCase();
     if      (cls === 'A') v.A += qtd;
     else if (cls === 'B') v.B += qtd;
     else if (cls === 'C') v.C += qtd;
+  });
+
+  // Enriquecer com volume real dos recebimentos onde disponível
+  Object.keys(recMap).forEach(forn => {
+    if (map[forn] && recMap[forn] > map[forn].total) {
+      map[forn].total = recMap[forn];
+    }
   });
 
   volListCache = Object.entries(map).map(([nome, v]) => ({

@@ -487,12 +487,19 @@ async function importar() {
       }
 
       const payload = {
-        data_coleta:       r.data_coleta,
+        // colunas originais da tabela
+        data_cq:           r.data_coleta,
+        fornecedor:        r.frigorifico,
+        produto:           r.tipo_conservacao,
+        obs:               r.observacoes,
+        numero_requisicao: r.numero_requisicao,
+        classificacao:     r.classificacao,
+        qtd_total_lote:    r.qtd_frigo,
+        qtd_amostra:       r.qtd_classic,
+        // colunas novas adicionadas via SQL
         cidade:            r.cidade,
         frigorifico:       r.frigorifico,
         tipo_conservacao:  r.tipo_conservacao,
-        qtd_total_lote:    r.qtd_frigo,
-        qtd_amostra:       r.qtd_classic,
         rasgados:          r.rasgados,
         furados:           r.furados,
         pelando:           r.pelando,
@@ -503,10 +510,7 @@ async function importar() {
         folha_extra:       r.folha_extra,
         total_problemas:   r.total_problemas,
         porcentagem:       parseFloat(r.porcentagem.toFixed(4)),
-        classificacao:     r.classificacao,
         situacao:          r.situacao,
-        observacoes:       r.observacoes,
-        numero_requisicao: r.numero_requisicao,
         motorista:         r.motorista,
         data_viagem:       r.data_viagem,
         importado:         true,
@@ -514,8 +518,11 @@ async function importar() {
       };
 
       const { error } = await sb.from('registros_cq').insert(payload);
-      if (error) { err++; console.error('Erro insert:', error, payload); }
-      else ok++;
+      if (error) {
+        err++;
+        console.error('Erro insert:', error.message, error.details, error.hint);
+        if (err === 1) alerta('warn', 'Erro ao inserir: ' + error.message);
+      } else ok++;
     } catch(e) { err++; console.error(e); }
   }
 

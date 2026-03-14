@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rastreabilidade do Lote · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:ital,wght@0,400;0,500;1,400&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --gold2:#e8c987; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95; --green:#27ae60; --yellow:#f39c12;
+  --red:#e74c3c; --purple:#8e44ad; --teal:#16a085;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.header-logo{width:32px;height:32px;object-fit:contain;}
+.header-title{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.header-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+.container{max-width:960px;margin:0 auto;padding:24px 20px 80px;}
+
+/* BUSCA */
+.search-bar{display:flex;gap:10px;margin-bottom:28px;align-items:center;}
+.search-input{flex:1;background:var(--bg2);border:1.5px solid var(--border);border-radius:10px;
+  color:var(--text);font-size:15px;padding:12px 16px;outline:none;font-family:'DM Mono',monospace;
+  transition:border .2s;}
+.search-input:focus{border-color:var(--blue);}
+.btn-buscar{padding:12px 24px;background:var(--blue);border:none;border-radius:10px;
+  color:white;font-size:14px;font-weight:600;cursor:pointer;transition:background .2s;white-space:nowrap;}
+.btn-buscar:hover{background:var(--blue2);}
+.btn-pdf{padding:12px 20px;background:transparent;border:1px solid var(--gold);border-radius:10px;
+  color:var(--gold);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;
+  gap:6px;transition:all .2s;white-space:nowrap;}
+.btn-pdf:hover{background:rgba(200,169,110,.1);}
+.btn-forn{padding:12px 20px;background:transparent;border:1px solid var(--border);border-radius:10px;
+  color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;
+  gap:6px;transition:all .2s;white-space:nowrap;}
+.btn-forn:hover{border-color:var(--blue);color:var(--text);}
+
+/* HEADER DO LOTE */
+.lote-header{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:20px;margin-bottom:20px;display:grid;grid-template-columns:1fr auto;gap:16px;}
+.lote-num{font-family:'Syne',sans-serif;font-weight:800;font-size:28px;color:var(--gold);}
+.lote-forn{font-size:14px;color:var(--text);font-weight:600;margin-top:4px;}
+.lote-meta{font-size:12px;color:var(--muted);margin-top:3px;}
+.lote-badge{display:flex;flex-direction:column;align-items:flex-end;gap:8px;}
+.badge-cls{display:inline-flex;align-items:center;justify-content:center;
+  width:48px;height:48px;border-radius:50%;font-family:'Syne',sans-serif;font-weight:800;font-size:20px;}
+.badge-A{background:rgba(39,174,96,.2);color:var(--green);border:2px solid rgba(39,174,96,.4);}
+.badge-B{background:rgba(243,156,18,.2);color:var(--yellow);border:2px solid rgba(243,156,18,.4);}
+.badge-C{background:rgba(231,76,60,.2);color:var(--red);border:2px solid rgba(231,76,60,.4);}
+.badge-ok{background:rgba(39,174,96,.1);color:var(--green);border:1px solid rgba(39,174,96,.3);
+  font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;}
+
+/* KPI CARDS */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:20px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px;text-align:center;}
+.kpi-val{font-family:'Syne',sans-serif;font-weight:800;font-size:22px;color:var(--gold);}
+.kpi-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-top:4px;}
+
+/* TIMELINE */
+.timeline-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+  color:var(--gold);text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.timeline{position:relative;padding-left:32px;}
+.timeline::before{content:'';position:absolute;left:10px;top:0;bottom:0;width:2px;
+  background:linear-gradient(180deg,var(--blue) 0%,var(--border) 100%);}
+.tl-item{position:relative;margin-bottom:16px;}
+.tl-dot{position:absolute;left:-26px;top:14px;width:14px;height:14px;border-radius:50%;
+  border:2px solid var(--blue);background:var(--bg2);z-index:1;}
+.tl-dot.done{background:var(--green);border-color:var(--green);}
+.tl-dot.warn{background:var(--yellow);border-color:var(--yellow);}
+.tl-dot.err{background:var(--red);border-color:var(--red);}
+.tl-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:14px 16px;
+  transition:border-color .2s;}
+.tl-card:hover{border-color:var(--blue);}
+.tl-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;}
+.tl-etapa{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;}
+.tl-hora{font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);}
+.tl-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-top:8px;}
+.tl-stat{background:var(--bg3);border-radius:6px;padding:8px 10px;}
+.tl-stat-val{font-family:'DM Mono',monospace;font-size:13px;font-weight:700;}
+.tl-stat-key{font-size:10px;color:var(--muted);margin-top:2px;}
+.tl-fotos{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap;}
+.tl-foto{width:72px;height:72px;border-radius:6px;object-fit:cover;cursor:pointer;
+  border:1px solid var(--border);transition:transform .2s;}
+.tl-foto:hover{transform:scale(1.05);}
+
+/* DEFEITOS */
+.def-table{width:100%;border-collapse:collapse;font-size:13px;}
+.def-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+.def-table td{padding:8px 10px;border-bottom:1px solid rgba(30,58,82,.4);}
+.def-bar-bg{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;width:80px;display:inline-block;vertical-align:middle;}
+.def-bar-fill{height:100%;border-radius:3px;background:var(--red);}
+
+/* SEÇÕES */
+.sec{background:var(--bg2);border:1px solid var(--border);border-radius:12px;
+  padding:18px;margin-bottom:16px;}
+.sec-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+  color:var(--gold);text-transform:uppercase;letter-spacing:.07em;
+  margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.info-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+.info-item{background:var(--bg3);border-radius:8px;padding:10px 12px;}
+.info-key{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px;}
+.info-val{font-size:13px;font-weight:600;}
+
+/* EMPTY / LOADING */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-icon{font-size:48px;margin-bottom:12px;opacity:.3;}
+.loading{display:flex;align-items:center;justify-content:center;gap:10px;padding:40px;color:var(--muted);}
+.spinner{width:20px;height:20px;border:2px solid var(--border);border-top-color:var(--blue);
+  border-radius:50%;animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* BOTÕES RELATÓRIO */
+.rel-btns{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;}
+
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.9);z-index:200;
+  display:none;align-items:center;justify-content:center;}
+.lightbox.show{display:flex;}
+.lightbox img{max-width:90vw;max-height:90vh;border-radius:8px;}
+.lightbox-close{position:absolute;top:20px;right:20px;background:none;border:none;
+  color:white;font-size:28px;cursor:pointer;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;z-index:300;
+  background:var(--bg3);border:1px solid var(--border);border-radius:10px;
+  padding:12px 20px;font-size:13px;transform:translateY(80px);opacity:0;
+  transition:all .3s;pointer-events:none;}
+.toast.show{transform:translateY(0);opacity:1;}
+
+@media(max-width:600px){
+  .search-bar{flex-wrap:wrap;}
+  .rel-btns{flex-direction:column;}
+  .lote-header{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <img class="header-logo" id="logoImg" src="" alt="">
+  <div>
+    <div class="header-title">Classic CQ</div>
+    <div class="header-sub">Rastreabilidade do Lote</div>
+  </div>
+  <a href="index.html" class="btn-back">← Menu</a>
+</div>
+
+<div class="container">
+
+  <div class="search-bar">
+    <input class="search-input" type="text" id="inputLote"
+      placeholder="Digite o número do lote (ex: 0046)"
+      onkeydown="if(event.key==='Enter') buscarLote()">
+    <button class="btn-buscar" onclick="buscarLote()">🔍 Buscar</button>
+  </div>
+
+  <div id="loadingState" class="loading" style="display:none;">
+    <div class="spinner"></div><span>Carregando dados do lote...</span>
+  </div>
+
+  <div id="emptyState" class="empty-state">
+    <div class="empty-icon">📦</div>
+    <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Rastreabilidade do Lote</div>
+    <div style="font-size:13px;">Digite o número do lote para visualizar o histórico completo de movimentações, inspeções, defeitos e destino.</div>
+  </div>
+
+  <div id="loteContent" style="display:none;">
+
+    <!-- Botões de relatório -->
+    <div class="rel-btns">
+      <button class="btn-pdf" onclick="gerarRelatorio('tecnico')">
+        📋 Relatório Técnico
+      </button>
+      <button class="btn-forn" onclick="gerarRelatorio('fornecedor')">
+        📄 Relatório ao Fornecedor
+      </button>
+    </div>
+
+    <!-- Header do lote -->
+    <div class="lote-header" id="loteHeader"></div>
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="loteKpis"></div>
+
+    <!-- Timeline de etapas -->
+    <div class="sec">
+      <div class="sec-title">⏱ Timeline de Movimentações</div>
+      <div class="timeline" id="loteTimeline"></div>
+    </div>
+
+    <!-- Inspeção CQ -->
+    <div class="sec" id="secInspecao" style="display:none;">
+      <div class="sec-title">🔍 Inspeção de Qualidade</div>
+      <div id="inspecaoContent"></div>
+    </div>
+
+    <!-- Defeitos -->
+    <div class="sec" id="secDefeitos" style="display:none;">
+      <div class="sec-title">⚠️ Defeitos Identificados</div>
+      <div id="defeitosContent"></div>
+    </div>
+
+    <!-- Transporte -->
+    <div class="sec" id="secTransporte" style="display:none;">
+      <div class="sec-title">🚚 Identificação do Transporte</div>
+      <div class="info-grid" id="transporteContent"></div>
+    </div>
+
+    <!-- Fotos -->
+    <div class="sec" id="secFotos" style="display:none;">
+      <div class="sec-title">📷 Evidências Fotográficas</div>
+      <div id="fotosContent" style="display:flex;gap:12px;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- Histórico do fornecedor -->
+    <div class="sec" id="secHistorico" style="display:none;">
+      <div class="sec-title">📊 Histórico do Fornecedor</div>
+      <div id="historicoContent"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Lightbox -->
+<div class="lightbox" id="lightbox" onclick="fecharLightbox()">
+  <button class="lightbox-close">✕</button>
+  <img id="lightboxImg" src="" alt="">
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- PDF template (oculto) -->
+<div id="pdfTecnico" style="display:none;"></div>
+<div id="pdfFornecedor" style="display:none;"></div>
+
+<script>
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+const DEF_LABELS = {
+  fermentacao:'Fermentação', sem_folhas:'Sem Folhas',
+  folhas_arrebentadas:'Folhas Arrebentadas', pedaco:'Pedaço',
+  sujo:'Sujo', rasgado:'Rasgado', corte_irregular:'Corte Irregular',
+  furado:'Furado', mau_cheiro:'Mau Cheiro', contaminacao:'Contaminação',
+  outro_defeito:'Outro Defeito'
+};
+
+const ETAPAS_ORDEM = [
+  { cod:'ROR',  label:'Recebimento',          icon:'📦', cor:'var(--blue)' },
+  { cod:'RVP',  label:'Particionamento',       icon:'✂️', cor:'var(--teal,#16a085)' },
+  { cod:'RAP',  label:'Salga',                 icon:'🧂', cor:'var(--teal,#16a085)' },
+  { cod:'RAS',  label:'Bate Sal',              icon:'🥊', cor:'var(--teal,#16a085)' },
+  { cod:'RAL',  label:'Lavagem',               icon:'🚿', cor:'var(--teal,#16a085)' },
+  { cod:'RSE',  label:'Sebo',                  icon:'🧈', cor:'var(--teal,#16a085)' },
+  { cod:'RAE',  label:'Classificação',         icon:'🔍', cor:'var(--yellow)' },
+  { cod:'RCL',  label:'Produto Classificado',  icon:'📋', cor:'var(--green)' },
+  { cod:'CQ',   label:'Inspeção CQ',           icon:'✅', cor:'var(--purple,#8e44ad)' },
+];
+
+let dadosLote = null;
+let inspecoesLote = [];
+
+// ══════════════════════════════════════════════════════════
+// BUSCA
+// ══════════════════════════════════════════════════════════
+async function buscarLote() {
+  const lote = document.getElementById('inputLote').value.trim().toUpperCase();
+  if (!lote) { toast('Digite o número do lote'); return; }
+
+  document.getElementById('emptyState').style.display  = 'none';
+  document.getElementById('loteContent').style.display = 'none';
+  document.getElementById('loadingState').style.display = 'flex';
+
+  try {
+    // Buscar inspeções CQ do lote
+    const r1 = await sbFetch('registros_cq_inspecao', `lote_atak=eq.${encodeURIComponent(lote)}&order=data_inspecao.asc`);
+    const r2 = await sbFetch('registros_cq', `lote_atak=eq.${encodeURIComponent(lote)}&order=data_entrada.asc`);
+
+    inspecoesLote = [...(r1||[]), ...(r2||[])];
+
+    if (!inspecoesLote.length) {
+      document.getElementById('loadingState').style.display = 'none';
+      document.getElementById('emptyState').style.display   = 'block';
+      document.getElementById('emptyState').innerHTML = `
+        <div class="empty-icon">🔍</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Lote "${lote}" não encontrado</div>
+        <div style="font-size:13px;color:var(--muted)">Verifique o número e tente novamente.</div>`;
+      return;
+    }
+
+    const insp = inspecoesLote[inspecoesLote.length - 1]; // última inspeção = mais completa
+
+    // Buscar histórico do fornecedor
+    const fornecedor = insp.fornecedor || '';
+    let historico = [];
+    if (fornecedor) {
+      const r3 = await sbFetch('registros_cq_inspecao',
+        `fornecedor=eq.${encodeURIComponent(fornecedor)}&order=data_inspecao.desc&limit=10`);
+      historico = (r3||[]).filter(x => x.lote_atak !== lote);
+    }
+
+    renderLote(insp, inspecoesLote, historico);
+
+  } catch(e) {
+    toast('Erro ao buscar: ' + e.message);
+  } finally {
+    document.getElementById('loadingState').style.display = 'none';
+  }
+}
+
+async function sbFetch(tabela, query) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${tabela}?${query}`, {
+    headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════
+function renderLote(insp, todas, historico) {
+  dadosLote = { insp, todas, historico };
+
+  const pct  = insp.percentual_defeitos || insp.percentual_defeito || 0;
+  const cls  = insp.classificacao || (pct<=5?'A':pct<=15?'B':'C');
+  const qtd  = insp.quantidade_lote || insp.qtd_total_lote || insp.qtd_declarada || 0;
+  const amst = insp.quantidade_analisada || insp.qtd_amostra || 0;
+  const defs = insp.total_defeitos || 0;
+  const status = insp.status_final || '';
+
+  // Header
+  document.getElementById('loteHeader').innerHTML = `
+    <div>
+      <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">Lote ATAK</div>
+      <div class="lote-num">${insp.lote_atak || '—'}</div>
+      <div class="lote-forn">${insp.fornecedor || '—'}</div>
+      <div class="lote-meta">
+        ${insp.produto||''} · ${insp.data_inspecao||insp.data_entrada||'—'} ${insp.hora_inspecao||''}
+        ${insp.inspetor ? ' · Inspetor: ' + insp.inspetor : ''}
+      </div>
+      ${insp.etiqueta ? `<div style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted);margin-top:6px;">Etiqueta: ${insp.etiqueta}</div>` : ''}
+    </div>
+    <div class="lote-badge">
+      <div class="badge-cls badge-${cls}">${cls}</div>
+      <span class="badge-ok">${status === 'bloqueado' ? '🔒 Bloqueado' : status === 'ressalva' ? '⚠️ Ressalva' : status === 'aprovado' ? '✅ Aprovado' : cls === 'A' ? '✅ Aprovado' : cls === 'B' ? '⚠️ Ressalva' : '🔒 Bloqueado'}</span>
+    </div>`;
+
+  // KPIs
+  const corPct = pct>12?'var(--red)':pct>5?'var(--yellow)':'var(--green)';
+  document.getElementById('loteKpis').innerHTML = [
+    { val: qtd.toLocaleString('pt-BR'), label:'Peças no Lote', cor:'var(--gold)' },
+    { val: amst.toLocaleString('pt-BR'), label:'Amostra Analisada', cor:'var(--text)' },
+    { val: defs.toLocaleString('pt-BR'), label:'Total Defeitos', cor: defs>0?'var(--red)':'var(--green)' },
+    { val: pct.toFixed(1)+'%', label:'% Defeito', cor: corPct },
+    { val: todas.length, label:'Inspeções CQ', cor:'var(--blue2)' },
+    ...(insp.temperatura_recebimento!=null ? [{ val: insp.temperatura_recebimento+'°C', label:'Temperatura', cor:'var(--teal,#16a085)' }] : []),
+  ].map(k => `
+    <div class="kpi">
+      <div class="kpi-val" style="color:${k.cor}">${k.val}</div>
+      <div class="kpi-label">${k.label}</div>
+    </div>`).join('');
+
+  // Timeline
+  renderTimeline(todas);
+
+  // Inspeção detalhada
+  renderInspecao(insp);
+
+  // Defeitos
+  renderDefeitos(insp);
+
+  // Transporte
+  renderTransporte(insp);
+
+  // Fotos
+  renderFotos(insp);
+
+  // Histórico
+  renderHistorico(historico, insp.fornecedor);
+
+  document.getElementById('loteContent').style.display = 'block';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderTimeline(todas) {
+  const tl = document.getElementById('loteTimeline');
+
+  // Montar etapas a partir das inspeções disponíveis
+  const etapas = [];
+
+  // Recebimento
+  const primeira = todas[0];
+  if (primeira) {
+    etapas.push({
+      etapa: 'Recebimento',
+      icon: '📦',
+      data: primeira.data_entrada || primeira.data_inspecao,
+      hora: '',
+      qtd: (primeira.qtd_total_lote || primeira.qtd_declarada || '—').toLocaleString?.('pt-BR') || '—',
+      cor: 'done',
+      extra: `Fornecedor: ${primeira.fornecedor || '—'}`
+    });
+  }
+
+  // Inspeção CQ (pode ter múltiplas)
+  todas.forEach((ins, i) => {
+    const pct = ins.percentual_defeitos || ins.percentual_defeito || 0;
+    etapas.push({
+      etapa: `Inspeção CQ${todas.length > 1 ? ' #'+(i+1) : ''}`,
+      icon: '🔍',
+      data: ins.data_inspecao || ins.data_entrada,
+      hora: ins.hora_inspecao || '',
+      qtd: (ins.quantidade_analisada || ins.qtd_amostra || '—').toLocaleString?.('pt-BR') || '—',
+      cor: pct > 12 ? 'err' : pct > 5 ? 'warn' : 'done',
+      extra: `${(ins.total_defeitos||0)} defeitos · ${pct.toFixed(1)}% · Classe ${ins.classificacao||'?'} · ${ins.inspetor||''}`,
+      fotos: [ins.foto_etiqueta_url, ins.foto_produto_url].filter(Boolean),
+    });
+  });
+
+  tl.innerHTML = etapas.map(e => `
+    <div class="tl-item">
+      <div class="tl-dot ${e.cor}"></div>
+      <div class="tl-card">
+        <div class="tl-top">
+          <div class="tl-etapa">${e.icon} ${e.etapa}</div>
+          <div class="tl-hora">${e.data || ''} ${e.hora || ''}</div>
+        </div>
+        <div style="font-size:12px;color:var(--muted)">${e.extra}</div>
+        <div class="tl-grid">
+          <div class="tl-stat">
+            <div class="tl-stat-val">${e.qtd}</div>
+            <div class="tl-stat-key">peças</div>
+          </div>
+        </div>
+        ${e.fotos && e.fotos.length ? `
+          <div class="tl-fotos">${e.fotos.map(f =>
+            `<img class="tl-foto" src="${f}" onclick="abrirLightbox('${f}')" alt="Foto">`
+          ).join('')}</div>` : ''}
+      </div>
+    </div>`).join('');
+}
+
+function renderInspecao(insp) {
+  const sec = document.getElementById('secInspecao');
+  const con = document.getElementById('inspecaoContent');
+  sec.style.display = 'block';
+  con.innerHTML = `
+    <div class="info-grid">
+      ${[
+        { k:'ID Inspeção',  v: insp.id_inspecao || '—' },
+        { k:'Inspetor',     v: insp.inspetor || '—' },
+        { k:'Produto',      v: insp.produto || '—' },
+        { k:'Amostragem',   v: insp.tipo_amostragem || '—' },
+        { k:'Status Final', v: (insp.status_final || '—').toUpperCase() },
+        { k:'Qtd Lote',     v: (insp.quantidade_lote||insp.qtd_total_lote||'—').toLocaleString?.('pt-BR')||'—' },
+        { k:'Qtd Analisada',v: (insp.quantidade_analisada||insp.qtd_amostra||'—').toLocaleString?.('pt-BR')||'—' },
+        { k:'% Defeito',    v: ((insp.percentual_defeitos||insp.percentual_defeito)||0).toFixed(1)+'%' },
+      ].map(i => `
+        <div class="info-item">
+          <div class="info-key">${i.k}</div>
+          <div class="info-val">${i.v}</div>
+        </div>`).join('')}
+    </div>
+    ${insp.obs_reprovado ? `<div style="margin-top:12px;padding:12px;background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);border-radius:8px;font-size:13px;">⚠️ ${insp.obs_reprovado}</div>` : ''}
+    ${insp.observacoes ? `<div style="margin-top:10px;padding:12px;background:var(--bg3);border-radius:8px;font-size:13px;color:var(--muted);">${insp.observacoes}</div>` : ''}
+  `;
+}
+
+function renderDefeitos(insp) {
+  const sec = document.getElementById('secDefeitos');
+  const con = document.getElementById('defeitosContent');
+
+  const defsObj = {};
+  Object.keys(DEF_LABELS).forEach(k => {
+    const v = insp[k] || 0;
+    if (v > 0) defsObj[k] = v;
+  });
+
+  if (!Object.keys(defsObj).length) { sec.style.display = 'none'; return; }
+  sec.style.display = 'block';
+
+  const total = Object.values(defsObj).reduce((a,b)=>a+b,0);
+  const qtdAnalisada = insp.quantidade_analisada || insp.qtd_amostra || 1;
+
+  const rows = Object.entries(defsObj).sort((a,b)=>b[1]-a[1]).map(([k,v]) => {
+    const pct = (v/qtdAnalisada*100).toFixed(1);
+    const barW = Math.min(100, v/total*100).toFixed(0);
+    return `<tr>
+      <td>${DEF_LABELS[k]}</td>
+      <td class="mono" style="text-align:right">${v.toLocaleString('pt-BR')}</td>
+      <td>
+        <div class="def-bar-bg"><div class="def-bar-fill" style="width:${barW}%"></div></div>
+        <span class="mono" style="font-size:11px;color:var(--red);margin-left:8px;">${(v/total*100).toFixed(0)}%</span>
+      </td>
+      <td class="mono" style="color:var(--muted)">${pct}%</td>
+    </tr>`;
+  }).join('');
+
+  con.innerHTML = `
+    <table class="def-table">
+      <thead><tr><th>Defeito</th><th style="text-align:right">Peças</th><th>Proporção</th><th>% da Amostra</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr style="border-top:1px solid var(--border)">
+        <td style="font-weight:700;padding:8px 10px">Total</td>
+        <td class="mono" style="text-align:right;padding:8px 10px;font-weight:700;color:var(--red)">${total.toLocaleString('pt-BR')}</td>
+        <td></td>
+        <td class="mono" style="padding:8px 10px;color:var(--red)">${(total/qtdAnalisada*100).toFixed(1)}%</td>
+      </tr></tfoot>
+    </table>
+    ${insp.outro_defeito_tipo ? `<div style="margin-top:10px;padding:10px;background:var(--bg3);border-radius:8px;font-size:13px;">📝 Outro defeito descrito: <strong style="color:var(--gold)">${insp.outro_defeito_tipo}</strong></div>` : ''}
+  `;
+}
+
+function renderTransporte(insp) {
+  const sec = document.getElementById('secTransporte');
+  const con = document.getElementById('transporteContent');
+  const campos = ['placa_caminhao','motorista','transportadora'];
+  const labels = { placa_caminhao:'Placa', motorista:'Motorista', transportadora:'Transportadora' };
+  const vals = campos.filter(k => insp[k]);
+  if (!vals.length) { sec.style.display='none'; return; }
+  sec.style.display = 'block';
+  con.innerHTML = vals.map(k => `
+    <div class="info-item">
+      <div class="info-key">${labels[k]}</div>
+      <div class="info-val" style="font-family:'DM Mono',monospace">${insp[k]}</div>
+    </div>`).join('');
+}
+
+function renderFotos(insp) {
+  const sec = document.getElementById('secFotos');
+  const con = document.getElementById('fotosContent');
+  const fotos = [
+    { url: insp.foto_etiqueta_url, label:'Etiqueta' },
+    { url: insp.foto_produto_url, label:'Produto' },
+  ].filter(f => f.url);
+  if (!fotos.length) { sec.style.display='none'; return; }
+  sec.style.display='block';
+  con.innerHTML = fotos.map(f => `
+    <div style="text-align:center">
+      <img src="${f.url}" onclick="abrirLightbox('${f.url}')"
+        style="width:120px;height:120px;object-fit:cover;border-radius:8px;
+               border:1px solid var(--border);cursor:pointer;transition:transform .2s;"
+        onmouseover="this.style.transform='scale(1.05)'"
+        onmouseout="this.style.transform='scale(1)'"
+        alt="${f.label}">
+      <div style="font-size:11px;color:var(--muted);margin-top:5px">${f.label}</div>
+    </div>`).join('');
+}
+
+function renderHistorico(historico, fornecedor) {
+  const sec = document.getElementById('secHistorico');
+  const con = document.getElementById('historicoContent');
+  if (!historico.length) { sec.style.display='none'; return; }
+  sec.style.display='block';
+
+  const rows = historico.slice(0,10).map(h => {
+    const pct = (h.percentual_defeitos||h.percentual_defeito||0).toFixed(1);
+    const cor = pct>12?'var(--red)':pct>5?'var(--yellow)':'var(--green)';
+    return `<tr>
+      <td class="mono" style="color:var(--gold)">${h.lote_atak||'—'}</td>
+      <td class="mono" style="color:var(--muted)">${h.data_inspecao||h.data_entrada||'—'}</td>
+      <td class="mono" style="color:${cor}">${pct}%</td>
+      <td><span style="font-family:'Syne',sans-serif;font-weight:800;color:${cor}">${h.classificacao||'?'}</span></td>
+      <td style="font-size:12px;color:var(--muted)">${h.inspetor||'—'}</td>
+    </tr>`;
+  }).join('');
+
+  con.innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:12px">Fornecedor: <strong style="color:var(--text)">${fornecedor}</strong></div>
+    <table class="def-table">
+      <thead><tr><th>Lote</th><th>Data</th><th>% Defeito</th><th>Classe</th><th>Inspetor</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ══════════════════════════════════════════════════════════
+// LIGHTBOX
+// ══════════════════════════════════════════════════════════
+function abrirLightbox(url) {
+  document.getElementById('lightboxImg').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+function fecharLightbox() {
+  document.getElementById('lightbox').classList.remove('show');
+}
+
+// ══════════════════════════════════════════════════════════
+// GERADOR DE RELATÓRIOS PDF
+// ══════════════════════════════════════════════════════════
+async function gerarRelatorio(tipo) {
+  if (!dadosLote) { toast('Carregue um lote primeiro'); return; }
+  toast('⏳ Gerando PDF...');
+
+  const { insp, historico } = dadosLote;
+  const pct = (insp.percentual_defeitos || insp.percentual_defeito || 0).toFixed(1);
+  const cls = insp.classificacao || (pct<=5?'A':pct<=15?'B':'C');
+  const total_def = insp.total_defeitos || 0;
+  const qtd_amst  = insp.quantidade_analisada || insp.qtd_amostra || 0;
+  const data_fmt  = insp.data_inspecao || insp.data_entrada || '—';
+  const hora_fmt  = insp.hora_inspecao || '';
+
+  const defsRows = Object.entries(DEF_LABELS).map(([k, label]) => {
+    const v = insp[k] || 0;
+    const p = qtd_amst > 0 ? (v/qtd_amst*100).toFixed(2) : '0.00';
+    return `<tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:5px 8px;">${label}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${v}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${p}%</td>
+    </tr>`;
+  }).join('');
+
+  const histRows = historico.slice(0,6).map(h => {
+    const hp = (h.percentual_defeitos||h.percentual_defeito||0).toFixed(1);
+    return `<tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:4px 8px;font-family:monospace">${h.lote_atak||'—'}</td>
+      <td style="padding:4px 8px">${h.data_inspecao||h.data_entrada||'—'}</td>
+      <td style="padding:4px 8px;font-family:monospace">${hp}%</td>
+      <td style="padding:4px 8px;font-weight:700">${h.classificacao||'?'}</td>
+    </tr>`; }).join('');
+
+  const clsLabel = cls==='A'?'✅ Aprovado':cls==='B'?'⚠️ Aprovado com Ressalva':'🔒 Bloqueado — Sujeito a Negociação';
+  const hoje = new Date().toLocaleDateString('pt-BR');
+
+  let html = '';
+
+  if (tipo === 'tecnico') {
+    html = `
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;max-width:800px;margin:0 auto;padding:24px;}
+  h1{font-size:16px;color:#1a3a52;margin-bottom:2px;}
+  h2{font-size:13px;color:#2E6B8A;border-bottom:2px solid #2E6B8A;padding-bottom:4px;margin:18px 0 10px;}
+  .header-doc{background:#1a3a52;color:white;padding:16px;border-radius:6px;margin-bottom:20px;}
+  .header-doc h1{color:#c8a96e;font-size:18px;}
+  .header-doc .sub{color:#8bafc4;font-size:12px;margin-top:2px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+  th{background:#1a3a52;color:white;padding:6px 8px;text-align:left;font-size:11px;}
+  td{padding:5px 8px;}
+  .info-table td:first-child{font-weight:600;color:#444;width:200px;}
+  .cls-box{padding:10px 14px;border-radius:6px;font-weight:700;font-size:13px;display:inline-block;margin:8px 0;}
+  .cls-A{background:#d4edda;color:#155724;border:1px solid #c3e6cb;}
+  .cls-B{background:#fff3cd;color:#856404;border:1px solid #ffeeba;}
+  .cls-C{background:#f8d7da;color:#721c24;border:1px solid #f5c6cb;}
+  .obs-box{background:#f8f9fa;border-left:3px solid #c8a96e;padding:10px;font-size:12px;margin:8px 0;}
+  .footer{margin-top:32px;padding-top:12px;border-top:1px solid #ddd;color:#888;font-size:10px;display:flex;justify-content:space-between;}
+  @media print{body{padding:0;} .no-print{display:none;}}
+</style></head><body>
+<div class="header-doc">
+  <h1>RELATÓRIO TÉCNICO DE CONTROLE DE QUALIDADE</h1>
+  <div class="sub">Classic Couros — Controle de Qualidade de Matéria-Prima · Emitido em: ${hoje}</div>
+</div>
+
+<h2>1. Identificação da Inspeção</h2>
+<table class="info-table"><tbody>
+  <tr><td>Empresa Fornecedora</td><td>${insp.fornecedor||'—'}</td></tr>
+  <tr><td>Produto</td><td>${insp.produto||'Omaso Bovino'}</td></tr>
+  <tr><td>Lote / Etiqueta</td><td>${insp.lote_atak||'—'} / ${insp.etiqueta||'—'}</td></tr>
+  <tr><td>Data / Hora</td><td>${data_fmt} ${hora_fmt}</td></tr>
+  <tr><td>Inspetor Responsável</td><td>${insp.inspetor||'—'}</td></tr>
+  <tr><td>Qtd Total do Lote</td><td>${(insp.quantidade_lote||insp.qtd_total_lote||'—').toLocaleString?.('pt-BR')||'—'} peças</td></tr>
+  <tr><td>Quantidade Analisada</td><td>${(qtd_amst).toLocaleString('pt-BR')} peças</td></tr>
+  <tr><td>Método de Amostragem</td><td>${insp.tipo_amostragem||'Aleatória'}</td></tr>
+  <tr><td>Temperatura no Recebimento</td><td>${insp.temperatura_recebimento!=null ? insp.temperatura_recebimento+'°C' : '—'}</td></tr>
+  ${insp.placa_caminhao ? `<tr><td>Placa / Motorista</td><td>${insp.placa_caminhao} — ${insp.motorista||'—'} (${insp.transportadora||'—'})</td></tr>` : ''}
+</tbody></table>
+
+<h2>2. Resultado da Inspeção</h2>
+<table><thead><tr><th>Defeito</th><th>Quantidade</th><th>Percentual</th></tr></thead>
+<tbody>${defsRows}</tbody>
+<tfoot><tr style="background:#1a3a52;color:white;">
+  <td style="padding:6px 8px;font-weight:700">TOTAL</td>
+  <td style="padding:6px 8px;text-align:right;font-family:monospace">${total_def}</td>
+  <td style="padding:6px 8px;text-align:right;font-family:monospace">${pct}%</td>
+</tr></tfoot></table>
+${insp.outro_defeito_tipo ? `<div class="obs-box">📝 Outro defeito identificado: <strong>${insp.outro_defeito_tipo}</strong></div>` : ''}
+
+<h2>3. Classificação do Lote</h2>
+<div class="cls-box cls-${cls}">${clsLabel}</div><br>
+<table><thead><tr><th>% Defeito</th><th>Classificação</th></tr></thead><tbody>
+  <tr><td>0 – 5%</td><td>✅ Aprovado</td></tr>
+  <tr><td>5 – 15%</td><td>⚠️ Aprovado com Ressalva</td></tr>
+  <tr><td>15 – 30%</td><td>🔒 Sujeito a Negociação</td></tr>
+  <tr><td>> 30%</td><td>🚫 Reprovado</td></tr>
+</tbody></table>
+
+<h2>4. Evidências</h2>
+<p>☑ Etiqueta fotografada &nbsp; ☑ Produto fotografado</p>
+${insp.observacoes ? `<div class="obs-box">${insp.observacoes}</div>` : ''}
+
+<h2>5. Análise Técnica</h2>
+<div class="obs-box">
+${Object.entries(DEF_LABELS).filter(([k])=>insp[k]>0).map(([k,label]) => {
+  const v = insp[k];
+  const p = (v/qtd_amst*100).toFixed(1);
+  return `• ${label}: ${v} peças (${p}%)`;
+}).join('<br>') || 'Sem defeitos significativos registrados.'}
+</div>
+
+${historico.length ? `<h2>8. Histórico do Fornecedor</h2>
+<table><thead><tr><th>Lote</th><th>Data</th><th>% Defeito</th><th>Classificação</th></tr></thead>
+<tbody>${histRows}</tbody></table>` : ''}
+
+${insp.obs_reprovado ? `<h2>9. Observações CQ</h2><div class="obs-box">${insp.obs_reprovado}</div>` : ''}
+
+<div class="footer">
+  <span>Classic Couros — Controle de Qualidade Interno</span>
+  <span>Documento gerado em: ${hoje}</span>
+</div>
+</body></html>`;
+
+  } else {
+    // Relatório ao Fornecedor — simplificado
+    const defsDestaque = Object.entries(DEF_LABELS)
+      .filter(([k]) => insp[k] > 0)
+      .sort((a,b) => (insp[b[0]]||0) - (insp[a[0]]||0))
+      .slice(0,5);
+
+    html = `
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  body{font-family:Arial,sans-serif;font-size:13px;color:#1a1a1a;max-width:720px;margin:0 auto;padding:24px;}
+  .header-doc{background:#1a3a52;color:white;padding:20px;border-radius:6px;margin-bottom:24px;}
+  .header-doc h1{color:#c8a96e;font-size:17px;margin-bottom:4px;}
+  .header-doc .sub{color:#8bafc4;font-size:12px;}
+  h2{font-size:13px;color:#2E6B8A;border-bottom:1px solid #d1d5db;padding-bottom:5px;margin:18px 0 10px;}
+  table{width:100%;border-collapse:collapse;margin-bottom:12px;}
+  th{background:#1a3a52;color:white;padding:7px 10px;text-align:left;font-size:12px;}
+  td{padding:7px 10px;border-bottom:1px solid #e5e7eb;}
+  .cls-box{padding:12px 16px;border-radius:6px;font-weight:700;font-size:14px;display:inline-block;margin:8px 0;}
+  .cls-A{background:#d4edda;color:#155724;} .cls-B{background:#fff3cd;color:#856404;} .cls-C{background:#f8d7da;color:#721c24;}
+  .rec-item{padding:8px 0;border-bottom:1px solid #f3f4f6;font-size:13px;}
+  .footer{margin-top:32px;padding-top:12px;border-top:1px solid #e5e7eb;color:#888;font-size:11px;}
+  .assinatura{margin-top:40px;display:flex;justify-content:space-between;}
+  .ass-bloco{text-align:center;width:45%;}
+  .ass-linha{border-top:1px solid #555;margin-top:40px;padding-top:6px;font-size:11px;}
+</style></head><body>
+<div class="header-doc">
+  <h1>RELATÓRIO DE QUALIDADE DE MATÉRIA-PRIMA</h1>
+  <div class="sub">Classic Couros — Controle de Qualidade · Emitido em: ${hoje}</div>
+</div>
+
+<h2>Identificação</h2>
+<table><tbody>
+  <tr><td style="font-weight:600;width:180px">Fornecedor</td><td>${insp.fornecedor||'—'}</td></tr>
+  <tr><td style="font-weight:600">Produto</td><td>${insp.produto||'Omaso Bovino'}</td></tr>
+  <tr><td style="font-weight:600">Lote</td><td>${insp.lote_atak||'—'}</td></tr>
+  <tr><td style="font-weight:600">Data de Recebimento</td><td>${data_fmt}</td></tr>
+</tbody></table>
+
+<h2>Resultado da Inspeção</h2>
+<p>Durante a análise do lote recebido foram identificadas as seguintes ocorrências:</p>
+<table><thead><tr><th>Tipo de Ocorrência</th><th>Quantidade</th><th>Percentual</th></tr></thead>
+<tbody>${defsDestaque.map(([k,label]) => `
+  <tr><td>${label}</td>
+  <td style="text-align:right;font-family:monospace">${insp[k]}</td>
+  <td style="text-align:right;font-family:monospace">${(insp[k]/qtd_amst*100).toFixed(1)}%</td></tr>`).join('')}
+</tbody></table>
+
+<h2>Avaliação Geral</h2>
+<p>Percentual total de não conformidades: <strong>${pct}%</strong></p>
+<div class="cls-box cls-${cls}">${clsLabel}</div>
+
+${insp.observacoes ? `<h2>Observações Técnicas</h2><p style="line-height:1.7">${insp.observacoes}</p>` : ''}
+
+<h2>Recomendações de Melhoria</h2>
+${defsDestaque.length ? `<div>${defsDestaque.map(([k]) => {
+  const recs = {
+    fermentacao: '• Reduzir intervalo entre abertura do omaso e congelamento.',
+    pedaco: '• Avaliar tempo de limpeza mecânica na centrífuga/betoneira.',
+    furado: '• Revisar processo de manipulação e transporte interno.',
+    rasgado: '• Reduzir tempo de exposição em betoneira.',
+    sujo: '• Reforçar etapa de limpeza manual após processo mecânico.',
+  };
+  return recs[k] ? `<div class="rec-item">${recs[k]}</div>` : '';
+}).join('')}</div>` : '<p>Lote dentro dos parâmetros de qualidade esperados.</p>'}
+
+<h2>Ações Comerciais</h2>
+<p style="line-height:1.7;color:#555;">
+  Eventuais ajustes comerciais decorrentes desta análise poderão ser tratados entre os departamentos responsáveis de cada empresa.
+</p>
+
+<h2>Contato</h2>
+<p style="line-height:1.7;color:#555;">
+  Para esclarecimentos técnicos ou apoio na melhoria do processo produtivo, permanecemos à disposição.<br>
+  <strong>Controle de Qualidade — Classic Couros</strong>
+</p>
+
+<div class="assinatura">
+  <div class="ass-bloco">
+    <div class="ass-linha">Responsável CQ Classic Couros</div>
+  </div>
+  <div class="ass-bloco">
+    <div class="ass-linha">Responsável Técnico Fornecedor</div>
+  </div>
+</div>
+
+<div class="footer">Classic Couros — Documento gerado em: ${hoje} · Uso ${tipo==='tecnico'?'interno':'externo — envio ao fornecedor'}</div>
+</body></html>`;
+  }
+
+  // Abrir em nova aba para impressão/download
+  const w = window.open('', '_blank');
+  w.document.write(html);
+  w.document.close();
+  setTimeout(() => { w.focus(); w.print(); }, 800);
+  toast('✅ Relatório aberto — use Ctrl+P para salvar como PDF');
+}
+
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+(function(){
+  const s = localStorage.getItem('classic_logo');
+  const el = document.getElementById('logoImg');
+  if(s) el.src=s; else el.style.display='none';
+
+  // Verificar parâmetro URL ?lote=0046
+  const params = new URLSearchParams(window.location.search);
+  const lote = params.get('lote');
+  if (lote) {
+    document.getElementById('inputLote').value = lote;
+    buscarLote();
+  }
+})();
+</script>
+</body>
+</html>

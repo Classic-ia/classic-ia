@@ -1,0 +1,985 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Relatório Atak · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #080f1a;
+  --bg2:      #0d1b2a;
+  --bg3:      #1a2f45;
+  --border:   #1e3a52;
+  --gold:     #c8a96e;
+  --gold2:    #e8c987;
+  --blue:     #2E6B8A;
+  --blue2:    #3d8aad;
+  --text:     #e8f0f5;
+  --muted:    #6b8a9a;
+  --green:    #27ae60;
+  --yellow:   #f39c12;
+  --red:      #e74c3c;
+  --radius:   10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  background: linear-gradient(135deg, var(--bg2) 0%, #0a1520 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 24px;
+  display: flex; align-items: center; gap: 16px;
+}
+.header-logo { width: 36px; height: 36px; object-fit: contain; }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--gold); }
+.header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.btn-back {
+  margin-left: auto; padding: 8px 16px; background: transparent;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: none;
+  display: flex; align-items: center; gap: 6px; transition: all .2s;
+}
+.btn-back:hover { border-color: var(--blue); color: var(--text); }
+
+/* ── LAYOUT ── */
+.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
+.page-title { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+.page-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
+}
+.card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
+  color: var(--gold); text-transform: uppercase; letter-spacing: .05em;
+  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
+}
+
+/* ── UPLOAD ZONE ── */
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 48px 24px; text-align: center; cursor: pointer;
+  transition: all .25s; position: relative;
+}
+.upload-zone:hover, .upload-zone.drag { border-color: var(--blue); background: rgba(46,107,138,.08); }
+.upload-zone.done { border-color: var(--green); border-style: solid; }
+.upload-icon { font-size: 40px; margin-bottom: 12px; }
+.upload-label { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
+.upload-hint { font-size: 12px; color: var(--muted); }
+.upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+
+/* ── PROGRESS ── */
+.progress-bar { background: var(--bg3); border-radius: 6px; height: 6px; overflow: hidden; margin: 12px 0; display: none; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--gold)); border-radius: 6px; transition: width .3s; width: 0; }
+.progress-text { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
+
+/* ── STATS GRID ── */
+.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.stat-box {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center;
+}
+.stat-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--gold); }
+.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
+.stat-box.green .stat-num { color: var(--green); }
+.stat-box.yellow .stat-num { color: var(--yellow); }
+.stat-box.red .stat-num { color: var(--red); }
+
+/* ── TABELA ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  background: var(--bg3); color: var(--muted); font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+thead th:hover { color: var(--text); }
+thead th .sort-arrow { margin-left: 4px; opacity: .4; }
+thead th.sorted .sort-arrow { opacity: 1; color: var(--gold); }
+tbody tr { border-bottom: 1px solid rgba(30,58,82,.5); transition: background .15s; }
+tbody tr:hover { background: rgba(46,107,138,.1); }
+tbody td { padding: 10px 12px; }
+.td-lote { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--gold); font-weight: 600; }
+.td-forn { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.td-num { font-family: 'DM Mono', monospace; text-align: right; }
+.badge {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%;
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 12px;
+}
+.badge-A { background: rgba(39,174,96,.2); color: var(--green); }
+.badge-B { background: rgba(243,156,18,.2); color: var(--yellow); }
+.badge-C { background: rgba(231,76,60,.2); color: var(--red); }
+
+/* ── DEFEITOS MINI BAR ── */
+.def-bar { display: flex; gap: 2px; height: 14px; width: 100px; }
+.def-seg { border-radius: 2px; height: 100%; }
+
+/* ── FILTROS ── */
+.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
+.filter-input {
+  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text); font-size: 13px; padding: 8px 12px; outline: none;
+  transition: border .2s;
+}
+.filter-input:focus { border-color: var(--blue); }
+.filter-select { appearance: none; cursor: pointer; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b8a9a'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
+.filter-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+/* ── BOTÕES ── */
+.btn {
+  padding: 10px 20px; border-radius: var(--radius); font-size: 13px; font-weight: 600;
+  cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px;
+  transition: all .2s; font-family: 'DM Sans', sans-serif;
+}
+.btn-primary { background: var(--blue); color: white; }
+.btn-primary:hover { background: var(--blue2); }
+.btn-gold { background: var(--gold); color: #080f1a; }
+.btn-gold:hover { background: var(--gold2); }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-outline:hover { border-color: var(--blue); color: var(--text); }
+.btn-danger { background: rgba(231,76,60,.15); border: 1px solid rgba(231,76,60,.3); color: var(--red); }
+.btn-danger:hover { background: rgba(231,76,60,.25); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+/* ── ANÁLISE PANEL ── */
+.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 700px) { .analysis-grid { grid-template-columns: 1fr; } }
+
+.rank-list { display: flex; flex-direction: column; gap: 8px; }
+.rank-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; background: var(--bg3); border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.rank-pos { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 20px; }
+.rank-nome { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank-val { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; }
+.rank-bar-bg { height: 4px; background: var(--bg); border-radius: 2px; margin-top: 4px; }
+.rank-bar-fill { height: 100%; border-radius: 2px; background: var(--blue); transition: width .6s; }
+
+/* ── ALERTA ── */
+.alert {
+  padding: 12px 16px; border-radius: var(--radius); font-size: 13px;
+  display: none; margin-bottom: 16px; align-items: center; gap: 10px;
+}
+.alert.show { display: flex; }
+.alert-success { background: rgba(39,174,96,.15); border: 1px solid rgba(39,174,96,.3); color: #6fcf97; }
+.alert-error   { background: rgba(231,76,60,.15); border: 1px solid rgba(231,76,60,.3); color: var(--red); }
+.alert-info    { background: rgba(46,107,138,.2); border: 1px solid var(--border); color: var(--text); }
+
+/* ── DETAIL MODAL ── */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100;
+  display: none; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
+  padding: 28px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto;
+}
+.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
+.modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
+.def-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(30,58,82,.4); font-size: 13px; }
+.def-row:last-child { border: none; }
+.def-nome { color: var(--muted); }
+.def-val { font-family: 'DM Mono', monospace; font-weight: 600; }
+.def-pct-bar { width: 80px; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
+.def-pct-fill { height: 100%; border-radius: 3px; }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 60px 24px; color: var(--muted); }
+.empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
+.empty-text { font-size: 14px; }
+
+/* ── TOAST ── */
+.toast {
+  position: fixed; bottom: 24px; right: 24px; z-index: 200;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px 20px; font-size: 13px;
+  transform: translateY(80px); opacity: 0; transition: all .3s; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+
+/* ── SUPABASE STATUS ── */
+.sync-status { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.sync-dot.off { background: var(--red); }
+
+/* ── TABS ── */
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+.tab {
+  padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s;
+  font-family: 'DM Sans', sans-serif;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <img class="header-logo" id="logoImg" src="" alt="">
+  <div>
+    <div class="header-title">Classic CQ</div>
+    <div class="header-sub">Importação · Relatório ATAK WRPRD501</div>
+  </div>
+  <a href="index.html" class="btn-back">← Menu</a>
+</div>
+
+<div class="container">
+  <div class="page-title">📥 Importar Relatório ATAK</div>
+  <div class="page-sub">Importe o PDF WRPRD501 (Rastreabilidade do Lote) para analisar lotes, defeitos e classificação por fornecedor.</div>
+
+  <div id="alertBox" class="alert alert-info">
+    <span id="alertMsg"></span>
+  </div>
+
+  <!-- UPLOAD -->
+  <div class="card">
+    <div class="card-title">📄 Arquivo PDF</div>
+    <div class="upload-zone" id="uploadZone">
+      <input type="file" id="fileInput" accept=".pdf" onchange="handleFile(this.files[0])">
+      <div class="upload-icon" id="uploadIcon">📋</div>
+      <div class="upload-label" id="uploadLabel">Arraste o PDF ou clique para selecionar</div>
+      <div class="upload-hint" id="uploadHint">WRPRD501 · Relatório de Rastreabilidade do Lote · Gerado pelo Atak</div>
+    </div>
+    <div class="progress-bar" id="progressBar">
+      <div class="progress-fill" id="progressFill"></div>
+    </div>
+    <div class="progress-text" id="progressText"></div>
+  </div>
+
+  <!-- RESULTADOS (oculto até importar) -->
+  <div id="resultSection" style="display:none">
+
+    <!-- STATS -->
+    <div class="stats-grid" id="statsGrid"></div>
+
+    <!-- TABS -->
+    <div class="card" style="padding-bottom:0">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('lotes')">📋 Lotes</div>
+        <div class="tab" onclick="switchTab('analise')">📊 Análise</div>
+        <div class="tab" onclick="switchTab('defeitos')">🔍 Defeitos</div>
+      </div>
+
+      <!-- TAB: LOTES -->
+      <div class="tab-panel active" id="tab-lotes">
+        <div style="padding:0 0 16px">
+          <div class="filters">
+            <input class="filter-input" id="searchInput" placeholder="🔍 Buscar fornecedor ou lote..." oninput="renderTabela()" style="min-width:220px;">
+            <select class="filter-input filter-select" id="filterCls" onchange="renderTabela()">
+              <option value="">Todas as classes</option>
+              <option value="A">Classe A (≤5%)</option>
+              <option value="B">Classe B (5–12%)</option>
+              <option value="C">Classe C (>12%)</option>
+            </select>
+            <select class="filter-input filter-select" id="sortBy" onchange="renderTabela()">
+              <option value="lote">Ordenar: Lote</option>
+              <option value="fornecedor">Fornecedor</option>
+              <option value="qtd_total">Quantidade ↓</option>
+              <option value="pct_defeito">% Defeito ↓</option>
+              <option value="total_defeitos">Total Defeitos ↓</option>
+            </select>
+            <span class="filter-count" id="filterCount"></span>
+          </div>
+          <div class="actions" style="margin-bottom:12px">
+            <button class="btn btn-primary" onclick="importarSupabase()" id="btnSupabase" disabled>
+              ⬆️ Importar para Supabase
+            </button>
+            <button class="btn btn-outline" onclick="exportarCSV()">📥 Exportar CSV</button>
+            <button class="btn btn-danger" onclick="limparImportacao()">🗑️ Limpar</button>
+            <div class="sync-status" id="syncStatus"></div>
+          </div>
+          <div class="table-wrap">
+            <table id="tabelaLotes">
+              <thead>
+                <tr>
+                  <th onclick="setSortBy('lote')">Lote <span class="sort-arrow">↕</span></th>
+                  <th onclick="setSortBy('fornecedor_nome')">Fornecedor <span class="sort-arrow">↕</span></th>
+                  <th onclick="setSortBy('data_entrada')">Data <span class="sort-arrow">↕</span></th>
+                  <th onclick="setSortBy('qtd_total')" style="text-align:right">Qtd <span class="sort-arrow">↕</span></th>
+                  <th onclick="setSortBy('total_defeitos')" style="text-align:right">Defeitos <span class="sort-arrow">↕</span></th>
+                  <th onclick="setSortBy('pct_defeito')" style="text-align:right">% Def <span class="sort-arrow">↕</span></th>
+                  <th style="text-align:center">Cls</th>
+                  <th>Detalhes</th>
+                </tr>
+              </thead>
+              <tbody id="tabelaBody"></tbody>
+            </table>
+          </div>
+          <div class="empty" id="emptyState" style="display:none">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">Nenhum lote encontrado com esse filtro.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: ANÁLISE -->
+      <div class="tab-panel" id="tab-analise">
+        <div style="padding:0 0 20px">
+          <div class="analysis-grid">
+            <div>
+              <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;font-weight:600;">Top Fornecedores — Volume Processado</div>
+              <div class="rank-list" id="rankVolume"></div>
+            </div>
+            <div>
+              <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;font-weight:600;">Top Fornecedores — % Defeito</div>
+              <div class="rank-list" id="rankDefeito"></div>
+            </div>
+          </div>
+          <div style="margin-top:20px">
+            <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:12px;font-weight:600;">Distribuição por Classe de Qualidade</div>
+            <div id="classDist" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: DEFEITOS -->
+      <div class="tab-panel" id="tab-defeitos">
+        <div style="padding:0 0 20px">
+          <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:16px;font-weight:600;">Incidência de cada tipo de defeito (total acumulado em todos os lotes)</div>
+          <div id="defeitosBars"></div>
+        </div>
+      </div>
+
+    </div><!-- /card tabs -->
+  </div><!-- /resultSection -->
+
+</div><!-- /container -->
+
+<!-- MODAL DETALHE LOTE -->
+<div class="modal-overlay" id="modalLote">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div>
+        <div class="modal-title" id="modalLoteTitle"></div>
+        <div style="font-size:13px;color:var(--muted);margin-top:4px" id="modalLoteSub"></div>
+      </div>
+      <button class="modal-close" onclick="fecharModal()">✕</button>
+    </div>
+    <div id="modalLoteBody"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════════════
+// CONFIG SUPABASE
+// ══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+
+// ══════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════
+let lotesData = [];
+let sortCol   = 'lote';
+let sortAsc   = true;
+
+// ══════════════════════════════════════════════════════════
+// LOGO
+// ══════════════════════════════════════════════════════════
+(function(){
+  const s = localStorage.getItem('classic_logo');
+  const el = document.getElementById('logoImg');
+  if(s){ el.src=s; } else { el.style.display='none'; }
+})();
+
+// ══════════════════════════════════════════════════════════
+// DRAG & DROP
+// ══════════════════════════════════════════════════════════
+const zone = document.getElementById('uploadZone');
+zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag'); });
+zone.addEventListener('dragleave', ()=>zone.classList.remove('drag'));
+zone.addEventListener('drop', e=>{
+  e.preventDefault(); zone.classList.remove('drag');
+  const f = e.dataTransfer.files[0];
+  if(f && f.type === 'application/pdf') handleFile(f);
+  else toast('⚠️ Selecione um arquivo PDF');
+});
+
+// ══════════════════════════════════════════════════════════
+// PARSER PDF
+// ══════════════════════════════════════════════════════════
+function handleFile(file) {
+  if(!file) return;
+  if(file.type !== 'application/pdf'){
+    showAlert('error','Selecione um arquivo PDF (.pdf)');
+    return;
+  }
+
+  zone.classList.add('done');
+  document.getElementById('uploadIcon').textContent = '⏳';
+  document.getElementById('uploadLabel').textContent = 'Processando ' + file.name + '...';
+  document.getElementById('uploadHint').textContent  = 'Lendo e analisando o PDF...';
+
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  const progressText = document.getElementById('progressText');
+  progressBar.style.display = 'block';
+
+  // Usa pdf.js via CDN
+  const script = document.createElement('script');
+  script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+  script.onload = () => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const pdf = await pdfjsLib.getDocument({ data: e.target.result }).promise;
+        const totalPages = pdf.numPages;
+        let fullText = '';
+
+        progressText.textContent = `Lendo ${totalPages} páginas...`;
+
+        // Ler em lotes de 100 páginas para não travar
+        for(let i = 1; i <= totalPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          fullText += content.items.map(s => s.str).join('\n') + '\n';
+          if(i % 100 === 0 || i === totalPages) {
+            const pct = Math.round(i / totalPages * 100);
+            progressFill.style.width = pct + '%';
+            progressText.textContent = `Página ${i}/${totalPages} (${pct}%)`;
+            await new Promise(r => setTimeout(r, 0)); // yield UI
+          }
+        }
+
+        progressText.textContent = 'Analisando dados...';
+        const lotes = parsearTexto(fullText);
+
+        if(lotes.length === 0){
+          showAlert('error','Nenhum lote encontrado. Verifique se é um PDF WRPRD501 válido.');
+          resetUpload();
+          return;
+        }
+
+        lotesData = lotes;
+        progressBar.style.display = 'none';
+        document.getElementById('uploadIcon').textContent = '✅';
+        document.getElementById('uploadLabel').textContent = `${lotes.length} lotes importados de ${file.name}`;
+        document.getElementById('uploadHint').textContent  = `${totalPages} páginas processadas`;
+        showAlert('success', `✅ ${lotes.length} lotes carregados. Revise abaixo e importe para o Supabase.`);
+
+        renderResultados();
+        document.getElementById('btnSupabase').disabled = false;
+
+      } catch(err) {
+        showAlert('error','Erro ao processar PDF: ' + err.message);
+        console.error(err);
+        resetUpload();
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+  document.head.appendChild(script);
+}
+
+// ══════════════════════════════════════════════════════════
+// PARSER TEXTO
+// ══════════════════════════════════════════════════════════
+function parsearTexto(text) {
+  const lines  = text.split('\n');
+  const lotes  = {};
+  let loteAtual = null;
+  let fornAtual = null;
+
+  const DEF_MAP = {
+    'Rasgado':             'rasgado',
+    'Folha Estourada':     'folha_estourada',
+    'Despojo/Sujo':        'despojo_sujo',
+    'Furado':              'furado',
+    'Sebo/Corte Incorreto':'sebo_corte',
+    'Água':                'agua',
+    'Pelando':             'pelando',
+    'Carne Sem Folha':     'carne_sem_folha',
+    'Orelha Misturada':    'orelha_misturada',
+  };
+
+  for(let i = 0; i < lines.length; i++) {
+    const l = lines[i].trim();
+
+    // Fornecedor
+    const mForn = l.match(/^FORNECEDOR:\s+(\d+)\s+-\s+(.+)/);
+    if(mForn) {
+      fornAtual = { codigo: mForn[1], nome: mForn[2].trim() };
+      continue;
+    }
+
+    // Lote
+    const mLote = l.match(/^LOTE:\s+(\d+)$/);
+    if(mLote) {
+      const n = mLote[1];
+      if(!lotes[n]) {
+        lotes[n] = {
+          lote: n,
+          fornecedor_cod:  fornAtual ? fornAtual.codigo : '',
+          fornecedor_nome: fornAtual ? fornAtual.nome   : '',
+          produto_cod:  '', produto_nome: '',
+          data_entrada: '', qtd_total: 0,
+          rasgado:0, folha_estourada:0, despojo_sujo:0,
+          furado:0, sebo_corte:0, agua:0,
+          pelando:0, carne_sem_folha:0, orelha_misturada:0,
+        };
+      }
+      loteAtual = n;
+      continue;
+    }
+
+    if(!loteAtual) continue;
+    const d = lotes[loteAtual];
+
+    // Produto (5 dígitos)
+    if(!d.produto_cod && /^\d{5}$/.test(l) && i+1 < lines.length) {
+      const nome = lines[i+1].trim();
+      if(nome && /[A-Z]/.test(nome)) {
+        d.produto_cod  = l;
+        d.produto_nome = nome;
+      }
+    }
+
+    // Data entrada (primeira)
+    if(!d.data_entrada) {
+      const mData = l.match(/^(\d{2}\/\d{2}\/\d{4})\s+\d{2}:\d{2}:\d{2}$/);
+      if(mData) d.data_entrada = mData[1];
+    }
+
+    // Quantidade: pegar Saldo quando Req=0,00
+    // (padrão: "Total da Requisição → 0,00 → Saldo: → 4.507,00")
+    if(l === 'Total da Requisição') {
+      const vals = [];
+      for(let k = i+1; k < Math.min(i+12, lines.length); k++) {
+        const lk = lines[k].trim();
+        if(lk === 'Saldo:') continue;
+        if(/^-?[\d.,]+$/.test(lk)) {
+          try { vals.push(parseFloat(lk.replace(/\./g,'').replace(',','.'))); } catch(e){}
+        } else if(lk) break;
+      }
+      // Se primeiro número = 0 → segundo é a quantidade total do lote
+      if(vals.length >= 2 && vals[0] === 0) {
+        if(vals[1] > d.qtd_total) d.qtd_total = vals[1];
+      }
+    }
+
+    // RESUMO DO LOTE
+    const mRes = l.match(/^RESUMO DO LOTE:\s+(\d+)$/);
+    if(mRes && lotes[mRes[1]]) {
+      const rd = lotes[mRes[1]];
+      for(let k = i+1; k < Math.min(i+25, lines.length); k++) {
+        const mDef = lines[k].trim().match(/^Total (.+?):\s+(\d+)$/);
+        if(mDef) {
+          const key = DEF_MAP[mDef[1]];
+          if(key) rd[key] = parseInt(mDef[2]);
+        }
+      }
+    }
+  }
+
+  // Calcular totais
+  return Object.values(lotes).filter(d => d.fornecedor_cod).map(d => {
+    const total = d.rasgado + d.folha_estourada + d.despojo_sujo +
+                  d.furado + d.sebo_corte + d.agua +
+                  d.pelando + d.carne_sem_folha + d.orelha_misturada;
+    d.total_defeitos = total;
+    d.pct_defeito    = d.qtd_total > 0 ? parseFloat((total / d.qtd_total * 100).toFixed(2)) : 0;
+    d.classificacao  = d.pct_defeito <= 5 ? 'A' : d.pct_defeito <= 12 ? 'B' : 'C';
+    return d;
+  });
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDER RESULTADOS
+// ══════════════════════════════════════════════════════════
+function renderResultados() {
+  document.getElementById('resultSection').style.display = 'block';
+  renderStats();
+  renderTabela();
+  renderAnalise();
+  renderDefeitos();
+}
+
+function renderStats() {
+  const d = lotesData;
+  const qtdTotal = d.reduce((s,l)=>s+l.qtd_total,0);
+  const cls = {A:0,B:0,C:0};
+  d.forEach(l => cls[l.classificacao]++);
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-box"><div class="stat-num">${d.length}</div><div class="stat-label">Lotes</div></div>
+    <div class="stat-box"><div class="stat-num">${qtdTotal.toLocaleString('pt-BR')}</div><div class="stat-label">Peças Total</div></div>
+    <div class="stat-box green"><div class="stat-num">${cls.A}</div><div class="stat-label">Classe A ≤5%</div></div>
+    <div class="stat-box yellow"><div class="stat-num">${cls.B}</div><div class="stat-label">Classe B 5–12%</div></div>
+    <div class="stat-box red"><div class="stat-num">${cls.C}</div><div class="stat-label">Classe C >12%</div></div>
+    <div class="stat-box"><div class="stat-num">${new Set(d.map(l=>l.fornecedor_cod)).size}</div><div class="stat-label">Fornecedores</div></div>
+  `;
+}
+
+function renderTabela() {
+  const q   = document.getElementById('searchInput').value.toLowerCase();
+  const cls = document.getElementById('filterCls').value;
+  const srt = document.getElementById('sortBy').value;
+
+  let dados = lotesData.filter(l => {
+    if(cls && l.classificacao !== cls) return false;
+    if(q && !l.lote.includes(q) && !l.fornecedor_nome.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  dados.sort((a,b) => {
+    let av = a[srt] || a.lote, bv = b[srt] || b.lote;
+    if(typeof av === 'number') return sortAsc ? av-bv : bv-av;
+    return sortAsc ? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+  });
+
+  document.getElementById('filterCount').textContent = `${dados.length} lotes`;
+
+  const tbody = document.getElementById('tabelaBody');
+  if(!dados.length) {
+    tbody.innerHTML = '';
+    document.getElementById('emptyState').style.display = 'block';
+    return;
+  }
+  document.getElementById('emptyState').style.display = 'none';
+
+  // Mini barra de defeitos
+  const DEF_KEYS = ['rasgado','folha_estourada','despojo_sujo','furado','sebo_corte','agua','pelando','carne_sem_folha','orelha_misturada'];
+  const DEF_COLORS = ['#e74c3c','#e67e22','#f1c40f','#3498db','#9b59b6','#1abc9c','#e91e63','#ff5722','#607d8b'];
+  const maxDef = Math.max(...dados.map(l=>l.total_defeitos), 1);
+
+  tbody.innerHTML = dados.map(l => {
+    const barSegs = DEF_KEYS.map((k,ci) => {
+      const w = Math.round(l[k] / maxDef * 80);
+      return w > 0 ? `<div class="def-seg" style="width:${w}px;background:${DEF_COLORS[ci]};opacity:.8"></div>` : '';
+    }).join('');
+
+    return `<tr>
+      <td class="td-lote">${l.lote}</td>
+      <td class="td-forn" title="${l.fornecedor_nome}">${l.fornecedor_nome || '—'}</td>
+      <td style="font-size:12px;color:var(--muted)">${l.data_entrada || '—'}</td>
+      <td class="td-num">${l.qtd_total ? l.qtd_total.toLocaleString('pt-BR') : '—'}</td>
+      <td class="td-num">${l.total_defeitos.toLocaleString('pt-BR')}</td>
+      <td class="td-num" style="color:${l.pct_defeito>12?'var(--red)':l.pct_defeito>5?'var(--yellow)':'var(--green)'}">${l.pct_defeito.toFixed(1)}%</td>
+      <td style="text-align:center"><span class="badge badge-${l.classificacao}">${l.classificacao}</span></td>
+      <td>
+        <div class="def-bar">${barSegs}</div>
+        <button onclick="abrirDetalhe('${l.lote}')" style="background:none;border:none;color:var(--blue2);cursor:pointer;font-size:11px;padding:2px 0;">ver detalhes →</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function setSortBy(col) {
+  if(sortCol === col) sortAsc = !sortAsc;
+  else { sortCol = col; sortAsc = true; }
+  document.getElementById('sortBy').value = col;
+  renderTabela();
+}
+
+function renderAnalise() {
+  // Por volume
+  const porForn = {};
+  lotesData.forEach(l => {
+    if(!porForn[l.fornecedor_nome]) porForn[l.fornecedor_nome] = {qtd:0,def:0,lotes:0};
+    porForn[l.fornecedor_nome].qtd   += l.qtd_total;
+    porForn[l.fornecedor_nome].def   += l.total_defeitos;
+    porForn[l.fornecedor_nome].lotes += 1;
+  });
+
+  const topVol = Object.entries(porForn).sort((a,b)=>b[1].qtd-a[1].qtd).slice(0,8);
+  const maxVol = topVol[0]?.[1].qtd || 1;
+  document.getElementById('rankVolume').innerHTML = topVol.map(([nome,d],i) => `
+    <div class="rank-item">
+      <span class="rank-pos">${i+1}.</span>
+      <div style="flex:1;min-width:0">
+        <div class="rank-nome">${nome}</div>
+        <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.round(d.qtd/maxVol*100)}%"></div></div>
+      </div>
+      <span class="rank-val" style="color:var(--text)">${d.qtd.toLocaleString('pt-BR')} pçs</span>
+    </div>
+  `).join('');
+
+  // Por % defeito (mín 500 peças)
+  const topDef = Object.entries(porForn)
+    .filter(([,d]) => d.qtd >= 500)
+    .map(([nome,d]) => [nome, {pct: d.qtd>0?d.def/d.qtd*100:0, ...d}])
+    .sort((a,b)=>b[1].pct-a[1].pct).slice(0,8);
+  const maxPct = topDef[0]?.[1].pct || 1;
+  document.getElementById('rankDefeito').innerHTML = topDef.map(([nome,d],i) => `
+    <div class="rank-item">
+      <span class="rank-pos">${i+1}.</span>
+      <div style="flex:1;min-width:0">
+        <div class="rank-nome">${nome}</div>
+        <div class="rank-bar-bg"><div class="rank-bar-fill" style="width:${Math.round(d.pct/maxPct*100)}%;background:${d.pct>12?'var(--red)':d.pct>5?'var(--yellow)':'var(--green)'}"></div></div>
+      </div>
+      <span class="rank-val" style="color:${d.pct>12?'var(--red)':d.pct>5?'var(--yellow)':'var(--green)'}">${d.pct.toFixed(1)}%</span>
+    </div>
+  `).join('');
+
+  // Distribuição classes
+  const cls = {A:0,B:0,C:0};
+  lotesData.forEach(l => cls[l.classificacao]++);
+  const total = lotesData.length;
+  document.getElementById('classDist').innerHTML = [
+    ['A','Aprovado (≤5%)','var(--green)'],
+    ['B','Ressalva (5–12%)','var(--yellow)'],
+    ['C','Crítico (>12%)','var(--red)'],
+  ].map(([c,label,cor]) => `
+    <div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
+      <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:${cor}">${cls[c]}</div>
+      <div style="font-size:12px;color:var(--muted);margin:4px 0">${label}</div>
+      <div style="font-size:18px;font-weight:700;color:${cor}">${Math.round(cls[c]/total*100)}%</div>
+    </div>
+  `).join('');
+}
+
+function renderDefeitos() {
+  const DEF_LABELS = {
+    rasgado:'Rasgado', folha_estourada:'Folha Estourada', despojo_sujo:'Despojo/Sujo',
+    furado:'Furado', sebo_corte:'Sebo/Corte Incorreto', agua:'Água',
+    pelando:'Pelando', carne_sem_folha:'Carne Sem Folha', orelha_misturada:'Orelha Misturada'
+  };
+  const DEF_COLORS = {
+    rasgado:'#e74c3c', folha_estourada:'#e67e22', despojo_sujo:'#f1c40f',
+    furado:'#3498db', sebo_corte:'#9b59b6', agua:'#1abc9c',
+    pelando:'#e91e63', carne_sem_folha:'#ff5722', orelha_misturada:'#607d8b'
+  };
+
+  const totais = {};
+  Object.keys(DEF_LABELS).forEach(k => {
+    totais[k] = lotesData.reduce((s,l) => s + (l[k]||0), 0);
+  });
+
+  const sorted = Object.entries(totais).sort((a,b)=>b[1]-a[1]);
+  const maxVal = sorted[0]?.[1] || 1;
+  const qtdTotal = lotesData.reduce((s,l)=>s+l.qtd_total,0);
+
+  document.getElementById('defeitosBars').innerHTML = sorted.map(([k,v]) => {
+    const pct = qtdTotal > 0 ? (v/qtdTotal*100).toFixed(2) : 0;
+    const barW = Math.round(v/maxVal*100);
+    return `
+      <div style="margin-bottom:12px">
+        <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
+          <span style="color:var(--text);font-weight:500">${DEF_LABELS[k]}</span>
+          <span style="font-family:'DM Mono',monospace;color:var(--muted)">${v.toLocaleString('pt-BR')} pçs &nbsp;·&nbsp; <span style="color:${DEF_COLORS[k]}">${pct}%</span></span>
+        </div>
+        <div style="height:10px;background:var(--bg3);border-radius:5px;overflow:hidden">
+          <div style="height:100%;width:${barW}%;background:${DEF_COLORS[k]};border-radius:5px;transition:width .6s"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// DETALHE DO LOTE
+// ══════════════════════════════════════════════════════════
+function abrirDetalhe(loteNum) {
+  const l = lotesData.find(d => d.lote === loteNum);
+  if(!l) return;
+
+  document.getElementById('modalLoteTitle').textContent = 'Lote ' + l.lote;
+  document.getElementById('modalLoteSub').textContent = l.fornecedor_nome + (l.data_entrada ? ' · ' + l.data_entrada : '');
+
+  const DEF_LABELS = {
+    rasgado:'Rasgado', folha_estourada:'Folha Estourada', despojo_sujo:'Despojo/Sujo',
+    furado:'Furado', sebo_corte:'Sebo/Corte Incorreto', agua:'Água',
+    pelando:'Pelando', carne_sem_folha:'Carne Sem Folha', orelha_misturada:'Orelha Misturada'
+  };
+  const DEF_COLORS = ['#e74c3c','#e67e22','#f1c40f','#3498db','#9b59b6','#1abc9c','#e91e63','#ff5722','#607d8b'];
+
+  let defRows = Object.entries(DEF_LABELS).map(([k,label],i) => {
+    const v = l[k] || 0;
+    const pct = l.qtd_total > 0 ? (v/l.qtd_total*100).toFixed(2) : 0;
+    const barW = l.total_defeitos > 0 ? Math.round(v/l.total_defeitos*100) : 0;
+    return `<div class="def-row">
+      <span class="def-nome">${label}</span>
+      <div style="display:flex;align-items:center;gap:12px">
+        <div class="def-pct-bar"><div class="def-pct-fill" style="width:${barW}%;background:${DEF_COLORS[i]}"></div></div>
+        <span class="def-val" style="color:${DEF_COLORS[i]};min-width:60px;text-align:right">${v.toLocaleString('pt-BR')}</span>
+        <span style="font-size:11px;color:var(--muted);min-width:42px;text-align:right">${pct}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  const clsBadge = `<span class="badge badge-${l.classificacao}" style="width:32px;height:32px;font-size:14px">${l.classificacao}</span>`;
+
+  document.getElementById('modalLoteBody').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--gold)">${l.qtd_total.toLocaleString('pt-BR')}</div>
+        <div style="font-size:11px;color:var(--muted)">Peças</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
+        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:${l.pct_defeito>12?'var(--red)':l.pct_defeito>5?'var(--yellow)':'var(--green)'}">${l.pct_defeito.toFixed(1)}%</div>
+        <div style="font-size:11px;color:var(--muted)">% Defeito</div>
+      </div>
+      <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">
+        ${clsBadge}
+        <div style="font-size:11px;color:var(--muted)">Classe</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:10px;font-weight:600;text-transform:uppercase;letter-spacing:.05em">Defeitos por Tipo</div>
+    ${defRows}
+    ${l.produto_nome ? `<div style="margin-top:16px;padding:10px;background:var(--bg3);border-radius:8px;font-size:12px;color:var(--muted)">Produto: <span style="color:var(--text)">${l.produto_cod} — ${l.produto_nome}</span></div>` : ''}
+  `;
+
+  document.getElementById('modalLote').classList.add('show');
+}
+
+function fecharModal() {
+  document.getElementById('modalLote').classList.remove('show');
+}
+document.getElementById('modalLote').addEventListener('click', e => {
+  if(e.target === document.getElementById('modalLote')) fecharModal();
+});
+
+// ══════════════════════════════════════════════════════════
+// IMPORTAR SUPABASE
+// ══════════════════════════════════════════════════════════
+async function importarSupabase() {
+  if(!lotesData.length) return;
+  const btn = document.getElementById('btnSupabase');
+  btn.disabled = true;
+  btn.textContent = '⏳ Importando...';
+
+  const syncStatus = document.getElementById('syncStatus');
+  syncStatus.innerHTML = '<div class="sync-dot"></div> Conectando...';
+
+  try {
+    // Montar payload para tabela lotes
+    const payload = lotesData.map(l => ({
+      lote_atak:       l.lote,
+      fornecedor_id:   parseInt(l.fornecedor_cod) || null,
+      fornecedor_nome: l.fornecedor_nome,
+      produto_cod:     l.produto_cod || null,
+      produto_nome:    l.produto_nome || null,
+      data_entrada:    l.data_entrada ? converterData(l.data_entrada) : null,
+      qtd_declarada:   l.qtd_total,
+      qtd_recebida:    l.qtd_total,
+      status:          'recebido',
+      classificacao_cq: l.classificacao,
+      liberado_producao: l.classificacao === 'A',
+    }));
+
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/lotes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_KEY,
+        'Authorization': 'Bearer ' + SUPABASE_KEY,
+        'Prefer': 'resolution=merge-duplicates,return=representation',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if(res.ok || res.status === 201 || res.status === 200) {
+      showAlert('success', `✅ ${payload.length} lotes importados para o Supabase com sucesso!`);
+      syncStatus.innerHTML = '<div class="sync-dot"></div> Sincronizado';
+      toast('✅ Importação concluída!');
+    } else {
+      const err = await res.text();
+      // Tentar inserir defeitos separadamente na tabela defeitos_lote
+      showAlert('error', `Erro Supabase (${res.status}): ${err.substring(0,200)}\n\nVerifique se a tabela "lotes" existe no banco.`);
+      syncStatus.innerHTML = '<div class="sync-dot off"></div> Erro';
+    }
+  } catch(e) {
+    showAlert('error', 'Erro de conexão: ' + e.message);
+    syncStatus.innerHTML = '<div class="sync-dot off"></div> Offline';
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '⬆️ Importar para Supabase';
+}
+
+function converterData(str) {
+  // DD/MM/YYYY → YYYY-MM-DD
+  const [d, m, y] = str.split('/');
+  return `${y}-${m}-${d}`;
+}
+
+// ══════════════════════════════════════════════════════════
+// EXPORTAR CSV
+// ══════════════════════════════════════════════════════════
+function exportarCSV() {
+  if(!lotesData.length) return;
+  const cols = ['lote','fornecedor_cod','fornecedor_nome','produto_cod','produto_nome',
+    'data_entrada','qtd_total','total_defeitos','pct_defeito','classificacao',
+    'rasgado','folha_estourada','despojo_sujo','furado','sebo_corte',
+    'agua','pelando','carne_sem_folha','orelha_misturada'];
+  const header = cols.join(';');
+  const rows = lotesData.map(l => cols.map(c => l[c] ?? '').join(';'));
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob(['\uFEFF' + csv], {type:'text/csv;charset=utf-8'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href=url; a.download='lotes_atak.csv'; a.click();
+  URL.revokeObjectURL(url);
+  toast('📥 CSV exportado!');
+}
+
+// ══════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════
+function switchTab(tab) {
+  document.querySelectorAll('.tab').forEach((t,i) => {
+    const tabs = ['lotes','analise','defeitos'];
+    t.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.tab-panel').forEach(p => {
+    p.classList.toggle('active', p.id === 'tab-' + tab);
+  });
+}
+
+function showAlert(type, msg) {
+  const el = document.getElementById('alertBox');
+  el.className = 'alert alert-' + type + ' show';
+  document.getElementById('alertMsg').textContent = msg;
+}
+
+function limparImportacao() {
+  lotesData = [];
+  document.getElementById('resultSection').style.display = 'none';
+  document.getElementById('btnSupabase').disabled = true;
+  resetUpload();
+  showAlert('info', 'Dados limpos. Importe um novo PDF.');
+}
+
+function resetUpload() {
+  const zone = document.getElementById('uploadZone');
+  zone.classList.remove('done','drag');
+  document.getElementById('uploadIcon').textContent = '📋';
+  document.getElementById('uploadLabel').textContent = 'Arraste o PDF ou clique para selecionar';
+  document.getElementById('uploadHint').textContent  = 'WRPRD501 · Relatório de Rastreabilidade do Lote · Gerado pelo Atak';
+  document.getElementById('progressBar').style.display = 'none';
+  document.getElementById('progressText').textContent = '';
+  document.getElementById('fileInput').value = '';
+}
+
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800);
+}
+</script>
+</body>
+</html>

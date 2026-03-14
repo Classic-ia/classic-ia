@@ -864,42 +864,50 @@ async function importarSupabase() {
   syncStatus.innerHTML = '<div class="sync-dot"></div> Conectando...';
 
   try {
-    // Montar payload para tabela lotes
+    // Salvar em cq_recebimentos (tabela correta do sistema CQ)
     const payload = lotesData.map(l => ({
+      id_recebimento:  'ATAK-' + l.lote,
+      fornecedor:      l.fornecedor_nome,
+      fornecedor_cod:  l.fornecedor_cod || null,
+      produto:         l.produto_nome || 'Omaso Bovino',
       lote_atak:       l.lote,
-      fornecedor_id:   parseInt(l.fornecedor_cod) || null,
-      fornecedor_nome: l.fornecedor_nome,
-      produto_cod:     l.produto_cod || null,
-      produto_nome:    l.produto_nome || null,
-      data_entrada:    l.data_entrada ? converterData(l.data_entrada) : null,
-      qtd_declarada:   l.qtd_total,
-      qtd_recebida:    l.qtd_total,
-      status:          'recebido',
-      classificacao_cq: l.classificacao,
-      liberado_producao: l.classificacao === 'A',
+      etiqueta:        l.lote,
+      quantidade_lote: parseInt(l.qtd_total) || 0,
+      status:          'importado_atak',
+      observacoes:     'WRPRD501 · Classe ' + l.classificacao + ' · ' + l.pct_defeito + '% defeito',
     }));
 
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/lotes`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_KEY,
-        'Authorization': 'Bearer ' + SUPABASE_KEY,
-        'Prefer': 'resolution=merge-duplicates,return=representation',
-      },
-      body: JSON.stringify(payload)
-    });
-
-    if(res.ok || res.status === 201 || res.status === 200) {
-      showAlert('success', `✅ ${payload.length} lotes importados para o Supabase com sucesso!`);
-      syncStatus.innerHTML = '<div class="sync-dot"></div> Sincronizado';
-      toast('✅ Importação concluída!');
-    } else {
-      const err = await res.text();
-      // Tentar inserir defeitos separadamente na tabela defeitos_lote
-      showAlert('error', `Erro Supabase (${res.status}): ${err.substring(0,200)}\n\nVerifique se a tabela "lotes" existe no banco.`);
-      syncStatus.innerHTML = '<div class="sync-dot off"></div> Erro';
+    // Importar em batches de 50
+    const BATCH = 50;
+    let importados = 0;
+    for (let i = 0; i < payload.length; i += BATCH) {
+      const batch = payload.slice(i, i + BATCH);
+      const res = await fetch(SUPABASE_URL + '/rest/v1/cq_recebimentos', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': SUPABASE_KEY,
+          'Authorization': 'Bearer ' + SUPABASE_KEY,
+          'Prefer': 'resolution=ignore-duplicates,return=minimal',
+        },
+        body: JSON.stringify(batch)
+      });
+      if (res.ok) {
+        importados += batch.length;
+      } else {
+        const errTxt = await res.text();
+        showAlert('error', 'Erro Supabase: ' + errTxt.substring(0, 200) + '\n\nExecute o arquivo 01_SQL_complementar.sql no Supabase primeiro.');
+        syncStatus.innerHTML = '<div class="sync-dot off"></div> Erro';
+        btn.disabled = false;
+        btn.innerHTML = '⬆️ Importar para Supabase';
+        return;
+      }
     }
+
+    showAlert('success', '✅ ' + importados + ' lotes importados com sucesso!');
+    syncStatus.innerHTML = '<div class="sync-dot"></div> Sincronizado';
+    toast('✅ Importação concluída!');
+
   } catch(e) {
     showAlert('error', 'Erro de conexão: ' + e.message);
     syncStatus.innerHTML = '<div class="sync-dot off"></div> Offline';
@@ -908,6 +916,7 @@ async function importarSupabase() {
   btn.disabled = false;
   btn.innerHTML = '⬆️ Importar para Supabase';
 }
+
 
 function converterData(str) {
   // DD/MM/YYYY → YYYY-MM-DD

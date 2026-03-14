@@ -1,0 +1,269 @@
+=================================================================
+SOURCEIQ — ROOT CONFIGURATION FILES
+These are the exact files to create at the monorepo root.
+=================================================================
+
+─── turbo.json ──────────────────────────────────────────────────
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalDependencies": ["**/.env.*local"],
+  "pipeline": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": [".next/**", "!.next/cache/**", "dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"],
+      "outputs": []
+    },
+    "lint": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^build"],
+      "outputs": ["coverage/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    }
+  }
+}
+
+─── pnpm-workspace.yaml ─────────────────────────────────────────
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+─── package.json (root) ─────────────────────────────────────────
+{
+  "name": "sourceiq",
+  "private": true,
+  "scripts": {
+    "dev":        "turbo run dev",
+    "build":      "turbo run build",
+    "test":       "turbo run test && cd packages/etl && pytest",
+    "lint":       "turbo run lint && cd packages/etl && ruff check .",
+    "typecheck":  "turbo run typecheck",
+    "db:push":    "supabase db push",
+    "db:types":   "supabase gen types typescript --project-id $SUPABASE_PROJECT_ID > packages/shared/src/types/database.types.ts",
+    "db:seed":    "supabase db reset --debug",
+    "db:studio":  "supabase studio"
+  },
+  "devDependencies": {
+    "turbo": "^1.12.0"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=8.0.0"
+  }
+}
+
+─── .env.example ────────────────────────────────────────────────
+# ── Supabase (public — safe to expose to browser) ──────────────
+NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
+
+# ── Supabase (secret — server-side only, NEVER expose to browser) ──
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_PROJECT_ID=your-project-id
+
+# ── ETL (isolated env — Python reads these directly) ────────────
+# These mirror the Supabase values above but are explicit for ETL isolation
+SUPABASE_URL=https://your-project.supabase.co
+SUPABASE_SERVICE_KEY=your-service-role-key
+ETL_BATCH_SIZE=100
+ETL_MAX_RETRIES=3
+ETL_LOG_LEVEL=INFO
+
+# ── Next.js Auth ─────────────────────────────────────────────────
+# Generate: openssl rand -hex 32
+NEXTAUTH_SECRET=generate-a-32-char-random-string
+NEXTAUTH_URL=http://localhost:3000
+
+# ── ETL subprocess (API-triggered ETL) ───────────────────────────
+ETL_SCRIPT_PATH=/app/packages/etl/run_etl.py
+ETL_PYTHON_BIN=python3
+
+# ── Monitoring (optional) ─────────────────────────────────────────
+SENTRY_DSN=
+LOG_LEVEL=info
+
+─── apps/web/src/lib/supabase/server.ts ─────────────────────────
+import { createClient } from '@supabase/supabase-js'
+import type { Database } from '@sourceiq/shared/types/database.types'
+
+// Service role client — bypasses RLS.
+// ONLY used in server-side code (API routes, Server Components).
+// NEVER import this in Client Components.
+export function createServerClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) throw new Error(
+    'Missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY'
+  )
+  return createClient<Database>(url, key, {
+    auth: { autoRefreshToken: false, persistSession: false }
+  })
+}
+
+─── apps/web/src/lib/supabase/client.ts ─────────────────────────
+'use client'
+import { createBrowserClient } from '@supabase/ssr'
+import type { Database } from '@sourceiq/shared/types/database.types'
+
+// Anon key client — subject to RLS.
+// Used ONLY for Auth operations (signIn, signOut, onAuthStateChange).
+// NEVER use this for data queries — use /api/v1/* routes instead.
+export function createBrowserSupabaseClient() {
+  return createBrowserClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+}
+
+─── apps/web/src/middleware.ts ──────────────────────────────────
+import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from './lib/supabase/server'
+
+export async function middleware(request: NextRequest) {
+  // All (app)/* routes require a valid session
+  const { pathname } = request.nextUrl
+  if (pathname.startsWith('/api/v1/health')) return NextResponse.next()
+  if (pathname.startsWith('/login')) return NextResponse.next()
+
+  // Validate session from Authorization header (API routes)
+  // or from cookie (page routes)
+  const token = request.headers.get('authorization')?.replace('Bearer ', '')
+    ?? request.cookies.get('sb-access-token')?.value
+
+  if (!token) {
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.json({ success: false, error: { code: 'UNAUTHORIZED' } }, { status: 401 })
+    }
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+}
+
+─── packages/etl/pyproject.toml ─────────────────────────────────
+[tool.ruff]
+line-length = 100
+select = ["E", "F", "I", "N", "W", "B", "UP"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["sourceiq_etl"]
+omit = ["tests/*", "run_etl.py"]
+
+─── packages/etl/requirements.txt ──────────────────────────────
+pandas>=2.0.0
+pdfplumber>=0.10.0
+requests>=2.31.0
+python-dotenv>=1.0.0
+openpyxl>=3.1.0
+
+─── packages/etl/requirements-dev.txt ──────────────────────────
+pytest>=7.4.0
+pytest-cov>=4.1.0
+ruff>=0.1.0
+
+─── packages/etl/Dockerfile ─────────────────────────────────────
+FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+ENTRYPOINT ["python", "run_etl.py"]
+# Usage: docker run sourceiq-etl --file /data/file.xlsx --entity_type receipt_load_closure
+
+=================================================================
+GITHUB ACTIONS — .github/workflows/ci.yml
+=================================================================
+name: CI
+
+on:
+  pull_request:
+    branches: [main, develop]
+  push:
+    branches: [main, develop]
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 8 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm db:types
+        env:
+          SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+      - run: pnpm typecheck
+
+  test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 8 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+  test-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r packages/etl/requirements.txt -r packages/etl/requirements-dev.txt
+      - run: cd packages/etl && pytest --cov=sourceiq_etl --cov-report=term
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v3
+        with: { version: 8 }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: pnpm }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pnpm install --frozen-lockfile
+      - run: pip install ruff
+      - run: pnpm lint
+      - run: cd packages/etl && ruff check .
+
+  migrate-preview:
+    needs: [typecheck, test-ts, test-python, lint]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - run: supabase db push --project-ref $SUPABASE_PREVIEW_PROJECT_ID
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PREVIEW_PROJECT_ID: ${{ secrets.SUPABASE_PREVIEW_PROJECT_ID }}

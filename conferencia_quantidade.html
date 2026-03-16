@@ -138,17 +138,18 @@
   </div>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
 <script>
 let loteSelecionadoId = null;
 let debounceTimer;
 
 (async () => {
-  const perfil = await authGuard(['logistica','administrador','industrial']);
-  if (!perfil) return;
-  document.getElementById('huser').textContent = perfil.nome;
-  document.getElementById('conferente').value = perfil.nome;
+  const usuario = await CQAuth.init({ perfisPermitidos: ['logistica','administrador','industrial'] });
+  if (!usuario) return;
+  document.getElementById('huser').textContent = usuario.nome;
+  document.getElementById('conferente').value = usuario.nome;
   await buscarLotes();
 })();
 
@@ -162,18 +163,16 @@ async function _buscarLotes() {
   const lote = document.getElementById('buscaLote').value.trim();
   const status = document.getElementById('filtroStatus').value;
 
-  let query = sb.from('registros_cq').select('id,fornecedor,lote_atak,numero_requisicao,data_entrada,classificacao,percentual_defeito,qtd_declarada,qtd_recebida').order('data_entrada',{ascending:false}).limit(30);
+  let endpoint = 'registros_cq?select=id,fornecedor,lote_atak,numero_requisicao,data_entrada,classificacao,percentual_defeito,qtd_declarada,qtd_recebida&order=data_entrada.desc&limit=30';
+  if (forn) endpoint += '&fornecedor=ilike.*' + encodeURIComponent(forn) + '*';
+  if (lote) endpoint += '&or=(lote_atak.ilike.*' + encodeURIComponent(lote) + '*,numero_requisicao.ilike.*' + encodeURIComponent(lote) + '*)';
+  if (status === 'pendente') endpoint += '&qtd_recebida=is.null';
+  if (status === 'conferido') endpoint += '&qtd_recebida=not.is.null';
 
-  if (forn) query = query.ilike('fornecedor','%'+forn+'%');
-  if (lote) query = query.or(`lote_atak.ilike.%${lote}%,numero_requisicao.ilike.%${lote}%`);
-  if (status === 'pendente') query = query.is('qtd_recebida',null);
-  if (status === 'conferido') query = query.not('qtd_recebida','is',null);
-
-  const { data, error } = await query;
+  const data = await CQ_API.get(endpoint);
   const container = document.getElementById('listaLotes');
 
-  if (error) { container.innerHTML = '<div class="loading">Erro ao buscar.</div>'; return; }
-  if (!data?.length) { container.innerHTML = '<div class="loading">Nenhum lote encontrado.</div>'; return; }
+  if (!data || !data.length) { container.innerHTML = '<div class="loading">Nenhum lote encontrado.</div>'; return; }
 
   container.innerHTML = data.map(r => `
     <div class="lote-card" onclick="selecionarLote('${r.id}','${r.fornecedor||''}','${r.lote_atak||''}','${r.numero_requisicao||''}','${r.classificacao||''}',${r.percentual_defeito||0},${r.qtd_declarada||0},'${r.data_entrada||''}')">
@@ -239,15 +238,20 @@ async function salvarConferencia() {
   btn.innerHTML = '<span class="spinner"></span>Salvando...';
 
   const qtdNF = parseInt(document.getElementById('qtdNF').value)||0;
-  const { error } = await sb.from('registros_cq').update({
-    qtd_recebida: qtdFis,
-    divergencia_quantidade: qtdFis - qtdNF,
-    conferente: document.getElementById('conferente').value,
-    data_conferencia: new Date().toISOString()
-  }).eq('id', loteSelecionadoId);
+  const res = await CQ_API.fetch('registros_cq?id=eq.' + loteSelecionadoId, {
+    method: 'PATCH',
+    body: {
+      qtd_recebida: qtdFis,
+      divergencia_quantidade: qtdFis - qtdNF,
+      conferente: document.getElementById('conferente').value,
+      data_conferencia: new Date().toISOString()
+    }
+  });
 
-  if (error) { showMsg(msg,'Erro: '+error.message,'error'); }
-  else {
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showMsg(msg,'Erro: '+(err.message||res.statusText),'error');
+  } else {
     showMsg(msg,'✓ Conferência registrada!','success');
     setTimeout(()=>{ limparSelecao(); buscarLotes(); },1500);
   }

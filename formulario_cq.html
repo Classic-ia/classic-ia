@@ -227,17 +227,19 @@
   <div class="msg" id="msg"></div>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
 <script>
 // Data padrão hoje
 document.getElementById('dataEntrada').value = new Date().toISOString().split('T')[0];
 
+let _usuario = null;
 (async () => {
-  const perfil = await authGuard(['qualidade','administrador']);
-  if (!perfil) return;
-  document.getElementById('huser').textContent = perfil.nome + ' · ' + perfil.perfil;
-  document.getElementById('analisador').value = perfil.nome;
+  _usuario = await CQAuth.init({ perfisPermitidos: ['qualidade','administrador'] });
+  if (!_usuario) return;
+  document.getElementById('huser').textContent = _usuario.nome + ' · ' + _usuario.perfil;
+  document.getElementById('analisador').value = _usuario.nome;
 })();
 
 function toggleParcialFn() {
@@ -331,7 +333,6 @@ async function salvar() {
 
   const liberado = document.getElementById('toggleLiberado').checked;
   const parcial = document.getElementById('toggleParcial').checked;
-  const { data: { session } } = await sb.auth.getSession();
 
   const payload = {
     lote_atak: document.getElementById('loteAtak').value.trim()||null,
@@ -353,18 +354,18 @@ async function salvar() {
     liberado_producao: liberado,
     lote_base: liberado ? document.getElementById('loteBase').value : null,
     analisador: document.getElementById('analisador').value,
-    usuario_id: session?.user?.id||null,
+    usuario_email: _usuario?.email||null,
     observacoes: document.getElementById('observacoes').value.trim()||null,
     parcial: parcial,
     sequencia_parcial: parcial ? (parseInt(document.getElementById('seqParcial').value)||1) : 1,
   };
 
-  const { error } = await sb.from('registros_cq').insert(payload);
-  if (error) {
-    showMsg('Erro ao salvar: ' + error.message, 'error');
+  const res = await CQ_API.post('registros_cq', payload, 'return=minimal');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showMsg('Erro ao salvar: ' + (err.message || res.statusText), 'error');
   } else {
     showMsg(`✓ Registro salvo! Classificação ${classe}.`, 'success');
-    // Limpa formulário (mantém fornecedor e data)
     ['loteAtak','nRequisicao','qtdNF','qtdTotalLote','qtdAmostra',
      'def1','def2','def3','def1tipo','def2tipo','def3tipo','observacoes'].forEach(id => {
       const el = document.getElementById(id);

@@ -179,16 +179,17 @@
   </div>
 </main>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
 <script>
 let loteAtual = null;
 let debounceTimer;
 
 (async () => {
-  const perfil = await authGuard(['financeiro','administrador']);
-  if (!perfil) return;
-  document.getElementById('huser').textContent = perfil.nome;
+  const usuario = await CQAuth.init({ perfisPermitidos: ['financeiro','administrador'] });
+  if (!usuario) return;
+  document.getElementById('huser').textContent = usuario.nome;
   await buscarLotes();
 })();
 
@@ -201,16 +202,13 @@ async function _buscarLotes() {
   const forn = document.getElementById('buscaForn').value.trim();
   const lote = document.getElementById('buscaLote').value.trim();
 
-  let query = sb.from('registros_cq')
-    .select('id,fornecedor,lote_atak,numero_requisicao,data_entrada,classificacao,percentual_defeito,qtd_declarada,qtd_recebida,divergencia_quantidade')
-    .order('data_entrada',{ascending:false}).limit(20);
+  let endpoint = 'registros_cq?select=id,fornecedor,lote_atak,numero_requisicao,data_entrada,classificacao,percentual_defeito,qtd_declarada,qtd_recebida,divergencia_quantidade&order=data_entrada.desc&limit=20';
+  if (forn) endpoint += '&fornecedor=ilike.*' + encodeURIComponent(forn) + '*';
+  if (lote) endpoint += '&or=(lote_atak.ilike.*' + encodeURIComponent(lote) + '*,numero_requisicao.ilike.*' + encodeURIComponent(lote) + '*)';
 
-  if (forn) query = query.ilike('fornecedor','%'+forn+'%');
-  if (lote) query = query.or(`lote_atak.ilike.%${lote}%,numero_requisicao.ilike.%${lote}%`);
-
-  const { data } = await query;
+  const data = await CQ_API.get(endpoint);
   const container = document.getElementById('listaLotes');
-  if (!data?.length) { container.innerHTML='<div class="loading">Nenhum lote encontrado.</div>'; return; }
+  if (!data || !data.length) { container.innerHTML='<div class="loading">Nenhum lote encontrado.</div>'; return; }
   container.innerHTML = data.map(r=>`
     <div class="lote-card" onclick='selecionarLote(${JSON.stringify(r)})'>
       <div class="lote-nome">${r.fornecedor||'—'} · Lote ${r.lote_atak||r.id.slice(0,8)}</div>
@@ -272,16 +270,23 @@ function calcular() {
 
 async function aprovar() {
   if (!loteAtual) return;
-  const { error } = await sb.from('registros_cq').update({
-    desconto_aplicado: parseFloat(document.getElementById('sliderDesc').value),
-    preco_unitario: parseFloat(document.getElementById('precoUnit').value)||null,
-    aprovado_financeiro: true,
-    data_aprovacao: new Date().toISOString()
-  }).eq('id', loteAtual.id);
+  const res = await CQ_API.fetch('registros_cq?id=eq.' + loteAtual.id, {
+    method: 'PATCH',
+    body: {
+      desconto_aplicado: parseFloat(document.getElementById('sliderDesc').value),
+      preco_unitario: parseFloat(document.getElementById('precoUnit').value)||null,
+      aprovado_financeiro: true,
+      data_aprovacao: new Date().toISOString()
+    }
+  });
 
   const msg = document.getElementById('msgCalc');
-  if (error) showMsg(msg,'Erro: '+error.message,'error');
-  else showMsg(msg,'✓ Aprovação registrada no sistema!','success');
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    showMsg(msg,'Erro: '+(err.message||res.statusText),'error');
+  } else {
+    showMsg(msg,'✓ Aprovação registrada no sistema!','success');
+  }
 }
 
 function showMsg(el,txt,tipo){el.textContent=txt;el.className='msg '+tipo;}

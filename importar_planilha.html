@@ -271,10 +271,11 @@
   </div>
 </main>
 
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
 <script>
 let dadosParaImportar = [];
-let SB_URL, SB_KEY;
 let arquivoAtual = null;    // { name, size, hash }
 let importacaoId = null;    // UUID do lote em cq_importacoes
 let usuarioAtual = null;    // dados do usuario logado
@@ -287,8 +288,6 @@ let usuarioAtual = null;    // dados do usuario logado
   });
   if (!usuario) return;
 
-  SB_URL = CQAuth.getSbUrl();
-  SB_KEY = CQAuth.getSbKey();
   usuarioAtual = usuario;
 
   document.getElementById('headerUser').innerHTML =
@@ -365,19 +364,10 @@ async function registrarErroImportacao(importacaoId, linha, tipo, severidade, me
   } catch(e) { console.error('Erro ao registrar erro:', e); }
 }
 
-async function apiFetch(endpoint, options = {}) {
-  const jwt = CQAuth.getAuthToken() || SB_KEY;
-  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
-    ...options,
-    headers: {
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + jwt,
-      'Content-Type': 'application/json',
-      'Prefer': 'return=minimal',
-      ...(options.headers || {})
-    }
-  });
-  return r;
+// apiFetch provided by cq_api.js (with Prefer: return=minimal for imports)
+function apiFetch(endpoint, options = {}) {
+  options.headers = { 'Prefer': 'return=minimal', ...(options.headers || {}) };
+  return CQ_API.fetch(endpoint, options);
 }
 
 // Drag & Drop

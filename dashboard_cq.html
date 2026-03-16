@@ -628,14 +628,13 @@ const chartDefaults = {
 // === LOAD ===
 async function carregar() {
   document.getElementById('pageSub').innerHTML = '<span>Carregando…</span>';
-  // Buscar de ambas as tabelas (nova e legada)
   let todosTemp = [];
   try {
-    // Tabela nova (registros_cq_inspecao)
+    // 1. Tabela de inspeções (registros_cq_inspecao)
     const d1 = await CQ_API.get('registros_cq_inspecao?order=data_inspecao.desc&limit=1000');
-    // Normalizar campos para compatibilidade
     todosTemp = (d1 || []).map(r => ({
       ...r,
+      _fonte: 'inspecao',
       created_at:       r.criado_em,
       data_entrada:     r.data_inspecao,
       qtd_amostra:      r.quantidade_analisada      || r.qtd_amostra,
@@ -643,27 +642,66 @@ async function carregar() {
       percentual_defeito: r.percentual_defeitos     ?? r.percentual_defeito,
       numero_requisicao: r.lote_atak                || r.numero_requisicao,
       liberado_producao: r.status_final === 'aprovado' || r.liberado_producao,
-      // Normalizar classificacao: garantir sempre A, B ou C
-      classificacao: (function(pct, cls) {
-        if (cls === 'A' || cls === 'B' || cls === 'C') return cls;
-        const p = parseFloat(pct) || 0;
-        return p <= 5 ? 'A' : p <= 15 ? 'B' : 'C';
-      })(r.percentual_defeitos ?? r.percentual_defeito, r.classificacao),
+      classificacao: normalizarClasse(r.percentual_defeitos ?? r.percentual_defeito, r.classificacao),
     }));
 
-    // Volume real: tabela de recebimentos
+    // 2. Tabela legada (registros_cq)
+    try {
+      const d2 = await CQ_API.get('registros_cq?order=created_at.desc&limit=500');
+      todosTemp = [...todosTemp, ...(d2 || []).map(r => ({ ...r, _fonte: 'legado' }))];
+    } catch(e) { console.warn('registros_cq:', e); }
+
+    // 3. Cargas importadas (cq_cargas) — planilha de motoristas
+    try {
+      const d3 = await CQ_API.get('cq_cargas?order=data_coleta.desc&limit=2000');
+      const cargas = (d3 || []).map(r => ({
+        ...r,
+        _fonte: 'carga',
+        fornecedor:         r.frigorifico,
+        data_entrada:       r.data_coleta,
+        qtd_amostra:        r.qtd_frigo || 0,
+        qtd_total_lote:     r.qtd_frigo || 0,
+        total_defeitos:     r.total_problemas || 0,
+        percentual_defeito: r.porcentagem ?? 0,
+        numero_requisicao:  r.numero_pcr || null,
+        classificacao:      normalizarClasse(r.porcentagem, r.classificacao),
+        // Mapear defeitos individuais para campos padrão
+        defeito_1_tipo: maiorDefeito(r, 1)?.[0] || null,
+        defeito_1_qtd:  maiorDefeito(r, 1)?.[1] || 0,
+        defeito_2_tipo: maiorDefeito(r, 2)?.[0] || null,
+        defeito_2_qtd:  maiorDefeito(r, 2)?.[1] || 0,
+        defeito_3_tipo: maiorDefeito(r, 3)?.[0] || null,
+        defeito_3_qtd:  maiorDefeito(r, 3)?.[1] || 0,
+      }));
+      todosTemp = [...todosTemp, ...cargas];
+    } catch(e) { console.warn('cq_cargas:', e); }
+
+    // 4. Recebimentos PCR (cq_recebimentos) — para volume
     try {
       window._recebimentos = await CQ_API.get('cq_recebimentos?order=criado_em.desc&limit=2000');
     } catch(e) { window._recebimentos = []; }
 
-    // Tabela legada (registros_cq) — complementar
-    const d2 = await CQ_API.get('registros_cq?order=created_at.desc&limit=500');
-    todosTemp = [...todosTemp, ...(d2 || [])];
   } catch(e) { console.warn('Erro ao buscar dados:', e); }
   todosRegistros = todosTemp;
   popularFiltrosForn();
   popularFiltrosAnalista();
   aplicarFiltro();
+}
+
+function normalizarClasse(pct, cls) {
+  if (cls === 'A' || cls === 'B' || cls === 'C') return cls;
+  const p = parseFloat(pct) || 0;
+  return p <= 5 ? 'A' : p <= 12 ? 'B' : 'C';
+}
+
+function maiorDefeito(r, pos) {
+  const defeitos = [
+    ['Rasgados', r.rasgados||0], ['Furados', r.furados||0],
+    ['Pelando', r.pelando||0], ['Sem folha', r.sem_folha||0],
+    ['Sujos', r.sujos||0], ['Pedacos', r.pedacos||0],
+    ['Corte irregular', r.corte_irregular||0], ['Folha extra', r.folha_extra||0]
+  ].filter(d => d[1] > 0).sort((a,b) => b[1] - a[1]);
+  return defeitos[pos-1] || null;
 }
 
 function popularFiltrosForn() {

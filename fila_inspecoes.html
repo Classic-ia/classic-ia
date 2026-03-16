@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e0e0e">
+<title>Fila de Inspeções — Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0e0e0e;
+  --bg2:      #141414;
+  --bg3:      #1a1a1a;
+  --bg4:      #222;
+  --border:   #2a2a2a;
+  --border2:  #333;
+  --accent:   #c8a96e;
+  --accent2:  #e2c98a;
+  --accent3:  rgba(200,169,110,.1);
+  --text:     #e8e3da;
+  --muted:    #7a7468;
+  --muted2:   #4a4540;
+  --radius:   14px;
+  --radius-sm:10px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size: 16px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ──────────────────────────── */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  padding: 0 16px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { height: 34px; width: auto; border-radius: 6px; }
+.header-info { flex: 1; }
+.header-title { font-size: 13px; font-weight: 700; color: var(--accent); font-family: 'Syne', sans-serif; }
+.header-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.back-link {
+  font-size: 10px; color: var(--muted); text-decoration: none;
+  border: 1px solid var(--border2); border-radius: 6px;
+  padding: 5px 10px; transition: all .15s;
+}
+.back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── PAGE ──────────────────────────── */
+.page { max-width: 900px; margin: 0 auto; padding: 16px 12px; }
+
+/* ── COUNTERS ──────────────────────── */
+.counters {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 4px 0 12px; scrollbar-width: none;
+}
+.counters::-webkit-scrollbar { display: none; }
+.counter-card {
+  flex-shrink: 0; min-width: 100px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  cursor: pointer; transition: all .2s; text-align: center;
+}
+.counter-card:hover, .counter-card.active {
+  border-color: var(--accent); background: var(--accent3);
+}
+.counter-num { font-size: 22px; font-weight: 800; font-family: 'Syne', sans-serif; }
+.counter-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .03em; }
+
+/* ── FILTROS ──────────────────────── */
+.filtros {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 8px 0 16px;
+}
+.filtro-input {
+  flex: 1; min-width: 140px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  color: var(--text); font-size: 13px; outline: none;
+  transition: border-color .2s;
+}
+.filtro-input:focus { border-color: var(--accent); }
+.filtro-input::placeholder { color: var(--muted2); }
+
+/* ── TABELA / LISTA ──────────────── */
+.lista-vazia {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.lista-vazia-icon { font-size: 48px; margin-bottom: 12px; }
+.lista-vazia-msg { font-size: 14px; }
+
+.insp-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  margin-bottom: 8px; cursor: pointer; transition: all .2s;
+}
+.insp-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.insp-card.reprovada { border-left: 3px solid #e74c3c; }
+.insp-card.aguardando { border-left: 3px solid #f39c12; }
+
+.insp-top {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+}
+.insp-id {
+  font-size: 11px; font-family: monospace; color: var(--muted);
+  background: var(--bg3); padding: 2px 8px; border-radius: 4px;
+}
+.insp-data { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+.insp-mid {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 8px;
+}
+.insp-field { font-size: 12px; }
+.insp-field-label { color: var(--muted); }
+.insp-field-value { color: var(--text); font-weight: 600; }
+
+.insp-bottom {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.insp-defeito {
+  font-size: 12px; font-weight: 700; padding: 2px 8px;
+  border-radius: 4px; font-family: monospace;
+}
+.insp-nc-badge {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  background: rgba(231,76,60,.12); color: #e74c3c;
+  border: 1px solid rgba(231,76,60,.3);
+}
+.insp-inspetor { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+/* ── PAGINAÇÃO ───────────────────── */
+.paginacao {
+  display: flex; justify-content: center; gap: 8px;
+  padding: 20px 0;
+}
+.pag-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 14px;
+  color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: all .2s;
+}
+.pag-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pag-btn:disabled { opacity: .4; cursor: default; }
+.pag-btn.active { background: var(--accent3); border-color: var(--accent); color: var(--accent); }
+.pag-info { font-size: 11px; color: var(--muted); align-self: center; }
+
+/* ── LOADING ─────────────────────── */
+.loading {
+  text-align: center; padding: 40px;
+}
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── TOAST ────────────────────────── */
+.toast-container {
+  position: fixed; top: 70px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+  font-size: 13px; min-width: 240px; max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  animation: slideIn .3s ease;
+}
+.toast.err { border-color: #e74c3c; color: #e74c3c; }
+.toast.ok  { border-color: #27ae60; color: #27ae60; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+
+/* ── RESPONSIVE ──────────────────── */
+@media (max-width: 600px) {
+  .page { padding: 12px 8px; }
+  .counter-card { min-width: 80px; padding: 8px 10px; }
+  .counter-num { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="app.html" class="back-link">← Menu</a>
+  <div class="header-info">
+    <div class="header-title">Fila de Inspeções</div>
+    <div class="header-sub">Controle de Qualidade — Classic Couros</div>
+  </div>
+  <div id="cq-user-chip"></div>
+</div>
+
+<div class="page">
+
+  <!-- CONTADORES -->
+  <div class="counters" id="contadores"></div>
+
+  <!-- FILTROS -->
+  <div class="filtros">
+    <select class="filtro-input" id="filtro-status" style="min-width:160px;">
+      <option value="">Todos os status</option>
+      <option value="rascunho">Rascunho</option>
+      <option value="em_analise">Em Análise</option>
+      <option value="aguardando_revisao">Aguardando Revisão</option>
+      <option value="revisada">Revisada</option>
+      <option value="reprovada">Reprovada</option>
+      <option value="aprovada">Aprovada</option>
+      <option value="encerrada">Encerrada</option>
+      <option value="cancelada">Cancelada</option>
+    </select>
+    <input type="text" class="filtro-input" id="filtro-fornecedor" placeholder="Fornecedor...">
+    <input type="text" class="filtro-input" id="filtro-produto" placeholder="Produto...">
+    <input type="date" class="filtro-input" id="filtro-data-inicio" style="min-width:130px;">
+    <input type="date" class="filtro-input" id="filtro-data-fim" style="min-width:130px;">
+    <button class="filtro-input" id="btn-filtrar" style="
+      min-width:auto;flex:0;cursor:pointer;
+      background:var(--accent3);border-color:var(--accent);
+      color:var(--accent);font-weight:600;
+    ">Filtrar</button>
+    <button class="filtro-input" id="btn-limpar" style="
+      min-width:auto;flex:0;cursor:pointer;
+      color:var(--muted);font-weight:500;
+    ">Limpar</button>
+  </div>
+
+  <!-- AÇÃO RÁPIDA -->
+  <div style="display:flex;justify-content:flex-end;margin-bottom:12px;">
+    <a href="inspecao_qualidade.html" id="btn-nova" style="
+      display:none;padding:8px 18px;border-radius:var(--radius-sm);
+      background:var(--accent);color:#0e0e0e;font-size:13px;font-weight:700;
+      text-decoration:none;transition:all .2s;
+    ">+ Nova Inspeção</a>
+  </div>
+
+  <!-- LISTA -->
+  <div id="lista-container">
+    <div class="loading">
+      <div class="spinner"></div>
+      <div style="font-size:12px;color:var(--muted);">Carregando inspeções...</div>
+    </div>
+  </div>
+
+  <!-- PAGINAÇÃO -->
+  <div class="paginacao" id="paginacao"></div>
+
+</div>
+
+<div class="toast-container" id="toasts"></div>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+// FILA DE INSPEÇÕES — Classic CQ
+// ══════════════════════════════════════════════════════════
+
+let paginaAtual = 1;
+const POR_PAGINA = 20;
+let filtroStatusAtivo = '';
+
+// ── INIT ──────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+  });
+  if (!user) return;
+
+  CQWorkflow.injetarCSS();
+
+  // Botão "Nova Inspeção" só para quem pode criar
+  if (['administrador','qualidade'].includes(user.perfil)) {
+    document.getElementById('btn-nova').style.display = 'inline-block';
+  }
+
+  // Eventos
+  document.getElementById('btn-filtrar').onclick = () => { paginaAtual = 1; carregarLista(); };
+  document.getElementById('btn-limpar').onclick = limparFiltros;
+  document.getElementById('filtro-status').onchange = () => { paginaAtual = 1; carregarLista(); };
+
+  // Carregar
+  await carregarContadores();
+  await carregarLista();
+});
+
+// ── CONTADORES ────────────────────────────────────────────
+async function carregarContadores() {
+  const container = document.getElementById('contadores');
+  const statusList = [
+    { key: '',                     label: 'Todas',     cor: 'var(--accent)' },
+    { key: 'rascunho',             label: 'Rascunho',  cor: '#5d7f95' },
+    { key: 'em_analise',           label: 'Análise',   cor: '#3498db' },
+    { key: 'aguardando_revisao',   label: 'Revisão',   cor: '#f39c12' },
+    { key: 'revisada',             label: 'Revisada',  cor: '#8e44ad' },
+    { key: 'reprovada',            label: 'Reprovada', cor: '#e74c3c' },
+    { key: 'aprovada',             label: 'Aprovada',  cor: '#27ae60' },
+    { key: 'encerrada',            label: 'Encerrada', cor: '#2c3e50' },
+  ];
+
+  try {
+    // Buscar contagem por status da view
+    const SB_URL = CQAuth.getSbUrl();
+    const SB_KEY = CQAuth.getSbKey();
+    const JWT = CQAuth.getAuthToken() || SB_KEY;
+
+    const r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': `Bearer ${JWT}`,
+      },
+    });
+
+    let contagens = {};
+    let total = 0;
+    if (r.ok) {
+      const rows = await r.json();
+      total = rows.length;
+      for (const row of rows) {
+        const s = row.status_workflow || 'rascunho';
+        contagens[s] = (contagens[s] || 0) + 1;
+      }
+    }
+
+    container.innerHTML = statusList.map(s => {
+      const count = s.key === '' ? total : (contagens[s.key] || 0);
+      const active = filtroStatusAtivo === s.key ? 'active' : '';
+      return `<div class="counter-card ${active}" data-status="${s.key}" onclick="filtrarPorStatus('${s.key}')">
+        <div class="counter-num" style="color:${s.cor}">${count}</div>
+        <div class="counter-label">${s.label}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div style="color:var(--muted);font-size:12px;">Erro ao carregar contadores</div>';
+  }
+}
+
+function filtrarPorStatus(status) {
+  filtroStatusAtivo = status;
+  document.getElementById('filtro-status').value = status;
+  paginaAtual = 1;
+  carregarContadores();
+  carregarLista();
+}
+
+// ── CARREGAR LISTA ────────────────────────────────────────
+async function carregarLista() {
+  const container = document.getElementById('lista-container');
+  container.innerHTML = '<div class="loading"><div class="spinner"></div><div style="font-size:12px;color:var(--muted);">Carregando...</div></div>';
+
+  const filtros = {
+    status:     document.getElementById('filtro-status').value || undefined,
+    fornecedor: document.getElementById('filtro-fornecedor').value || undefined,
+    produto:    document.getElementById('filtro-produto').value || undefined,
+    dataInicio: document.getElementById('filtro-data-inicio').value || undefined,
+    dataFim:    document.getElementById('filtro-data-fim').value || undefined,
+  };
+
+  try {
+    const { dados } = await CQWorkflow.listarInspecoes(filtros, paginaAtual, POR_PAGINA);
+
+    if (!dados || dados.length === 0) {
+      container.innerHTML = `
+        <div class="lista-vazia">
+          <div class="lista-vazia-icon">📋</div>
+          <div class="lista-vazia-msg">Nenhuma inspeção encontrada</div>
+        </div>`;
+      document.getElementById('paginacao').innerHTML = '';
+      return;
+    }
+
+    container.innerHTML = dados.map(renderCard).join('');
+    renderPaginacao(dados.length);
+  } catch (e) {
+    container.innerHTML = `<div class="lista-vazia">
+      <div class="lista-vazia-icon">⚠️</div>
+      <div class="lista-vazia-msg">Erro ao carregar: ${e.message}</div>
+    </div>`;
+  }
+}
+
+// ── RENDER CARD ───────────────────────────────────────────
+function renderCard(insp) {
+  const statusWf = insp.status_workflow || 'rascunho';
+  const extraClass = statusWf === 'reprovada' ? 'reprovada' : statusWf === 'aguardando_revisao' ? 'aguardando' : '';
+
+  const pctDefeitos = insp.percentual_defeitos != null
+    ? parseFloat(insp.percentual_defeitos).toFixed(1) + '%'
+    : '—';
+
+  const pctCor = insp.percentual_defeitos > 15 ? '#e74c3c'
+    : insp.percentual_defeitos > 5 ? '#f39c12'
+    : '#27ae60';
+
+  const ncCount = insp.total_ncs || 0;
+
+  return `<div class="insp-card ${extraClass}" onclick="abrirInspecao('${insp.id}')">
+    <div class="insp-top">
+      <span class="insp-id">${insp.id_inspecao || insp.id?.slice(0,8) || '—'}</span>
+      ${CQWorkflow.renderStatusBadge(statusWf)}
+      ${insp.status_final ? CQWorkflow.renderStatusFinalBadge(insp.status_final) : ''}
+      <span class="insp-data">${CQWorkflow.formatarData(insp.criado_em)}</span>
+    </div>
+    <div class="insp-mid">
+      <div class="insp-field">
+        <span class="insp-field-label">Fornecedor: </span>
+        <span class="insp-field-value">${insp.fornecedor || '—'}</span>
+      </div>
+      <div class="insp-field">
+        <span class="insp-field-label">Produto: </span>
+        <span class="insp-field-value">${insp.produto || '—'}</span>
+      </div>
+      <div class="insp-field">
+        <span class="insp-field-label">Lote: </span>
+        <span class="insp-field-value">${insp.lote_atak || '—'}</span>
+      </div>
+    </div>
+    <div class="insp-bottom">
+      <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
+        ${pctDefeitos} defeitos
+      </span>
+      ${ncCount > 0 ? `<span class="insp-nc-badge">NC: ${ncCount}</span>` : ''}
+      <span class="insp-inspetor">${insp.usuario_nome || '—'}</span>
+    </div>
+  </div>`;
+}
+
+// ── PAGINAÇÃO ─────────────────────────────────────────────
+function renderPaginacao(totalItems) {
+  const container = document.getElementById('paginacao');
+  if (totalItems < POR_PAGINA && paginaAtual === 1) {
+    container.innerHTML = '';
+    return;
+  }
+
+  container.innerHTML = `
+    <button class="pag-btn" onclick="mudarPagina(-1)" ${paginaAtual <= 1 ? 'disabled' : ''}>← Anterior</button>
+    <span class="pag-info">Página ${paginaAtual}</span>
+    <button class="pag-btn" onclick="mudarPagina(1)" ${totalItems < POR_PAGINA ? 'disabled' : ''}>Próxima →</button>
+  `;
+}
+
+function mudarPagina(delta) {
+  paginaAtual += delta;
+  if (paginaAtual < 1) paginaAtual = 1;
+  carregarLista();
+  window.scrollTo(0, 0);
+}
+
+// ── AÇÕES ─────────────────────────────────────────────────
+function abrirInspecao(id) {
+  window.location.href = `inspecao_qualidade.html?id=${id}`;
+}
+
+function limparFiltros() {
+  document.getElementById('filtro-status').value = '';
+  document.getElementById('filtro-fornecedor').value = '';
+  document.getElementById('filtro-produto').value = '';
+  document.getElementById('filtro-data-inicio').value = '';
+  document.getElementById('filtro-data-fim').value = '';
+  filtroStatusAtivo = '';
+  paginaAtual = 1;
+  carregarContadores();
+  carregarLista();
+}
+
+// ── TOAST ─────────────────────────────────────────────────
+function toast(msg, tipo = 'ok') {
+  const container = document.getElementById('toasts');
+  const el = document.createElement('div');
+  el.className = `toast ${tipo}`;
+  el.textContent = msg;
+  container.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+</script>
+</body>
+</html>

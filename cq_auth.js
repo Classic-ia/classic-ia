@@ -578,10 +578,13 @@ const CQAuth = (function () {
     };
   }
 
-  function getUser()  { return _user; }
-  function getGeo()   { return _geo; }
-  function getToken() { return _token; }
+  function getUser()      { return _user; }
+  function getGeo()       { return _geo; }
+  function getToken()     { return _token; }
+  function getAuthToken() { return _authToken; }
+  function getSbUrl()     { return SB_URL; }
+  function getSbKey()     { return SB_KEY; }
 
-  return { init, login, logout, renovarSessao, log, dadosRegistro, getUser, getGeo, getToken };
+  return { init, login, logout, renovarSessao, log, dadosRegistro, getUser, getGeo, getToken, getAuthToken, getSbUrl, getSbKey };
 
 })();

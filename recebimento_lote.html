@@ -319,12 +319,16 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;
         <div class="field">
           <label class="field-label">Placa do Caminhão</label>
           <input class="field-input" type="text" id="f-placa"
-            placeholder="ABC-1234" style="text-transform:uppercase" autocomplete="off">
+            placeholder="ABC-1234" style="text-transform:uppercase" autocomplete="off"
+            list="dl-placas" oninput="onPlacaSelect(this.value)">
+          <datalist id="dl-placas"></datalist>
+          <div id="placa-info" style="font-size:11px;color:var(--muted);margin-top:4px;display:none;"></div>
         </div>
         <div class="field">
           <label class="field-label">Motorista</label>
           <input class="field-input" type="text" id="f-motorista"
-            placeholder="Nome do motorista">
+            placeholder="Nome do motorista" list="dl-motoristas">
+          <datalist id="dl-motoristas"></datalist>
         </div>
       </div>
       <div class="field">
@@ -481,7 +485,52 @@ let ultimoRecebimento = null;
   }
 
   carregarRecentes();
+  carregarVeiculosMotoristas();
 })();
+
+// ── VEÍCULOS E MOTORISTAS (autocomplete) ──────────────────────
+let _veiculos = [];
+let _motoristas = [];
+
+async function carregarVeiculosMotoristas() {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  try {
+    const [resV, resM] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/cq_veiculos?ativo=eq.true&select=placa,nome,tipo_veiculo&order=placa`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+      }),
+      fetch(`${SB_URL}/rest/v1/cadastros_atak?tipo=eq.motorista&ativo=eq.true&select=codigo,nome,apelido&order=nome`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+      })
+    ]);
+    if (resV.ok) _veiculos = await resV.json();
+    if (resM.ok) _motoristas = await resM.json();
+
+    // Preencher datalists
+    const dlPlacas = document.getElementById('dl-placas');
+    dlPlacas.innerHTML = _veiculos.map(v =>
+      `<option value="${v.placa}" label="${v.nome} (${v.tipo_veiculo})">`
+    ).join('');
+
+    const dlMot = document.getElementById('dl-motoristas');
+    dlMot.innerHTML = _motoristas.map(m =>
+      `<option value="${m.nome}"${m.apelido ? ' label="'+m.apelido+'"' : ''}>`
+    ).join('');
+  } catch(e) {
+    console.warn('Erro ao carregar veículos/motoristas:', e);
+  }
+}
+
+function onPlacaSelect(val) {
+  const info = document.getElementById('placa-info');
+  const v = _veiculos.find(x => x.placa === val.toUpperCase());
+  if (v) {
+    info.textContent = `${v.nome} · ${v.tipo_veiculo}`;
+    info.style.display = 'block';
+  } else {
+    info.style.display = 'none';
+  }
+}
 
 // ── ID ÚNICO ──────────────────────────────────────────────────
 function gerarId() {

@@ -4,7 +4,10 @@
  *
  * Uso em qualquer página:
  *   <script src="cq_auth.js"></script>
- *   const user = await CQAuth.init({ perfisPermitidos: ['gestor','analisador'] });
+ *   const user = await CQAuth.init({ perfisPermitidos: ['administrador','qualidade'] });
+ *
+ * FASE 1 HARDENING: Agora usa JWT do Supabase Auth em vez da anon key.
+ * O perfil é revalidado do banco (cq_usuarios) a cada init(), não do localStorage.
  */
 
 const CQAuth = (function () {
@@ -19,19 +22,27 @@ const CQAuth = (function () {
   const STORE_KEY  = 'cq_sess_v2';
 
   // Planta Classic Couros — Jardim Alegre/PR
-  // Ajuste as coordenadas conforme o endereço real
   const PLANTA = { lat: -24.1820, lng: -51.6920, raio_m: 500 };
 
   // ── ESTADO INTERNO ────────────────────────────────────────
-  let _user  = null;   // { id, email, nome, perfil }
-  let _token = null;   // session_token (UUID gerado localmente)
-  let _geo   = null;   // { latitude, longitude, dentro_planta, distancia_m }
-  let _tExp  = null;   // timer expiração
-  let _tWarn = null;   // timer aviso
-  let _tBeat = null;   // intervalo heartbeat
+  let _user      = null;   // { id, email, nome, perfil }
+  let _token     = null;   // session_token (UUID gerado localmente)
+  let _authToken = null;   // JWT access_token do Supabase Auth
+  let _geo       = null;   // { latitude, longitude, dentro_planta, distancia_m }
+  let _tExp      = null;   // timer expiração
+  let _tWarn     = null;   // timer aviso
+  let _tBeat     = null;   // intervalo heartbeat
 
   // ── SUPABASE HELPERS ──────────────────────────────────────
+  // Headers com JWT autenticado (não anon key) para requests seguros
   const _h = () => ({
+    'Content-Type': 'application/json',
+    'apikey':       SB_KEY,
+    'Authorization':'Bearer ' + (_authToken || SB_KEY),
+  });
+
+  // Headers com anon key (para login e operações pré-autenticação)
+  const _hAnon = () => ({
     'Content-Type': 'application/json',
     'apikey':       SB_KEY,
     'Authorization':'Bearer ' + SB_KEY,
@@ -41,8 +52,8 @@ const CQAuth = (function () {
     try {
       const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, { headers: _h() });
       if (r.ok) return r.json();
-      return null; // distingue erro de array vazio
-    } catch { return null; } // sem conexão
+      return null;
+    } catch { return null; }
   }
 
   async function _post(tabela, dados) {
@@ -65,6 +76,46 @@ const CQAuth = (function () {
       });
       return r.ok;
     } catch { return false; }
+  }
+
+  // ── REVALIDAR PERFIL DO BANCO ─────────────────────────────
+  // Chama a RPC cq_meu_perfil() que usa auth.uid() no server-side
+  async function _revalidarPerfil() {
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/rpc/cq_meu_perfil`, {
+        method: 'POST',
+        headers: _h(),
+        body: '{}',
+      });
+      if (!r.ok) return null;
+      const rows = await r.json();
+      if (rows && rows.length > 0) return rows[0];
+      return null;
+    } catch { return null; }
+  }
+
+  // ── REFRESH TOKEN ─────────────────────────────────────────
+  // Tenta renovar o JWT usando o refresh_token salvo
+  async function _refreshToken() {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (!raw) return null;
+    try {
+      const s = JSON.parse(raw);
+      if (!s.refresh_token) return null;
+      const r = await fetch(`${SB_URL}/auth/v1/token?grant_type=refresh_token`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY },
+        body: JSON.stringify({ refresh_token: s.refresh_token }),
+      });
+      if (!r.ok) return null;
+      const data = await r.json();
+      _authToken = data.access_token;
+      // Atualizar refresh_token no localStorage
+      s.access_token = data.access_token;
+      s.refresh_token = data.refresh_token;
+      localStorage.setItem(STORE_KEY, JSON.stringify(s));
+      return data;
+    } catch { return null; }
   }
 
   // ── GEOLOCALIZAÇÃO ────────────────────────────────────────
@@ -118,8 +169,8 @@ const CQAuth = (function () {
   }
 
   // ── SESSÃO ÚNICA ──────────────────────────────────────────
-  async function _abrirSessao() {
-    // Invalidar sessões antigas (silencioso se tabela não existe)
+  async function _abrirSessao(refreshToken) {
+    // Invalidar sessões antigas
     try { await _patch('cq_sessoes',
       `usuario_id=eq.${_user.id}&ativa=eq.true`,
       { ativa: false, encerrada_em: new Date().toISOString() }
@@ -136,19 +187,21 @@ const CQAuth = (function () {
       ativa:         true,
       criado_em:     new Date().toISOString(),
     }); } catch(e) { console.warn('[CQAuth] Tabela cq_sessoes não existe ainda'); }
-    // Persistir no localStorage
+    // Persistir no localStorage (inclui JWT tokens para revalidação)
     localStorage.setItem(STORE_KEY, JSON.stringify({
-      token: _token, user: _user, ts: Date.now()
+      token: _token,
+      user: _user,
+      access_token: _authToken,
+      refresh_token: refreshToken || null,
+      ts: Date.now()
     }));
   }
 
   async function _validarSessao() {
-    // Se o token e usuário existem no localStorage, a sessão é válida.
-    // A tabela cq_sessoes é usada para auditoria, não para autenticação primária.
-    // Validação real é feita via Supabase Auth no momento do login.
+    // HARDENING: Não aceitar sessão local como fallback.
+    // A sessão DEVE ser validada no Supabase.
     if (!_user || !_token) return false;
 
-    // Opcionalmente, verificar na tabela cq_sessoes se ela existir
     try {
       const r = await fetch(
         `${SB_URL}/rest/v1/cq_sessoes?session_token=eq.${_token}&ativa=eq.true`,
@@ -158,11 +211,11 @@ const CQAuth = (function () {
         const rows = await r.json();
         return rows.length > 0;
       }
-      // Tabela não existe (404/400) ou outro erro HTTP → aceitar sessão local
-      return true;
+      // Erro HTTP → sessão inválida (não aceitar fallback local)
+      return false;
     } catch {
-      // Sem conexão → aceitar sessão local
-      return true;
+      // Sem conexão → sessão inválida (não aceitar fallback offline)
+      return false;
     }
   }
 
@@ -358,7 +411,12 @@ const CQAuth = (function () {
     // 1. Carregar sessão do localStorage
     const raw = localStorage.getItem(STORE_KEY);
     if (raw) {
-      try { const s = JSON.parse(raw); _user = s.user; _token = s.token; } catch { /* */ }
+      try {
+        const s = JSON.parse(raw);
+        _user = s.user;
+        _token = s.token;
+        _authToken = s.access_token || null;
+      } catch { /* */ }
     }
 
     // 2. Sem sessão → redirecionar
@@ -367,17 +425,51 @@ const CQAuth = (function () {
       return null;
     }
 
-    // 3. Verificar validade no Supabase
-    const ok = await _validarSessao();
-    if (!ok) {
-      localStorage.removeItem(STORE_KEY);
-      window.location.href = 'login.html';
-      return null;
+    // 3. Renovar JWT se necessário e revalidar perfil do banco
+    if (_authToken) {
+      // Tentar refresh do token para garantir que está válido
+      const refreshed = await _refreshToken();
+      if (!refreshed) {
+        // Token expirou e refresh falhou → re-login
+        _limparLocal();
+        window.location.href = 'login.html';
+        return null;
+      }
+
+      // Revalidar perfil diretamente do banco (server-side via RPC)
+      const perfilDB = await _revalidarPerfil();
+      if (!perfilDB) {
+        // Usuário desativado ou não encontrado no banco
+        _limparLocal();
+        window.location.href = 'login.html';
+        return null;
+      }
+
+      // Atualizar dados do usuário com o que veio do banco (fonte confiável)
+      _user.id = perfilDB.id;
+      _user.nome = perfilDB.nome;
+      _user.perfil = perfilDB.perfil;
+      _user.email = perfilDB.email;
+
+      // Atualizar localStorage com perfil correto
+      const stored = JSON.parse(localStorage.getItem(STORE_KEY));
+      stored.user = _user;
+      localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+    } else {
+      // Sessão legada (sem JWT) — verificar sessão antiga e forçar re-login
+      const ok = await _validarSessao();
+      if (!ok) {
+        _limparLocal();
+        window.location.href = 'login.html';
+        return null;
+      }
+      // AVISO: sessão legada sem JWT — perfil NÃO revalidado do banco
+      console.warn('[CQAuth] Sessão legada sem JWT. Recomenda-se re-login.');
     }
 
-    // 4. Verificar perfil permitido
+    // 4. Verificar perfil permitido (agora usando perfil do banco)
     if (opts.perfisPermitidos && !opts.perfisPermitidos.includes(_user.perfil)) {
-      window.location.href = 'index.html';
+      window.location.href = 'app.html';
       return null;
     }
 
@@ -420,15 +512,32 @@ const CQAuth = (function () {
 
     const data = await r.json();
     const u    = data.user;
+
+    // Salvar JWT para uso autenticado (não mais anon key)
+    _authToken = data.access_token;
+
+    // Dados iniciais do user_metadata (será revalidado do banco)
     _user = {
       id:     u.id,
       email:  u.email,
       nome:   u.user_metadata?.nome || u.user_metadata?.name || email.split('@')[0],
-      perfil: u.user_metadata?.perfil || 'analisador',
+      perfil: u.user_metadata?.perfil || 'qualidade',
     };
 
+    // HARDENING: Revalidar perfil do banco (fonte de verdade)
+    const perfilDB = await _revalidarPerfil();
+    if (perfilDB) {
+      _user.id     = perfilDB.id;
+      _user.nome   = perfilDB.nome;
+      _user.perfil = perfilDB.perfil;
+      _user.email  = perfilDB.email;
+    } else {
+      // Usuário autenticado mas sem registro ativo em cq_usuarios
+      throw new Error('Usuário não cadastrado ou desativado no sistema. Contate o administrador.');
+    }
+
     await _geo_capture();
-    await _abrirSessao();
+    await _abrirSessao(data.refresh_token);
     await _log('login', { email, dispositivo: navigator.userAgent.slice(0, 80) });
     _resetTimers();
     return _user;

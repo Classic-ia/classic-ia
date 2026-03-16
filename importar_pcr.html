@@ -184,7 +184,7 @@
     <div class="drop-title">Arraste a planilha PCR aqui</div>
     <div class="drop-sub">ou <span>clique para selecionar</span> · .xlsx</div>
   </div>
-  <input type="file" id="fileInput" accept=".xlsx,.xls">
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.XLS,.XLSX">
 
   <!-- Preview -->
   <div id="previewSection" style="display:none">
@@ -496,97 +496,82 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
   let currentDoc = null;
   let rowCount = raw.length;
 
+  // Helper: get cell as string
+  function cell(row, col) {
+    return row && row[col] != null ? String(row[col]).trim() : '';
+  }
+
+  // Helper: scan nearby rows for a field (WRMVE500 spreads header across multiple rows)
+  function scanField(startRow, maxOffset, col, prefix) {
+    for (let offset = 0; offset <= maxOffset; offset++) {
+      const r = raw[startRow + offset];
+      if (!r) continue;
+      const v = cell(r, col);
+      if (v && v.toUpperCase().indexOf(prefix.toUpperCase()) !== -1) {
+        return extrairCampo(v, prefix);
+      }
+    }
+    return '';
+  }
+
   for (let i = 0; i < rowCount; i++) {
     const row = raw[i];
     if (!row) continue;
 
-    const colA = row[0] != null ? String(row[0]).trim() : '';
+    // Data is in col B (index 1) — col A (index 0) is empty in WRMVE500
+    const colB = cell(row, 1);
 
-    // Detect header row by "DOCUMENTO:" in col A
-    if (colA.toUpperCase().indexOf('DOCUMENTO:') !== -1) {
-      // Parse header fields from cols A-H
-      const colB = row[1] != null ? String(row[1]) : '';
-      const colC = row[2] != null ? String(row[2]) : '';
-      const colD = row[3] != null ? String(row[3]) : '';
-      const colE = row[4] != null ? String(row[4]) : '';
-      const colF = row[5] != null ? String(row[5]) : '';
-      const colG = row[6] != null ? String(row[6]) : '';
-      const colH = row[7] != null ? String(row[7]) : '';
-
-      // Extract documento number
-      const docMatch = colA.match(/DOCUMENTO:\s*(\d+)/i);
+    // Detect DOCUMENTO row in col B
+    if (colB.toUpperCase().indexOf('DOCUMENTO:') !== -1) {
+      const docMatch = colB.match(/DOCUMENTO:\s*(\d+)/i);
       const documento = docMatch ? docMatch[1] : '';
 
-      // Extract data PCR
-      const dataPcrRaw = extrairCampo(colC, 'DATA PCR:');
+      // Scan nearby rows (within +8) for other header fields
+      // DATA PCR is in col 27, MOTORISTA in col 20, PARTICIPANTE in col 1, ORIGEM in col 1, PLACA in col 20
+      const dataPcrRaw = scanField(i, 8, 27, 'DATA PCR');
       const dataPcr = parseDataPCR(dataPcrRaw);
+      const motorista = scanField(i, 8, 20, 'MOTORISTA');
+      const participanteRaw = scanField(i, 8, 1, 'PARTICIPANTE');
+      const origem = scanField(i, 8, 1, 'ORIGEM');
+      const placa = scanField(i, 8, 20, 'PLACA');
 
-      // Extract motorista
-      const motorista = extrairCampo(colE, 'MOTORISTA:');
-
-      // Extract fornecedor (PARTICIPANTE : CODIGO  NOME or CODIGO - NOME)
-      const participanteRaw = extrairCampo(colF, 'PARTICIPANTE');
       let fornecedorCodigo = '';
       let fornecedorNome = '';
       if (participanteRaw) {
-        // Try "CODIGO - NOME" first, then "CODIGO  NOME" (double space)
-        const sepIdx = participanteRaw.indexOf(' - ');
-        if (sepIdx !== -1) {
-          fornecedorCodigo = participanteRaw.substring(0, sepIdx).trim();
-          fornecedorNome = participanteRaw.substring(sepIdx + 3).trim();
+        const m = participanteRaw.match(/^(\d+)\s+(.+)/);
+        if (m) {
+          fornecedorCodigo = m[1];
+          fornecedorNome = m[2].trim();
         } else {
-          // Match leading digits as code, rest as name
-          const m = participanteRaw.match(/^(\d+)\s+(.+)/);
-          if (m) {
-            fornecedorCodigo = m[1];
-            fornecedorNome = m[2].trim();
-          } else {
-            fornecedorNome = participanteRaw;
-          }
+          fornecedorNome = participanteRaw;
         }
       }
 
-      // Extract origem
-      const origem = extrairCampo(colG, 'ORIGEM:');
+      if (documento) docsSet.add(documento);
 
-      // Extract placa
-      const placa = extrairCampo(colH, 'PLACA:');
-
-      if (documento) {
-        docsSet.add(documento);
-      }
-
-      currentDoc = {
-        documento,
-        dataPcr,
-        motorista,
-        fornecedorCodigo,
-        fornecedorNome,
-        origem,
-        placa,
-        headerRow: i
-      };
+      currentDoc = { documento, dataPcr, motorista, fornecedorCodigo, fornecedorNome, origem, placa, headerRow: i };
       continue;
     }
 
-    // If we have a current doc context, check for product rows
-    // Product rows: col A = product code (digits), col B = description, col C/D/E = quantities
+    // Product rows: col B (1) = product code (digits), col G (6) = description
+    // Quantities: col V (21) = qtd recebida, col AA (26) = qtd pedida, col AH (33) = diferença
     if (currentDoc) {
-      // Skip defect rows (contain "PERC" or "Sebo/Corte" etc.)
-      if (colA.indexOf('PERC') !== -1 || colA.indexOf('Sebo/') !== -1 || colA.indexOf('Carne/') !== -1) continue;
-      // Check if col A is a product code (digits, at least 3 chars)
-      const prodCode = colA;
+      // Skip defect/header rows
+      if (colB.indexOf('PERC') !== -1 || colB.indexOf('Sebo/') !== -1 || colB.indexOf('Carne/') !== -1 ||
+          colB.indexOf('Orelha') !== -1 || colB.indexOf('Rasgado') !== -1 || colB.indexOf('Furado') !== -1 ||
+          colB.indexOf('Pelando') !== -1 || colB.indexOf('Folha') !== -1 || colB.indexOf('gua no') !== -1 ||
+          colB.toUpperCase().indexOf('PRODUTO') !== -1 || colB.toUpperCase().indexOf('TIPO DE') !== -1) continue;
+
+      const prodCode = colB;
       if (prodCode && /^\d{3,}$/.test(prodCode)) {
         const idRecebimento = `PCR-${currentDoc.documento}-${prodCode}`;
-        // Skip duplicate rows (same product appears twice in WRMVE500 format)
         if (idsVistos.has(idRecebimento)) continue;
         idsVistos.add(idRecebimento);
 
-        const prodDescricao = row[1] != null ? String(row[1]).trim() : '';
-        const qtdRecebida = num(row[2]);
-        const qtdPedidaRaw = row[3] != null ? String(row[3]).replace(/\./g, '').replace(',', '.').trim() : '0';
-        const qtdPedida = parseFloat(qtdPedidaRaw) || 0;
-        const diferenca = num(row[4]);
+        const prodDescricao = cell(row, 6);
+        const qtdRecebida = num(row[21]);
+        const qtdPedida = num(row[26]);
+        const diferenca = num(row[33]);
         const dataPcrFormatada = formatarDataBR(currentDoc.dataPcr);
         const obs = `WRMVE500 \u00B7 PCR ${dataPcrFormatada} \u00B7 Motorista: ${currentDoc.motorista}`;
 

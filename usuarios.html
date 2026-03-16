@@ -75,7 +75,7 @@
   </div>
   <div class="header-right">
     <span id="headerUser"></span>
-    <button class="btn-sair" onclick="fazerLogout()">Sair</button>
+    <button class="btn-sair" onclick="CQAuth.logout()">Sair</button>
   </div>
 </header>
 
@@ -141,15 +141,15 @@
   </div>
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
 <script>
 let usuarioEditando = null;
 
 (async () => {
-  const perfil = await authGuard(['administrador']);
-  if (!perfil) return;
-  atualizarHeaderUser();
+  const usuario = await CQAuth.init({ perfisPermitidos: ['administrador'] });
+  if (!usuario) return;
   await carregarUsuarios();
 })();
 
@@ -167,46 +167,31 @@ async function cadastrarUsuario() {
   btn.disabled = true;
   btn.innerHTML = '<span class="spinner"></span>Cadastrando...';
 
-  // Cria no Auth usando service role via função Edge — aqui usamos a Admin API do Supabase
-  // Como não temos service key no frontend, usamos uma abordagem alternativa:
-  // Criamos o usuário via signUp (sem confirmar email) e depois inserimos o perfil
-  
-  // Para admin criar usuário sem login, usamos a API Admin
-  // Como o frontend não deve expor a service key, vamos usar a anon key com uma policy permissiva
-  // e criar via signUp normalmente
-  
-  const { data, error } = await sb.auth.admin ? 
-    await criarViaAdmin(email, senha) : 
-    await sb.auth.signUp({ email, password: senha, options: { emailRedirectTo: null } });
+  // Cria usuário via Admin API do Supabase Auth
+  const sbUrl = CQAuth.getSbUrl();
+  const sbKey = CQAuth.getSbKey();
+  const authToken = CQAuth.getAuthToken();
 
-  // Tenta via signUp padrão
-  const resp = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/auth/v1/admin/users`, {
+  const resp = await fetch(`${sbUrl}/auth/v1/admin/users`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw',
-      'Authorization': `Bearer ${(await sb.auth.getSession()).data.session?.access_token}`
+      'apikey': sbKey,
+      'Authorization': `Bearer ${authToken}`
     },
     body: JSON.stringify({ email, password: senha, email_confirm: true })
   });
 
   if (!resp.ok) {
-    // Fallback: signUp normal
-    const { data: signUpData, error: signUpError } = await sb.auth.signUp({
-      email, password: senha
-    });
-    if (signUpError) {
-      showMsg(msg, 'Erro: ' + signUpError.message, 'error');
-      btn.disabled = false; btn.textContent = 'Cadastrar Usuário'; return;
-    }
-    // Insere perfil
-    await sb.from('perfis').insert({ id: signUpData.user.id, nome, perfil: perfilSel });
-    showMsg(msg, `✓ ${nome} cadastrado! O e-mail de confirmação foi enviado.`, 'success');
-  } else {
-    const novoUser = await resp.json();
-    await sb.from('perfis').insert({ id: novoUser.id, nome, perfil: perfilSel });
-    showMsg(msg, `✓ ${nome} cadastrado com sucesso!`, 'success');
+    const errBody = await resp.json().catch(() => ({}));
+    showMsg(msg, 'Erro ao criar usuário: ' + (errBody.msg || errBody.message || resp.statusText), 'error');
+    btn.disabled = false; btn.textContent = 'Cadastrar Usuário'; return;
   }
+
+  const novoUser = await resp.json();
+  // Insere perfil via PostgREST
+  await CQ_API.post('perfis', { id: novoUser.id, nome, perfil: perfilSel }, 'return=minimal');
+  showMsg(msg, `✓ ${nome} cadastrado com sucesso!`, 'success');
 
   document.getElementById('novoNome').value = '';
   document.getElementById('novoEmail').value = '';
@@ -217,9 +202,9 @@ async function cadastrarUsuario() {
 }
 
 async function carregarUsuarios() {
-  const { data, error } = await sb.from('perfis').select('*').order('created_at');
+  const data = await CQ_API.get('perfis?select=*&order=created_at');
   const container = document.getElementById('tabelaUsers');
-  if (error || !data?.length) {
+  if (!data?.length) {
     container.innerHTML = '<div class="loading">Nenhum usuário cadastrado.</div>'; return;
   }
   const labels = {administrador:'administrador',qualidade:'qualidade',logistica:'logistica',financeiro:'financeiro',comercial:'comercial',industrial:'industrial',diretoria:'diretoria'};
@@ -245,7 +230,7 @@ async function carregarUsuarios() {
 }
 
 async function toggleAtivo(id, ativo) {
-  await sb.from('perfis').update({ ativo: !ativo }).eq('id', id);
+  await CQ_API.fetch('perfis?id=eq.' + id, { method: 'PATCH', body: { ativo: !ativo } });
   await carregarUsuarios();
 }
 
@@ -266,12 +251,15 @@ async function confirmarSenha() {
   if (nova.length < 6) { showMsg(msg,'Mínimo 6 caracteres.','error'); return; }
 
   // Redefinir senha via Admin API
-  const resp = await fetch(`https://nvqxsulntpftcwtkjedu.supabase.co/auth/v1/admin/users/${usuarioEditando}`, {
+  const sbUrl = CQAuth.getSbUrl();
+  const sbKey = CQAuth.getSbKey();
+  const authToken = CQAuth.getAuthToken();
+  const resp = await fetch(`${sbUrl}/auth/v1/admin/users/${usuarioEditando}`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json',
-      'apikey': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw',
-      'Authorization': `Bearer ${(await sb.auth.getSession()).data.session?.access_token}`
+      'apikey': sbKey,
+      'Authorization': `Bearer ${authToken}`
     },
     body: JSON.stringify({ password: nova })
   });

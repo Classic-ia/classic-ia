@@ -282,8 +282,9 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 /* Highlight required */
 .required-missing { border-color:var(--red) !important; }
 </style>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="auth.js"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -298,7 +299,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
     <div class="header-spacer"></div>
     <span id="huser" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-right:12px;"></span>
     <button class="btn-icon" onclick="exportarCSV()" style="margin-right:8px;">⬇ Exportar CSV</button>
-    <button class="btn-icon" onclick="fazerLogout()">Sair</button>
+    <button class="btn-icon" onclick="CQAuth.logout()">Sair</button>
   </div>
 
   <!-- TABS -->
@@ -599,12 +600,10 @@ let lancamentos = []; // array de registros salvos
 // ────────────────────────────────────
 (async function init(){
   // Auth guard
-  if (typeof authGuard === 'function') {
-    const perfil = await authGuard(['administrador','qualidade','logistica','industrial']);
-    if (!perfil) return;
-    const huser = document.getElementById('huser');
-    if (huser) huser.textContent = perfil.nome;
-  }
+  const usuario = await CQAuth.init({ perfisPermitidos: ['administrador','qualidade','logistica','industrial'] });
+  if (!usuario) return;
+  const huser = document.getElementById('huser');
+  if (huser) huser.textContent = usuario.nome;
 
   // Datalist
   const dl = document.getElementById('frg-list');

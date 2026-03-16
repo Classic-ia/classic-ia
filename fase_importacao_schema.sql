@@ -279,13 +279,6 @@ END $$;
 CREATE INDEX IF NOT EXISTS idx_cad_origem ON cadastros_atak(origem_dado);
 
 
--- ── 3.5 registros_carga (legado, somente-leitura) ──────────
-
-ALTER TABLE registros_carga
-  ADD COLUMN IF NOT EXISTS origem_dado TEXT DEFAULT 'legado',
-  ADD COLUMN IF NOT EXISTS migrado     BOOLEAN DEFAULT false;
-
-
 -- ══════════════════════════════════════════════════════════════
 -- 4. BACKFILL: Preencher origem dos registros existentes
 -- ══════════════════════════════════════════════════════════════
@@ -303,11 +296,6 @@ WHERE id_recebimento LIKE 'ATAK-%' AND (origem_dado IS NULL OR origem_dado = 'ma
 -- Recebimentos manuais
 UPDATE cq_recebimentos
 SET origem_dado = 'manual'
-WHERE origem_dado IS NULL;
-
--- Registros legados
-UPDATE registros_carga
-SET origem_dado = 'legado'
 WHERE origem_dado IS NULL;
 
 

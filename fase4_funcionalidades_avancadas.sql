@@ -33,13 +33,14 @@ WITH base AS (
 ),
 ncs AS (
   SELECT
-    fornecedor,
-    COUNT(*) FILTER (WHERE gravidade = 'critica') AS nc_criticas,
-    COUNT(*) FILTER (WHERE gravidade = 'maior')   AS nc_maiores,
-    COUNT(*) FILTER (WHERE gravidade = 'menor')   AS nc_menores
-  FROM cq_nao_conformidades
-  WHERE criado_em >= CURRENT_DATE - INTERVAL '90 days'
-  GROUP BY fornecedor
+    r.fornecedor,
+    COUNT(*) FILTER (WHERE nc.gravidade = 'critica') AS nc_criticas,
+    COUNT(*) FILTER (WHERE nc.gravidade = 'maior')   AS nc_maiores,
+    COUNT(*) FILTER (WHERE nc.gravidade = 'menor')   AS nc_menores
+  FROM cq_nao_conformidades nc
+  JOIN registros_cq_inspecao r ON nc.inspecao_id = r.id
+  WHERE nc.criado_em >= CURRENT_DATE - INTERVAL '90 days'
+  GROUP BY r.fornecedor
 ),
 calc AS (
   SELECT

@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Radar de Risco · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --cb-yellow: #F0E442;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── MAIN ── */
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .icon { font-size: 16px; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent); }
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* ── KPI CARDS ── */
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+  transition: border-color .2s;
+}
+.kpi-card:hover { border-color: var(--border2); border-left-color: var(--accent); }
+.kpi-num {
+  font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1;
+  margin-bottom: 6px;
+}
+.kpi-label {
+  font-family: 'DM Mono'; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"]   .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"]   .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"]    .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+.kpi-card[data-color="gray"]   { border-left-color: var(--cb-gray); }
+.kpi-card[data-color="gray"]   .kpi-num { color: var(--cb-gray); }
+
+/* ── GRID 2 COLUNAS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── CARD PANEL ── */
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500; letter-spacing: .03em;
+}
+.badge-alto   { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-medio  { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-info   { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-critica  { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-maior    { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-menor    { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-bloqueado{ background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-aprovado { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-ressalva { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-piorando { background: rgba(213,94,0,.15); color: var(--cb-red); }
+
+/* ── ALERT ITEMS ── */
+.alert-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 14px 0; border-bottom: 1px solid var(--border);
+}
+.alert-item:last-child { border-bottom: none; }
+.alert-gravity { min-width: 70px; }
+.alert-type { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); min-width: 140px; }
+.alert-desc { font-size: 13px; flex: 1; }
+.alert-entity { font-family: 'DM Mono'; font-size: 12px; color: var(--accent); }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  font-family: 'DM Sans'; color: var(--text);
+}
+tbody tr:hover { background: var(--s2); }
+
+/* ── CHART CONTAINER ── */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 280px; position: relative; }
+
+/* ── FOOTER ── */
+.footer {
+  text-align: center; padding: 16px; font-family: 'DM Mono';
+  font-size: 11px; color: var(--muted);
+}
+
+/* ── LOADING ── */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Radar de Risco</div>
+    <div class="header-sub">Quality Risk Radar · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <!-- LOADING -->
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+
+  <div id="dashContent" style="display:none;">
+
+    <!-- FILTRO -->
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="90">Últimos 90 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="180">Últimos 180 dias</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title"><span class="icon">🎯</span> Indicadores de Risco</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- ALERT LIST -->
+    <div class="section-title" style="margin-top:8px;">
+      <span class="icon">🚨</span> Lista de Alertas
+      <button class="btn-refresh" style="margin-left:auto;font-size:11px;" onclick="exportCSV()">⬇ Exportar CSV</button>
+    </div>
+    <div class="panel" id="panelAlerts">
+      <div id="alertList"></div>
+    </div>
+
+    <!-- CHART: Tendência Bloqueio por Estado -->
+    <div class="section-title" style="margin-top:28px;"><span class="icon">📈</span> Tendência de Bloqueio por Estado</div>
+    <div class="chart-wrap">
+      <div class="chart-box"><canvas id="chartBloqueioUF"></canvas></div>
+    </div>
+
+    <!-- TABLE: Fornecedores Piorando -->
+    <div class="section-title" style="margin-top:8px;"><span class="icon">📉</span> Fornecedores Piorando</div>
+    <div class="panel">
+      <div class="table-wrap" id="tablePiorando"></div>
+    </div>
+
+  </div>
+</main>
+
+<footer class="footer">Classic Couros · Sistema CQ · Radar de Risco</footer>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _inspecoes = [], _cadastros = [];
+let _alerts = [];
+let chartBloqueioUF = null;
+
+const COR_PALETTE = [
+  '#0072B2','#009E73','#E69F00','#CC79A7','#D55E00','#666666','#F0E442'
+];
+
+const DEFECT_COLS = [
+  'fermentacao','sem_folhas','folhas_arrebentadas','pedaco','sujo',
+  'rasgado','corte_irregular','furado','mau_cheiro','contaminacao','outro_defeito'
+];
+
+// ── INIT ──
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+// ── API ──
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+// ── LOAD DATA ──
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    const dias = parseInt(document.getElementById('filtroPeriodo').value) || 90;
+    const fetchDias = Math.max(dias, 180); // always fetch 180d for trend comparison
+    const dtFrom = new Date(); dtFrom.setDate(dtFrom.getDate() - fetchDias);
+    const isoFrom = dtFrom.toISOString().split('T')[0];
+
+    const selectCols = 'fornecedor,fornecedor_codigo,produto,data_inspecao,percentual_defeitos,status_final,classificacao,' +
+      DEFECT_COLS.join(',');
+
+    [_inspecoes, _cadastros] = await Promise.all([
+      apiFetch(`registros_cq_inspecao?select=${selectCols}&data_inspecao=gte.${isoFrom}&order=data_inspecao`),
+      apiFetch('cadastros_atak?select=codigo,nome,uf&tipo=eq.fornecedor&ativo=eq.true')
+    ]);
+
+    processAlerts();
+    renderAll();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { console.error('Erro:', e); }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ── HELPERS ──
+function daysAgo(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().split('T')[0];
+}
+
+function getUF(codigo) {
+  if (!codigo) return '??';
+  const c = _cadastros.find(f => String(f.codigo) === String(codigo));
+  return c ? (c.uf || '??') : '??';
+}
+
+function getPeriodDias() {
+  return parseInt(document.getElementById('filtroPeriodo').value) || 90;
+}
+
+function inspecoesInPeriod() {
+  const cutoff = daysAgo(getPeriodDias());
+  return _inspecoes.filter(i => i.data_inspecao >= cutoff);
+}
+
+// ── ALERT DETECTION ──
+function processAlerts() {
+  _alerts = [];
+  const dias = getPeriodDias();
+  const cutoff = daysAgo(dias);
+  const periodData = _inspecoes.filter(i => i.data_inspecao >= cutoff);
+
+  const now30 = daysAgo(30);
+  const prev30 = daysAgo(60);
+  const last30 = _inspecoes.filter(i => i.data_inspecao >= now30);
+  const prev30data = _inspecoes.filter(i => i.data_inspecao >= prev30 && i.data_inspecao < now30);
+
+  // === ALTO: Fornecedor piorando ===
+  const byForn = {};
+  periodData.forEach(i => {
+    const key = i.fornecedor || i.fornecedor_codigo || 'Desconhecido';
+    if (!byForn[key]) byForn[key] = [];
+    byForn[key].push(i);
+  });
+
+  for (const [forn, insps] of Object.entries(byForn)) {
+    // Sort by date desc, take last 3
+    const sorted = insps.sort((a, b) => a.data_inspecao > b.data_inspecao ? -1 : 1);
+    if (sorted.length >= 3) {
+      const last3 = sorted.slice(0, 3); // newest first
+      const d1 = parseFloat(last3[2].percentual_defeitos) || 0; // oldest
+      const d2 = parseFloat(last3[1].percentual_defeitos) || 0;
+      const d3 = parseFloat(last3[0].percentual_defeitos) || 0; // newest
+      if (d3 > d2 && d2 > d1 && d3 > 0) {
+        _alerts.push({
+          gravity: 'ALTO',
+          type: 'Fornecedor piorando',
+          desc: `Últimas 3 inspeções: ${d1.toFixed(1)}% → ${d2.toFixed(1)}% → ${d3.toFixed(1)}%`,
+          entity: forn,
+          entityCode: sorted[0].fornecedor_codigo
+        });
+      }
+    }
+  }
+
+  // === ALTO: Estado com bloqueio alto ===
+  const byUF = {};
+  periodData.forEach(i => {
+    const uf = getUF(i.fornecedor_codigo);
+    if (!byUF[uf]) byUF[uf] = { total: 0, bloqueado: 0 };
+    byUF[uf].total++;
+    if (i.status_final === 'bloqueado') byUF[uf].bloqueado++;
+  });
+
+  for (const [uf, data] of Object.entries(byUF)) {
+    if (data.total > 0) {
+      const rate = (data.bloqueado / data.total) * 100;
+      if (rate > 20) {
+        _alerts.push({
+          gravity: 'ALTO',
+          type: 'Estado com bloqueio alto',
+          desc: `Taxa de bloqueio: ${rate.toFixed(1)}% (${data.bloqueado}/${data.total} inspeções)`,
+          entity: uf
+        });
+      }
+    }
+  }
+
+  // === MÉDIO: Produto com aumento ===
+  const prodLast30 = {}, prodPrev30 = {};
+  last30.forEach(i => {
+    const p = i.produto || 'Desconhecido';
+    if (!prodLast30[p]) prodLast30[p] = [];
+    prodLast30[p].push(parseFloat(i.percentual_defeitos) || 0);
+  });
+  prev30data.forEach(i => {
+    const p = i.produto || 'Desconhecido';
+    if (!prodPrev30[p]) prodPrev30[p] = [];
+    prodPrev30[p].push(parseFloat(i.percentual_defeitos) || 0);
+  });
+
+  for (const [prod, vals] of Object.entries(prodLast30)) {
+    const prevVals = prodPrev30[prod];
+    if (prevVals && prevVals.length > 0) {
+      const avgNow = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const avgPrev = prevVals.reduce((a, b) => a + b, 0) / prevVals.length;
+      const diff = avgNow - avgPrev;
+      if (diff > 5) {
+        _alerts.push({
+          gravity: 'MEDIO',
+          type: 'Produto com aumento',
+          desc: `Média defeitos: ${avgPrev.toFixed(1)}% → ${avgNow.toFixed(1)}% (+${diff.toFixed(1)}pp)`,
+          entity: prod
+        });
+      }
+    }
+  }
+
+  // === MÉDIO: Defeito crescente ===
+  DEFECT_COLS.forEach(col => {
+    const totalLast = last30.reduce((s, i) => s + (parseFloat(i[col]) || 0), 0);
+    const totalPrev = prev30data.reduce((s, i) => s + (parseFloat(i[col]) || 0), 0);
+    if (totalPrev > 0 && totalLast > totalPrev * 1.5) {
+      const pctIncrease = ((totalLast - totalPrev) / totalPrev * 100).toFixed(0);
+      const label = col.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      _alerts.push({
+        gravity: 'MEDIO',
+        type: 'Defeito crescente',
+        desc: `${label}: ${totalPrev.toFixed(0)} → ${totalLast.toFixed(0)} (+${pctIncrease}%)`,
+        entity: label
+      });
+    }
+  });
+
+  // === INFO: Fornecedor novo bloqueado ===
+  // Find suppliers whose first-ever inspection is in the period and was bloqueado
+  const allByForn = {};
+  _inspecoes.forEach(i => {
+    const key = i.fornecedor || i.fornecedor_codigo || 'Desconhecido';
+    if (!allByForn[key]) allByForn[key] = [];
+    allByForn[key].push(i);
+  });
+
+  for (const [forn, insps] of Object.entries(allByForn)) {
+    const sorted = insps.sort((a, b) => a.data_inspecao > b.data_inspecao ? 1 : -1);
+    const first = sorted[0];
+    if (first.data_inspecao >= cutoff && first.status_final === 'bloqueado' && sorted.length <= 2) {
+      _alerts.push({
+        gravity: 'INFO',
+        type: 'Fornecedor novo bloqueado',
+        desc: `Primeira inspeção resultou em bloqueio (${first.data_inspecao})`,
+        entity: forn
+      });
+    }
+  }
+
+  // Sort: ALTO first, then MEDIO, then INFO, then by entity
+  const gravOrder = { 'ALTO': 0, 'MEDIO': 1, 'INFO': 2 };
+  _alerts.sort((a, b) => {
+    const gd = (gravOrder[a.gravity] || 9) - (gravOrder[b.gravity] || 9);
+    if (gd !== 0) return gd;
+    return (a.entity || '').localeCompare(b.entity || '');
+  });
+}
+
+// ── RENDER ALL ──
+function renderAll() {
+  renderKPIs();
+  renderAlertList();
+  renderChartBloqueioUF();
+  renderTablePiorando();
+}
+
+// ── KPIs ──
+function renderKPIs() {
+  const alto = _alerts.filter(a => a.gravity === 'ALTO').length;
+  const medio = _alerts.filter(a => a.gravity === 'MEDIO').length;
+  const info = _alerts.filter(a => a.gravity === 'INFO').length;
+
+  // Unique suppliers with any alert
+  const fornSet = new Set();
+  _alerts.forEach(a => {
+    if (a.type === 'Fornecedor piorando' || a.type === 'Fornecedor novo bloqueado') {
+      fornSet.add(a.entity);
+    }
+  });
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">✖ ${alto}</div>
+      <div class="kpi-label">Alertas Alto</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">⚠ ${medio}</div>
+      <div class="kpi-label">Alertas Médio</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">ℹ ${info}</div>
+      <div class="kpi-label">Alertas Info</div>
+    </div>
+    <div class="kpi-card" data-color="purple">
+      <div class="kpi-num">🏭 ${fornSet.size}</div>
+      <div class="kpi-label">Fornecedores em Risco</div>
+    </div>
+  `;
+}
+
+// ── ALERT LIST ──
+function renderAlertList() {
+  const container = document.getElementById('alertList');
+  if (_alerts.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum alerta detectado no período.</div>';
+    return;
+  }
+
+  const gravIcons = {
+    'ALTO':  { badge: 'badge-alto',  icon: '✖', label: 'ALTO' },
+    'MEDIO': { badge: 'badge-medio', icon: '⚠', label: 'MÉDIO' },
+    'INFO':  { badge: 'badge-info',  icon: 'ℹ', label: 'INFO' }
+  };
+
+  const typeIcons = {
+    'Fornecedor piorando':     '📉',
+    'Estado com bloqueio alto': '🗺',
+    'Produto com aumento':     '📦',
+    'Defeito crescente':       '🔺',
+    'Fornecedor novo bloqueado':'🆕'
+  };
+
+  let html = '';
+  _alerts.forEach(a => {
+    const g = gravIcons[a.gravity] || gravIcons['INFO'];
+    const ti = typeIcons[a.type] || '⚡';
+    html += `
+      <div class="alert-item">
+        <div class="alert-gravity"><span class="badge ${g.badge}">${g.icon} ${g.label}</span></div>
+        <div class="alert-type">${ti} ${a.type}</div>
+        <div class="alert-desc">${a.desc}</div>
+        <div class="alert-entity">${a.entity}</div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+// ── CHART: Bloqueio por Estado ──
+function renderChartBloqueioUF() {
+  const periodData = inspecoesInPeriod();
+
+  // Group by UF + month
+  const ufMonthData = {};
+  const monthsSet = new Set();
+
+  periodData.forEach(i => {
+    const uf = getUF(i.fornecedor_codigo);
+    const month = i.data_inspecao ? i.data_inspecao.substring(0, 7) : null;
+    if (!month) return;
+    monthsSet.add(month);
+    if (!ufMonthData[uf]) ufMonthData[uf] = {};
+    if (!ufMonthData[uf][month]) ufMonthData[uf][month] = { total: 0, bloqueado: 0 };
+    ufMonthData[uf][month].total++;
+    if (i.status_final === 'bloqueado') ufMonthData[uf][month].bloqueado++;
+  });
+
+  const months = Array.from(monthsSet).sort();
+
+  // Top 5 states by volume
+  const ufVolume = {};
+  for (const [uf, md] of Object.entries(ufMonthData)) {
+    ufVolume[uf] = Object.values(md).reduce((s, v) => s + v.total, 0);
+  }
+  const top5 = Object.entries(ufVolume)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 5)
+    .map(e => e[0]);
+
+  const datasets = top5.map((uf, idx) => ({
+    label: uf,
+    data: months.map(m => {
+      const d = (ufMonthData[uf] || {})[m];
+      if (!d || d.total === 0) return 0;
+      return parseFloat(((d.bloqueado / d.total) * 100).toFixed(1));
+    }),
+    borderColor: COR_PALETTE[idx % COR_PALETTE.length],
+    backgroundColor: COR_PALETTE[idx % COR_PALETTE.length] + '22',
+    tension: 0.3,
+    pointRadius: 4,
+    pointHoverRadius: 6,
+    fill: false
+  }));
+
+  const ctx = document.getElementById('chartBloqueioUF').getContext('2d');
+  if (chartBloqueioUF) chartBloqueioUF.destroy();
+  chartBloqueioUF = new Chart(ctx, {
+    type: 'line',
+    data: { labels: months, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'top', labels: { color: '#ede9e3', font: { family: 'DM Mono', size: 11 } } }
+      },
+      scales: {
+        x: { ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }, grid: { color: '#242424' } },
+        y: {
+          ticks: { color: '#666', font: { family: 'DM Mono', size: 10 }, callback: v => v + '%' },
+          grid: { color: '#242424' },
+          beginAtZero: true
+        }
+      }
+    }
+  });
+}
+
+// ── TABLE: Fornecedores Piorando ──
+function renderTablePiorando() {
+  const container = document.getElementById('tablePiorando');
+  const periodData = inspecoesInPeriod();
+
+  // Group by supplier
+  const byForn = {};
+  periodData.forEach(i => {
+    const key = i.fornecedor || i.fornecedor_codigo || 'Desconhecido';
+    if (!byForn[key]) byForn[key] = { insps: [], code: i.fornecedor_codigo };
+    byForn[key].insps.push(i);
+  });
+
+  const rows = [];
+  for (const [forn, data] of Object.entries(byForn)) {
+    const sorted = data.insps.sort((a, b) => a.data_inspecao > b.data_inspecao ? -1 : 1);
+    if (sorted.length >= 3) {
+      const last3 = sorted.slice(0, 3);
+      const d1 = parseFloat(last3[2].percentual_defeitos) || 0;
+      const d2 = parseFloat(last3[1].percentual_defeitos) || 0;
+      const d3 = parseFloat(last3[0].percentual_defeitos) || 0;
+      if (d3 > d2 && d2 > d1 && d3 > 0) {
+        rows.push({ forn, uf: getUF(data.code), d1, d2, d3 });
+      }
+    }
+  }
+
+  if (rows.length === 0) {
+    container.innerHTML = '<div class="empty">Nenhum fornecedor com tendência de piora detectado.</div>';
+    return;
+  }
+
+  rows.sort((a, b) => b.d3 - a.d3);
+
+  let html = `<table><thead><tr>
+    <th>Fornecedor</th><th>UF</th>
+    <th>Inspeção 1</th><th>Inspeção 2</th><th>Inspeção 3</th>
+    <th>Tendência</th>
+  </tr></thead><tbody>`;
+
+  rows.forEach(r => {
+    html += `<tr>
+      <td>${r.forn}</td>
+      <td><span style="font-family:'DM Mono';color:var(--muted);">${r.uf}</span></td>
+      <td style="font-family:'DM Mono';">${r.d1.toFixed(1)}%</td>
+      <td style="font-family:'DM Mono';">${r.d2.toFixed(1)}%</td>
+      <td style="font-family:'DM Mono';color:var(--cb-red);font-weight:500;">${r.d3.toFixed(1)}%</td>
+      <td><span class="badge badge-piorando">↑ PIORANDO</span></td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+// ── EXPORT CSV ──
+function exportCSV() {
+  if (_alerts.length === 0) return;
+
+  const headers = ['Gravidade', 'Tipo', 'Descricao', 'Entidade'];
+  const rows = _alerts.map(a => [
+    a.gravity,
+    a.type,
+    '"' + (a.desc || '').replace(/"/g, '""') + '"',
+    '"' + (a.entity || '').replace(/"/g, '""') + '"'
+  ]);
+
+  let csv = headers.join(';') + '\n';
+  rows.forEach(r => { csv += r.join(';') + '\n'; });
+
+  const BOM = '\uFEFF';
+  const blob = new Blob([BOM + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `radar_risco_alertas_${new Date().toISOString().split('T')[0]}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

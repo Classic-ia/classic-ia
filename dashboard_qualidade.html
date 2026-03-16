@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Qualidade · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+/* ── COLOR-BLIND SAFE PALETTE ── */
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  /* Color-blind safe */
+  --cb-blue: #0072B2;    /* aprovado, ok */
+  --cb-teal: #009E73;    /* concluído, encerrado */
+  --cb-orange: #E69F00;  /* atenção, ressalva */
+  --cb-purple: #CC79A7;  /* revisão, pendente */
+  --cb-red: #D55E00;     /* bloqueado, crítico */
+  --cb-gray: #666666;    /* cancelado, neutro */
+  --cb-yellow: #F0E442;  /* destaque, novo */
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── MAIN ── */
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .icon { font-size: 16px; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent); }
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* ── KPI CARDS ── */
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+  transition: border-color .2s;
+}
+.kpi-card:hover { border-color: var(--border2); border-left-color: var(--accent); }
+.kpi-num {
+  font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1;
+  margin-bottom: 6px;
+}
+.kpi-label {
+  font-family: 'DM Mono'; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"]   .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"]   .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"]    .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+
+/* ── PIPELINE ── */
+.pipeline {
+  display: flex; gap: 0; align-items: stretch; margin-bottom: 28px;
+  overflow-x: auto; padding-bottom: 4px;
+}
+.pipe-step {
+  flex: 1; min-width: 120px; background: var(--s1); border: 1px solid var(--border);
+  padding: 14px 12px; text-align: center; position: relative; cursor: pointer;
+  transition: all .2s;
+}
+.pipe-step:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+.pipe-step:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+.pipe-step:hover { background: var(--s2); border-color: var(--accent); z-index: 1; }
+.pipe-step.highlight { background: rgba(204,121,167,.1); border-color: var(--cb-purple); }
+.pipe-icon { font-size: 18px; margin-bottom: 4px; }
+.pipe-num { font-family: 'Syne'; font-weight: 800; font-size: 24px; }
+.pipe-label { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+.pipe-arrow {
+  display: flex; align-items: center; color: var(--muted2); font-size: 16px;
+  padding: 0 2px;
+}
+
+/* ── GRID 2 COLUNAS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── CARD PANEL ── */
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* ── MINI CARDS (NCs/Planos) ── */
+.mini-grid { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+.mini-card {
+  flex: 1; min-width: 70px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 8px; text-align: center;
+}
+.mini-num { font-family: 'Syne'; font-weight: 800; font-size: 22px; }
+.mini-label { font-family: 'DM Mono'; font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500; letter-spacing: .03em;
+}
+.badge-critica  { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-maior    { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-menor    { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-aberta   { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-execucao { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-concluido{ background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-aprovado { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-ressalva { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-bloqueado{ background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-cancelado{ background: rgba(102,102,102,.15); color: var(--cb-gray); }
+
+/* ── LIST ITEMS ── */
+.list-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.list-item:last-child { border-bottom: none; }
+.list-code { font-family: 'DM Mono'; font-size: 11px; color: var(--accent); min-width: 80px; }
+.list-desc { flex: 1; color: var(--text); }
+.list-meta { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); }
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  letter-spacing: .05em; padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+tbody td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  font-family: 'DM Sans'; color: var(--text);
+}
+tbody tr:hover { background: var(--s2); }
+
+/* ── CHART CONTAINER ── */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 280px; position: relative; }
+
+/* ── FOOTER ── */
+.footer {
+  text-align: center; padding: 16px; font-family: 'DM Mono';
+  font-size: 11px; color: var(--muted);
+}
+
+/* ── LOADING ── */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── EMPTY STATE ── */
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .pipeline { flex-wrap: wrap; }
+  .pipe-step { min-width: 100px; }
+  .pipe-arrow { display: none; }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Dashboard Qualidade</div>
+    <div class="header-sub">Indicadores Operacionais · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <!-- LOADING -->
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+
+  <div id="dashContent" style="display:none;">
+
+    <!-- FILTRO -->
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="7">Últimos 7 dias</option>
+        <option value="1">Hoje</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- PAINEL 1: KPIs -->
+    <div class="section-title"><span class="icon">📊</span> Indicadores Principais</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- PAINEL 2: PIPELINE WORKFLOW -->
+    <div class="section-title"><span class="icon">🔄</span> Pipeline de Inspeções</div>
+    <div class="pipeline" id="pipeline"></div>
+
+    <!-- PAINEL 3: NCs + PLANOS -->
+    <div class="section-title"><span class="icon">⚡</span> Não Conformidades & Planos de Ação</div>
+    <div class="grid-2">
+      <div class="panel" id="panelNCs">
+        <div class="panel-title">⚡ Não Conformidades</div>
+        <div class="mini-grid" id="ncMiniCards"></div>
+        <div id="ncList"></div>
+      </div>
+      <div class="panel" id="panelPlanos">
+        <div class="panel-title">▶ Planos de Ação</div>
+        <div class="mini-grid" id="planosMiniCards"></div>
+        <div id="planosList"></div>
+      </div>
+    </div>
+
+    <!-- PAINEL 4: FORNECEDORES -->
+    <div class="section-title" style="margin-top:28px;"><span class="icon">🏭</span> Fornecedores em Alerta</div>
+    <div class="panel">
+      <div class="table-wrap" id="alertaTable"></div>
+    </div>
+
+    <!-- PAINEL 5: TENDÊNCIA -->
+    <div class="section-title" style="margin-top:28px;"><span class="icon">📈</span> Tendência Semanal (12 semanas)</div>
+    <div class="chart-wrap">
+      <div class="chart-box"><canvas id="chartTendencia"></canvas></div>
+    </div>
+
+  </div><!-- /dashContent -->
+</main>
+
+<div class="footer" id="footerInfo"></div>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════
+// DASHBOARD QUALIDADE — JS
+// ══════════════════════════════════════════════════════════
+
+let SB_URL, SB_KEY;
+let chartTendencia = null;
+
+// ── INIT ──
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+// ── FETCH HELPER ──
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+// ── DATA HELPERS ──
+function hoje() { return new Date().toISOString().slice(0,10); }
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+function inicioSemana() {
+  const d = new Date(); const day = d.getDay();
+  d.setDate(d.getDate() - (day === 0 ? 6 : day - 1));
+  return d.toISOString().slice(0,10);
+}
+function getWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  return Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+}
+
+// ── CARREGAR DADOS ──
+async function carregarDados() {
+  const periodo = parseInt(document.getElementById('filtroPeriodo').value);
+  const dataInicio = periodo === 1 ? hoje() : diasAtras(periodo);
+
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    const [inspecoes, ncs, planos, alertas, ranking] = await Promise.all([
+      apiFetch(`vw_inspecoes_workflow?select=*&data_inspecao=gte.${dataInicio}&order=data_inspecao.desc`),
+      apiFetch('cq_nao_conformidades?select=*&order=criado_em.desc'),
+      apiFetch('cq_planos_acao?select=*&order=criado_em.desc'),
+      apiFetch('vw_alertas_fornecedor?select=*'),
+      apiFetch('vw_ranking_fornecedores?select=*&order=score_cq.asc&limit=20')
+    ]);
+
+    renderKPIs(inspecoes, ncs, planos);
+    renderPipeline(inspecoes);
+    renderNCs(ncs);
+    renderPlanos(planos);
+    renderAlertas(alertas, ranking);
+
+    // Tendência: sempre últimas 12 semanas
+    const insp12w = await apiFetch(`registros_cq_inspecao?select=data_inspecao,classificacao,percentual_defeitos&data_inspecao=gte.${diasAtras(84)}&order=data_inspecao`);
+    renderTendencia(insp12w);
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+
+  } catch(e) {
+    console.error('Erro ao carregar dados:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 1: KPIs
+// ══════════════════════════════════════════════════════════
+function renderKPIs(inspecoes, ncs, planos) {
+  const total = inspecoes.length;
+  const hj = inspecoes.filter(i => i.data_inspecao === hoje()).length;
+  const aprovadas = inspecoes.filter(i => i.status_final === 'aprovado').length;
+  const bloqueadas = inspecoes.filter(i => i.status_final === 'bloqueado').length;
+  const pctAprov = total ? Math.round(aprovadas / total * 100) : 0;
+  const pctBloq = total ? Math.round(bloqueadas / total * 100) : 0;
+  const ncsAbertas = ncs.filter(n => n.status === 'aberta' || n.status === 'em_tratamento').length;
+  const planosExec = planos.filter(p => p.status === 'em_execucao').length;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">📋 ${hj}</div>
+      <div class="kpi-label">Inspeções Hoje</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">📊 ${total}</div>
+      <div class="kpi-label">Inspeções Período</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">✔ ${pctAprov}%</div>
+      <div class="kpi-label">Aprovadas</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">✖ ${pctBloq}%</div>
+      <div class="kpi-label">Bloqueadas</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">⚡ ${ncsAbertas}</div>
+      <div class="kpi-label">NCs Abertas</div>
+    </div>
+    <div class="kpi-card" data-color="purple">
+      <div class="kpi-num">▶ ${planosExec}</div>
+      <div class="kpi-label">Planos em Execução</div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 2: PIPELINE WORKFLOW
+// ══════════════════════════════════════════════════════════
+function renderPipeline(inspecoes) {
+  const steps = [
+    { key:'rascunho',            icon:'📝', label:'Rascunho',      color:'var(--cb-gray)' },
+    { key:'em_analise',          icon:'🔍', label:'Em Análise',    color:'var(--cb-blue)' },
+    { key:'aguardando_revisao',  icon:'⏳', label:'Ag. Revisão',   color:'var(--cb-purple)', highlight:true },
+    { key:'revisada',            icon:'✔',  label:'Revisada',      color:'var(--cb-teal)' },
+    { key:'aprovada',            icon:'✅', label:'Aprovada',      color:'var(--cb-blue)' },
+    { key:'reprovada',           icon:'✖',  label:'Reprovada',     color:'var(--cb-red)', highlight:true },
+    { key:'encerrada',           icon:'🔒', label:'Encerrada',     color:'var(--cb-teal)' },
+    { key:'cancelada',           icon:'⊘',  label:'Cancelada',     color:'var(--cb-gray)' },
+  ];
+
+  const counts = {};
+  inspecoes.forEach(i => { counts[i.status_workflow] = (counts[i.status_workflow] || 0) + 1; });
+
+  let html = '';
+  steps.forEach((s, idx) => {
+    const c = counts[s.key] || 0;
+    if (idx > 0) html += `<div class="pipe-arrow">→</div>`;
+    html += `
+      <div class="pipe-step ${s.highlight && c > 0 ? 'highlight' : ''}"
+           onclick="window.location='fila_inspecoes.html?status=${s.key}'"
+           title="Clique para ver inspeções ${s.label}">
+        <div class="pipe-icon">${s.icon}</div>
+        <div class="pipe-num" style="color:${s.color}">${c}</div>
+        <div class="pipe-label">${s.label}</div>
+      </div>`;
+  });
+
+  document.getElementById('pipeline').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 3: NCs
+// ══════════════════════════════════════════════════════════
+function renderNCs(ncs) {
+  const criticas = ncs.filter(n => n.gravidade === 'critica');
+  const maiores  = ncs.filter(n => n.gravidade === 'maior');
+  const menores  = ncs.filter(n => n.gravidade === 'menor');
+  const abertas  = ncs.filter(n => n.status === 'aberta' || n.status === 'em_tratamento');
+
+  document.getElementById('ncMiniCards').innerHTML = `
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-red)">${criticas.length}</div>
+      <div class="mini-label">✖ Crítica</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-orange)">${maiores.length}</div>
+      <div class="mini-label">⚠ Maior</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-blue)">${menores.length}</div>
+      <div class="mini-label">● Menor</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-purple)">${abertas.length}</div>
+      <div class="mini-label">⚡ Abertas</div>
+    </div>
+  `;
+
+  const recentes = abertas.slice(0, 5);
+  if (!recentes.length) {
+    document.getElementById('ncList').innerHTML = '<div class="empty">Nenhuma NC aberta</div>';
+    return;
+  }
+
+  const gravBadge = g => {
+    const map = { critica: 'badge-critica', maior: 'badge-maior', menor: 'badge-menor' };
+    const icons = { critica: '✖', maior: '⚠', menor: '●' };
+    return `<span class="badge ${map[g] || ''}">${icons[g] || ''} ${(g||'').toUpperCase()}</span>`;
+  };
+
+  document.getElementById('ncList').innerHTML = recentes.map(n => `
+    <div class="list-item">
+      <span class="list-code">${n.codigo || '—'}</span>
+      <span class="list-desc">${n.tipo || ''} — ${(n.descricao||'').slice(0,50)}</span>
+      ${gravBadge(n.gravidade)}
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 3: PLANOS DE AÇÃO
+// ══════════════════════════════════════════════════════════
+function renderPlanos(planos) {
+  const abertos  = planos.filter(p => p.status === 'aberto').length;
+  const execucao = planos.filter(p => p.status === 'em_execucao').length;
+  const concluidos = planos.filter(p => p.status === 'concluido');
+  const cancelados = planos.filter(p => p.status === 'cancelado').length;
+
+  const eficazes = concluidos.filter(p => p.validacao === 'eficaz').length;
+  const ineficazes = concluidos.filter(p => p.validacao === 'ineficaz').length;
+  const pctEficaz = concluidos.length ? Math.round(eficazes / concluidos.length * 100) : 0;
+
+  document.getElementById('planosMiniCards').innerHTML = `
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-red)">${abertos}</div>
+      <div class="mini-label">⚡ Aberto</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-orange)">${execucao}</div>
+      <div class="mini-label">▶ Execução</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-teal)">${concluidos.length}</div>
+      <div class="mini-label">✔ Concluído</div>
+    </div>
+    <div class="mini-card">
+      <div class="mini-num" style="color:var(--cb-gray)">${cancelados}</div>
+      <div class="mini-label">⊘ Cancelado</div>
+    </div>
+  `;
+
+  const eficaciaHtml = concluidos.length
+    ? `<div style="font-family:'DM Mono';font-size:11px;color:var(--muted);margin-bottom:10px;">
+         Eficácia: <strong style="color:var(--cb-teal)">${pctEficaz}%</strong> eficaz
+         (${eficazes} de ${concluidos.length}) ${ineficazes ? `· <span style="color:var(--cb-red)">${ineficazes} ineficaz</span>` : ''}
+       </div>`
+    : '';
+
+  const recentes = planos.slice(0, 5);
+  const statusBadge = s => {
+    const map = { aberto:'badge-aberta', em_execucao:'badge-execucao', concluido:'badge-concluido', cancelado:'badge-cancelado' };
+    const icons = { aberto:'⚡', em_execucao:'▶', concluido:'✔', cancelado:'⊘' };
+    return `<span class="badge ${map[s]||''}">${icons[s]||''} ${(s||'').replace('_',' ').toUpperCase()}</span>`;
+  };
+
+  document.getElementById('planosList').innerHTML = eficaciaHtml + (recentes.length
+    ? recentes.map(p => `
+        <div class="list-item">
+          <span class="list-desc">${(p.problema||p.recomendacao||'').slice(0,50)}</span>
+          ${statusBadge(p.status)}
+          ${p.data_limite ? `<span class="list-meta">${p.data_limite}</span>` : ''}
+        </div>
+      `).join('')
+    : '<div class="empty">Nenhum plano registrado</div>');
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 4: FORNECEDORES EM ALERTA
+// ══════════════════════════════════════════════════════════
+function renderAlertas(alertas, ranking) {
+  // Merge alertas + ranking com score < 70
+  const fornMap = {};
+  alertas.forEach(a => {
+    fornMap[a.fornecedor] = { ...a, alerta: a.nivel_alerta };
+  });
+  ranking.forEach(r => {
+    if (r.score_cq < 70 || fornMap[r.fornecedor]) {
+      if (!fornMap[r.fornecedor]) fornMap[r.fornecedor] = {};
+      fornMap[r.fornecedor] = { ...fornMap[r.fornecedor], ...r };
+    }
+  });
+
+  const lista = Object.values(fornMap).sort((a,b) => (a.score_cq||0) - (b.score_cq||0));
+
+  if (!lista.length) {
+    document.getElementById('alertaTable').innerHTML = '<div class="empty">Nenhum fornecedor em alerta</div>';
+    return;
+  }
+
+  const alertaBadge = nivel => {
+    if (nivel === 'CRITICO') return '<span class="badge badge-critica">✖ CRÍTICO</span>';
+    if (nivel === 'ATENCAO') return '<span class="badge badge-maior">⚠ ATENÇÃO</span>';
+    return '<span class="badge badge-menor">● MONITORAR</span>';
+  };
+
+  document.getElementById('alertaTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Fornecedor</th><th>Score CQ</th><th>Lotes A</th><th>Lotes B</th><th>Lotes C</th>
+        <th>% Médio</th><th>Alerta</th>
+      </tr></thead>
+      <tbody>
+        ${lista.map(f => `<tr>
+          <td><a href="gestao_fornecedores.html" style="color:var(--accent);text-decoration:none;">${f.fornecedor||'—'}</a></td>
+          <td style="font-family:'DM Mono';font-weight:700;color:${(f.score_cq||0)<50?'var(--cb-red)':(f.score_cq||0)<70?'var(--cb-orange)':'var(--cb-blue)'}">
+            ${f.score_cq ?? '—'}
+          </td>
+          <td style="color:var(--cb-blue)">${f.lotes_a ?? f.lotes_A ?? '—'}</td>
+          <td style="color:var(--cb-orange)">${f.lotes_b ?? f.lotes_B ?? '—'}</td>
+          <td style="color:var(--cb-red)">${f.lotes_c ?? f.lotes_C ?? '—'}</td>
+          <td style="font-family:'DM Mono'">${f.pct_medio != null ? f.pct_medio + '%' : '—'}</td>
+          <td>${alertaBadge(f.alerta || (f.score_cq < 50 ? 'CRITICO' : f.score_cq < 70 ? 'ATENCAO' : ''))}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL 5: TENDÊNCIA SEMANAL
+// ══════════════════════════════════════════════════════════
+function renderTendencia(dados) {
+  const canvas = document.getElementById('chartTendencia');
+  if (!dados.length || !canvas) {
+    const el = canvas || document.querySelector('.chart-box');
+    if (el) el.closest('.chart-box').innerHTML = '<div class="empty">Sem dados para tendência</div>';
+    return;
+  }
+
+  // Agrupar por semana
+  const semanas = {};
+  dados.forEach(d => {
+    const wk = d.data_inspecao.slice(0,4) + '-W' + String(getWeek(d.data_inspecao)).padStart(2,'0');
+    if (!semanas[wk]) semanas[wk] = { A:0, B:0, C:0, total:0, defSum:0 };
+    semanas[wk][d.classificacao || 'C']++;
+    semanas[wk].total++;
+    semanas[wk].defSum += parseFloat(d.percentual_defeitos) || 0;
+  });
+
+  const labels = Object.keys(semanas).sort().slice(-12);
+  const dataA = labels.map(w => semanas[w]?.A || 0);
+  const dataB = labels.map(w => semanas[w]?.B || 0);
+  const dataC = labels.map(w => semanas[w]?.C || 0);
+  const dataAvg = labels.map(w => {
+    const s = semanas[w];
+    return s && s.total ? parseFloat((s.defSum / s.total).toFixed(1)) : 0;
+  });
+
+  if (chartTendencia) chartTendencia.destroy();
+
+  chartTendencia = new Chart(document.getElementById('chartTendencia'), {
+    type: 'bar',
+    data: {
+      labels: labels.map(w => w.replace(/^\d{4}-/, '')),
+      datasets: [
+        {
+          type: 'line', label: '% Defeito Médio', data: dataAvg,
+          borderColor: '#ede9e3', backgroundColor: 'rgba(237,233,227,.1)',
+          borderWidth: 2, pointRadius: 3, tension: .3, yAxisID: 'y1', order: 0
+        },
+        {
+          label: 'Classe A', data: dataA, backgroundColor: 'rgba(0,114,178,.7)',
+          borderRadius: 3, yAxisID: 'y', order: 1
+        },
+        {
+          label: 'Classe B', data: dataB, backgroundColor: 'rgba(230,159,0,.7)',
+          borderRadius: 3, yAxisID: 'y', order: 1
+        },
+        {
+          label: 'Classe C', data: dataC, backgroundColor: 'rgba(213,94,0,.7)',
+          borderRadius: 3, yAxisID: 'y', order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: '#666', font: { family: 'DM Mono', size: 10 } } }
+      },
+      scales: {
+        x: {
+          stacked: true, grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }
+        },
+        y: {
+          stacked: true, position: 'left',
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } },
+          title: { display: true, text: 'Lotes', color: '#666', font: { family: 'DM Mono', size: 10 } }
+        },
+        y1: {
+          position: 'right', grid: { drawOnChartArea: false },
+          ticks: { color: '#999', font: { family: 'DM Mono', size: 10 }, callback: v => v + '%' },
+          title: { display: true, text: '% Defeito', color: '#999', font: { family: 'DM Mono', size: 10 } }
+        }
+      }
+    }
+  });
+}
+
+</script>
+</body>
+</html>

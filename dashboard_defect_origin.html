@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapa de Defeitos · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+/* ── MAIN ── */
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+/* ── SECTION TITLE ── */
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .icon { font-size: 16px; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.filter-bar select:focus, .filter-bar input:focus { outline: none; border-color: var(--accent); }
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* ── KPI CARDS ── */
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+  transition: border-color .2s;
+}
+.kpi-card:hover { border-color: var(--border2); border-left-color: var(--accent); }
+.kpi-num {
+  font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1;
+  margin-bottom: 6px;
+}
+.kpi-label {
+  font-family: 'DM Mono'; font-size: 11px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .06em;
+}
+.kpi-sub {
+  font-family: 'DM Mono'; font-size: 10px; color: var(--muted); margin-top: 4px;
+}
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"]   .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"]   .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"]    .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+
+/* ── GRID 2 COLUNAS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* ── CARD PANEL ── */
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+}
+
+/* ── TABLE ── */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+thead th:hover { color: var(--accent); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+/* ── CHART ── */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 400px; position: relative; }
+
+/* ── HEATMAP ── */
+.heatmap td { text-align: center; font-family: 'DM Mono'; font-size: 11px; min-width: 60px; }
+.heatmap th { white-space: nowrap; }
+.heatmap td.row-label {
+  text-align: left; font-weight: 500; color: var(--text);
+  position: sticky; left: 0; background: var(--s1); z-index: 1;
+  min-width: 80px;
+}
+.heatmap thead th {
+  font-size: 9px; padding: 8px 6px;
+}
+
+/* ── BADGES ── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500;
+}
+
+/* ── UTILITIES ── */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+.btn-export {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 11px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s; float: right; margin-bottom: 12px;
+}
+.btn-export:hover { background: var(--accent3); color: var(--bg); }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Mapa de Defeitos</div>
+    <div class="header-sub">Defect Origin Map · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- FILTERS -->
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="aplicarFiltros()">
+        <option value="90">Últimos 90 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="180">Últimos 180 dias</option>
+        <option value="365">Último ano</option>
+        <option value="0">Todos</option>
+      </select>
+      <label>Estado</label>
+      <select id="filtroEstado" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+      </select>
+      <label>Fornecedor</label>
+      <select id="filtroFornecedor" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+      </select>
+      <label>Produto</label>
+      <select id="filtroProduto" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">🗺 Visão Geral de Defeitos</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- HEATMAP: Estado × Tipo de Defeito -->
+    <div class="section-title" style="margin-top:28px;">🔥 Heatmap — Estado × Tipo de Defeito</div>
+    <div class="panel">
+      <div class="table-wrap" id="heatmapWrap"></div>
+    </div>
+
+    <!-- TOP 10 DEFEITOS CHART -->
+    <div class="section-title" style="margin-top:28px;">📊 Top 10 Defeitos</div>
+    <div class="chart-wrap" style="margin-bottom:28px;">
+      <div class="chart-box"><canvas id="chartTop10"></canvas></div>
+    </div>
+
+    <!-- DETAILED TABLE -->
+    <div class="section-title" style="margin-top:28px;">📋 Tabela Detalhada</div>
+    <div class="panel">
+      <button class="btn-export" onclick="exportarCSV()">⬇ Exportar CSV</button>
+      <div class="table-wrap" id="detalheWrap"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _rawData = [];
+let _filteredData = [];
+let chartTop10 = null;
+
+const DEFEITO_COLS = [
+  { col: 'fermentacao', nome: 'Fermentação' },
+  { col: 'sem_folhas', nome: 'Sem Folhas' },
+  { col: 'folhas_arrebentadas', nome: 'F. Arrebentadas' },
+  { col: 'pedaco', nome: 'Pedaço' },
+  { col: 'sujo', nome: 'Sujo' },
+  { col: 'rasgado', nome: 'Rasgado' },
+  { col: 'corte_irregular', nome: 'Corte Irregular' },
+  { col: 'furado', nome: 'Furado' },
+  { col: 'mau_cheiro', nome: 'Mau Cheiro' },
+  { col: 'contaminacao', nome: 'Contaminação' },
+  { col: 'outro_defeito', nome: 'Outro' }
+];
+
+const CHART_COLORS = [
+  'rgba(213,94,0,.75)',   // cb-red
+  'rgba(230,159,0,.75)',  // cb-orange
+  'rgba(0,114,178,.75)',  // cb-blue
+  'rgba(204,121,167,.75)',// cb-purple
+  'rgba(0,158,115,.75)',  // cb-teal
+  'rgba(102,102,102,.75)',// cb-gray
+  'rgba(200,169,110,.75)',// accent
+  'rgba(213,94,0,.5)',
+  'rgba(230,159,0,.5)',
+  'rgba(0,114,178,.5)',
+  'rgba(204,121,167,.5)'
+];
+
+// ── INIT ──
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+// ── API ──
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+// ── LOAD DATA ──
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    _rawData = await apiFetch('vw_defect_origin?select=*');
+    populateFilters();
+    aplicarFiltros();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro ao carregar dados:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ── POPULATE FILTER SELECTS ──
+function populateFilters() {
+  const estados = [...new Set(_rawData.map(r => r.estado).filter(Boolean))].sort();
+  const fornecedores = [...new Set(_rawData.map(r => r.fornecedor).filter(Boolean))].sort();
+  const produtos = [...new Set(_rawData.map(r => r.produto).filter(Boolean))].sort();
+
+  fillSelect('filtroEstado', estados);
+  fillSelect('filtroFornecedor', fornecedores);
+  fillSelect('filtroProduto', produtos);
+}
+
+function fillSelect(id, items) {
+  const sel = document.getElementById(id);
+  const current = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  items.forEach(v => {
+    sel.innerHTML += `<option value="${v}">${v}</option>`;
+  });
+  sel.value = current || '';
+}
+
+// ── APPLY FILTERS ──
+function aplicarFiltros() {
+  const periodo = parseInt(document.getElementById('filtroPeriodo').value);
+  const estado = document.getElementById('filtroEstado').value;
+  const fornecedor = document.getElementById('filtroFornecedor').value;
+  const produto = document.getElementById('filtroProduto').value;
+
+  _filteredData = _rawData.filter(r => {
+    if (periodo > 0 && r.data_inspecao) {
+      const limiteData = diasAtras(periodo);
+      if (r.data_inspecao < limiteData) return false;
+    }
+    if (estado && r.estado !== estado) return false;
+    if (fornecedor && r.fornecedor !== fornecedor) return false;
+    if (produto && r.produto !== produto) return false;
+    return true;
+  });
+
+  renderKPIs();
+  renderHeatmap();
+  renderChartTop10();
+  renderDetalhe();
+}
+
+// ── HELPERS ──
+function sumCol(data, col) {
+  return data.reduce((s, r) => s + (Number(r[col]) || 0), 0);
+}
+
+function totalDefeitos(row) {
+  return DEFEITO_COLS.reduce((s, d) => s + (Number(row[d.col]) || 0), 0);
+}
+
+// ── KPIs ──
+function renderKPIs() {
+  const data = _filteredData;
+  const totalDef = data.reduce((s, r) => s + (Number(r.total_defeitos) || 0), 0);
+  const totalInsp = data.reduce((s, r) => s + (Number(r.total_inspecoes) || 0), 0);
+
+  // Defeito mais comum
+  const defTotals = DEFEITO_COLS.map(d => ({
+    nome: d.nome,
+    total: sumCol(data, d.col)
+  }));
+  defTotals.sort((a, b) => b.total - a.total);
+  const maisComum = defTotals[0] || { nome: '-', total: 0 };
+
+  // Estado mais afetado
+  const estadoMap = {};
+  data.forEach(r => {
+    if (!r.estado) return;
+    estadoMap[r.estado] = (estadoMap[r.estado] || 0) + (Number(r.total_defeitos) || 0);
+  });
+  const estadoTop = Object.entries(estadoMap).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
+
+  // Produto mais afetado
+  const produtoMap = {};
+  data.forEach(r => {
+    if (!r.produto) return;
+    produtoMap[r.produto] = (produtoMap[r.produto] || 0) + (Number(r.total_defeitos) || 0);
+  });
+  const produtoTop = Object.entries(produtoMap).sort((a, b) => b[1] - a[1])[0] || ['-', 0];
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">${totalDef.toLocaleString('pt-BR')}</div>
+      <div class="kpi-label">Total Defeitos</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">${maisComum.nome}</div>
+      <div class="kpi-label">Defeito Mais Comum</div>
+      <div class="kpi-sub">${maisComum.total.toLocaleString('pt-BR')} ocorrências</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">${estadoTop[0]}</div>
+      <div class="kpi-label">Estado Mais Afetado</div>
+      <div class="kpi-sub">${Number(estadoTop[1]).toLocaleString('pt-BR')} defeitos</div>
+    </div>
+    <div class="kpi-card" data-color="purple">
+      <div class="kpi-num" style="font-size:${produtoTop[0].length > 12 ? '18' : '28'}px">${produtoTop[0]}</div>
+      <div class="kpi-label">Produto Mais Afetado</div>
+      <div class="kpi-sub">${Number(produtoTop[1]).toLocaleString('pt-BR')} defeitos</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">${totalInsp.toLocaleString('pt-BR')}</div>
+      <div class="kpi-label">Inspeções Analisadas</div>
+    </div>
+  `;
+}
+
+// ── HEATMAP: Estado × Tipo de Defeito ──
+function renderHeatmap() {
+  const data = _filteredData;
+  const estadoMap = {};
+
+  data.forEach(r => {
+    const uf = r.estado || '—';
+    if (!estadoMap[uf]) {
+      estadoMap[uf] = {};
+      DEFEITO_COLS.forEach(d => estadoMap[uf][d.col] = 0);
+    }
+    DEFEITO_COLS.forEach(d => {
+      estadoMap[uf][d.col] += Number(r[d.col]) || 0;
+    });
+  });
+
+  const estados = Object.keys(estadoMap).sort();
+  if (!estados.length) {
+    document.getElementById('heatmapWrap').innerHTML = '<div class="empty">Sem dados para exibir.</div>';
+    return;
+  }
+
+  // Find global max for color scaling
+  let maxVal = 0;
+  estados.forEach(uf => {
+    DEFEITO_COLS.forEach(d => {
+      if (estadoMap[uf][d.col] > maxVal) maxVal = estadoMap[uf][d.col];
+    });
+  });
+
+  let html = '<table class="heatmap"><thead><tr><th>UF</th>';
+  DEFEITO_COLS.forEach(d => {
+    html += `<th>${d.nome}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  estados.forEach(uf => {
+    html += `<tr><td class="row-label">${uf}</td>`;
+    DEFEITO_COLS.forEach(d => {
+      const val = estadoMap[uf][d.col];
+      const intensity = maxVal > 0 ? (val / maxVal) : 0;
+      const opacity = val === 0 ? 0 : Math.max(0.05, Math.min(0.6, intensity * 0.6));
+      const bg = val > 0 ? `rgba(213,94,0,${opacity.toFixed(2)})` : 'transparent';
+      const textColor = intensity > 0.35 ? '#fff' : 'var(--muted)';
+      html += `<td style="background:${bg};color:${val > 0 ? textColor : 'var(--muted2)'}">${val || ''}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('heatmapWrap').innerHTML = html;
+}
+
+// ── CHART: Top 10 Defeitos ──
+function renderChartTop10() {
+  const data = _filteredData;
+  const defTotals = DEFEITO_COLS.map((d, i) => ({
+    nome: d.nome,
+    total: sumCol(data, d.col),
+    color: CHART_COLORS[i % CHART_COLORS.length]
+  }));
+
+  defTotals.sort((a, b) => b.total - a.total);
+  const top10 = defTotals.slice(0, 10).filter(d => d.total > 0);
+
+  if (chartTop10) chartTop10.destroy();
+
+  if (!top10.length) return;
+
+  chartTop10 = new Chart(document.getElementById('chartTop10'), {
+    type: 'bar',
+    data: {
+      labels: top10.map(d => d.nome),
+      datasets: [{
+        label: 'Ocorrências',
+        data: top10.map(d => d.total),
+        backgroundColor: top10.map(d => d.color),
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.x.toLocaleString('pt-BR')} ocorrências`
+          }
+        }
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255,255,255,.04)' },
+          ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }
+        },
+        y: {
+          grid: { display: false },
+          ticks: { color: '#999', font: { family: 'DM Mono', size: 11 } }
+        }
+      }
+    }
+  });
+}
+
+// ── DETAILED TABLE ──
+function renderDetalhe() {
+  const data = _filteredData;
+  if (!data.length) {
+    document.getElementById('detalheWrap').innerHTML = '<div class="empty">Sem dados para exibir.</div>';
+    return;
+  }
+
+  // Aggregate by estado + fornecedor + produto
+  const aggrMap = {};
+  data.forEach(r => {
+    const key = `${r.estado || '—'}|${r.fornecedor || '—'}|${r.produto || '—'}`;
+    if (!aggrMap[key]) {
+      aggrMap[key] = {
+        estado: r.estado || '—',
+        fornecedor: r.fornecedor || '—',
+        produto: r.produto || '—',
+        total_defeitos: 0,
+        count: 0
+      };
+      DEFEITO_COLS.forEach(d => aggrMap[key][d.col] = 0);
+    }
+    aggrMap[key].total_defeitos += Number(r.total_defeitos) || 0;
+    aggrMap[key].count += 1;
+    DEFEITO_COLS.forEach(d => {
+      aggrMap[key][d.col] += Number(r[d.col]) || 0;
+    });
+  });
+
+  const rows = Object.values(aggrMap);
+  rows.sort((a, b) => b.total_defeitos - a.total_defeitos);
+  const display = rows.slice(0, 50);
+
+  // Find max for mini heatmap
+  let maxDef = 0;
+  display.forEach(r => {
+    DEFEITO_COLS.forEach(d => {
+      if (r[d.col] > maxDef) maxDef = r[d.col];
+    });
+  });
+
+  let html = '<table><thead><tr>';
+  html += '<th>Estado</th><th>Fornecedor</th><th>Produto</th>';
+  html += '<th>Total Def.</th><th>Méd. Def.</th>';
+  DEFEITO_COLS.forEach(d => {
+    html += `<th style="font-size:9px;">${d.nome}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  display.forEach(r => {
+    const media = r.count > 0 ? (r.total_defeitos / r.count).toFixed(1) : '0';
+    html += `<tr>`;
+    html += `<td style="font-family:'DM Mono';font-weight:500;">${r.estado}</td>`;
+    html += `<td>${r.fornecedor}</td>`;
+    html += `<td>${r.produto}</td>`;
+    html += `<td style="font-family:'DM Mono';font-weight:700;color:var(--cb-red);">${r.total_defeitos.toLocaleString('pt-BR')}</td>`;
+    html += `<td style="font-family:'DM Mono';">${media}</td>`;
+    DEFEITO_COLS.forEach(d => {
+      const val = r[d.col];
+      const intensity = maxDef > 0 ? (val / maxDef) : 0;
+      const opacity = val === 0 ? 0 : Math.max(0.05, Math.min(0.6, intensity * 0.6));
+      const bg = val > 0 ? `rgba(213,94,0,${opacity.toFixed(2)})` : 'transparent';
+      const textColor = intensity > 0.35 ? '#fff' : 'var(--muted)';
+      html += `<td style="text-align:center;font-family:'DM Mono';font-size:11px;background:${bg};color:${val > 0 ? textColor : 'var(--muted2)'}">${val || ''}</td>`;
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  document.getElementById('detalheWrap').innerHTML = html;
+}
+
+// ── EXPORT CSV ──
+function exportarCSV() {
+  const data = _filteredData;
+  if (!data.length) return;
+
+  // Build same aggregation as detailed table
+  const aggrMap = {};
+  data.forEach(r => {
+    const key = `${r.estado || '—'}|${r.fornecedor || '—'}|${r.produto || '—'}`;
+    if (!aggrMap[key]) {
+      aggrMap[key] = {
+        estado: r.estado || '—',
+        fornecedor: r.fornecedor || '—',
+        produto: r.produto || '—',
+        total_defeitos: 0,
+        count: 0
+      };
+      DEFEITO_COLS.forEach(d => aggrMap[key][d.col] = 0);
+    }
+    aggrMap[key].total_defeitos += Number(r.total_defeitos) || 0;
+    aggrMap[key].count += 1;
+    DEFEITO_COLS.forEach(d => {
+      aggrMap[key][d.col] += Number(r[d.col]) || 0;
+    });
+  });
+
+  const rows = Object.values(aggrMap);
+  rows.sort((a, b) => b.total_defeitos - a.total_defeitos);
+
+  const headers = ['Estado', 'Fornecedor', 'Produto', 'Total Defeitos', 'Média Defeitos'];
+  DEFEITO_COLS.forEach(d => headers.push(d.nome));
+
+  let csv = headers.join(';') + '\n';
+  rows.forEach(r => {
+    const media = r.count > 0 ? (r.total_defeitos / r.count).toFixed(1) : '0';
+    const line = [r.estado, r.fornecedor, r.produto, r.total_defeitos, media];
+    DEFEITO_COLS.forEach(d => line.push(r[d.col]));
+    csv += line.join(';') + '\n';
+  });
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mapa_defeitos_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

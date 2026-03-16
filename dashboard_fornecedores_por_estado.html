@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fornecedores por Estado · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+.btn-back {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--cb-blue); background: rgba(0,114,178,.1); color: var(--cb-blue);
+  transition: all .2s; text-decoration: none; font-family: 'DM Mono';
+}
+.btn-back:hover { background: rgba(0,114,178,.2); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.context-bar {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+  padding: 16px 20px; background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); border-left: 4px solid var(--accent);
+}
+.context-uf { font-family: 'Syne'; font-weight: 800; font-size: 28px; color: var(--accent); }
+.context-info { font-size: 13px; color: var(--muted); }
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }   .kpi-card[data-color="blue"] .kpi-num   { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }   .kpi-card[data-color="teal"] .kpi-num   { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); } .kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }    .kpi-card[data-color="red"] .kpi-num    { color: var(--cb-red); }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }    .kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); } .kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+}
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-track { flex: 1; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; }
+.score-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.score-val { font-family: 'DM Mono'; font-size: 12px; font-weight: 700; min-width: 32px; }
+
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 350px; position: relative; }
+
+.btn-drill {
+  padding: 4px 10px; border-radius: 4px; font-size: 10px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--accent);
+  font-family: 'DM Mono'; transition: all .2s; text-decoration: none;
+}
+.btn-drill:hover { background: var(--accent3); color: var(--bg); }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Fornecedores por Estado</div>
+    <div class="header-sub">Drill-Down · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">&#8592; Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- CONTEXTO -->
+    <div class="context-bar">
+      <span class="context-uf" id="ctxUF"></span>
+      <div>
+        <div class="context-info" id="ctxInfo">Fornecedores do estado</div>
+      </div>
+      <a class="btn-back" href="dashboard_qualidade_por_estado.html" style="margin-left:auto;">&#8592; Voltar aos Estados</a>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="90">Últimos 90 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="180">Últimos 180 dias</option>
+        <option value="365">Último ano</option>
+        <option value="0">Todos</option>
+      </select>
+      <label>Produto</label>
+      <select id="filtroProduto" onchange="aplicarFiltros()"><option value="">Todos</option></select>
+      <label>Status</label>
+      <select id="filtroStatus" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option value="aprovado">Aprovado</option>
+        <option value="ressalva">Ressalva</option>
+        <option value="bloqueado">Bloqueado</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">&#8635; Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">&#128203; Indicadores do Estado</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- RANKING FORNECEDORES -->
+    <div class="section-title" style="margin-top:28px;">&#128203; Ranking de Fornecedores</div>
+    <div class="panel">
+      <div class="table-wrap" id="rankingForn"></div>
+    </div>
+
+    <!-- GRÁFICO COMPARATIVO -->
+    <div class="section-title" style="margin-top:28px;">&#128200; Comparativo de Fornecedores</div>
+    <div class="chart-wrap">
+      <div class="chart-box"><canvas id="chartComparativo"></canvas></div>
+    </div>
+
+    <!-- DEFEITOS POR FORNECEDOR -->
+    <div class="section-title" style="margin-top:0;">&#9888; Defeitos por Fornecedor</div>
+    <div class="panel">
+      <div class="table-wrap" id="defeitosTable"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _uf = '';
+let _inspecoes = [], _cadastros = [], _ncs = [];
+let _filtrado = [];
+let chartComparativo = null;
+
+const DEFEITO_COLS = [
+  { col: 'fermentacao', nome: 'Ferm.' },
+  { col: 'sem_folhas', nome: 'S/Folha' },
+  { col: 'folhas_arrebentadas', nome: 'F.Arreb.' },
+  { col: 'pedaco', nome: 'Pedaço' },
+  { col: 'sujo', nome: 'Sujo' },
+  { col: 'rasgado', nome: 'Rasgado' },
+  { col: 'corte_irregular', nome: 'C.Irreg.' },
+  { col: 'furado', nome: 'Furado' },
+  { col: 'mau_cheiro', nome: 'M.Cheiro' },
+  { col: 'contaminacao', nome: 'Contam.' },
+  { col: 'outro_defeito', nome: 'Outro' }
+];
+
+(async function(){
+  // Ler UF da URL
+  const params = new URLSearchParams(window.location.search);
+  _uf = params.get('uf') || '';
+  if (!_uf) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#666;">Parâmetro UF não informado. <a href="dashboard_qualidade_por_estado.html" style="color:#c8a96e;">Voltar</a></div>';
+    return;
+  }
+
+  document.getElementById('ctxUF').textContent = _uf;
+  document.title = `Fornecedores ${_uf} · Classic CQ`;
+
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro','comercial'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+async function carregarDados() {
+  const periodo = parseInt(document.getElementById('filtroPeriodo').value);
+  const filtroData = periodo > 0 ? `&data_inspecao=gte.${diasAtras(periodo)}` : '';
+
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    [_inspecoes, _cadastros, _ncs] = await Promise.all([
+      apiFetch(`registros_cq_inspecao?select=fornecedor,fornecedor_codigo,data_inspecao,classificacao,percentual_defeitos,status_final,produto,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,sujo,rasgado,corte_irregular,furado,mau_cheiro,contaminacao,outro_defeito${filtroData}&order=data_inspecao`),
+      apiFetch('cadastros_atak?select=codigo,nome,uf&tipo=eq.fornecedor&ativo=eq.true'),
+      apiFetch('cq_nao_conformidades?select=fornecedor,status&status=in.(aberta,em_tratamento)')
+    ]);
+
+    populaFiltros();
+    aplicarFiltros();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { console.error('Erro:', e); }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+function populaFiltros() {
+  const selProd = document.getElementById('filtroProduto');
+  const v = selProd.value;
+  const ufCodigos = _cadastros.filter(c => c.uf === _uf).map(c => c.codigo);
+  const inspsUF = _inspecoes.filter(i => ufCodigos.includes(i.fornecedor_codigo));
+  const prods = [...new Set(inspsUF.map(i => i.produto).filter(Boolean))].sort();
+  selProd.innerHTML = '<option value="">Todos</option>' + prods.map(p => `<option value="${p}">${p}</option>`).join('');
+  selProd.value = v;
+}
+
+function aplicarFiltros() {
+  const produto = document.getElementById('filtroProduto').value;
+  const status = document.getElementById('filtroStatus').value;
+  const ufCodigos = _cadastros.filter(c => c.uf === _uf).map(c => c.codigo);
+
+  _filtrado = _inspecoes.filter(i => {
+    if (!ufCodigos.includes(i.fornecedor_codigo)) return false;
+    if (produto && i.produto !== produto) return false;
+    if (status && i.status_final !== status) return false;
+    return true;
+  });
+
+  document.getElementById('ctxInfo').textContent =
+    `${[...new Set(_filtrado.map(i => i.fornecedor))].length} fornecedores · ${_filtrado.length} inspeções`;
+
+  renderAll();
+}
+
+function agruparPorFornecedor(dados) {
+  const map = {};
+  dados.forEach(i => {
+    const key = i.fornecedor_codigo || i.fornecedor || '?';
+    if (!map[key]) map[key] = {
+      fornecedor: i.fornecedor || '?', codigo: i.fornecedor_codigo,
+      total: 0, aprovadas: 0, ressalvas: 0, bloqueios: 0, somaPct: 0,
+      a: 0, b: 0, c: 0, defeitos: {}
+    };
+    const g = map[key];
+    g.total++;
+    if (i.status_final === 'aprovado') g.aprovadas++;
+    if (i.status_final === 'ressalva') g.ressalvas++;
+    if (i.status_final === 'bloqueado') g.bloqueios++;
+    g.somaPct += parseFloat(i.percentual_defeitos) || 0;
+    if (i.classificacao === 'A') g.a++;
+    if (i.classificacao === 'B') g.b++;
+    if (i.classificacao === 'C') g.c++;
+    DEFEITO_COLS.forEach(d => {
+      g.defeitos[d.col] = (g.defeitos[d.col] || 0) + (parseInt(i[d.col]) || 0);
+    });
+  });
+
+  return Object.values(map).map(g => ({
+    ...g,
+    taxa_aprovacao: g.total ? +(g.aprovadas / g.total * 100).toFixed(1) : 0,
+    taxa_bloqueio: g.total ? +(g.bloqueios / g.total * 100).toFixed(1) : 0,
+    media_defeitos: g.total ? +(g.somaPct / g.total).toFixed(2) : 0,
+    score_cq: g.total ? Math.max(0, Math.min(100, Math.round(
+      100 - (g.c / g.total * 50) - (g.b / g.total * 20) + (g.a / g.total * 20)
+    ))) : 0,
+    ncs_abertas: _ncs.filter(nc => nc.fornecedor === g.fornecedor).length
+  })).sort((a, b) => b.score_cq - a.score_cq);
+}
+
+function renderAll() {
+  const fornecedores = agruparPorFornecedor(_filtrado);
+  renderKPIs(fornecedores);
+  renderRanking(fornecedores);
+  renderChart(fornecedores);
+  renderDefeitos(fornecedores);
+}
+
+function renderKPIs(fornecedores) {
+  const totalForn = fornecedores.length;
+  const totalInsp = _filtrado.length;
+  const taxaAprov = totalInsp ? (_filtrado.filter(i => i.status_final === 'aprovado').length / totalInsp * 100).toFixed(1) : '0.0';
+  const taxaBloq = totalInsp ? (_filtrado.filter(i => i.status_final === 'bloqueado').length / totalInsp * 100).toFixed(1) : '0.0';
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">&#128203; ${totalForn}</div>
+      <div class="kpi-label">Fornecedores</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">&#128203; ${totalInsp}</div>
+      <div class="kpi-label">Inspeções</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">&#10004; ${taxaAprov}%</div>
+      <div class="kpi-label">Taxa aprovação</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">&#10006; ${taxaBloq}%</div>
+      <div class="kpi-label">Taxa bloqueio</div>
+    </div>
+  `;
+}
+
+function renderRanking(fornecedores) {
+  if (!fornecedores.length) {
+    document.getElementById('rankingForn').innerHTML = '<div class="empty">Nenhuma inspeção encontrada</div>';
+    return;
+  }
+
+  const scoreColor = s => s < 50 ? 'var(--cb-red)' : s < 70 ? 'var(--cb-orange)' : s < 85 ? 'var(--cb-blue)' : 'var(--cb-teal)';
+
+  document.getElementById('rankingForn').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Fornecedor</th><th>Score CQ</th><th>Inspeções</th>
+        <th>&#10004; A</th><th>&#9888; B</th><th>&#10006; C</th>
+        <th>% Aprov.</th><th>% Bloq.</th><th>Méd. Def.</th><th>NCs</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${fornecedores.map((f, i) => `<tr>
+          <td style="font-family:'DM Mono';color:var(--muted)">${i+1}</td>
+          <td style="font-size:12px;">${(f.fornecedor||'—').slice(0,35)}</td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width:${f.score_cq}%;background:${scoreColor(f.score_cq)}"></div></div>
+              <span class="score-val" style="color:${scoreColor(f.score_cq)}">${f.score_cq}</span>
+            </div>
+          </td>
+          <td style="font-family:'DM Mono'">${f.total}</td>
+          <td style="color:var(--cb-blue);font-family:'DM Mono'">${f.a}</td>
+          <td style="color:var(--cb-orange);font-family:'DM Mono'">${f.b}</td>
+          <td style="color:var(--cb-red);font-family:'DM Mono'">${f.c}</td>
+          <td style="font-family:'DM Mono'">${f.taxa_aprovacao}%</td>
+          <td style="font-family:'DM Mono';color:${f.taxa_bloqueio > 15 ? 'var(--cb-red)' : f.taxa_bloqueio > 5 ? 'var(--cb-orange)' : 'var(--muted)'}">${f.taxa_bloqueio}%</td>
+          <td style="font-family:'DM Mono'">${f.media_defeitos}%</td>
+          <td style="font-family:'DM Mono';color:${f.ncs_abertas > 0 ? 'var(--cb-red)' : 'var(--muted)'}">${f.ncs_abertas > 0 ? '&#9889; ' + f.ncs_abertas : '—'}</td>
+          <td><a class="btn-drill" href="dashboard_produto_estado.html?uf=${encodeURIComponent(_uf)}&fornecedor=${encodeURIComponent(f.fornecedor)}&codigo=${encodeURIComponent(f.codigo||'')}">Produtos &#8594;</a></td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderChart(fornecedores) {
+  const top = fornecedores.slice().sort((a, b) => a.score_cq - b.score_cq).slice(0, 15);
+  const canvas = document.getElementById('chartComparativo');
+  if (!top.length || !canvas) return;
+
+  if (chartComparativo) chartComparativo.destroy();
+  chartComparativo = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: top.map(f => (f.fornecedor||'').slice(0, 20)),
+      datasets: [{
+        label: 'Score CQ',
+        data: top.map(f => f.score_cq),
+        backgroundColor: top.map(f =>
+          f.score_cq < 50 ? 'rgba(213,94,0,.7)' :
+          f.score_cq < 70 ? 'rgba(230,159,0,.7)' : 'rgba(0,114,178,.7)'
+        ),
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => `Score ${ctx.parsed.x} (${top[ctx.dataIndex].total} inspeções)` } }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }, max: 100 },
+        y: { grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderDefeitos(fornecedores) {
+  const top = fornecedores.slice(0, 20);
+  if (!top.length) {
+    document.getElementById('defeitosTable').innerHTML = '<div class="empty">Sem dados</div>';
+    return;
+  }
+
+  document.getElementById('defeitosTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Fornecedor</th>
+        ${DEFEITO_COLS.map(d => `<th style="text-align:center;">${d.nome}</th>`).join('')}
+      </tr></thead>
+      <tbody>
+        ${top.map(f => {
+          const maxDef = Math.max(...DEFEITO_COLS.map(d => f.defeitos[d.col] || 0), 1);
+          return `<tr>
+            <td style="font-size:11px;">${(f.fornecedor||'').slice(0,30)}</td>
+            ${DEFEITO_COLS.map(d => {
+              const v = f.defeitos[d.col] || 0;
+              const intensity = v / maxDef;
+              const bg = v > 0 ? `rgba(213,94,0,${(intensity * 0.4 + 0.1).toFixed(2)})` : 'transparent';
+              return `<td style="text-align:center;font-family:'DM Mono';font-size:11px;background:${bg};color:${v > 0 ? 'var(--text)' : 'var(--muted2)'}">${v || '·'}</td>`;
+            }).join('')}
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  `;
+}
+</script>
+</body>
+</html>

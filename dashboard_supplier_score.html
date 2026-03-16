@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score de Confiabilidade · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+.kpi-card[data-color="blue"] { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"] .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"] { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"] .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"] { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"] .kpi-num { color: var(--cb-red); }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+}
+
+/* TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--accent); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+/* BADGES */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500;
+}
+.badge-confiavel { background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-regular { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-atencao { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-critico { background: rgba(213,94,0,.15); color: var(--cb-red); }
+
+/* SCORE BAR */
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-track {
+  flex: 1; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden;
+}
+.score-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.score-val { font-family: 'DM Mono'; font-size: 12px; font-weight: 700; min-width: 32px; }
+
+/* CHART */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 300px; position: relative; }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+.btn-export {
+  padding: 8px 18px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s; margin-top: 14px;
+}
+.btn-export:hover { background: var(--accent3); color: var(--bg); }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Score de Confiabilidade</div>
+    <div class="header-sub">Supplier Reliability Index · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="90" selected>Últimos 90 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="180">Últimos 180 dias</option>
+        <option value="365">Último ano</option>
+        <option value="all">Todos</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">Visão Geral — Confiabilidade</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- RANKING COMPLETO -->
+    <div class="section-title" style="margin-top:28px;">Ranking de Confiabilidade</div>
+    <div class="panel">
+      <div class="table-wrap" id="rankingTable"></div>
+      <button class="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button>
+    </div>
+
+    <!-- CHARTS -->
+    <div class="grid-2" style="margin-top:28px;">
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">Distribuição de Classificação</div>
+        <div class="chart-box"><canvas id="chartClassificacao"></canvas></div>
+      </div>
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">Top 10 Piores Scores</div>
+        <div class="chart-box"><canvas id="chartPiores"></canvas></div>
+      </div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _data = [];
+let chartClassificacao = null, chartPiores = null;
+
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    _data = await apiFetch('vw_supplier_score?select=*&order=score_confiabilidade.desc');
+
+    renderKPIs();
+    renderRanking();
+    renderChartClassificacao();
+    renderChartPiores();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ── KPIs ──
+function renderKPIs() {
+  const total = _data.length;
+  const avgScore = total ? Math.round(_data.reduce((s,r) => s + (r.score_confiabilidade||0), 0) / total) : 0;
+  const confiaveis = _data.filter(d => (d.classificacao_confiabilidade||'').toLowerCase() === 'confiavel').length;
+  const criticos = _data.filter(d => (d.classificacao_confiabilidade||'').toLowerCase() === 'critico').length;
+  const pctConf = total ? Math.round(confiaveis / total * 100) : 0;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">${total}</div>
+      <div class="kpi-label">Total Fornecedores</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">${avgScore}</div>
+      <div class="kpi-label">Score Médio</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">${pctConf}%<span style="font-size:14px;font-weight:400;color:var(--muted);margin-left:6px;">(${confiaveis})</span></div>
+      <div class="kpi-label">Confiáveis</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">${criticos}</div>
+      <div class="kpi-label">Críticos</div>
+    </div>
+  `;
+}
+
+// ── RANKING TABLE ──
+function renderRanking() {
+  if (!_data.length) {
+    document.getElementById('rankingTable').innerHTML = '<div class="empty">Nenhum fornecedor encontrado</div>';
+    return;
+  }
+
+  const scoreColor = s => s < 40 ? 'var(--cb-red)' : s < 60 ? 'var(--cb-orange)' : s < 80 ? 'var(--cb-blue)' : 'var(--cb-teal)';
+
+  function classifBadge(c) {
+    const cl = (c||'').toLowerCase();
+    if (cl === 'confiavel') return '<span class="badge badge-confiavel">✔ CONFIÁVEL</span>';
+    if (cl === 'regular')   return '<span class="badge badge-regular">● REGULAR</span>';
+    if (cl === 'atencao')   return '<span class="badge badge-atencao">⚠ ATENÇÃO</span>';
+    if (cl === 'critico')   return '<span class="badge badge-critico">✖ CRÍTICO</span>';
+    return '<span class="badge">' + (c||'—') + '</span>';
+  }
+
+  document.getElementById('rankingTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Fornecedor</th><th>UF</th><th>Score Confiabilidade</th>
+        <th>Classificação</th><th>Inspeções</th><th>Bloqueios</th><th>NCs</th><th>Méd. Defeitos</th>
+      </tr></thead>
+      <tbody>
+        ${_data.map((d, i) => `<tr>
+          <td style="font-family:'DM Mono';color:var(--muted)">${i+1}</td>
+          <td style="font-size:12px;">${d.fornecedor||'—'}</td>
+          <td style="font-family:'DM Mono';color:var(--muted)">${d.estado||'—'}</td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width:${d.score_confiabilidade||0}%;background:${scoreColor(d.score_confiabilidade||0)}"></div></div>
+              <span class="score-val" style="color:${scoreColor(d.score_confiabilidade||0)}">${d.score_confiabilidade ?? '—'}</span>
+            </div>
+          </td>
+          <td>${classifBadge(d.classificacao_confiabilidade)}</td>
+          <td style="font-family:'DM Mono'">${d.total_inspecoes||0}</td>
+          <td style="font-family:'DM Mono'">${d.bloqueios||0}</td>
+          <td style="font-family:'DM Mono'">${(d.nc_criticas||0) + (d.nc_maiores||0)}</td>
+          <td style="font-family:'DM Mono'">${d.media_defeitos != null ? d.media_defeitos + '%' : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── CHART: DISTRIBUIÇÃO ──
+function renderChartClassificacao() {
+  const counts = { confiavel: 0, regular: 0, atencao: 0, critico: 0 };
+  _data.forEach(d => {
+    const cl = (d.classificacao_confiabilidade||'').toLowerCase();
+    if (counts[cl] !== undefined) counts[cl]++;
+  });
+
+  if (chartClassificacao) chartClassificacao.destroy();
+  chartClassificacao = new Chart(document.getElementById('chartClassificacao'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Confiável', 'Regular', 'Atenção', 'Crítico'],
+      datasets: [{
+        data: [counts.confiavel, counts.regular, counts.atencao, counts.critico],
+        backgroundColor: [
+          'rgba(0,158,115,.8)',
+          'rgba(0,114,178,.8)',
+          'rgba(230,159,0,.8)',
+          'rgba(213,94,0,.8)'
+        ],
+        borderColor: 'transparent',
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '60%',
+      plugins: {
+        legend: {
+          position: 'bottom',
+          labels: { color: '#666', font: { family: 'DM Mono', size: 11 }, padding: 16, usePointStyle: true, pointStyleWidth: 10 }
+        }
+      }
+    }
+  });
+}
+
+// ── CHART: TOP 10 PIORES ──
+function renderChartPiores() {
+  const worst = _data.slice().sort((a,b) => (a.score_confiabilidade||0) - (b.score_confiabilidade||0)).slice(0, 10);
+  if (!worst.length) return;
+
+  if (chartPiores) chartPiores.destroy();
+  chartPiores = new Chart(document.getElementById('chartPiores'), {
+    type: 'bar',
+    data: {
+      labels: worst.map(r => (r.fornecedor||'').slice(0,20)),
+      datasets: [{
+        label: 'Score',
+        data: worst.map(r => r.score_confiabilidade || 0),
+        backgroundColor: worst.map(r =>
+          (r.score_confiabilidade||0) < 40 ? 'rgba(213,94,0,.7)' :
+          (r.score_confiabilidade||0) < 60 ? 'rgba(230,159,0,.7)' :
+          (r.score_confiabilidade||0) < 80 ? 'rgba(0,114,178,.7)' : 'rgba(0,158,115,.7)'
+        ),
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }, max: 100 },
+        y: { grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── EXPORT CSV ──
+function exportCSV() {
+  if (!_data.length) return;
+  const headers = ['Fornecedor','UF','Score','Classificação','Inspeções','Bloqueios','NCs Críticas','NCs Maiores','Méd. Defeitos'];
+  const rows = _data.map(d => [
+    d.fornecedor, d.estado, d.score_confiabilidade, d.classificacao_confiabilidade,
+    d.total_inspecoes, d.bloqueios, d.nc_criticas, d.nc_maiores, d.media_defeitos
+  ]);
+  const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'supplier_score_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

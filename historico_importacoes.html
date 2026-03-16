@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Histórico de Importações · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0a; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #1e1e1e; --border2: #2a2a2a;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --cb-amber: #F5A623;
+  --success: #2a7a4a; --success-text: #4ade80;
+  --error: #7a2a2a; --error-text: #f87171;
+  --warn: #7a6020; --warn-text: #fbbf24;
+  --info: #1e3a5f; --info-text: #60a5fa;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,10,10,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border2);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-back { color: var(--muted); font-size: 12px; text-decoration: none; letter-spacing: 0.1em; white-space: nowrap; }
+.header-back:hover { color: var(--accent); }
+.header-sep { color: var(--border2); }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 14px; color: var(--accent); letter-spacing: 0.08em; white-space: nowrap; }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border2); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none; white-space: nowrap;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+/* Main */
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 28px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"]   .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"]   .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"]    .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+.btn-export {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s; margin-left: auto;
+}
+.btn-export:hover { background: var(--accent3); color: var(--bg); }
+
+/* Panel & Table */
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 28px; }
+.panel-header {
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.panel-title { font-family: 'Syne'; font-weight: 700; font-size: 12px; color: var(--accent2); text-transform: uppercase; letter-spacing: .04em; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono'; font-weight: 500;
+  font-size: 10px; text-transform: uppercase; padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--border); white-space: nowrap;
+}
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); font-family: 'DM Mono'; font-size: 11px; }
+tbody tr:hover { background: var(--s2); }
+tbody tr.row-clickable { cursor: pointer; }
+tbody tr.row-clickable:hover { background: rgba(200,169,110,0.05); }
+
+/* Badges */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px;
+  font-family: 'DM Mono'; font-size: 10px; font-weight: 500; white-space: nowrap;
+}
+.badge-concluido { background: rgba(74,222,128,.12); color: var(--success-text); }
+.badge-concluido_com_erros { background: rgba(251,191,36,.12); color: var(--warn-text); }
+.badge-em_progresso { background: rgba(96,165,250,.12); color: var(--info-text); }
+.badge-falha { background: rgba(248,113,113,.12); color: var(--error-text); }
+.badge-cancelado { background: rgba(102,102,102,.15); color: var(--muted); }
+
+.badge-tipo-atak_pdf { background: rgba(0,114,178,.12); color: var(--cb-blue); }
+.badge-tipo-atak_pcr_xlsx { background: rgba(0,158,115,.12); color: var(--cb-teal); }
+.badge-tipo-planilha_cargas { background: rgba(245,166,35,.12); color: var(--cb-amber); }
+.badge-tipo-manual { background: rgba(102,102,102,.12); color: var(--muted); }
+.badge-tipo-migracao_legado { background: rgba(204,121,167,.12); color: var(--cb-purple); }
+.badge-tipo-cadastro_atak { background: rgba(0,114,178,.12); color: var(--cb-blue); }
+
+/* Error severity badges */
+.sev-erro { background: rgba(248,113,113,.12); color: var(--error-text); }
+.sev-aviso { background: rgba(251,191,36,.12); color: var(--warn-text); }
+.sev-info { background: rgba(96,165,250,.12); color: var(--info-text); }
+
+/* Expandable error row */
+.error-detail-row { display: none; }
+.error-detail-row.open { display: table-row; }
+.error-detail-row td { padding: 0; background: var(--s2); }
+.error-detail-wrap { padding: 12px 20px 16px; }
+.error-detail-wrap .sub-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 11px; color: var(--warn-text);
+  text-transform: uppercase; letter-spacing: .04em; margin-bottom: 10px;
+}
+.error-detail-wrap table { margin: 0; }
+.error-detail-wrap thead th { background: var(--s3); }
+.error-detail-wrap tbody td { font-size: 11px; color: var(--text); }
+
+/* States */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+.last-update { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); margin-left: auto; }
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .kpi-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .header-title { font-size: 12px; }
+}
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: 1fr 1fr; }
+  .main { padding: 12px 12px 32px; }
+  .header { padding: 0 12px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <a href="app.html" class="header-back">← MENU</a>
+  <span class="header-sep">|</span>
+  <span class="header-title">HISTÓRICO DE IMPORTAÇÕES</span>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- KPIs -->
+    <div class="section-title">Resumo das Importações</div>
+    <div class="kpi-grid" id="kpiGrid">
+      <div class="kpi-card" data-color="accent">
+        <div class="kpi-num" id="kpiTotal">—</div>
+        <div class="kpi-label">Total importações</div>
+      </div>
+      <div class="kpi-card" data-color="teal">
+        <div class="kpi-num" id="kpiImportados">—</div>
+        <div class="kpi-label">Registros importados</div>
+      </div>
+      <div class="kpi-card" data-color="orange">
+        <div class="kpi-num" id="kpiDuplicados">—</div>
+        <div class="kpi-label">Total duplicados</div>
+      </div>
+      <div class="kpi-card" data-color="red">
+        <div class="kpi-num" id="kpiErros">—</div>
+        <div class="kpi-label">Total erros</div>
+      </div>
+      <div class="kpi-card" data-color="purple">
+        <div class="kpi-num" id="kpiUltima" style="font-size:18px;">—</div>
+        <div class="kpi-label">Última importação</div>
+      </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <label>Tipo</label>
+      <select id="filtroTipo" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option value="atak_pdf">atak_pdf</option>
+        <option value="atak_pcr_xlsx">atak_pcr_xlsx</option>
+        <option value="planilha_cargas">planilha_cargas</option>
+        <option value="manual">manual</option>
+        <option value="migracao_legado">migracao_legado</option>
+        <option value="cadastro_atak">cadastro_atak</option>
+      </select>
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="aplicarFiltros()">
+        <option value="7">Últimos 7 dias</option>
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="all">Todos</option>
+      </select>
+      <label>Status</label>
+      <select id="filtroStatus" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option value="concluido">Concluído</option>
+        <option value="concluido_com_erros">Com erros</option>
+        <option value="em_progresso">Em progresso</option>
+        <option value="falha">Falha</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <button class="btn-export" onclick="exportCSV()">⬇ Exportar CSV</button>
+      <span class="last-update" id="lastUpdate"></span>
+    </div>
+
+    <!-- Main Table -->
+    <div class="panel">
+      <div class="panel-header">
+        <span class="panel-title">Histórico de Importações</span>
+        <span class="panel-title" id="tableCount" style="color:var(--muted);font-weight:400;"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Código</th>
+              <th>Tipo</th>
+              <th>Arquivo</th>
+              <th>Destino</th>
+              <th>Importados</th>
+              <th>Duplic.</th>
+              <th>Erros</th>
+              <th>Status</th>
+              <th>Usuário</th>
+              <th>Data</th>
+              <th>Duração</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody"></tbody>
+        </table>
+      </div>
+      <div class="empty" id="emptyState" style="display:none;">Nenhuma importação encontrada com os filtros selecionados.</div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _allData = [];
+let _filteredData = [];
+let _errorCache = {};
+
+(async function(){
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    _allData = await apiFetch('cq_importacoes?order=iniciado_em.desc&limit=500');
+    _errorCache = {};
+    aplicarFiltros();
+    document.getElementById('lastUpdate').textContent = 'Atualizado: ' + new Date().toLocaleTimeString('pt-BR');
+  } catch (e) {
+    console.error('Erro ao carregar dados:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+function aplicarFiltros() {
+  const tipo = document.getElementById('filtroTipo').value;
+  const periodo = document.getElementById('filtroPeriodo').value;
+  const status = document.getElementById('filtroStatus').value;
+
+  let dados = [..._allData];
+
+  if (tipo) {
+    dados = dados.filter(d => d.tipo_fonte === tipo);
+  }
+
+  if (periodo !== 'all') {
+    const dias = parseInt(periodo);
+    const limite = new Date();
+    limite.setDate(limite.getDate() - dias);
+    dados = dados.filter(d => d.iniciado_em && new Date(d.iniciado_em) >= limite);
+  }
+
+  if (status) {
+    dados = dados.filter(d => d.status === status);
+  }
+
+  _filteredData = dados;
+  renderKPIs(dados);
+  renderTable(dados);
+}
+
+function renderKPIs(dados) {
+  document.getElementById('kpiTotal').textContent = dados.length.toLocaleString('pt-BR');
+
+  const totalImportados = dados.reduce((s, d) => s + (d.total_importados || 0), 0);
+  document.getElementById('kpiImportados').textContent = totalImportados.toLocaleString('pt-BR');
+
+  const totalDuplicados = dados.reduce((s, d) => s + (d.total_duplicados || 0), 0);
+  document.getElementById('kpiDuplicados').textContent = totalDuplicados.toLocaleString('pt-BR');
+
+  const totalErros = dados.reduce((s, d) => s + (d.total_erros || 0), 0);
+  document.getElementById('kpiErros').textContent = totalErros.toLocaleString('pt-BR');
+
+  const datas = dados.filter(d => d.iniciado_em).map(d => new Date(d.iniciado_em));
+  if (datas.length > 0) {
+    const ultima = new Date(Math.max(...datas));
+    document.getElementById('kpiUltima').textContent = formatDateTime(ultima);
+  } else {
+    document.getElementById('kpiUltima').textContent = '—';
+  }
+}
+
+function renderTable(dados) {
+  const tbody = document.getElementById('tableBody');
+  const emptyEl = document.getElementById('emptyState');
+  const countEl = document.getElementById('tableCount');
+
+  if (dados.length === 0) {
+    tbody.innerHTML = '';
+    emptyEl.style.display = 'block';
+    countEl.textContent = '0 registros';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  countEl.textContent = `${dados.length} registro${dados.length !== 1 ? 's' : ''}`;
+
+  let html = '';
+  dados.forEach((d, idx) => {
+    const hasErrors = (d.total_erros || 0) > 0;
+    const rowId = `row-${idx}`;
+    const detailId = `detail-${idx}`;
+
+    html += `<tr class="${hasErrors ? 'row-clickable' : ''}" ${hasErrors ? `onclick="toggleDetail('${detailId}', '${d.id}')"` : ''}>
+      <td style="color:var(--accent);font-weight:500;">${escHtml(d.codigo || d.id?.substring(0,8) || '—')}</td>
+      <td><span class="badge badge-tipo-${d.tipo_fonte || 'manual'}">${escHtml(d.tipo_fonte || '—')}</span></td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;" title="${escHtml(d.nome_arquivo || '')}">${escHtml(d.nome_arquivo || '—')}</td>
+      <td>${escHtml(d.tabela_destino || '—')}</td>
+      <td style="color:var(--success-text);font-weight:500;">${(d.total_importados || 0).toLocaleString('pt-BR')}</td>
+      <td style="color:var(--warn-text);">${(d.total_duplicados || 0).toLocaleString('pt-BR')}</td>
+      <td style="color:${hasErrors ? 'var(--error-text)' : 'var(--muted)'}; font-weight:${hasErrors ? '500' : '400'};">${(d.total_erros || 0).toLocaleString('pt-BR')}${hasErrors ? ' ▾' : ''}</td>
+      <td><span class="badge badge-${d.status || 'cancelado'}">${statusLabel(d.status)}</span></td>
+      <td>${escHtml(d.usuario_nome || d.usuario_email || '—')}</td>
+      <td>${d.iniciado_em ? formatDateTime(new Date(d.iniciado_em)) : '—'}</td>
+      <td>${calcDuration(d.iniciado_em, d.finalizado_em)}</td>
+    </tr>`;
+
+    if (hasErrors) {
+      html += `<tr class="error-detail-row" id="${detailId}">
+        <td colspan="11">
+          <div class="error-detail-wrap">
+            <div class="sub-title">Detalhes dos Erros</div>
+            <div id="errors-${d.id}" class="loading" style="padding:12px;font-size:11px;">Carregando erros...</div>
+          </div>
+        </td>
+      </tr>`;
+    }
+  });
+
+  tbody.innerHTML = html;
+}
+
+async function toggleDetail(detailId, importacaoId) {
+  const row = document.getElementById(detailId);
+  if (!row) return;
+
+  if (row.classList.contains('open')) {
+    row.classList.remove('open');
+    return;
+  }
+
+  row.classList.add('open');
+
+  const container = document.getElementById(`errors-${importacaoId}`);
+  if (!container) return;
+
+  if (_errorCache[importacaoId]) {
+    renderErrors(container, _errorCache[importacaoId]);
+    return;
+  }
+
+  try {
+    const erros = await apiFetch(`cq_importacao_erros?importacao_id=eq.${importacaoId}&order=criado_em.asc`);
+    _errorCache[importacaoId] = erros;
+    renderErrors(container, erros);
+  } catch (e) {
+    container.innerHTML = '<span style="color:var(--error-text)">Erro ao carregar detalhes.</span>';
+  }
+}
+
+function renderErrors(container, erros) {
+  if (!erros || erros.length === 0) {
+    container.innerHTML = '<span style="color:var(--muted);font-size:11px;">Nenhum erro registrado.</span>';
+    return;
+  }
+
+  let html = `<table>
+    <thead><tr>
+      <th>Linha</th>
+      <th>Tipo</th>
+      <th>Severidade</th>
+      <th>Mensagem</th>
+    </tr></thead><tbody>`;
+
+  erros.forEach(e => {
+    const sevClass = e.severidade === 'erro' ? 'sev-erro' : e.severidade === 'aviso' ? 'sev-aviso' : 'sev-info';
+    html += `<tr>
+      <td>${e.linha != null ? e.linha : '—'}</td>
+      <td>${escHtml(e.tipo || '—')}</td>
+      <td><span class="badge ${sevClass}">${escHtml(e.severidade || '—')}</span></td>
+      <td style="white-space:normal;max-width:500px;word-break:break-word;">${escHtml(e.mensagem || '—')}</td>
+    </tr>`;
+  });
+
+  html += '</tbody></table>';
+  container.innerHTML = html;
+}
+
+function statusLabel(s) {
+  const map = {
+    'concluido': 'Concluído',
+    'concluido_com_erros': 'Com erros',
+    'em_progresso': 'Em progresso',
+    'falha': 'Falha',
+    'cancelado': 'Cancelado'
+  };
+  return map[s] || s || '—';
+}
+
+function formatDateTime(dt) {
+  if (!dt || isNaN(dt)) return '—';
+  const d = String(dt.getDate()).padStart(2, '0');
+  const m = String(dt.getMonth() + 1).padStart(2, '0');
+  const y = dt.getFullYear();
+  const h = String(dt.getHours()).padStart(2, '0');
+  const min = String(dt.getMinutes()).padStart(2, '0');
+  return `${d}/${m}/${y} ${h}:${min}`;
+}
+
+function calcDuration(start, end) {
+  if (!start || !end) return '—';
+  const ms = new Date(end) - new Date(start);
+  if (ms < 0 || isNaN(ms)) return '—';
+  const secs = Math.floor(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  const mins = Math.floor(secs / 60);
+  const remSecs = secs % 60;
+  if (mins < 60) return `${mins}m ${remSecs}s`;
+  const hrs = Math.floor(mins / 60);
+  const remMins = mins % 60;
+  return `${hrs}h ${remMins}m`;
+}
+
+function escHtml(str) {
+  if (!str) return '';
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function exportCSV() {
+  if (_filteredData.length === 0) return;
+
+  const headers = ['Código', 'Tipo', 'Arquivo', 'Destino', 'Importados', 'Duplicados', 'Erros', 'Status', 'Usuário', 'Data Início', 'Data Fim', 'Duração'];
+  const rows = _filteredData.map(d => [
+    d.codigo || d.id?.substring(0, 8) || '',
+    d.tipo_fonte || '',
+    d.nome_arquivo || '',
+    d.tabela_destino || '',
+    d.total_importados || 0,
+    d.total_duplicados || 0,
+    d.total_erros || 0,
+    d.status || '',
+    d.usuario_nome || d.usuario_email || '',
+    d.iniciado_em ? formatDateTime(new Date(d.iniciado_em)) : '',
+    d.finalizado_em ? formatDateTime(new Date(d.finalizado_em)) : '',
+    calcDuration(d.iniciado_em, d.finalizado_em)
+  ]);
+
+  let csv = '\uFEFF' + headers.join(';') + '\n';
+  rows.forEach(r => {
+    csv += r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(';') + '\n';
+  });
+
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `historico_importacoes_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

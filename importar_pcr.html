@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Importar Planilha — Classic CQ</title>
+<title>Importar PCR WRMVE500 — Classic CQ</title>
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -38,7 +38,7 @@
   }
   .btn-logout:hover { border-color: var(--accent); color: var(--accent); }
 
-  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  main { max-width: 1100px; margin: 0 auto; padding: 32px 24px; }
 
   .page-title {
     font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800;
@@ -87,23 +87,17 @@
   .badge-ok { background: rgba(74,222,128,0.1); color: var(--success-text); border: 1px solid rgba(74,222,128,0.2); }
   .badge-warn { background: rgba(251,191,36,0.1); color: var(--warn-text); border: 1px solid rgba(251,191,36,0.2); }
 
-  .table-wrap { overflow-x: auto; }
+  .table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; }
   table { width: 100%; border-collapse: collapse; font-size: 12px; }
   th {
     background: #1a1a1a; color: var(--muted); font-weight: 600;
     text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px;
     padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border2);
-    white-space: nowrap;
+    white-space: nowrap; position: sticky; top: 0; z-index: 1;
   }
   td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
   tr:last-child td { border-bottom: none; }
   tr:hover td { background: rgba(255,255,255,0.02); }
-
-  .tag-congelado { color: #60a5fa; }
-  .tag-salgado { color: #f59e0b; }
-  .tag-a { color: #4ade80; font-weight: 600; }
-  .tag-b { color: #fbbf24; font-weight: 600; }
-  .tag-c { color: #f87171; font-weight: 600; }
 
   /* Alerts */
   .alert {
@@ -141,13 +135,14 @@
     background: var(--surface); border: 1px solid var(--border2);
     border-radius: 8px; padding: 24px; margin-top: 24px; display: none;
   }
-  .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 16px; }
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 16px; margin-top: 16px; }
   .result-item { text-align: center; }
   .result-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; }
   .result-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
   .num-ok { color: var(--success-text); }
   .num-skip { color: var(--warn-text); }
   .num-err { color: var(--error-text); }
+  .num-info { color: var(--info-text); }
 
   .spinner {
     width: 14px; height: 14px; border: 2px solid rgba(200,169,110,0.3);
@@ -161,9 +156,9 @@
 
 <header>
   <div class="header-left">
-    <a href="app.html">← MENU</a>
+    <a href="app.html">&#8592; MENU</a>
     <span class="header-sep">|</span>
-    <span class="header-mod">IMPORTAR PLANILHA DE CARGAS</span>
+    <span class="header-mod">IMPORTAR PCR WRMVE500</span>
   </div>
   <div class="header-right">
     <span id="headerUser">Carregando...</span>
@@ -172,13 +167,13 @@
 </header>
 
 <main>
-  <div class="page-title">Importar Planilha de Qualidade</div>
-  <div class="page-sub">Importa registros da aba <strong style="color:var(--accent)">FECHAMENTO</strong> da planilha diária do motorista</div>
+  <div class="page-title">Importar PCR ATAK (WRMVE500)</div>
+  <div class="page-sub">Importa registros de recebimento da planilha PCR do ATAK para a tabela <strong style="color:var(--accent)">cq_recebimentos</strong></div>
 
   <div class="info-box">
-    <strong>📋 Formato esperado:</strong> Planilha Excel (.xlsx) com aba <strong>FECHAMENTO</strong> — mesmo modelo usado pelos motoristas.
-    Os dados são lidos das linhas 4 em diante (colunas: Data · Cidade · Frigorífico · Salg/Cong · Contagem Frigo · Classic · Rasgados · Furados · Pelando · Sem Folha · Sujos · Pedaços · Corte I. · Folha E. · Situação · Observações).
-    <br><strong>Registros já existentes (mesmo PCR) serão ignorados automaticamente.</strong>
+    <strong>Formato esperado:</strong> Planilha Excel (.xlsx) gerada pelo ATAK (relatorio WRMVE500) com aba <strong>Sheet1</strong>.
+    A planilha contem blocos repetidos: linha de cabecalho (DOCUMENTO:, DATA PCR:, MOTORISTA:, etc.) seguida de linhas de produtos.
+    <br><strong>Registros ja existentes (mesmo id_recebimento) serao ignorados automaticamente.</strong>
   </div>
 
   <div id="alerts"></div>
@@ -186,8 +181,8 @@
   <!-- Drop Zone -->
   <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
     <div class="drop-icon">📂</div>
-    <div class="drop-title">Arraste a planilha aqui</div>
-    <div class="drop-sub">ou <span>clique para selecionar</span> · .xlsx · .xls</div>
+    <div class="drop-title">Arraste a planilha PCR aqui</div>
+    <div class="drop-sub">ou <span>clique para selecionar</span> · .xlsx</div>
   </div>
   <input type="file" id="fileInput" accept=".xlsx,.xls">
 
@@ -196,7 +191,7 @@
     <div class="preview-card">
       <div class="preview-header">
         <div>
-          <div class="preview-title" id="previewTitle">Pré-visualização</div>
+          <div class="preview-title" id="previewTitle">Pre-visualizacao</div>
           <div style="font-size:11px;color:var(--muted);margin-top:3px;" id="previewMeta"></div>
         </div>
         <span class="badge" id="previewBadge"></span>
@@ -206,26 +201,14 @@
           <thead>
             <tr>
               <th>#</th>
-              <th>Data</th>
-              <th>Cidade</th>
-              <th>Frigorífico</th>
-              <th>Tipo</th>
-              <th>Frigo</th>
-              <th>Classic</th>
-              <th>Diferença</th>
-              <th>Rasgados</th>
-              <th>Furados</th>
-              <th>Pelando</th>
-              <th>Sem Folha</th>
-              <th>Sujos</th>
-              <th>Pedaços</th>
-              <th>Corte I.</th>
-              <th>Folha E.</th>
-              <th>Total Prob.</th>
-              <th>%</th>
-              <th>Classe</th>
-              <th>Situação</th>
-              <th>PCR</th>
+              <th>Documento</th>
+              <th>Data PCR</th>
+              <th>Motorista</th>
+              <th>Fornecedor</th>
+              <th>Produto</th>
+              <th>Qtd Receb.</th>
+              <th>Qtd Pedida</th>
+              <th>Dif.</th>
             </tr>
           </thead>
           <tbody id="previewBody"></tbody>
@@ -235,9 +218,9 @@
 
     <div class="btn-row">
       <button class="btn btn-primary" id="btnImportar" onclick="importar()">
-        ⬆ Importar para o sistema
+        &#11014; Importar para o sistema
       </button>
-      <button class="btn btn-ghost" onclick="resetar()">✕ Cancelar</button>
+      <button class="btn btn-ghost" onclick="resetar()">&#10005; Cancelar</button>
     </div>
 
     <div class="progress-wrap" id="progressWrap">
@@ -250,15 +233,23 @@
   </div>
 
   <div class="result-card" id="resultCard">
-    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text)">Importação concluída</div>
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text)">Importacao concluida</div>
     <div class="result-grid">
+      <div class="result-item">
+        <div class="result-num num-info" id="resDocs">0</div>
+        <div class="result-label">Documentos</div>
+      </div>
+      <div class="result-item">
+        <div class="result-num num-info" id="resProds">0</div>
+        <div class="result-label">Produtos</div>
+      </div>
       <div class="result-item">
         <div class="result-num num-ok" id="resOk">0</div>
         <div class="result-label">Importados</div>
       </div>
       <div class="result-item">
         <div class="result-num num-skip" id="resSkip">0</div>
-        <div class="result-label">Já existiam (ignorados)</div>
+        <div class="result-label">Ignorados (duplicados)</div>
       </div>
       <div class="result-item">
         <div class="result-num num-err" id="resErr">0</div>
@@ -275,9 +266,10 @@
 <script>
 let dadosParaImportar = [];
 let SB_URL, SB_KEY;
-let arquivoAtual = null;    // { name, size, hash }
-let importacaoId = null;    // UUID do lote em cq_importacoes
-let usuarioAtual = null;    // dados do usuario logado
+let arquivoAtual = null;
+let importacaoId = null;
+let usuarioAtual = null;
+let totalDocsEncontrados = 0;
 
 // Auth
 (async () => {
@@ -295,7 +287,7 @@ let usuarioAtual = null;    // dados do usuario logado
     `<strong>${usuario.nome || usuario.email}</strong> · ${usuario.perfil}`;
 })();
 
-// ── Utilitários de rastreabilidade ──
+// ── Utilitarios de rastreabilidade ──
 async function calcularHash(arrayBuffer) {
   const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
   return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -320,11 +312,11 @@ async function criarLoteImportacao(arquivo, totalLinhas, metadados) {
   const codigo = gerarCodigoImportacao();
   const payload = {
     codigo_importacao: codigo,
-    tipo_fonte: 'planilha_cargas',
+    tipo_fonte: 'atak_pcr_xlsx',
     arquivo_nome: arquivo.name,
     arquivo_tamanho: arquivo.size,
     arquivo_hash: arquivo.hash,
-    tabela_destino: 'cq_cargas',
+    tabela_destino: 'cq_recebimentos',
     total_linhas: totalLinhas,
     status: 'em_progresso',
     usuario_id: usuarioAtual?.id || null,
@@ -395,7 +387,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
 });
 
 function mostrarAlerta(tipo, msg) {
-  const icons = { error: '⚠', success: '✓', warn: 'ℹ' };
+  const icons = { error: '&#9888;', success: '&#10003;', warn: '&#8505;' };
   document.getElementById('alerts').innerHTML =
     `<div class="alert alert-${tipo}"><span class="alert-icon">${icons[tipo]}</span><div>${msg}</div></div>`;
 }
@@ -406,183 +398,244 @@ function limparAlertas() {
 
 function resetar() {
   dadosParaImportar = [];
+  totalDocsEncontrados = 0;
   document.getElementById('previewSection').style.display = 'none';
   document.getElementById('resultCard').style.display = 'none';
   document.getElementById('fileInput').value = '';
   limparAlertas();
 }
 
-function calcularClassificacao(pct) {
-  if (pct === null || pct === undefined || isNaN(pct)) return '-';
-  if (pct <= 5) return 'A';
-  if (pct <= 12) return 'B';
-  return 'C';
+// ── Parsing WRMVE500 ──
+
+function extrairCampo(texto, prefixo) {
+  if (!texto || typeof texto !== 'string') return '';
+  const idx = texto.indexOf(prefixo);
+  if (idx === -1) return '';
+  return texto.substring(idx + prefixo.length).trim();
 }
 
-function formatarData(val) {
+function parseDataPCR(val) {
   if (!val) return null;
-  if (val instanceof Date) {
-    const d = String(val.getDate()).padStart(2,'0');
-    const m = String(val.getMonth()+1).padStart(2,'0');
-    const y = val.getFullYear();
-    return `${y}-${m}-${d}`;
-  }
-  if (typeof val === 'number') {
-    // Excel serial date
-    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
-    return formatarData(d);
-  }
-  if (typeof val === 'string' && val.includes('/')) {
-    const parts = val.split('/');
-    if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+  const s = String(val);
+  // Try DD/MM/YYYY
+  const m = s.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (m) return `${m[3]}-${m[2]}-${m[1]}`;
+  // Try serial date
+  if (!isNaN(val)) {
+    const d = new Date(Math.round((Number(val) - 25569) * 86400 * 1000));
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().slice(0, 10);
+    }
   }
   return null;
 }
 
+function formatarDataBR(isoDate) {
+  if (!isoDate) return '-';
+  const p = isoDate.split('-');
+  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+  return isoDate;
+}
+
 function num(v) {
   if (v === null || v === undefined || v === '') return 0;
-  if (typeof v === 'number') return Math.round(v);
+  if (typeof v === 'number') return v;
   const n = parseFloat(String(v).replace(',','.'));
-  return isNaN(n) ? 0 : Math.round(n);
+  return isNaN(n) ? 0 : n;
 }
 
 async function processarArquivo(file) {
   limparAlertas();
   if (!file.name.match(/\.xlsx?$/i)) {
-    mostrarAlerta('error', 'Selecione um arquivo Excel (.xlsx ou .xls)');
+    mostrarAlerta('error', 'Selecione um arquivo Excel (.xlsx)');
     return;
   }
 
   const reader = new FileReader();
   reader.onload = async (e) => {
     try {
-      // Calcular hash do arquivo para detectar reimportação
       const arrayBuffer = e.target.result;
       const hash = await calcularHash(arrayBuffer);
       arquivoAtual = { name: file.name, size: file.size, hash };
 
-      // Verificar se arquivo já foi importado
+      // Check duplicate file
       const impExistente = await verificarHashDuplicado(hash);
       if (impExistente) {
         const dataImp = new Date(impExistente.iniciado_em).toLocaleString('pt-BR');
-        mostrarAlerta('warn', `Este arquivo já foi importado em <strong>${dataImp}</strong> (lote: ${impExistente.codigo_importacao}). Se continuar, registros duplicados serão ignorados.`);
+        mostrarAlerta('warn', `Este arquivo ja foi importado em <strong>${dataImp}</strong> (lote: ${impExistente.codigo_importacao}). Se continuar, registros duplicados serao ignorados.`);
       }
 
-      const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+      mostrarAlerta('warn', 'Lendo planilha... aguarde (arquivo grande).');
 
-      // Busca aba FECHAMENTO (case-insensitive, trim)
-      const nomeAba = wb.SheetNames.find(n => n.trim().toUpperCase().includes('FECHAMENTO'));
-      if (!nomeAba) {
-        mostrarAlerta('error', 'Aba "FECHAMENTO" não encontrada na planilha. Abas disponíveis: ' + wb.SheetNames.join(', '));
-        return;
-      }
-
-      const ws = wb.Sheets[nomeAba];
-      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: false, dateNF: 'dd/mm/yyyy' });
-
-      // Linha 1 = índice 0 (motorista/data)
-      // Linhas de dados: índice 3 a 15 (L4 a L16)
-      // Colunas: A=0 Data, B=1 Cidade, C=2 Frigo, D=3 Salg/Cong, E=4 Frigo qtd, F=5 Classic qtd,
-      //          G=6 Diferença, H=7 Rasgados, I=8 Furados, J=9 Pelando, K=10 Sem Folha,
-      //          L=11 Sujos, M=12 Pedaços, N=13 Corte I., O=14 Folha E.,
-      //          P=15 Total Problema, Q=16 % Problema, R=17 Situação, S=18 Observações
-
-      const registros = [];
-      const erros = [];
-
-      // Motorista e data da viagem
-      let motorista = '';
-      let dataViagem = null;
-      if (raw[0]) {
-        motorista = raw[0][2] || '';
-        const dv = raw[0][5];
-        dataViagem = formatarData(dv instanceof Date ? dv : (dv ? new Date(dv) : null));
-      }
-
-      for (let i = 3; i <= 15; i++) {
-        const row = raw[i];
-        if (!row) continue;
-
-        const dataVal = row[0];
-        const cidade = (row[1] || '').toString().trim();
-        const frigo = (row[2] || '').toString().trim();
-        const tipo = (row[3] || '').toString().trim().toUpperCase();
-
-        // Linha vazia ou linha de total
-        if (!cidade && !frigo) continue;
-        if (cidade.toUpperCase().includes('TOTAL')) continue;
-
-        const data = formatarData(dataVal);
-        if (!data) continue;
-
-        const qtdFrigo = num(row[4]);
-        const qtdClassic = num(row[5]);
-        if (qtdFrigo === 0 && qtdClassic === 0) continue;
-
-        const rasgados   = num(row[7]);
-        const furados    = num(row[8]);
-        const pelando    = num(row[9]);
-        const semFolha   = num(row[10]);
-        const sujos      = num(row[11]);
-        const pedacos    = num(row[12]);
-        const corteI     = num(row[13]);
-        const folhaE     = num(row[14]);
-        const totalProb  = rasgados + furados + pelando + semFolha + sujos + pedacos + corteI + folhaE;
-        const pct        = qtdFrigo > 0 ? (totalProb / qtdFrigo) * 100 : 0;
-        const classe     = pct >= 5 && pelando >= 5 ? 'C' : calcularClassificacao(pct);
-        const situacao   = (row[17] || '').toString().trim();
-        const obs        = (row[18] || '').toString().trim();
-
-        // PCR da observação
-        const pcrMatch = obs.match(/PCR\s*(\d+)/i);
-        const pcr = pcrMatch ? pcrMatch[1] : null;
-
-        registros.push({
-          data_coleta: data,
-          cidade, frigorifico: frigo,
-          tipo_conservacao: tipo,
-          qtd_frigo: qtdFrigo,
-          qtd_classic: qtdClassic,
-          diferenca: qtdClassic - qtdFrigo,
-          rasgados, furados, pelando,
-          sem_folha: semFolha,
-          sujos, pedacos,
-          corte_irregular: corteI,
-          folha_extra: folhaE,
-          total_problemas: totalProb,
-          porcentagem: pct,
-          classificacao: classe,
-          situacao,
-          observacoes: obs,
-          numero_requisicao: pcr,
-          motorista: motorista || null,
-          data_viagem: dataViagem,
-          importado: true
-        });
-      }
-
-      if (registros.length === 0) {
-        mostrarAlerta('warn', 'Nenhum registro válido encontrado na planilha. Verifique se o arquivo está no formato correto.');
-        return;
-      }
-
-      dadosParaImportar = registros;
-      renderizarPreview(registros, motorista, dataViagem, file.name);
+      // Use setTimeout to allow UI to update before heavy parsing
+      setTimeout(() => {
+        try {
+          parsePlanilha(arrayBuffer, file.name);
+        } catch(err) {
+          mostrarAlerta('error', 'Erro ao processar planilha: ' + err.message);
+          console.error(err);
+        }
+      }, 100);
 
     } catch(err) {
-      mostrarAlerta('error', 'Erro ao ler planilha: ' + err.message);
+      mostrarAlerta('error', 'Erro ao ler arquivo: ' + err.message);
       console.error(err);
     }
   };
   reader.readAsArrayBuffer(file);
 }
 
-function renderizarPreview(registros, motorista, dataViagem, nomeArquivo) {
+function parsePlanilha(arrayBuffer, nomeArquivo) {
+  const wb = XLSX.read(arrayBuffer, { type: 'array' });
+
+  // Find Sheet1 or first sheet
+  const nomeAba = wb.SheetNames.find(n => n.trim().toLowerCase() === 'sheet1') || wb.SheetNames[0];
+  if (!nomeAba) {
+    mostrarAlerta('error', 'Nenhuma aba encontrada na planilha.');
+    return;
+  }
+
+  const ws = wb.Sheets[nomeAba];
+  const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+
+  const registros = [];
+  const docsSet = new Set();
+  let currentDoc = null;
+  let rowCount = raw.length;
+
+  for (let i = 0; i < rowCount; i++) {
+    const row = raw[i];
+    if (!row) continue;
+
+    const colA = row[0] != null ? String(row[0]).trim() : '';
+
+    // Detect header row by "DOCUMENTO:" in col A
+    if (colA.toUpperCase().indexOf('DOCUMENTO:') !== -1) {
+      // Parse header fields from cols A-H
+      const colB = row[1] != null ? String(row[1]) : '';
+      const colC = row[2] != null ? String(row[2]) : '';
+      const colD = row[3] != null ? String(row[3]) : '';
+      const colE = row[4] != null ? String(row[4]) : '';
+      const colF = row[5] != null ? String(row[5]) : '';
+      const colG = row[6] != null ? String(row[6]) : '';
+      const colH = row[7] != null ? String(row[7]) : '';
+
+      // Extract documento number
+      const docMatch = colA.match(/DOCUMENTO:\s*(\d+)/i);
+      const documento = docMatch ? docMatch[1] : '';
+
+      // Extract data PCR
+      const dataPcrRaw = extrairCampo(colC, 'DATA PCR:');
+      const dataPcr = parseDataPCR(dataPcrRaw);
+
+      // Extract motorista
+      const motorista = extrairCampo(colE, 'MOTORISTA:');
+
+      // Extract fornecedor (PARTICIPANTE: CODIGO - NOME)
+      const participanteRaw = extrairCampo(colF, 'PARTICIPANTE:');
+      let fornecedorCodigo = '';
+      let fornecedorNome = '';
+      if (participanteRaw) {
+        const sepIdx = participanteRaw.indexOf(' - ');
+        if (sepIdx !== -1) {
+          fornecedorCodigo = participanteRaw.substring(0, sepIdx).trim();
+          fornecedorNome = participanteRaw.substring(sepIdx + 3).trim();
+        } else {
+          fornecedorNome = participanteRaw;
+        }
+      }
+
+      // Extract origem
+      const origem = extrairCampo(colG, 'ORIGEM:');
+
+      // Extract placa
+      const placa = extrairCampo(colH, 'PLACA:');
+
+      if (documento) {
+        docsSet.add(documento);
+      }
+
+      currentDoc = {
+        documento,
+        dataPcr,
+        motorista,
+        fornecedorCodigo,
+        fornecedorNome,
+        origem,
+        placa,
+        headerRow: i
+      };
+      continue;
+    }
+
+    // If we have a current doc context, check for product rows
+    // Product rows have data in col I (index 8) = product code
+    if (currentDoc) {
+      const colI = row[8];
+      // Product code is typically a 5-digit number
+      if (colI != null) {
+        const prodCode = String(colI).trim();
+        // Check if it looks like a product code (digits, at least 3 chars)
+        if (prodCode && /^\d{3,}$/.test(prodCode)) {
+          const prodDescricao = row[9] != null ? String(row[9]).trim() : '';
+          const qtdRecebida = num(row[10]);
+          const qtdPedida = num(row[11]);
+          const diferenca = num(row[12]);
+
+          const idRecebimento = `PCR-${currentDoc.documento}-${prodCode}`;
+
+          const dataPcrFormatada = formatarDataBR(currentDoc.dataPcr);
+          const obs = `WRMVE500 \u00B7 PCR ${dataPcrFormatada} \u00B7 Motorista: ${currentDoc.motorista}`;
+
+          registros.push({
+            id_recebimento: idRecebimento,
+            fornecedor: currentDoc.fornecedorNome,
+            fornecedor_cod: currentDoc.fornecedorCodigo,
+            produto: prodDescricao,
+            produto_codigo: prodCode,
+            lote_atak: currentDoc.documento,
+            etiqueta: currentDoc.documento,
+            quantidade_lote: qtdRecebida,
+            status: 'importado_pcr',
+            observacoes: obs,
+            origem_dado: 'atak',
+            arquivo_origem: nomeArquivo,
+            // Extra fields for preview
+            _documento: currentDoc.documento,
+            _data_pcr: currentDoc.dataPcr,
+            _data_pcr_br: dataPcrFormatada,
+            _motorista: currentDoc.motorista,
+            _fornecedor_display: currentDoc.fornecedorCodigo
+              ? `${currentDoc.fornecedorCodigo} - ${currentDoc.fornecedorNome}`
+              : currentDoc.fornecedorNome,
+            _qtd_recebida: qtdRecebida,
+            _qtd_pedida: qtdPedida,
+            _diferenca: diferenca,
+            _origem: currentDoc.origem,
+            _placa: currentDoc.placa,
+            _row: i + 1
+          });
+        }
+      }
+    }
+  }
+
+  totalDocsEncontrados = docsSet.size;
+
+  if (registros.length === 0) {
+    mostrarAlerta('warn', `Nenhum registro de produto encontrado na planilha (${rowCount} linhas lidas). Verifique se o arquivo e um WRMVE500 valido.`);
+    return;
+  }
+
+  limparAlertas();
+  dadosParaImportar = registros;
+  renderizarPreview(registros, nomeArquivo);
+}
+
+function renderizarPreview(registros, nomeArquivo) {
   document.getElementById('previewTitle').textContent = nomeArquivo;
   document.getElementById('previewMeta').textContent =
-    (motorista ? 'Motorista: ' + motorista + '  ·  ' : '') +
-    (dataViagem ? 'Data viagem: ' + dataViagem.split('-').reverse().join('/') + '  ·  ' : '') +
-    registros.length + ' registro(s) encontrado(s)';
+    `${totalDocsEncontrados} documento(s)  ·  ${registros.length} produto(s) encontrado(s)`;
 
   const badge = document.getElementById('previewBadge');
   badge.textContent = registros.length + ' registros';
@@ -591,34 +644,36 @@ function renderizarPreview(registros, motorista, dataViagem, nomeArquivo) {
   const tbody = document.getElementById('previewBody');
   tbody.innerHTML = '';
 
-  registros.forEach((r, i) => {
-    const classeTag = { A: 'tag-a', B: 'tag-b', C: 'tag-c' }[r.classificacao] || '';
-    const tipoTag = r.tipo_conservacao === 'CONGELADO' ? 'tag-congelado' : 'tag-salgado';
+  // Show up to 200 rows in preview, indicate if more
+  const maxPreview = 200;
+  const showAll = registros.length <= maxPreview;
+  const displayRows = showAll ? registros : registros.slice(0, maxPreview);
+
+  displayRows.forEach((r, i) => {
+    const difColor = r._diferenca > 0 ? '#4ade80' : (r._diferenca < 0 ? '#f87171' : 'var(--muted)');
+    const difSign = r._diferenca > 0 ? '+' : '';
     tbody.innerHTML += `
       <tr>
         <td style="color:var(--muted)">${i+1}</td>
-        <td>${r.data_coleta.split('-').reverse().join('/')}</td>
-        <td>${r.cidade}</td>
-        <td>${r.frigorifico}</td>
-        <td class="${tipoTag}">${r.tipo_conservacao}</td>
-        <td>${r.qtd_frigo.toLocaleString('pt-BR')}</td>
-        <td>${r.qtd_classic.toLocaleString('pt-BR')}</td>
-        <td style="color:${r.diferenca >= 0 ? '#4ade80' : '#f87171'}">${r.diferenca >= 0 ? '+' : ''}${r.diferenca}</td>
-        <td>${r.rasgados || '-'}</td>
-        <td>${r.furados || '-'}</td>
-        <td>${r.pelando || '-'}</td>
-        <td>${r.sem_folha || '-'}</td>
-        <td>${r.sujos || '-'}</td>
-        <td>${r.pedacos || '-'}</td>
-        <td>${r.corte_irregular || '-'}</td>
-        <td>${r.folha_extra || '-'}</td>
-        <td style="font-weight:600">${r.total_problemas.toLocaleString('pt-BR')}</td>
-        <td>${r.porcentagem.toFixed(2)}%</td>
-        <td class="${classeTag}">${r.classificacao}</td>
-        <td style="color:var(--muted);font-size:11px">${r.situacao}</td>
-        <td style="color:var(--accent);font-size:11px">${r.numero_requisicao || '-'}</td>
+        <td style="color:var(--accent);font-weight:600">${r._documento}</td>
+        <td>${r._data_pcr_br}</td>
+        <td>${r._motorista || '-'}</td>
+        <td style="font-size:11px">${r._fornecedor_display || '-'}</td>
+        <td>${r.produto_codigo} - ${r.produto || '-'}</td>
+        <td style="font-weight:600">${r._qtd_recebida.toLocaleString('pt-BR')}</td>
+        <td>${r._qtd_pedida.toLocaleString('pt-BR')}</td>
+        <td style="color:${difColor}">${difSign}${r._diferenca}</td>
       </tr>`;
   });
+
+  if (!showAll) {
+    tbody.innerHTML += `
+      <tr>
+        <td colspan="9" style="text-align:center;color:var(--muted);font-style:italic;padding:16px">
+          ... e mais ${registros.length - maxPreview} registros (mostrando primeiros ${maxPreview})
+        </td>
+      </tr>`;
+  }
 
   document.getElementById('previewSection').style.display = 'block';
   document.getElementById('previewSection').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -636,96 +691,115 @@ async function importar() {
 
   let ok = 0, skip = 0, err = 0;
   const total = dadosParaImportar.length;
+  const BATCH_SIZE = 50;
 
-  // ── Criar lote de importação ──
+  // Create import batch
   const metadados = {
-    motorista: dadosParaImportar[0]?.motorista || null,
-    data_viagem: dadosParaImportar[0]?.data_viagem || null
+    total_documentos: totalDocsEncontrados,
+    total_produtos: total
   };
   const lote = await criarLoteImportacao(arquivoAtual, total, metadados);
   importacaoId = lote?.id || null;
 
-  for (let i = 0; i < total; i++) {
-    const r = dadosParaImportar[i];
+  // Build payloads, stripping preview-only fields
+  const payloads = dadosParaImportar.map(r => ({
+    id_recebimento: r.id_recebimento,
+    fornecedor: r.fornecedor,
+    fornecedor_cod: r.fornecedor_cod,
+    produto: r.produto,
+    lote_atak: r.lote_atak,
+    etiqueta: r.etiqueta,
+    quantidade_lote: r.quantidade_lote,
+    status: r.status,
+    observacoes: r.observacoes,
+    origem_dado: r.origem_dado,
+    importacao_id: importacaoId,
+    arquivo_origem: r.arquivo_origem
+  }));
 
-    // Atualizar progresso
-    const pct = Math.round(((i) / total) * 100);
+  // Batch insert with on_conflict ignore duplicates
+  for (let i = 0; i < payloads.length; i += BATCH_SIZE) {
+    const batch = payloads.slice(i, i + BATCH_SIZE);
+    const batchEnd = Math.min(i + BATCH_SIZE, payloads.length);
+
+    // Update progress
+    const pct = Math.round((i / total) * 100);
     document.getElementById('progressFill').style.width = pct + '%';
     document.getElementById('progressPct').textContent = pct + '%';
-    document.getElementById('progressLabel').textContent = `Inserindo ${i+1} de ${total}: ${r.frigorifico}`;
+    document.getElementById('progressLabel').textContent = `Inserindo lote ${Math.floor(i / BATCH_SIZE) + 1} (${i+1}-${batchEnd} de ${total})`;
 
     try {
-      // Verificar duplicata por PCR (numero_pcr)
-      if (r.numero_requisicao) {
-        const checkRes = await apiFetch(`cq_cargas?select=id&numero_pcr=eq.${encodeURIComponent(r.numero_requisicao)}&limit=1`);
-        const existing = await checkRes.json();
-        if (existing && existing.length > 0) {
-          skip++;
-          if (importacaoId) {
-            await registrarErroImportacao(importacaoId, i + 4, 'duplicata', 'info',
-              `PCR ${r.numero_requisicao} já existe no banco`, { pcr: r.numero_requisicao, frigorifico: r.frigorifico });
+      const res = await apiFetch('cq_recebimentos', {
+        method: 'POST',
+        headers: {
+          'Prefer': 'return=representation,resolution=ignore-duplicates',
+          'on_conflict': 'id_recebimento'
+        },
+        body: JSON.stringify(batch)
+      });
+
+      if (res.ok) {
+        const inserted = await res.json();
+        const insertedCount = Array.isArray(inserted) ? inserted.length : 0;
+        ok += insertedCount;
+        skip += batch.length - insertedCount;
+      } else {
+        const errBody = await res.text();
+        console.error('Batch insert error:', errBody);
+
+        // Try individual inserts as fallback
+        for (let j = 0; j < batch.length; j++) {
+          try {
+            const singleRes = await apiFetch('cq_recebimentos', {
+              method: 'POST',
+              headers: {
+                'Prefer': 'return=representation,resolution=ignore-duplicates',
+                'on_conflict': 'id_recebimento'
+              },
+              body: JSON.stringify(batch[j])
+            });
+            if (singleRes.ok) {
+              const singleData = await singleRes.json();
+              if (Array.isArray(singleData) && singleData.length > 0) {
+                ok++;
+              } else {
+                skip++;
+              }
+            } else {
+              const singleErr = await singleRes.text();
+              // Check if it's a duplicate conflict (409 or 23505)
+              if (singleRes.status === 409 || singleErr.includes('23505') || singleErr.includes('duplicate')) {
+                skip++;
+              } else {
+                err++;
+                console.error('Single insert error:', singleErr, batch[j]);
+                if (importacaoId) {
+                  await registrarErroImportacao(importacaoId, i + j, 'insercao', 'erro',
+                    `Falha: ${singleErr.substring(0, 200)}`, { id_recebimento: batch[j].id_recebimento });
+                }
+              }
+            }
+          } catch(se) {
+            err++;
+            console.error('Single insert exception:', se);
+            if (importacaoId) {
+              await registrarErroImportacao(importacaoId, i + j, 'insercao', 'erro',
+                `Excecao: ${se.message}`, { id_recebimento: batch[j].id_recebimento });
+            }
           }
-          continue;
         }
       }
-
-      // Montar payload para cq_cargas com rastreabilidade
-      const payload = {
-        motorista:          r.motorista || null,
-        data_viagem:        r.data_viagem || null,
-        data_coleta:        r.data_coleta,
-        cidade:             r.cidade,
-        frigorifico:        r.frigorifico,
-        tipo_conservacao:   r.tipo_conservacao,
-        qtd_frigo:          r.qtd_frigo,
-        qtd_classic:        r.qtd_classic,
-        diferenca:          r.diferenca,
-        rasgados:           r.rasgados,
-        furados:            r.furados,
-        pelando:            r.pelando,
-        sem_folha:          r.sem_folha,
-        sujos:              r.sujos,
-        pedacos:            r.pedacos,
-        corte_irregular:    r.corte_irregular,
-        folha_extra:        r.folha_extra,
-        total_problemas:    r.total_problemas,
-        porcentagem:        parseFloat(r.porcentagem.toFixed(4)),
-        classificacao:      r.classificacao,
-        situacao:           r.situacao,
-        observacoes:        r.observacoes,
-        numero_pcr:         r.numero_requisicao || null,
-        // ── Rastreabilidade ──
-        importado_por:      usuarioAtual?.id || null,
-        origem_dado:        'planilha',
-        importacao_id:      importacaoId,
-        arquivo_origem:     arquivoAtual?.name || null
-      };
-
-      const insertRes = await apiFetch('cq_cargas', {
-        method: 'POST',
-        body: JSON.stringify(payload)
-      });
-      if (!insertRes.ok) {
-        const errBody = await insertRes.text();
-        err++;
-        console.error('Insert error:', errBody, payload);
-        if (importacaoId) {
-          await registrarErroImportacao(importacaoId, i + 4, 'insercao', 'erro',
-            `Falha ao inserir: ${errBody.substring(0, 200)}`, { frigorifico: r.frigorifico, pcr: r.numero_requisicao });
-        }
-      } else { ok++; }
-
-    } catch(e) {
-      err++;
-      console.error('Erro ao inserir registro:', e);
+    } catch(batchErr) {
+      err += batch.length;
+      console.error('Batch exception:', batchErr);
       if (importacaoId) {
-        await registrarErroImportacao(importacaoId, i + 4, 'insercao', 'erro',
-          `Exceção: ${e.message}`, { frigorifico: r.frigorifico });
+        await registrarErroImportacao(importacaoId, i, 'insercao', 'erro',
+          `Excecao no lote: ${batchErr.message}`, { batch_start: i, batch_size: batch.length });
       }
     }
   }
 
-  // ── Atualizar lote de importação ──
+  // Update import batch record
   if (importacaoId) {
     await atualizarLoteImportacao(importacaoId, {
       total_importados: ok,
@@ -739,9 +813,11 @@ async function importar() {
   // 100%
   document.getElementById('progressFill').style.width = '100%';
   document.getElementById('progressPct').textContent = '100%';
-  document.getElementById('progressLabel').textContent = 'Concluído!';
+  document.getElementById('progressLabel').textContent = 'Concluido!';
 
-  // Resultado
+  // Result card
+  document.getElementById('resDocs').textContent = totalDocsEncontrados;
+  document.getElementById('resProds').textContent = total;
   document.getElementById('resOk').textContent = ok;
   document.getElementById('resSkip').textContent = skip;
   document.getElementById('resErr').textContent = err;
@@ -749,13 +825,15 @@ async function importar() {
   document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth' });
 
   if (err > 0) {
-    mostrarAlerta('warn', `${err} registro(s) com erro — verifique se as colunas da tabela existem no Supabase. Veja o console (F12) para detalhes.`);
+    mostrarAlerta('warn', `${err} registro(s) com erro. Verifique o console (F12) para detalhes.`);
   } else if (ok > 0) {
     mostrarAlerta('success', `${ok} registro(s) importados com sucesso! Lote: ${lote?.codigo_importacao || 'N/A'}`);
+  } else if (skip > 0 && ok === 0) {
+    mostrarAlerta('warn', `Todos os ${skip} registros ja existiam no sistema (ignorados).`);
   }
 
   btn.disabled = false;
-  btn.innerHTML = '⬆ Importar para o sistema';
+  btn.innerHTML = '&#11014; Importar para o sistema';
 }
 </script>
 </body>

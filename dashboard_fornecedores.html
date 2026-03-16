@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Fornecedores · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="blue"] { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"] .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"] { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"] .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"] { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"] .kpi-num { color: var(--cb-red); }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+}
+
+/* TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--accent); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+/* BADGES */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500;
+}
+.badge-a { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-b { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-c { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-critico { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-atencao { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-ok { background: rgba(0,158,115,.15); color: var(--cb-teal); }
+
+/* SCORE BAR */
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-track {
+  flex: 1; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden;
+}
+.score-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.score-val { font-family: 'DM Mono'; font-size: 12px; font-weight: 700; min-width: 32px; }
+
+/* CHART */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 300px; position: relative; }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Dashboard Fornecedores</div>
+    <div class="header-sub">Performance e Alertas · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="30">Últimos 30 dias</option>
+        <option value="7">Últimos 7 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="365">Último ano</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">🏭 Visão Geral de Fornecedores</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- TOP 10 SCORE + DISTRIBUIÇÃO -->
+    <div class="grid-2">
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">📊 Score CQ — Top 10 Piores</div>
+        <div class="chart-box"><canvas id="chartScore"></canvas></div>
+      </div>
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">📊 Distribuição A / B / C — Top 10 Volume</div>
+        <div class="chart-box"><canvas id="chartDistrib"></canvas></div>
+      </div>
+    </div>
+
+    <!-- RANKING COMPLETO -->
+    <div class="section-title" style="margin-top:28px;">📋 Ranking Completo</div>
+    <div class="panel">
+      <div class="table-wrap" id="rankingTable"></div>
+    </div>
+
+    <!-- ALERTAS -->
+    <div class="section-title" style="margin-top:28px;">⚠ Fornecedores em Alerta</div>
+    <div class="panel" id="alertaPanel"></div>
+
+    <!-- EVOLUÇÃO POR FORNECEDOR -->
+    <div class="section-title" style="margin-top:28px;">📈 Evolução por Fornecedor</div>
+    <div class="chart-wrap">
+      <div class="filter-bar" style="margin-bottom:12px;">
+        <label>Fornecedor</label>
+        <select id="filtroFornecedor" onchange="renderEvolucao()"></select>
+      </div>
+      <div class="chart-box"><canvas id="chartEvolucao"></canvas></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _ranking = [], _alertas = [], _inspecoes = [];
+let chartScore = null, chartDistrib = null, chartEvolucao = null;
+
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro','comercial'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+async function carregarDados() {
+  const periodo = parseInt(document.getElementById('filtroPeriodo').value);
+  const dataInicio = diasAtras(periodo);
+
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    [_ranking, _alertas, _inspecoes] = await Promise.all([
+      apiFetch('vw_ranking_fornecedores?select=*&order=score_cq.desc'),
+      apiFetch('vw_alertas_fornecedor?select=*'),
+      apiFetch(`registros_cq_inspecao?select=fornecedor,fornecedor_codigo,data_inspecao,classificacao,percentual_defeitos,status_final&data_inspecao=gte.${dataInicio}&order=data_inspecao`)
+    ]);
+
+    renderKPIs();
+    renderChartScore();
+    renderChartDistrib();
+    renderRanking();
+    renderAlertas();
+    populaSelectFornecedor();
+    renderEvolucao();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ── KPIs ──
+function renderKPIs() {
+  const totalForn = _ranking.length;
+  const criticos = _alertas.filter(a => a.nivel_alerta === 'CRITICO').length;
+  const atencao = _alertas.filter(a => a.nivel_alerta === 'ATENCAO').length;
+  const avgScore = totalForn ? Math.round(_ranking.reduce((s,r) => s + (r.score_cq||0), 0) / totalForn) : 0;
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">🏭 ${totalForn}</div>
+      <div class="kpi-label">Fornecedores Ativos</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">📊 ${avgScore}</div>
+      <div class="kpi-label">Score CQ Médio</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">✖ ${criticos}</div>
+      <div class="kpi-label">Alerta Crítico</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">⚠ ${atencao}</div>
+      <div class="kpi-label">Alerta Atenção</div>
+    </div>
+  `;
+}
+
+// ── CHART: SCORE TOP 10 PIORES ──
+function renderChartScore() {
+  const worst = _ranking.slice().sort((a,b) => (a.score_cq||0) - (b.score_cq||0)).slice(0, 10);
+  if (!worst.length) return;
+
+  if (chartScore) chartScore.destroy();
+  chartScore = new Chart(document.getElementById('chartScore'), {
+    type: 'bar',
+    data: {
+      labels: worst.map(r => (r.fornecedor||'').slice(0,20)),
+      datasets: [{
+        label: 'Score CQ',
+        data: worst.map(r => r.score_cq || 0),
+        backgroundColor: worst.map(r =>
+          (r.score_cq||0) < 50 ? 'rgba(213,94,0,.7)' :
+          (r.score_cq||0) < 70 ? 'rgba(230,159,0,.7)' : 'rgba(0,114,178,.7)'
+        ),
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }, max: 100 },
+        y: { grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── CHART: DISTRIBUIÇÃO A/B/C TOP 10 VOLUME ──
+function renderChartDistrib() {
+  const top = _ranking.slice().sort((a,b) => (b.total_lotes||0) - (a.total_lotes||0)).slice(0, 10);
+  if (!top.length) return;
+
+  if (chartDistrib) chartDistrib.destroy();
+  chartDistrib = new Chart(document.getElementById('chartDistrib'), {
+    type: 'bar',
+    data: {
+      labels: top.map(r => (r.fornecedor||'').slice(0,20)),
+      datasets: [
+        { label: 'Classe A', data: top.map(r => r.lotes_a || r.lotes_A || 0), backgroundColor: 'rgba(0,114,178,.7)', borderRadius: 3 },
+        { label: 'Classe B', data: top.map(r => r.lotes_b || r.lotes_B || 0), backgroundColor: 'rgba(230,159,0,.7)', borderRadius: 3 },
+        { label: 'Classe C', data: top.map(r => r.lotes_c || r.lotes_C || 0), backgroundColor: 'rgba(213,94,0,.7)', borderRadius: 3 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#666', font: { family: 'DM Mono', size: 10 } } } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 9 }, maxRotation: 45 } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── RANKING TABLE ──
+function renderRanking() {
+  if (!_ranking.length) {
+    document.getElementById('rankingTable').innerHTML = '<div class="empty">Nenhum fornecedor com inspeções</div>';
+    return;
+  }
+
+  const scoreColor = s => s < 50 ? 'var(--cb-red)' : s < 70 ? 'var(--cb-orange)' : s < 85 ? 'var(--cb-blue)' : 'var(--cb-teal)';
+  const scoreBg = s => s < 50 ? 'var(--cb-red)' : s < 70 ? 'var(--cb-orange)' : s < 85 ? 'var(--cb-blue)' : 'var(--cb-teal)';
+
+  document.getElementById('rankingTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Fornecedor</th><th>Score CQ</th><th>Lotes</th>
+        <th>✔ A</th><th>⚠ B</th><th>✖ C</th><th>% Méd. Defeito</th>
+      </tr></thead>
+      <tbody>
+        ${_ranking.map((r, i) => `<tr>
+          <td style="font-family:'DM Mono';color:var(--muted)">${i+1}</td>
+          <td><a href="gestao_fornecedores.html" style="color:var(--accent);text-decoration:none">${r.fornecedor||'—'}</a></td>
+          <td>
+            <div class="score-bar">
+              <div class="score-track"><div class="score-fill" style="width:${r.score_cq||0}%;background:${scoreBg(r.score_cq||0)}"></div></div>
+              <span class="score-val" style="color:${scoreColor(r.score_cq||0)}">${r.score_cq ?? '—'}</span>
+            </div>
+          </td>
+          <td style="font-family:'DM Mono'">${r.total_lotes||0}</td>
+          <td style="color:var(--cb-blue);font-family:'DM Mono'">${r.lotes_a ?? r.lotes_A ?? 0}</td>
+          <td style="color:var(--cb-orange);font-family:'DM Mono'">${r.lotes_b ?? r.lotes_B ?? 0}</td>
+          <td style="color:var(--cb-red);font-family:'DM Mono'">${r.lotes_c ?? r.lotes_C ?? 0}</td>
+          <td style="font-family:'DM Mono'">${r.pct_medio != null ? r.pct_medio + '%' : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── ALERTAS ──
+function renderAlertas() {
+  if (!_alertas.length) {
+    document.getElementById('alertaPanel').innerHTML = '<div class="empty">Nenhum fornecedor em alerta</div>';
+    return;
+  }
+
+  document.getElementById('alertaPanel').innerHTML = _alertas.map(a => `
+    <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);">
+      <span class="badge ${a.nivel_alerta==='CRITICO' ? 'badge-critico' : 'badge-atencao'}">
+        ${a.nivel_alerta==='CRITICO' ? '✖' : '⚠'} ${a.nivel_alerta}
+      </span>
+      <span style="flex:1;font-size:13px;">${a.fornecedor||'—'}</span>
+      <span style="font-family:'DM Mono';font-size:11px;color:var(--cb-red);">${a.lotes_c_recentes ?? a.lotes_C_recentes ?? '?'} lotes C recentes</span>
+    </div>
+  `).join('');
+}
+
+// ── EVOLUÇÃO POR FORNECEDOR ──
+function populaSelectFornecedor() {
+  const fornecedores = [...new Set(_inspecoes.map(i => i.fornecedor).filter(Boolean))].sort();
+  const sel = document.getElementById('filtroFornecedor');
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    fornecedores.map(f => `<option value="${f}">${f}</option>`).join('');
+}
+
+function renderEvolucao() {
+  const forn = document.getElementById('filtroFornecedor').value;
+  if (!forn) {
+    if (chartEvolucao) { chartEvolucao.destroy(); chartEvolucao = null; }
+    return;
+  }
+
+  const dados = _inspecoes.filter(i => i.fornecedor === forn).sort((a,b) => a.data_inspecao.localeCompare(b.data_inspecao));
+  if (!dados.length) return;
+
+  const labels = dados.map(d => d.data_inspecao);
+  const pcts = dados.map(d => parseFloat(d.percentual_defeitos) || 0);
+  const cores = dados.map(d =>
+    d.classificacao === 'A' ? 'rgba(0,114,178,.8)' :
+    d.classificacao === 'B' ? 'rgba(230,159,0,.8)' : 'rgba(213,94,0,.8)'
+  );
+
+  if (chartEvolucao) chartEvolucao.destroy();
+  chartEvolucao = new Chart(document.getElementById('chartEvolucao'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [
+        {
+          type: 'line', label: '% Defeito', data: pcts,
+          borderColor: '#ede9e3', borderWidth: 2, pointRadius: 4,
+          pointBackgroundColor: cores, tension: .3, order: 0
+        },
+        {
+          label: 'Lote', data: pcts, backgroundColor: cores,
+          borderRadius: 3, order: 1
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#666', font: { family: 'DM Mono', size: 9 }, maxRotation: 45 } },
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 }, callback: v => v + '%' } }
+      }
+    }
+  });
+}
+</script>
+</body>
+</html>

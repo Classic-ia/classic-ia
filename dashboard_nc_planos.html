@@ -1,0 +1,578 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard NCs & Planos · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 16px 14px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 28px; line-height: 1; margin-bottom: 4px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.kpi-card[data-color="blue"] { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"] .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"] { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"] .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"] { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"] .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+.kpi-card[data-color="gray"] { border-left-color: var(--cb-gray); }
+.kpi-card[data-color="gray"] .kpi-num { color: var(--cb-gray); }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.panel {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px;
+}
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+/* BADGES */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500;
+}
+.badge-critica  { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-maior    { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-menor    { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-aberta   { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-tratamento { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-resolvida  { background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-encerrada  { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-aberto   { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-execucao { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-concluido{ background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-cancelado{ background: rgba(102,102,102,.15); color: var(--cb-gray); }
+.badge-eficaz   { background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-ineficaz { background: rgba(213,94,0,.15); color: var(--cb-red); }
+
+/* TABLE */
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+/* CHART */
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 260px; position: relative; }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+/* PROGRESS BAR */
+.prog-wrap { margin-bottom: 10px; }
+.prog-label { display: flex; justify-content: space-between; font-family: 'DM Mono'; font-size: 11px; margin-bottom: 4px; }
+.prog-track { height: 8px; background: var(--s3); border-radius: 4px; overflow: hidden; }
+.prog-fill { height: 100%; border-radius: 4px; }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">NCs & Planos de Ação</div>
+    <div class="header-sub">Gestão de Não Conformidades · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <div class="filter-bar">
+      <label>Filtro</label>
+      <select id="filtroStatus" onchange="renderAll()">
+        <option value="">Todos</option>
+        <option value="aberta">Abertas</option>
+        <option value="em_tratamento">Em Tratamento</option>
+        <option value="resolvida">Resolvidas</option>
+        <option value="encerrada">Encerradas</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs NCs -->
+    <div class="section-title">⚡ Não Conformidades</div>
+    <div class="kpi-grid" id="ncKpis"></div>
+
+    <!-- GRÁFICOS NCs -->
+    <div class="grid-2">
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">📊 NCs por Tipo</div>
+        <div class="chart-box"><canvas id="chartNcTipo"></canvas></div>
+      </div>
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">📊 NCs por Gravidade × Status</div>
+        <div class="chart-box"><canvas id="chartNcGrav"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TABELA NCs -->
+    <div class="section-title" style="margin-top:28px;">📋 Lista de Não Conformidades</div>
+    <div class="panel">
+      <div class="table-wrap" id="ncTable"></div>
+    </div>
+
+    <!-- SEPARADOR PLANOS -->
+    <div class="section-title" style="margin-top:36px;">▶ Planos de Ação</div>
+    <div class="kpi-grid" id="planoKpis"></div>
+
+    <!-- EFICÁCIA -->
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-title">📊 Status dos Planos</div>
+        <div id="planosProgress"></div>
+      </div>
+      <div class="chart-wrap" style="margin-bottom:0;">
+        <div class="panel-title">📊 Eficácia das Ações Concluídas</div>
+        <div class="chart-box"><canvas id="chartEficacia"></canvas></div>
+      </div>
+    </div>
+
+    <!-- TABELA PLANOS -->
+    <div class="section-title" style="margin-top:28px;">📋 Lista de Planos de Ação</div>
+    <div class="panel">
+      <div class="table-wrap" id="planosTable"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _ncs = [], _planos = [];
+let chartNcTipo = null, chartNcGrav = null, chartEficacia = null;
+
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    [_ncs, _planos] = await Promise.all([
+      apiFetch('cq_nao_conformidades?select=*&order=criado_em.desc'),
+      apiFetch('cq_planos_acao?select=*&order=criado_em.desc')
+    ]);
+    renderAll();
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { console.error('Erro:', e); }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+function renderAll() {
+  const filtro = document.getElementById('filtroStatus').value;
+  const ncsFiltered = filtro ? _ncs.filter(n => n.status === filtro) : _ncs;
+
+  renderNcKpis(ncsFiltered);
+  renderChartNcTipo(ncsFiltered);
+  renderChartNcGrav(ncsFiltered);
+  renderNcTable(ncsFiltered);
+  renderPlanoKpis();
+  renderPlanosProgress();
+  renderChartEficacia();
+  renderPlanosTable();
+}
+
+// ── NC KPIs ──
+function renderNcKpis(ncs) {
+  const total = ncs.length;
+  const abertas = ncs.filter(n => n.status === 'aberta').length;
+  const tratamento = ncs.filter(n => n.status === 'em_tratamento').length;
+  const resolvidas = ncs.filter(n => n.status === 'resolvida').length;
+  const criticas = ncs.filter(n => n.gravidade === 'critica').length;
+  const maiores = ncs.filter(n => n.gravidade === 'maior').length;
+
+  document.getElementById('ncKpis').innerHTML = `
+    <div class="kpi-card" data-color="purple">
+      <div class="kpi-num">⚡ ${total}</div>
+      <div class="kpi-label">Total NCs</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">✖ ${abertas}</div>
+      <div class="kpi-label">Abertas</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">⚠ ${tratamento}</div>
+      <div class="kpi-label">Em Tratamento</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">✔ ${resolvidas}</div>
+      <div class="kpi-label">Resolvidas</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">✖ ${criticas}</div>
+      <div class="kpi-label">Críticas</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">⚠ ${maiores}</div>
+      <div class="kpi-label">Maiores</div>
+    </div>
+  `;
+}
+
+// ── CHART: NCs POR TIPO ──
+function renderChartNcTipo(ncs) {
+  const tipos = {};
+  ncs.forEach(n => { tipos[n.tipo || 'outro'] = (tipos[n.tipo || 'outro'] || 0) + 1; });
+
+  const labels = Object.keys(tipos);
+  const data = Object.values(tipos);
+  const colors = ['rgba(0,114,178,.7)', 'rgba(230,159,0,.7)', 'rgba(213,94,0,.7)',
+                  'rgba(204,121,167,.7)', 'rgba(0,158,115,.7)', 'rgba(102,102,102,.7)'];
+
+  if (chartNcTipo) chartNcTipo.destroy();
+  if (!labels.length) { document.getElementById('chartNcTipo').parentElement.innerHTML = '<div class="empty">Sem dados</div>'; return; }
+
+  chartNcTipo = new Chart(document.getElementById('chartNcTipo'), {
+    type: 'doughnut',
+    data: { labels, datasets: [{ data, backgroundColor: colors.slice(0, labels.length), borderWidth: 0 }] },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#999', font: { family: 'DM Mono', size: 10 }, padding: 12 } }
+      }
+    }
+  });
+}
+
+// ── CHART: NCs GRAVIDADE × STATUS ──
+function renderChartNcGrav(ncs) {
+  const gravidades = ['critica', 'maior', 'menor'];
+  const statuses = ['aberta', 'em_tratamento', 'resolvida', 'encerrada'];
+  const statusColors = {
+    aberta: 'rgba(213,94,0,.7)', em_tratamento: 'rgba(230,159,0,.7)',
+    resolvida: 'rgba(0,158,115,.7)', encerrada: 'rgba(0,114,178,.7)'
+  };
+  const statusIcons = { aberta: '⚡', em_tratamento: '⚠', resolvida: '✔', encerrada: '●' };
+
+  const datasets = statuses.map(s => ({
+    label: `${statusIcons[s]} ${s.replace('_',' ')}`,
+    data: gravidades.map(g => ncs.filter(n => n.gravidade === g && n.status === s).length),
+    backgroundColor: statusColors[s], borderRadius: 3
+  }));
+
+  if (chartNcGrav) chartNcGrav.destroy();
+  if (!ncs.length) { document.getElementById('chartNcGrav').parentElement.innerHTML = '<div class="empty">Sem dados</div>'; return; }
+
+  chartNcGrav = new Chart(document.getElementById('chartNcGrav'), {
+    type: 'bar',
+    data: {
+      labels: gravidades.map(g => g.charAt(0).toUpperCase() + g.slice(1)),
+      datasets
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#666', font: { family: 'DM Mono', size: 10 } } } },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 11 } } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── NC TABLE ──
+function renderNcTable(ncs) {
+  if (!ncs.length) {
+    document.getElementById('ncTable').innerHTML = '<div class="empty">Nenhuma NC registrada</div>';
+    return;
+  }
+
+  const gravBadge = g => {
+    const m = { critica: 'badge-critica', maior: 'badge-maior', menor: 'badge-menor' };
+    const i = { critica: '✖', maior: '⚠', menor: '●' };
+    return `<span class="badge ${m[g]||''}">${i[g]||''} ${(g||'').toUpperCase()}</span>`;
+  };
+  const statusBadge = s => {
+    const m = { aberta:'badge-aberta', em_tratamento:'badge-tratamento', resolvida:'badge-resolvida', encerrada:'badge-encerrada' };
+    const i = { aberta:'⚡', em_tratamento:'⚠', resolvida:'✔', encerrada:'●' };
+    return `<span class="badge ${m[s]||''}">${i[s]||''} ${(s||'').replace('_',' ').toUpperCase()}</span>`;
+  };
+
+  document.getElementById('ncTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Tipo</th><th>Gravidade</th><th>Status</th>
+        <th>Descrição</th><th>Responsável</th><th>Data</th>
+      </tr></thead>
+      <tbody>
+        ${ncs.slice(0, 50).map(n => `<tr>
+          <td style="font-family:'DM Mono';color:var(--accent)">${n.codigo||'—'}</td>
+          <td>${n.tipo||'—'}</td>
+          <td>${gravBadge(n.gravidade)}</td>
+          <td>${statusBadge(n.status)}</td>
+          <td title="${n.descricao||''}">${(n.descricao||'').slice(0,40)}${(n.descricao||'').length>40?'...':''}</td>
+          <td style="font-size:11px">${n.responsavel_nome||'—'}</td>
+          <td style="font-family:'DM Mono';font-size:11px;color:var(--muted)">${n.criado_em ? n.criado_em.slice(0,10) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── PLANO KPIs ──
+function renderPlanoKpis() {
+  const abertos = _planos.filter(p => p.status === 'aberto').length;
+  const exec = _planos.filter(p => p.status === 'em_execucao').length;
+  const concl = _planos.filter(p => p.status === 'concluido').length;
+  const cancel = _planos.filter(p => p.status === 'cancelado').length;
+
+  const concluidos = _planos.filter(p => p.status === 'concluido');
+  const eficazes = concluidos.filter(p => p.validacao === 'eficaz').length;
+  const pctEficaz = concluidos.length ? Math.round(eficazes / concluidos.length * 100) : 0;
+
+  document.getElementById('planoKpis').innerHTML = `
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">⚡ ${abertos}</div>
+      <div class="kpi-label">Abertos</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">▶ ${exec}</div>
+      <div class="kpi-label">Em Execução</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">✔ ${concl}</div>
+      <div class="kpi-label">Concluídos</div>
+    </div>
+    <div class="kpi-card" data-color="gray">
+      <div class="kpi-num">⊘ ${cancel}</div>
+      <div class="kpi-label">Cancelados</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">📊 ${pctEficaz}%</div>
+      <div class="kpi-label">Eficácia</div>
+    </div>
+  `;
+}
+
+// ── PLANOS PROGRESS BARS ──
+function renderPlanosProgress() {
+  const total = _planos.length || 1;
+  const statuses = [
+    { key: 'aberto', label: '⚡ Aberto', color: 'var(--cb-red)' },
+    { key: 'em_execucao', label: '▶ Em Execução', color: 'var(--cb-orange)' },
+    { key: 'concluido', label: '✔ Concluído', color: 'var(--cb-teal)' },
+    { key: 'cancelado', label: '⊘ Cancelado', color: 'var(--cb-gray)' },
+  ];
+
+  document.getElementById('planosProgress').innerHTML = statuses.map(s => {
+    const count = _planos.filter(p => p.status === s.key).length;
+    const pct = Math.round(count / total * 100);
+    return `
+      <div class="prog-wrap">
+        <div class="prog-label">
+          <span style="color:var(--text)">${s.label}</span>
+          <span style="color:var(--muted)">${count} (${pct}%)</span>
+        </div>
+        <div class="prog-track">
+          <div class="prog-fill" style="width:${pct}%;background:${s.color}"></div>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── CHART: EFICÁCIA ──
+function renderChartEficacia() {
+  const concluidos = _planos.filter(p => p.status === 'concluido');
+  const eficaz = concluidos.filter(p => p.validacao === 'eficaz').length;
+  const ineficaz = concluidos.filter(p => p.validacao === 'ineficaz').length;
+  const pendente = concluidos.filter(p => !p.validacao || p.validacao === 'pendente').length;
+
+  if (chartEficacia) chartEficacia.destroy();
+  if (!concluidos.length) {
+    document.getElementById('chartEficacia').parentElement.innerHTML = '<div class="empty">Sem planos concluídos</div>';
+    return;
+  }
+
+  chartEficacia = new Chart(document.getElementById('chartEficacia'), {
+    type: 'doughnut',
+    data: {
+      labels: ['✔ Eficaz', '✖ Ineficaz', '⏳ Pendente'],
+      datasets: [{
+        data: [eficaz, ineficaz, pendente],
+        backgroundColor: ['rgba(0,158,115,.7)', 'rgba(213,94,0,.7)', 'rgba(204,121,167,.7)'],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'right', labels: { color: '#999', font: { family: 'DM Mono', size: 11 }, padding: 12 } }
+      }
+    }
+  });
+}
+
+// ── PLANOS TABLE ──
+function renderPlanosTable() {
+  if (!_planos.length) {
+    document.getElementById('planosTable').innerHTML = '<div class="empty">Nenhum plano registrado</div>';
+    return;
+  }
+
+  const stBadge = s => {
+    const m = { aberto:'badge-aberto', em_execucao:'badge-execucao', concluido:'badge-concluido', cancelado:'badge-cancelado' };
+    const i = { aberto:'⚡', em_execucao:'▶', concluido:'✔', cancelado:'⊘' };
+    return `<span class="badge ${m[s]||''}">${i[s]||''} ${(s||'').replace('_',' ').toUpperCase()}</span>`;
+  };
+  const valBadge = v => {
+    if (!v || v === 'pendente') return '<span class="badge" style="background:rgba(204,121,167,.15);color:var(--cb-purple)">⏳ PENDENTE</span>';
+    if (v === 'eficaz') return '<span class="badge badge-eficaz">✔ EFICAZ</span>';
+    return '<span class="badge badge-ineficaz">✖ INEFICAZ</span>';
+  };
+
+  document.getElementById('planosTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Fornecedor</th><th>Problema</th><th>Status</th>
+        <th>Validação</th><th>Prazo</th><th>Data</th>
+      </tr></thead>
+      <tbody>
+        ${_planos.slice(0, 50).map(p => `<tr>
+          <td style="font-size:12px">${p.fornecedor||'—'}</td>
+          <td title="${p.problema||''}">${(p.problema||p.recomendacao||'').slice(0,40)}${(p.problema||'').length>40?'...':''}</td>
+          <td>${stBadge(p.status)}</td>
+          <td>${p.status === 'concluido' ? valBadge(p.validacao) : '—'}</td>
+          <td style="font-family:'DM Mono';font-size:11px;${p.data_limite && new Date(p.data_limite) < new Date() && p.status !== 'concluido' && p.status !== 'cancelado' ? 'color:var(--cb-red);font-weight:700' : 'color:var(--muted)'}">${p.data_limite || '—'}</td>
+          <td style="font-family:'DM Mono';font-size:11px;color:var(--muted)">${p.criado_em ? p.criado_em.slice(0,10) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+</script>
+</body>
+</html>

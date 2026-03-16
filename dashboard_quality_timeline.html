@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quality Timeline · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+.header { position: sticky; top: 0; z-index: 100; background: rgba(8,8,8,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 0 24px; height: 56px; display: flex; align-items: center; gap: 12px; }
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); } .header-user strong { color: var(--text); }
+.header-avatar { width: 32px; height: 32px; border-radius: 50%; background: var(--accent3); display: flex; align-items: center; justify-content: center; font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg); }
+.btn-sm { padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer; border: 1px solid var(--border); background: transparent; color: var(--muted); transition: all .2s; text-decoration: none; }
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+.section-title { font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.filter-bar { display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select, .filter-bar input { background: var(--s2); border: 1px solid var(--border); border-radius: 6px; color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px; }
+.btn-refresh { padding: 6px 14px; background: var(--s2); border: 1px solid var(--border); border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer; font-family: 'DM Mono'; transition: all .2s; }
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 28px; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th { background: var(--s2); color: var(--muted); font-family: 'DM Mono'; font-weight: 500; font-size: 10px; text-transform: uppercase; padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); cursor: pointer; }
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono'; font-size: 10px; font-weight: 500; }
+.badge-aprovado { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-ressalva { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-bloqueado { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-a { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-b { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-c { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+/* TIMELINE */
+.timeline { position: relative; padding-left: 40px; margin: 20px 0; }
+.timeline::before { content: ''; position: absolute; left: 16px; top: 0; bottom: 0; width: 2px; background: var(--border); }
+.tl-item { position: relative; margin-bottom: 24px; }
+.tl-dot {
+  position: absolute; left: -40px; top: 2px; width: 32px; height: 32px;
+  border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; border: 2px solid var(--border); background: var(--s1);
+}
+.tl-dot.active { border-color: var(--accent); background: var(--accent3); }
+.tl-dot.done { border-color: var(--cb-teal); }
+.tl-dot.alert { border-color: var(--cb-red); }
+.tl-content { padding: 12px 16px; background: var(--s2); border: 1px solid var(--border); border-radius: 8px; }
+.tl-title { font-family: 'Syne'; font-weight: 700; font-size: 12px; color: var(--accent); margin-bottom: 4px; }
+.tl-meta { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); }
+.tl-time { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 4px; background: rgba(200,169,110,.1); color: var(--accent); font-family: 'DM Mono'; font-size: 10px; margin-top: 6px; }
+
+.search-box { display: flex; gap: 10px; margin-bottom: 24px; }
+.search-input {
+  flex: 1; background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 13px; padding: 10px 14px;
+}
+.search-input::placeholder { color: var(--muted2); }
+.btn-search {
+  padding: 10px 20px; background: var(--accent3); border: none; border-radius: 6px;
+  color: var(--bg); font-family: 'Syne'; font-weight: 700; font-size: 13px; cursor: pointer;
+  transition: all .2s;
+}
+.btn-search:hover { background: var(--accent); }
+
+@media (max-width: 600px) { .main { padding: 12px 12px 32px; } }
+</style>
+</head>
+<body>
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Quality Timeline</div>
+    <div class="header-sub">Linha do Tempo da Inspeção · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">&#8592; Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- BUSCA -->
+    <div class="section-title">&#128270; Buscar Inspeção</div>
+    <div class="search-box">
+      <input class="search-input" id="searchInput" type="text" placeholder="Buscar por lote, fornecedor ou etiqueta..." onkeydown="if(event.key==='Enter')buscar()">
+      <button class="btn-search" onclick="buscar()">Buscar</button>
+    </div>
+
+    <!-- RESULTADOS -->
+    <div class="section-title" style="margin-top:28px;">&#128203; Inspeções Recentes</div>
+    <div class="panel">
+      <div class="table-wrap" id="resultTable"></div>
+    </div>
+
+    <!-- TIMELINE -->
+    <div id="timelineSection" style="display:none;">
+      <div class="section-title" style="margin-top:28px;">&#128337; Timeline da Inspeção</div>
+      <div class="panel" id="timelinePanel"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _data = [];
+
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarRecentes();
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+async function carregarRecentes() {
+  _data = await apiFetch('vw_quality_timeline?select=*&order=data_inspecao.desc&limit=50');
+  renderTable(_data);
+}
+
+async function buscar() {
+  const q = document.getElementById('searchInput').value.trim();
+  if (!q) { renderTable(_data); return; }
+
+  const encoded = encodeURIComponent(q);
+  const results = await apiFetch(
+    `vw_quality_timeline?select=*&or=(lote_atak.ilike.%25${encoded}%25,fornecedor.ilike.%25${encoded}%25,etiqueta.ilike.%25${encoded}%25)&order=data_inspecao.desc&limit=50`
+  );
+  renderTable(results);
+}
+
+function renderTable(rows) {
+  if (!rows.length) {
+    document.getElementById('resultTable').innerHTML = '<div class="empty">Nenhuma inspeção encontrada</div>';
+    return;
+  }
+
+  const statusBadge = s => {
+    if (s === 'aprovado') return '<span class="badge badge-aprovado">&#10004; APROVADO</span>';
+    if (s === 'ressalva') return '<span class="badge badge-ressalva">&#9888; RESSALVA</span>';
+    if (s === 'bloqueado') return '<span class="badge badge-bloqueado">&#10006; BLOQUEADO</span>';
+    return s || '—';
+  };
+
+  document.getElementById('resultTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Fornecedor</th><th>Produto</th>
+        <th>Classe</th><th>Status</th><th>Workflow</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map(r => `<tr onclick="abrirTimeline('${r.inspecao_id}')">
+          <td style="font-family:'DM Mono';font-size:11px;">${r.data_inspecao || '—'}</td>
+          <td style="font-family:'DM Mono';font-size:11px;">${r.lote_atak || r.etiqueta || '—'}</td>
+          <td style="font-size:12px;">${(r.fornecedor||'—').slice(0,30)}</td>
+          <td style="font-size:12px;">${r.produto || '—'}</td>
+          <td><span class="badge badge-${(r.classificacao||'').toLowerCase()}">${r.classificacao || '—'}</span></td>
+          <td>${statusBadge(r.status_final)}</td>
+          <td style="font-family:'DM Mono';font-size:10px;color:var(--muted)">${r.status_workflow || '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function abrirTimeline(id) {
+  const r = _data.find(d => d.inspecao_id === id);
+  if (!r) return;
+
+  const events = [];
+
+  // 1. Recebimento
+  if (r.recebimento_criado_em) {
+    events.push({
+      icon: '&#128230;', title: 'Recebimento',
+      time: r.recebimento_criado_em,
+      meta: `Lote: ${r.lote_atak || '—'}`,
+      done: true
+    });
+  }
+
+  // 2. Inspeção
+  events.push({
+    icon: '&#128270;', title: 'Inspeção de Qualidade',
+    time: r.inspecao_criado_em,
+    meta: `${r.classificacao || '—'} · ${r.percentual_defeitos || 0}% defeitos · ${r.status_final || '—'}`,
+    done: true,
+    duration: r.horas_recebimento_inspecao != null ? `${r.horas_recebimento_inspecao}h após recebimento` : null
+  });
+
+  // 3. Revisão
+  if (r.revisao_criado_em) {
+    events.push({
+      icon: '&#9989;', title: 'Revisão',
+      time: r.revisao_criado_em,
+      meta: `Decisão: ${r.revisao_decisao || '—'} · Revisor: ${r.revisor_nome || '—'}`,
+      done: true,
+      duration: r.horas_inspecao_revisao != null ? `${r.horas_inspecao_revisao}h após inspeção` : null
+    });
+  } else if (['aguardando_revisao','revisada','aprovada','reprovada','encerrada'].includes(r.status_workflow)) {
+    events.push({
+      icon: '&#9203;', title: 'Aguardando Revisão',
+      time: null, meta: 'Pendente', active: true
+    });
+  }
+
+  // 4. NC
+  if (r.nc_id) {
+    events.push({
+      icon: '&#9889;', title: 'Não Conformidade',
+      time: r.nc_criado_em,
+      meta: `${r.nc_codigo || '—'} · ${r.nc_gravidade || '—'} · Status: ${r.nc_status || '—'}`,
+      done: r.nc_status === 'resolvida' || r.nc_status === 'encerrada',
+      alert: r.nc_gravidade === 'critica'
+    });
+  }
+
+  // 5. Plano de Ação
+  if (r.plano_id) {
+    events.push({
+      icon: '&#9654;', title: 'Plano de Ação',
+      time: r.plano_criado_em,
+      meta: `Status: ${r.plano_status || '—'} · Prazo: ${r.plano_prazo || '—'}` +
+            (r.plano_conclusao ? ` · Concluído: ${r.plano_conclusao}` : '') +
+            (r.plano_validacao ? ` · Validação: ${r.plano_validacao}` : ''),
+      done: r.plano_status === 'concluido'
+    });
+  }
+
+  // Render timeline
+  const formatDate = d => {
+    if (!d) return '—';
+    return new Date(d).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+  };
+
+  document.getElementById('timelinePanel').innerHTML = `
+    <div style="margin-bottom:16px;">
+      <span style="font-family:'Syne';font-weight:800;font-size:18px;color:var(--accent);">${r.lote_atak || r.etiqueta || '—'}</span>
+      <span style="font-size:13px;color:var(--muted);margin-left:12px;">${r.fornecedor || '—'} · ${r.produto || '—'}</span>
+    </div>
+    <div class="timeline">
+      ${events.map(e => `
+        <div class="tl-item">
+          <div class="tl-dot ${e.done ? 'done' : e.active ? 'active' : e.alert ? 'alert' : ''}">${e.icon}</div>
+          <div class="tl-content">
+            <div class="tl-title">${e.title}</div>
+            <div class="tl-meta">${e.meta}</div>
+            <div class="tl-meta">${formatDate(e.time)}</div>
+            ${e.duration ? `<div class="tl-time">&#9200; ${e.duration}</div>` : ''}
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  const section = document.getElementById('timelineSection');
+  section.style.display = 'block';
+  section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Produto por Estado · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+.btn-back {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--cb-blue); background: rgba(0,114,178,.1); color: var(--cb-blue);
+  transition: all .2s; text-decoration: none; font-family: 'DM Mono';
+}
+.btn-back:hover { background: rgba(0,114,178,.2); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.context-bar {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+  padding: 16px 20px; background: var(--s1); border: 1px solid var(--border);
+  border-radius: var(--radius); border-left: 4px solid var(--accent); flex-wrap: wrap;
+}
+.context-uf { font-family: 'Syne'; font-weight: 800; font-size: 24px; color: var(--accent); }
+.context-sep { color: var(--muted2); font-size: 20px; }
+.context-forn { font-family: 'Syne'; font-weight: 700; font-size: 16px; color: var(--text); }
+.context-info { font-size: 12px; color: var(--muted); }
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }   .kpi-card[data-color="blue"] .kpi-num   { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }   .kpi-card[data-color="teal"] .kpi-num   { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); } .kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }    .kpi-card[data-color="red"] .kpi-num    { color: var(--cb-red); }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }    .kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; }
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+}
+
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+}
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500;
+}
+.badge-aprovado { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-ressalva { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-bloqueado { background: rgba(213,94,0,.15); color: var(--cb-red); }
+.badge-a { background: rgba(0,114,178,.15); color: var(--cb-blue); }
+.badge-b { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-c { background: rgba(213,94,0,.15); color: var(--cb-red); }
+
+.chart-wrap {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 20px; margin-bottom: 28px;
+}
+.chart-box { max-height: 350px; position: relative; }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Produto por Estado</div>
+    <div class="header-sub">Drill-Down Final · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">&#8592; Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <!-- CONTEXTO -->
+    <div class="context-bar">
+      <span class="context-uf" id="ctxUF"></span>
+      <span class="context-sep">&#8250;</span>
+      <span class="context-forn" id="ctxForn"></span>
+      <a class="btn-back" id="btnVoltar" href="#" style="margin-left:auto;">&#8592; Voltar</a>
+    </div>
+
+    <!-- FILTROS -->
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="90">Últimos 90 dias</option>
+        <option value="30">Últimos 30 dias</option>
+        <option value="180">Últimos 180 dias</option>
+        <option value="365">Último ano</option>
+        <option value="0">Todos</option>
+      </select>
+      <label>Status</label>
+      <select id="filtroStatus" onchange="aplicarFiltros()">
+        <option value="">Todos</option>
+        <option value="aprovado">Aprovado</option>
+        <option value="ressalva">Ressalva</option>
+        <option value="bloqueado">Bloqueado</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">&#8635; Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">&#128203; Indicadores do Fornecedor</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- COMPARATIVO PRODUTOS -->
+    <div class="section-title" style="margin-top:28px;">&#128203; Comparativo por Produto</div>
+    <div class="panel">
+      <div class="table-wrap" id="produtosTable"></div>
+    </div>
+
+    <!-- GRÁFICO DEFEITOS POR PRODUTO -->
+    <div class="section-title" style="margin-top:28px;">&#9888; Defeitos por Produto</div>
+    <div class="chart-wrap">
+      <div class="chart-box" style="max-height:400px;"><canvas id="chartDefeitos"></canvas></div>
+    </div>
+
+    <!-- TABELA DETALHADA INSPEÇÕES -->
+    <div class="section-title" style="margin-top:0;">&#128270; Inspeções Detalhadas</div>
+    <div class="panel">
+      <div class="table-wrap" id="inspecoesTable"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _uf = '', _fornecedor = '', _codigo = '';
+let _inspecoes = [], _filtrado = [];
+let chartDefeitos = null;
+
+const DEFEITO_COLS = [
+  { col: 'fermentacao', nome: 'Fermentação' },
+  { col: 'sem_folhas', nome: 'Sem Folhas' },
+  { col: 'folhas_arrebentadas', nome: 'F. Arrebentadas' },
+  { col: 'pedaco', nome: 'Pedaço' },
+  { col: 'sujo', nome: 'Sujo' },
+  { col: 'rasgado', nome: 'Rasgado' },
+  { col: 'corte_irregular', nome: 'Corte Irregular' },
+  { col: 'furado', nome: 'Furado' },
+  { col: 'mau_cheiro', nome: 'Mau Cheiro' },
+  { col: 'contaminacao', nome: 'Contaminação' },
+  { col: 'outro_defeito', nome: 'Outro' }
+];
+
+const COR_PALETTE = ['#0072B2','#009E73','#E69F00','#CC79A7','#D55E00','#56B4E9','#F0E442','#999999','#0072B2','#009E73','#E69F00'];
+
+(async function(){
+  const params = new URLSearchParams(window.location.search);
+  _uf = params.get('uf') || '';
+  _fornecedor = params.get('fornecedor') || '';
+  _codigo = params.get('codigo') || '';
+
+  if (!_fornecedor && !_codigo) {
+    document.body.innerHTML = '<div style="padding:40px;text-align:center;color:#666;">Parâmetros não informados. <a href="dashboard_qualidade_por_estado.html" style="color:#c8a96e;">Voltar</a></div>';
+    return;
+  }
+
+  document.getElementById('ctxUF').textContent = _uf || '—';
+  document.getElementById('ctxForn').textContent = _fornecedor || _codigo;
+  document.getElementById('btnVoltar').href = `dashboard_fornecedores_por_estado.html?uf=${encodeURIComponent(_uf)}`;
+  document.title = `${_fornecedor || _codigo} · ${_uf} · Classic CQ`;
+
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro','comercial'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+function diasAtras(n) {
+  const d = new Date(); d.setDate(d.getDate() - n);
+  return d.toISOString().slice(0,10);
+}
+
+async function carregarDados() {
+  const periodo = parseInt(document.getElementById('filtroPeriodo').value);
+  const filtroData = periodo > 0 ? `&data_inspecao=gte.${diasAtras(periodo)}` : '';
+  const filtroForn = _codigo
+    ? `&fornecedor_codigo=eq.${encodeURIComponent(_codigo)}`
+    : `&fornecedor=eq.${encodeURIComponent(_fornecedor)}`;
+
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    _inspecoes = await apiFetch(
+      `registros_cq_inspecao?select=data_inspecao,lote_atak,etiqueta,produto,classificacao,percentual_defeitos,status_final,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,sujo,rasgado,corte_irregular,furado,mau_cheiro,contaminacao,outro_defeito${filtroForn}${filtroData}&order=data_inspecao.desc`
+    );
+
+    aplicarFiltros();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) { console.error('Erro:', e); }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+function aplicarFiltros() {
+  const status = document.getElementById('filtroStatus').value;
+  _filtrado = status ? _inspecoes.filter(i => i.status_final === status) : [..._inspecoes];
+  renderAll();
+}
+
+function renderAll() {
+  renderKPIs();
+  renderProdutos();
+  renderChartDefeitos();
+  renderInspecoes();
+}
+
+function renderKPIs() {
+  const total = _filtrado.length;
+  const aprovadas = _filtrado.filter(i => i.status_final === 'aprovado').length;
+  const bloqueios = _filtrado.filter(i => i.status_final === 'bloqueado').length;
+  const taxaAprov = total ? (aprovadas / total * 100).toFixed(1) : '0.0';
+  const taxaBloq = total ? (bloqueios / total * 100).toFixed(1) : '0.0';
+  const mediaDef = total
+    ? (_filtrado.reduce((s, i) => s + (parseFloat(i.percentual_defeitos) || 0), 0) / total).toFixed(2)
+    : '0.00';
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">&#128203; ${total}</div>
+      <div class="kpi-label">Inspeções</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">&#10004; ${taxaAprov}%</div>
+      <div class="kpi-label">Taxa aprovação</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">&#10006; ${taxaBloq}%</div>
+      <div class="kpi-label">Taxa bloqueio</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">&#9888; ${mediaDef}%</div>
+      <div class="kpi-label">Média defeitos</div>
+    </div>
+  `;
+}
+
+function renderProdutos() {
+  const map = {};
+  _filtrado.forEach(i => {
+    const prod = i.produto || 'N/D';
+    if (!map[prod]) map[prod] = { produto: prod, total: 0, aprovadas: 0, ressalvas: 0, bloqueios: 0, somaPct: 0 };
+    map[prod].total++;
+    if (i.status_final === 'aprovado') map[prod].aprovadas++;
+    if (i.status_final === 'ressalva') map[prod].ressalvas++;
+    if (i.status_final === 'bloqueado') map[prod].bloqueios++;
+    map[prod].somaPct += parseFloat(i.percentual_defeitos) || 0;
+  });
+
+  const prods = Object.values(map).map(p => ({
+    ...p,
+    taxa_aprovacao: p.total ? +(p.aprovadas / p.total * 100).toFixed(1) : 0,
+    taxa_bloqueio: p.total ? +(p.bloqueios / p.total * 100).toFixed(1) : 0,
+    media_defeitos: p.total ? +(p.somaPct / p.total).toFixed(2) : 0
+  })).sort((a, b) => b.total - a.total);
+
+  if (!prods.length) {
+    document.getElementById('produtosTable').innerHTML = '<div class="empty">Sem dados</div>';
+    return;
+  }
+
+  document.getElementById('produtosTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Produto</th><th>Inspeções</th>
+        <th>&#10004; Aprov.</th><th>&#9888; Ress.</th><th>&#10006; Bloq.</th>
+        <th>% Aprov.</th><th>% Bloq.</th><th>Méd. Def.</th>
+      </tr></thead>
+      <tbody>
+        ${prods.map(p => `<tr>
+          <td style="font-weight:500;">${p.produto}</td>
+          <td style="font-family:'DM Mono'">${p.total}</td>
+          <td style="color:var(--cb-teal);font-family:'DM Mono'">${p.aprovadas}</td>
+          <td style="color:var(--cb-orange);font-family:'DM Mono'">${p.ressalvas}</td>
+          <td style="color:var(--cb-red);font-family:'DM Mono'">${p.bloqueios}</td>
+          <td style="font-family:'DM Mono'">${p.taxa_aprovacao}%</td>
+          <td style="font-family:'DM Mono';color:${p.taxa_bloqueio > 15 ? 'var(--cb-red)' : p.taxa_bloqueio > 5 ? 'var(--cb-orange)' : 'var(--muted)'}">${p.taxa_bloqueio}%</td>
+          <td style="font-family:'DM Mono'">${p.media_defeitos}%</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderChartDefeitos() {
+  const canvas = document.getElementById('chartDefeitos');
+  if (!canvas || !_filtrado.length) return;
+
+  // Agrupar defeitos por produto
+  const prodMap = {};
+  _filtrado.forEach(i => {
+    const prod = i.produto || 'N/D';
+    if (!prodMap[prod]) prodMap[prod] = {};
+    DEFEITO_COLS.forEach(d => {
+      prodMap[prod][d.col] = (prodMap[prod][d.col] || 0) + (parseInt(i[d.col]) || 0);
+    });
+  });
+
+  const produtos = Object.keys(prodMap).sort();
+  if (!produtos.length) return;
+
+  const datasets = DEFEITO_COLS.map((d, idx) => ({
+    label: d.nome,
+    data: produtos.map(p => prodMap[p][d.col] || 0),
+    backgroundColor: COR_PALETTE[idx] + 'AA',
+    borderRadius: 2
+  })).filter(ds => ds.data.some(v => v > 0));
+
+  if (chartDefeitos) chartDefeitos.destroy();
+  chartDefeitos = new Chart(canvas, {
+    type: 'bar',
+    data: { labels: produtos, datasets },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#999', font: { family: 'DM Mono', size: 9 } } }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+function renderInspecoes() {
+  const data = _filtrado.slice(0, 100);
+  if (!data.length) {
+    document.getElementById('inspecoesTable').innerHTML = '<div class="empty">Nenhuma inspeção encontrada</div>';
+    return;
+  }
+
+  const statusBadge = s => {
+    if (s === 'aprovado') return '<span class="badge badge-aprovado">&#10004; APROVADO</span>';
+    if (s === 'ressalva') return '<span class="badge badge-ressalva">&#9888; RESSALVA</span>';
+    if (s === 'bloqueado') return '<span class="badge badge-bloqueado">&#10006; BLOQUEADO</span>';
+    return s || '—';
+  };
+
+  const classBadge = c => {
+    if (c === 'A') return '<span class="badge badge-a">&#10004; A</span>';
+    if (c === 'B') return '<span class="badge badge-b">&#9888; B</span>';
+    if (c === 'C') return '<span class="badge badge-c">&#10006; C</span>';
+    return c || '—';
+  };
+
+  document.getElementById('inspecoesTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Data</th><th>Lote</th><th>Produto</th><th>Classe</th>
+        <th>% Defeitos</th><th>Status</th><th></th>
+      </tr></thead>
+      <tbody>
+        ${data.map(i => `<tr>
+          <td style="font-family:'DM Mono';font-size:11px;">${i.data_inspecao || '—'}</td>
+          <td style="font-family:'DM Mono';font-size:11px;">${i.lote_atak || i.etiqueta || '—'}</td>
+          <td style="font-size:12px;">${i.produto || '—'}</td>
+          <td>${classBadge(i.classificacao)}</td>
+          <td style="font-family:'DM Mono'">${i.percentual_defeitos != null ? i.percentual_defeitos + '%' : '—'}</td>
+          <td>${statusBadge(i.status_final)}</td>
+          <td>${i.lote_atak ? `<a class="btn-drill" href="rastreabilidade_lote.html?lote=${encodeURIComponent(i.lote_atak)}" style="font-size:9px;">&#128270; Rastrear</a>` : ''}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+</script>
+</body>
+</html>

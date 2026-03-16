@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eficiência do CQ · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.header-user { font-size: 12px; color: var(--muted); }
+.header-user strong { color: var(--text); }
+.header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
+}
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .06em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 32px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.kpi-card[data-color="accent"] { border-left-color: var(--accent); }
+.kpi-card[data-color="accent"] .kpi-num { color: var(--accent); }
+.kpi-card[data-color="blue"]   { border-left-color: var(--cb-blue); }
+.kpi-card[data-color="blue"]   .kpi-num { color: var(--cb-blue); }
+.kpi-card[data-color="teal"]   { border-left-color: var(--cb-teal); }
+.kpi-card[data-color="teal"]   .kpi-num { color: var(--cb-teal); }
+.kpi-card[data-color="orange"] { border-left-color: var(--cb-orange); }
+.kpi-card[data-color="orange"] .kpi-num { color: var(--cb-orange); }
+.kpi-card[data-color="red"]    { border-left-color: var(--cb-red); }
+.kpi-card[data-color="red"]    .kpi-num { color: var(--cb-red); }
+.kpi-card[data-color="purple"] { border-left-color: var(--cb-purple); }
+.kpi-card[data-color="purple"] .kpi-num { color: var(--cb-purple); }
+
+/* Panel & Table */
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 28px; }
+.panel-title { font-family: 'Syne'; font-weight: 700; font-size: 12px; color: var(--accent2); margin-bottom: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono'; font-weight: 500;
+  font-size: 10px; text-transform: uppercase; padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--border); cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--text); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+tbody tr:hover { background: var(--s2); }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono'; font-size: 10px; font-weight: 500; }
+.badge-ok { background: rgba(0,158,115,.15); color: var(--cb-teal); }
+.badge-warn { background: rgba(230,159,0,.15); color: var(--cb-orange); }
+.badge-crit { background: rgba(213,94,0,.15); color: var(--cb-red); }
+
+/* Grid 2 cols */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.chart-wrap { margin-bottom: 28px; }
+.chart-box { position: relative; height: 320px; }
+
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.empty { text-align: center; padding: 24px; color: var(--muted); font-size: 13px; }
+
+.btn-export {
+  padding: 8px 18px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s; margin-top: 14px;
+}
+.btn-export:hover { background: var(--accent3); color: var(--bg); }
+
+/* Overdue highlight */
+.row-overdue td { background: rgba(213,94,0,.06); }
+
+@media (max-width: 768px) {
+  .grid-2 { grid-template-columns: 1fr; }
+}
+@media (max-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .main { padding: 12px 12px 32px; }
+}
+</style>
+</head>
+<body>
+
+<header class="header">
+  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="header-title">Eficiência do CQ</div>
+    <div class="header-sub">CQ Efficiency Index · Classic CQ</div>
+  </div>
+  <div class="header-right">
+    <div class="header-user" id="userInfo"></div>
+    <div class="header-avatar" id="userAvatar"></div>
+    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
+    <a class="btn-sm" href="app.html">← Menu</a>
+  </div>
+</header>
+
+<main class="main">
+  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div id="dashContent" style="display:none;">
+
+    <div class="filter-bar">
+      <label>Período</label>
+      <select id="filtroPeriodo" onchange="carregarDados()">
+        <option value="30" selected>Últimos 30 dias</option>
+        <option value="60">Últimos 60 dias</option>
+        <option value="90">Últimos 90 dias</option>
+        <option value="180">Últimos 180 dias</option>
+        <option value="all">Todos</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarDados()">↻ Atualizar</button>
+      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+    </div>
+
+    <!-- KPIs -->
+    <div class="section-title">Visão Geral — Eficiência do Processo</div>
+    <div class="kpi-grid" id="kpiGrid"></div>
+
+    <!-- CHARTS -->
+    <div class="grid-2">
+      <div class="panel">
+        <div class="panel-title">Inspeções por Analista</div>
+        <div class="chart-box"><canvas id="chartAnalistas"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Tendência de Tempos (Semanal)</div>
+        <div class="chart-box"><canvas id="chartTendencia"></canvas></div>
+      </div>
+    </div>
+
+    <!-- ANALISTAS TABLE -->
+    <div class="section-title" style="margin-top:28px;">Desempenho por Analista</div>
+    <div class="panel">
+      <div class="table-wrap" id="analistaTable"></div>
+      <button class="btn-export" onclick="exportCSV('analistas')">⬇ Exportar CSV</button>
+    </div>
+
+    <!-- PLANOS ATRASADOS -->
+    <div class="section-title" style="margin-top:28px;">⚠ Planos de Ação Atrasados</div>
+    <div class="panel">
+      <div class="table-wrap" id="planosTable"></div>
+      <button class="btn-export" onclick="exportCSV('planos')">⬇ Exportar CSV</button>
+    </div>
+
+    <!-- NCs ABERTAS -->
+    <div class="section-title" style="margin-top:28px;">NCs em Aberto</div>
+    <div class="panel">
+      <div class="table-wrap" id="ncsTable"></div>
+    </div>
+
+  </div>
+</main>
+
+<script src="cq_auth.js"></script>
+<script src="cq_workflow.js"></script>
+<script>
+let SB_URL, SB_KEY;
+let _analistas = [], _planos = [], _ncs = [], _inspecoes = [];
+let chartAnalistas = null, chartTendencia = null;
+
+(async function(){
+  const logo = localStorage.getItem('classic_logo');
+  if (logo) document.getElementById('logoImg').src = logo;
+
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  SB_URL = CQAuth.getSbUrl();
+  SB_KEY = CQAuth.getSbKey();
+
+  document.getElementById('userInfo').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
+  document.getElementById('userAvatar').textContent =
+    (usuario.nome || usuario.email).charAt(0).toUpperCase();
+
+  await carregarDados();
+})();
+
+async function apiFetch(endpoint) {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+  });
+  if (!r.ok) return [];
+  return r.json();
+}
+
+function getPeriodFilter() {
+  const val = document.getElementById('filtroPeriodo').value;
+  if (val === 'all') return '';
+  const d = new Date(); d.setDate(d.getDate() - parseInt(val));
+  return `&criado_em=gte.${d.toISOString().slice(0,10)}`;
+}
+
+async function carregarDados() {
+  document.getElementById('loadingState').style.display = 'block';
+  document.getElementById('dashContent').style.display = 'none';
+
+  try {
+    const pf = getPeriodFilter();
+
+    const [inspecoes, recebimentos, revisoes, ncs, planos] = await Promise.all([
+      apiFetch(`registros_cq_inspecao?select=id,fornecedor,fornecedor_codigo,produto,lote_atak,data_inspecao,status_final,classificacao,percentual_defeitos,criado_em,criador_id${pf.replace('criado_em', 'criado_em')}`),
+      apiFetch(`cq_recebimentos?select=id,lote_atak,criado_em${pf}`),
+      apiFetch(`cq_revisoes?select=id,inspecao_id,revisor_nome,decisao,criado_em${pf}`),
+      apiFetch(`cq_nao_conformidades?select=id,codigo,fornecedor,inspecao_id,gravidade,status,criado_em&status=in.(aberta,em_tratamento)`),
+      apiFetch(`cq_planos_acao?select=id,nao_conformidade_id,status,data_limite,data_conclusao,validacao,criado_em&status=neq.concluido&status=neq.cancelado`)
+    ]);
+
+    _inspecoes = inspecoes;
+    _ncs = ncs;
+    _planos = planos;
+
+    // Build lookup maps
+    const recMap = {};
+    recebimentos.forEach(r => { recMap[r.lote_atak] = r; });
+    const revMap = {};
+    revisoes.forEach(r => { if (!revMap[r.inspecao_id]) revMap[r.inspecao_id] = r; });
+
+    // Calculate per-analyst metrics
+    const analistaMap = {};
+    inspecoes.forEach(ins => {
+      const key = ins.criador_id || 'desconhecido';
+      if (!analistaMap[key]) analistaMap[key] = { criador_id: key, nome: null, total: 0, aprovadas: 0, bloqueios: 0, tempos_rec: [], tempos_rev: [] };
+      const a = analistaMap[key];
+      a.total++;
+      if (ins.status_final === 'aprovado') a.aprovadas++;
+      if (ins.status_final === 'bloqueado') a.bloqueios++;
+
+      // Tempo recebimento → inspeção
+      const rec = recMap[ins.lote_atak];
+      if (rec && rec.criado_em && ins.criado_em) {
+        const h = (new Date(ins.criado_em) - new Date(rec.criado_em)) / 3600000;
+        if (h >= 0 && h < 720) a.tempos_rec.push(h);
+      }
+
+      // Tempo inspeção → revisão
+      const rev = revMap[ins.id];
+      if (rev && rev.criado_em && ins.criado_em) {
+        const h = (new Date(rev.criado_em) - new Date(ins.criado_em)) / 3600000;
+        if (h >= 0 && h < 720) a.tempos_rev.push(h);
+      }
+    });
+
+    // Fetch user names
+    const usuarios = await apiFetch('cq_usuarios?select=id,nome,email');
+    const userMap = {};
+    usuarios.forEach(u => { userMap[u.id] = u.nome || u.email || u.id; });
+
+    _analistas = Object.values(analistaMap).map(a => {
+      const avgRec = a.tempos_rec.length ? (a.tempos_rec.reduce((s,v)=>s+v,0) / a.tempos_rec.length) : null;
+      const avgRev = a.tempos_rev.length ? (a.tempos_rev.reduce((s,v)=>s+v,0) / a.tempos_rev.length) : null;
+      return {
+        ...a,
+        nome: userMap[a.criador_id] || a.criador_id,
+        avg_rec: avgRec !== null ? Math.round(avgRec * 10) / 10 : null,
+        avg_rev: avgRev !== null ? Math.round(avgRev * 10) / 10 : null,
+        taxa_aprovacao: a.total ? Math.round(a.aprovadas / a.total * 100) : 0
+      };
+    }).sort((a,b) => b.total - a.total);
+
+    // Weekly trend data
+    buildWeeklyTrend(inspecoes, recMap, revMap);
+
+    renderKPIs(recMap, revMap);
+    renderAnalistaTable();
+    renderChartAnalistas();
+    renderPlanosTable();
+    renderNcsTable();
+
+    document.getElementById('lastUpdate').textContent =
+      'Atualizado: ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
+  } catch(e) {
+    console.error('Erro:', e);
+  }
+
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('dashContent').style.display = 'block';
+}
+
+// ── KPIs ──
+function renderKPIs(recMap, revMap) {
+  const total = _inspecoes.length;
+  const allRec = [], allRev = [];
+  _inspecoes.forEach(ins => {
+    const rec = recMap[ins.lote_atak];
+    if (rec && rec.criado_em && ins.criado_em) {
+      const h = (new Date(ins.criado_em) - new Date(rec.criado_em)) / 3600000;
+      if (h >= 0 && h < 720) allRec.push(h);
+    }
+    const rev = revMap[ins.id];
+    if (rev && rev.criado_em && ins.criado_em) {
+      const h = (new Date(rev.criado_em) - new Date(ins.criado_em)) / 3600000;
+      if (h >= 0 && h < 720) allRev.push(h);
+    }
+  });
+
+  const avgRecH = allRec.length ? Math.round(allRec.reduce((s,v)=>s+v,0) / allRec.length * 10) / 10 : '—';
+  const avgRevH = allRev.length ? Math.round(allRev.reduce((s,v)=>s+v,0) / allRev.length * 10) / 10 : '—';
+  const ncsAbertas = _ncs.length;
+  const planosAtrasados = _planos.filter(p => p.data_limite && new Date(p.data_limite) < new Date() && p.status !== 'concluido' && p.status !== 'cancelado').length;
+  const totalPlanos = _planos.length;
+  const taxaResolucao = totalPlanos ? Math.round((_planos.filter(p => p.status === 'concluido').length / totalPlanos) * 100) : '—';
+
+  document.getElementById('kpiGrid').innerHTML = `
+    <div class="kpi-card" data-color="accent">
+      <div class="kpi-num">${total}</div>
+      <div class="kpi-label">Inspeções no Período</div>
+    </div>
+    <div class="kpi-card" data-color="blue">
+      <div class="kpi-num">${avgRecH}${avgRecH !== '—' ? 'h' : ''}</div>
+      <div class="kpi-label">Tempo Méd. Receb → Insp</div>
+    </div>
+    <div class="kpi-card" data-color="teal">
+      <div class="kpi-num">${avgRevH}${avgRevH !== '—' ? 'h' : ''}</div>
+      <div class="kpi-label">Tempo Méd. Insp → Revisão</div>
+    </div>
+    <div class="kpi-card" data-color="orange">
+      <div class="kpi-num">${ncsAbertas}</div>
+      <div class="kpi-label">NCs em Aberto</div>
+    </div>
+    <div class="kpi-card" data-color="red">
+      <div class="kpi-num">${planosAtrasados}</div>
+      <div class="kpi-label">Planos Atrasados</div>
+    </div>
+    <div class="kpi-card" data-color="purple">
+      <div class="kpi-num">${_analistas.length}</div>
+      <div class="kpi-label">Analistas Ativos</div>
+    </div>
+  `;
+}
+
+// ── ANALISTA TABLE ──
+function renderAnalistaTable() {
+  if (!_analistas.length) {
+    document.getElementById('analistaTable').innerHTML = '<div class="empty">Nenhum analista encontrado</div>';
+    return;
+  }
+
+  function tempoBadge(h) {
+    if (h === null) return '<span style="color:var(--muted)">—</span>';
+    const cls = h < 4 ? 'badge-ok' : h < 12 ? 'badge-warn' : 'badge-crit';
+    return `<span class="badge ${cls}">${h}h</span>`;
+  }
+
+  document.getElementById('analistaTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>#</th><th>Analista</th><th>Inspeções</th><th>Taxa Aprov.</th>
+        <th>Bloqueios</th><th>Tempo Méd. Receb→Insp</th><th>Tempo Méd. Insp→Rev</th>
+      </tr></thead>
+      <tbody>
+        ${_analistas.map((a, i) => `<tr>
+          <td style="font-family:'DM Mono';color:var(--muted)">${i+1}</td>
+          <td>${a.nome}</td>
+          <td style="font-family:'DM Mono'">${a.total}</td>
+          <td style="font-family:'DM Mono'">${a.taxa_aprovacao}%</td>
+          <td style="font-family:'DM Mono'">${a.bloqueios}</td>
+          <td>${tempoBadge(a.avg_rec)}</td>
+          <td>${tempoBadge(a.avg_rev)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── CHART: ANALISTAS ──
+function renderChartAnalistas() {
+  const top = _analistas.slice(0, 15);
+  if (!top.length) return;
+
+  if (chartAnalistas) chartAnalistas.destroy();
+  chartAnalistas = new Chart(document.getElementById('chartAnalistas'), {
+    type: 'bar',
+    data: {
+      labels: top.map(a => (a.nome || '').slice(0, 20)),
+      datasets: [{
+        label: 'Inspeções',
+        data: top.map(a => a.total),
+        backgroundColor: 'rgba(0,114,178,.7)',
+        borderRadius: 3
+      }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } } },
+        y: { grid: { display: false }, ticks: { color: '#999', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── WEEKLY TREND ──
+let _weeklyData = [];
+function buildWeeklyTrend(inspecoes, recMap, revMap) {
+  const weeks = {};
+  inspecoes.forEach(ins => {
+    const d = new Date(ins.data_inspecao || ins.criado_em);
+    const wk = getWeekKey(d);
+    if (!weeks[wk]) weeks[wk] = { label: wk, rec: [], rev: [], count: 0 };
+    weeks[wk].count++;
+
+    const rec = recMap[ins.lote_atak];
+    if (rec && rec.criado_em && ins.criado_em) {
+      const h = (new Date(ins.criado_em) - new Date(rec.criado_em)) / 3600000;
+      if (h >= 0 && h < 720) weeks[wk].rec.push(h);
+    }
+    const rev = revMap[ins.id];
+    if (rev && rev.criado_em && ins.criado_em) {
+      const h = (new Date(rev.criado_em) - new Date(ins.criado_em)) / 3600000;
+      if (h >= 0 && h < 720) weeks[wk].rev.push(h);
+    }
+  });
+
+  _weeklyData = Object.values(weeks)
+    .sort((a,b) => a.label.localeCompare(b.label))
+    .slice(-12)
+    .map(w => ({
+      label: w.label,
+      avgRec: w.rec.length ? Math.round(w.rec.reduce((s,v)=>s+v,0) / w.rec.length * 10) / 10 : null,
+      avgRev: w.rev.length ? Math.round(w.rev.reduce((s,v)=>s+v,0) / w.rev.length * 10) / 10 : null,
+      count: w.count
+    }));
+
+  renderChartTendencia();
+}
+
+function getWeekKey(d) {
+  const jan1 = new Date(d.getFullYear(), 0, 1);
+  const wk = Math.ceil(((d - jan1) / 86400000 + jan1.getDay() + 1) / 7);
+  return `${d.getFullYear()}-S${String(wk).padStart(2,'0')}`;
+}
+
+function renderChartTendencia() {
+  if (!_weeklyData.length) return;
+
+  if (chartTendencia) chartTendencia.destroy();
+  chartTendencia = new Chart(document.getElementById('chartTendencia'), {
+    type: 'line',
+    data: {
+      labels: _weeklyData.map(w => w.label),
+      datasets: [
+        {
+          label: 'Receb → Insp (h)',
+          data: _weeklyData.map(w => w.avgRec),
+          borderColor: 'rgba(0,114,178,.9)',
+          backgroundColor: 'rgba(0,114,178,.1)',
+          fill: true, tension: .3, pointRadius: 4, pointHoverRadius: 6
+        },
+        {
+          label: 'Insp → Revisão (h)',
+          data: _weeklyData.map(w => w.avgRev),
+          borderColor: 'rgba(0,158,115,.9)',
+          backgroundColor: 'rgba(0,158,115,.1)',
+          fill: true, tension: .3, pointRadius: 4, pointHoverRadius: 6
+        }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: {
+          labels: { color: '#666', font: { family: 'DM Mono', size: 11 }, usePointStyle: true, pointStyleWidth: 10 }
+        }
+      },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 }, maxRotation: 45 } },
+        y: { grid: { color: 'rgba(255,255,255,.04)' }, ticks: { color: '#666', font: { family: 'DM Mono', size: 10 } }, title: { display: true, text: 'Horas', color: '#666', font: { family: 'DM Mono', size: 10 } } }
+      }
+    }
+  });
+}
+
+// ── PLANOS ATRASADOS TABLE ──
+function renderPlanosTable() {
+  const atrasados = _planos.filter(p =>
+    p.data_limite && new Date(p.data_limite) < new Date() &&
+    p.status !== 'concluido' && p.status !== 'cancelado'
+  ).sort((a,b) => new Date(a.data_limite) - new Date(b.data_limite));
+
+  if (!atrasados.length) {
+    document.getElementById('planosTable').innerHTML = '<div class="empty">Nenhum plano atrasado — ótimo!</div>';
+    return;
+  }
+
+  function diasAtraso(dt) {
+    const dias = Math.floor((new Date() - new Date(dt)) / 86400000);
+    if (dias > 30) return `<span class="badge badge-crit">✖ ${dias}d</span>`;
+    if (dias > 7) return `<span class="badge badge-warn">⚠ ${dias}d</span>`;
+    return `<span class="badge badge-ok">${dias}d</span>`;
+  }
+
+  function fmtDate(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
+
+  document.getElementById('planosTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>ID Plano</th><th>NC Ref.</th><th>Status</th><th>Prazo</th><th>Atraso</th>
+      </tr></thead>
+      <tbody>
+        ${atrasados.map(p => `<tr class="row-overdue">
+          <td style="font-family:'DM Mono'">${p.id ? String(p.id).slice(0,8) : '—'}</td>
+          <td style="font-family:'DM Mono'">${p.nao_conformidade_id ? String(p.nao_conformidade_id).slice(0,8) : '—'}</td>
+          <td><span class="badge badge-warn">${p.status || '—'}</span></td>
+          <td style="font-family:'DM Mono'">${fmtDate(p.data_limite)}</td>
+          <td>${diasAtraso(p.data_limite)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── NCs ABERTAS TABLE ──
+function renderNcsTable() {
+  if (!_ncs.length) {
+    document.getElementById('ncsTable').innerHTML = '<div class="empty">Nenhuma NC em aberto</div>';
+    return;
+  }
+
+  function gravBadge(g) {
+    if (g === 'critica') return '<span class="badge badge-crit">✖ CRÍTICA</span>';
+    if (g === 'maior') return '<span class="badge badge-warn">⚠ MAIOR</span>';
+    return '<span class="badge badge-ok">● MENOR</span>';
+  }
+
+  function fmtDate(d) { return d ? new Date(d).toLocaleDateString('pt-BR') : '—'; }
+
+  const sorted = _ncs.slice().sort((a,b) => {
+    const o = { critica: 0, maior: 1, menor: 2 };
+    return (o[a.gravidade] ?? 3) - (o[b.gravidade] ?? 3);
+  });
+
+  document.getElementById('ncsTable').innerHTML = `
+    <table>
+      <thead><tr>
+        <th>Código</th><th>Fornecedor</th><th>Gravidade</th><th>Status</th><th>Criado em</th>
+      </tr></thead>
+      <tbody>
+        ${sorted.map(nc => `<tr>
+          <td style="font-family:'DM Mono'">${nc.codigo || '—'}</td>
+          <td>${nc.fornecedor || '—'}</td>
+          <td>${gravBadge(nc.gravidade)}</td>
+          <td><span class="badge badge-warn">${nc.status || '—'}</span></td>
+          <td style="font-family:'DM Mono'">${fmtDate(nc.criado_em)}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+// ── EXPORT CSV ──
+function exportCSV(type) {
+  let headers, rows, filename;
+
+  if (type === 'analistas') {
+    if (!_analistas.length) return;
+    headers = ['Analista','Inspeções','Taxa Aprovação','Bloqueios','Tempo Méd Receb-Insp (h)','Tempo Méd Insp-Rev (h)'];
+    rows = _analistas.map(a => [a.nome, a.total, a.taxa_aprovacao + '%', a.bloqueios, a.avg_rec ?? '—', a.avg_rev ?? '—']);
+    filename = 'cq_efficiency_analistas';
+  } else {
+    const atrasados = _planos.filter(p => p.data_limite && new Date(p.data_limite) < new Date() && p.status !== 'concluido' && p.status !== 'cancelado');
+    if (!atrasados.length) return;
+    headers = ['ID Plano','NC Ref','Status','Prazo','Dias Atraso'];
+    rows = atrasados.map(p => {
+      const dias = Math.floor((new Date() - new Date(p.data_limite)) / 86400000);
+      return [p.id, p.nao_conformidade_id, p.status, p.data_limite, dias];
+    });
+    filename = 'cq_planos_atrasados';
+  }
+
+  const csv = [headers.join(';'), ...rows.map(r => r.join(';'))].join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename + '_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click(); URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>

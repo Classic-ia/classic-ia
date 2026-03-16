@@ -445,8 +445,15 @@ let scanData = null;
 let listaData = [];
 
 // ---- AUTH ----
+let usuarioAtual = null;
 (async()=>{
-  await authGuard(['qualidade','administrador']);
+  const auth = await CQAuth.init({ perfisPermitidos: ['qualidade','administrador'] });
+  if (!auth) return;
+  usuarioAtual = CQAuth.getUser();
+  // Preencher header
+  const u = usuarioAtual;
+  document.querySelectorAll('.hd-user').forEach(el => { if (u) el.innerHTML = 'Usuário: <strong>' + (u.nome || u.email) + '</strong>'; });
+  document.querySelectorAll('.hd-avatar').forEach(el => { if (u?.nome) el.textContent = u.nome.split(' ').map(p=>p[0]).join('').slice(0,2); });
   initForm();
 })();
 
@@ -570,7 +577,7 @@ async function salvarRegistro() {
     classificacao: cls,
     obs: document.getElementById('f-obs').value.trim()||null,
     fotos: photoUrls.length?photoUrls:null,
-    usuario_id: usuarioAtual?.id,
+    // usuario_id omitido — FK pode não ter auth user em registros_carga
     created_at: new Date().toISOString(),
   };
 
@@ -873,7 +880,7 @@ function lerCSV(event) {
         pcs_c: pcsC, pct_c: parseFloat((pcsC/tot*100).toFixed(2)),
         classificacao: cls,
         obs: row.obs||null,
-        usuario_id: usuarioAtual?.id,
+        // usuario_id omitido — FK pode não ter auth user
         created_at: new Date().toISOString(),
       });
     }

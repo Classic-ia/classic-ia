@@ -655,21 +655,27 @@ async function carregar() {
     try {
       const d3 = await CQ_API.get('cq_cargas?order=data_coleta.desc&limit=2000');
       const cargas = (d3 || []).map(r => {
-        // Sanitizar porcentagem — valores absurdos (>100%) indicam dados ruins
-        let pct = parseFloat(r.porcentagem) || 0;
-        if (pct > 100) pct = Math.min(pct, 100);
+        // Recalcular % defeito: usar qtd_classic (inspecionada) como denominador
+        // Se não houver, usar qtd_frigo. Garantir que nunca excede 100%.
+        const qtd = (r.qtd_classic || r.qtd_frigo || 0);
+        const def = r.total_problemas || 0;
+        let pct = qtd > 0 ? Math.min((def / qtd) * 100, 100) : 0;
+        // Se porcentagem original do banco é razoável (<=100), usá-la
+        const pctOriginal = parseFloat(r.porcentagem) || 0;
+        if (pctOriginal > 0 && pctOriginal <= 100) pct = pctOriginal;
         return {
         ...r,
         _fonte: 'carga',
         fornecedor:         r.frigorifico,
         data_entrada:       r.data_coleta,
         lote_atak:          r.numero_pcr || r.numero_carga || '',
-        qtd_amostra:        r.qtd_frigo || 0,
+        qtd_amostra:        qtd,
         qtd_total_lote:     r.qtd_frigo || 0,
-        total_defeitos:     r.total_problemas || 0,
+        total_defeitos:     def,
         percentual_defeito: pct,
         numero_requisicao:  r.numero_pcr || null,
-        classificacao:      normalizarClasse(pct, r.classificacao),
+        classificacao:      normalizarClasse(pct),
+        liberado_producao:  normalizarClasse(pct) === 'A' || (r.situacao && r.situacao.toLowerCase().includes('liberado')),
         // Mapear defeitos individuais para campos padrão
         defeito_1_tipo: maiorDefeito(r, 1)?.[0] || null,
         defeito_1_qtd:  maiorDefeito(r, 1)?.[1] || 0,
@@ -694,8 +700,9 @@ async function carregar() {
 }
 
 function normalizarClasse(pct, cls) {
-  if (cls === 'A' || cls === 'B' || cls === 'C') return cls;
   const p = parseFloat(pct) || 0;
+  // Sempre recalcular — classificação do banco pode estar inconsistente
+  // Regra: A ≤ 5%, B ≤ 12%, C > 12%
   return p <= 5 ? 'A' : p <= 12 ? 'B' : 'C';
 }
 
@@ -819,21 +826,39 @@ function median(arr) {
   return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
 }
 
-// === ALERTAS SIMPLES ===
+// === RISCOS POR FORNECEDOR ===
 function renderAlertasSimples() {
-  const cls = dadosFiltrados.filter(x=>x.classificacao==='C').slice(0,6);
+  // Agrupa por fornecedor com resumo (não lotes individuais — alertas avançados cuida disso)
+  const fornMap = {};
+  dadosFiltrados.forEach(x => {
+    if (!x.fornecedor) return;
+    if (!fornMap[x.fornecedor]) fornMap[x.fornecedor] = { total:0, A:0, B:0, C:0, pctSum:0, amostra:0, defeitos:0 };
+    const f = fornMap[x.fornecedor];
+    f.total++;
+    f[x.classificacao] = (f[x.classificacao]||0) + 1;
+    f.pctSum += (x.percentual_defeito||0);
+    f.amostra += (x.qtd_amostra||0);
+    f.defeitos += (x.total_defeitos||0);
+  });
+  const fornList = Object.entries(fornMap)
+    .map(([nome, f]) => ({ nome, ...f, media: f.total ? f.pctSum/f.total : 0 }))
+    .sort((a,b) => b.media - a.media)
+    .slice(0, 6);
   const el = document.getElementById('alertas');
-  if (!cls.length) { el.innerHTML=''; return; }
-  el.innerHTML = cls.map(x=>`
-    <div class="alerta">
-      <div class="alerta-icon">⚠</div>
+  if (!fornList.length) { el.innerHTML=''; return; }
+  el.innerHTML = fornList.map(x => {
+    const cls = x.C > x.A ? 'C' : x.B > x.A ? 'B' : 'A';
+    const cor = cls==='A'?'var(--ok2)':cls==='B'?'var(--warn2)':'var(--err2)';
+    return `
+    <div class="alerta" style="border-left:3px solid ${cor};">
+      <div class="alerta-icon" style="color:${cor}">${cls==='C'?'⚠':cls==='B'?'◉':'✓'}</div>
       <div class="alerta-body">
-        <div class="alerta-forn">${x.fornecedor||'—'}</div>
-        <div class="alerta-meta mono">Lote ${x.lote_atak||'—'} · Req. ${x.numero_requisicao||'—'} · Amostra ${x.qtd_amostra||'—'} pcs · Total def. ${x.total_defeitos||0} pcs · ${x.data_entrada||'—'}</div>
-        ${x.defeito_1_tipo?`<div class="alerta-meta" style="color:var(--muted);margin-top:2px;">Defeitos: ${[x.defeito_1_tipo,x.defeito_2_tipo,x.defeito_3_tipo].filter(Boolean).join(' · ')}</div>`:''}
+        <div class="alerta-forn">${x.nome}</div>
+        <div class="alerta-meta mono">Lote${x.total>1?'s':''} ${x.total} · Amostra ${x.amostra.toLocaleString('pt-BR')} pcs · Total def. ${x.defeitos.toLocaleString('pt-BR')} pcs · ${x.data_entrada||'—'}</div>
       </div>
-      <div class="alerta-badge">${(x.percentual_defeito||0).toFixed(1)}% DEF · CLASSE C</div>
-    </div>`).join('');
+      <div class="alerta-badge" style="color:${cor}">${x.media.toFixed(1)}% DEF · CLASSE ${cls}</div>
+    </div>`;
+  }).join('');
 }
 
 // === TABS ===

@@ -654,17 +654,22 @@ async function carregar() {
     // 3. Cargas importadas (cq_cargas) — planilha de motoristas
     try {
       const d3 = await CQ_API.get('cq_cargas?order=data_coleta.desc&limit=2000');
-      const cargas = (d3 || []).map(r => ({
+      const cargas = (d3 || []).map(r => {
+        // Sanitizar porcentagem — valores absurdos (>100%) indicam dados ruins
+        let pct = parseFloat(r.porcentagem) || 0;
+        if (pct > 100) pct = Math.min(pct, 100);
+        return {
         ...r,
         _fonte: 'carga',
         fornecedor:         r.frigorifico,
         data_entrada:       r.data_coleta,
+        lote_atak:          r.numero_pcr || r.numero_carga || null,
         qtd_amostra:        r.qtd_frigo || 0,
         qtd_total_lote:     r.qtd_frigo || 0,
         total_defeitos:     r.total_problemas || 0,
-        percentual_defeito: r.porcentagem ?? 0,
+        percentual_defeito: pct,
         numero_requisicao:  r.numero_pcr || null,
-        classificacao:      normalizarClasse(r.porcentagem, r.classificacao),
+        classificacao:      normalizarClasse(pct, r.classificacao),
         // Mapear defeitos individuais para campos padrão
         defeito_1_tipo: maiorDefeito(r, 1)?.[0] || null,
         defeito_1_qtd:  maiorDefeito(r, 1)?.[1] || 0,
@@ -672,7 +677,7 @@ async function carregar() {
         defeito_2_qtd:  maiorDefeito(r, 2)?.[1] || 0,
         defeito_3_tipo: maiorDefeito(r, 3)?.[0] || null,
         defeito_3_qtd:  maiorDefeito(r, 3)?.[1] || 0,
-      }));
+      };});
       todosTemp = [...todosTemp, ...cargas];
     } catch(e) { console.warn('cq_cargas:', e); }
 
@@ -1637,14 +1642,9 @@ function exportarCSV() {
 // === WORKFLOW ===
 async function renderWorkflow() {
   CQWorkflow.injetarCSS();
-  const JWT = CQAuth.getAuthToken() || SB_KEY;
-
   try {
     // Buscar todas inspeções com status_workflow
-    const r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=id,id_inspecao,status_workflow,status_final,fornecedor,produto,criado_em,usuario_nome,total_ncs&order=criado_em.desc&limit=200`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
-    });
-    const inspecoes = r.ok ? await r.json() : [];
+    const inspecoes = await CQ_API.get('vw_inspecoes_workflow?select=id,id_inspecao,status_workflow,status_final,fornecedor,produto,criado_em,usuario_nome,total_ncs&order=criado_em.desc&limit=200') || [];
 
     // KPIs por status
     const contagens = {};
@@ -1689,10 +1689,7 @@ async function renderWorkflow() {
         </div>`).join('');
 
     // NCs abertas
-    const rNC = await fetch(`${SB_URL}/rest/v1/cq_nao_conformidades?status=eq.aberta&select=id,codigo,tipo,gravidade,descricao,responsavel_nome,criado_em&order=criado_em.desc&limit=10`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
-    });
-    const ncs = rNC.ok ? await rNC.json() : [];
+    const ncs = await CQ_API.get('cq_nao_conformidades?status=eq.aberta&select=id,codigo,tipo,gravidade,descricao,responsavel_nome,criado_em&order=criado_em.desc&limit=10') || [];
 
     document.getElementById('wf-ncs-abertas').innerHTML = ncs.length === 0
       ? '<div style="padding:12px;color:#666;">Nenhuma NC aberta.</div>'

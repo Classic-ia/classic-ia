@@ -409,9 +409,11 @@ function resetar() {
 
 function extrairCampo(texto, prefixo) {
   if (!texto || typeof texto !== 'string') return '';
-  const idx = texto.indexOf(prefixo);
-  if (idx === -1) return '';
-  return texto.substring(idx + prefixo.length).trim();
+  // Match prefix with optional spaces and colon (e.g. "MOTORISTA :", "MOTORISTA:", "PARTICIPANTE :")
+  const regex = new RegExp(prefixo.replace(':', '') + '\\s*:\\s*', 'i');
+  const m = texto.match(regex);
+  if (!m) return '';
+  return texto.substring(m.index + m[0].length).trim();
 }
 
 function parseDataPCR(val) {
@@ -500,6 +502,7 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
 
   const registros = [];
   const docsSet = new Set();
+  const idsVistos = new Set();
   let currentDoc = null;
   let rowCount = raw.length;
 
@@ -531,17 +534,25 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
       // Extract motorista
       const motorista = extrairCampo(colE, 'MOTORISTA:');
 
-      // Extract fornecedor (PARTICIPANTE: CODIGO - NOME)
-      const participanteRaw = extrairCampo(colF, 'PARTICIPANTE:');
+      // Extract fornecedor (PARTICIPANTE : CODIGO  NOME or CODIGO - NOME)
+      const participanteRaw = extrairCampo(colF, 'PARTICIPANTE');
       let fornecedorCodigo = '';
       let fornecedorNome = '';
       if (participanteRaw) {
+        // Try "CODIGO - NOME" first, then "CODIGO  NOME" (double space)
         const sepIdx = participanteRaw.indexOf(' - ');
         if (sepIdx !== -1) {
           fornecedorCodigo = participanteRaw.substring(0, sepIdx).trim();
           fornecedorNome = participanteRaw.substring(sepIdx + 3).trim();
         } else {
-          fornecedorNome = participanteRaw;
+          // Match leading digits as code, rest as name
+          const m = participanteRaw.match(/^(\d+)\s+(.+)/);
+          if (m) {
+            fornecedorCodigo = m[1];
+            fornecedorNome = m[2].trim();
+          } else {
+            fornecedorNome = participanteRaw;
+          }
         }
       }
 
@@ -569,20 +580,23 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
     }
 
     // If we have a current doc context, check for product rows
-    // Product rows have data in col I (index 8) = product code
+    // Product rows: col A = product code (digits), col B = description, col C/D/E = quantities
     if (currentDoc) {
-      const colI = row[8];
-      // Product code is typically a 5-digit number
-      if (colI != null) {
-        const prodCode = String(colI).trim();
-        // Check if it looks like a product code (digits, at least 3 chars)
-        if (prodCode && /^\d{3,}$/.test(prodCode)) {
-          const prodDescricao = row[9] != null ? String(row[9]).trim() : '';
-          const qtdRecebida = num(row[10]);
-          const qtdPedida = num(row[11]);
-          const diferenca = num(row[12]);
+      // Skip defect rows (contain "PERC" or "Sebo/Corte" etc.)
+      if (colA.indexOf('PERC') !== -1 || colA.indexOf('Sebo/') !== -1 || colA.indexOf('Carne/') !== -1) continue;
+      // Check if col A is a product code (digits, at least 3 chars)
+      const prodCode = colA;
+      if (prodCode && /^\d{3,}$/.test(prodCode)) {
+        const idRecebimento = `PCR-${currentDoc.documento}-${prodCode}`;
+        // Skip duplicate rows (same product appears twice in WRMVE500 format)
+        if (idsVistos.has(idRecebimento)) continue;
+        idsVistos.add(idRecebimento);
 
-          const idRecebimento = `PCR-${currentDoc.documento}-${prodCode}`;
+        const prodDescricao = row[1] != null ? String(row[1]).trim() : '';
+        const qtdRecebida = num(row[2]);
+        const qtdPedidaRaw = row[3] != null ? String(row[3]).replace(/\./g, '').replace(',', '.').trim() : '0';
+        const qtdPedida = parseFloat(qtdPedidaRaw) || 0;
+        const diferenca = num(row[4]);
 
           const dataPcrFormatada = formatarDataBR(currentDoc.dataPcr);
           const obs = `WRMVE500 \u00B7 PCR ${dataPcrFormatada} \u00B7 Motorista: ${currentDoc.motorista}`;

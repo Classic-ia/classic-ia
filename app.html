@@ -207,6 +207,10 @@
     <div class="kpi-value" id="kpiFornCriticos">&mdash;</div>
     <div class="kpi-label">Fornecedores críticos</div>
   </div>
+  <div class="kpi-box">
+    <div class="kpi-value" id="kpiUltimaImport">&mdash;</div>
+    <div class="kpi-label">Última importação</div>
+  </div>
 </div>
 
 <main>
@@ -356,25 +360,57 @@ const SECTIONS = [
 async function carregarKPIs() {
   const hoje = new Date().toISOString().slice(0, 10);
 
-  // Cargas hoje
+  // 1. Lotes recebidos hoje (cq_cargas + cq_recebimentos)
   try {
-    const rows = await CQ_API.get(`cq_cargas?data_coleta=eq.${hoje}&select=id`);
-    document.getElementById('kpiCargas').textContent = rows.length;
+    let total = 0;
+    try {
+      const r1 = await CQ_API.get(`cq_cargas?data_coleta=eq.${hoje}&select=id`);
+      total += (r1 || []).length;
+    } catch(e) {}
+    try {
+      const r2 = await CQ_API.get(`cq_recebimentos?data_recebimento=eq.${hoje}&select=id`);
+      total += (r2 || []).length;
+    } catch(e) {}
+    document.getElementById('kpiCargas').textContent = total;
   } catch(e) { console.warn('KPI cargas:', e); }
 
-  // Inspeções pendentes (status_workflow != concluido)
+  // 2. Inspeções pendentes (não aprovadas/encerradas)
   try {
-    const rows = await CQ_API.get('registros_cq_inspecao?status_workflow=neq.concluido&select=id');
-    document.getElementById('kpiInspecoes').textContent = rows.length;
+    const rows = await CQ_API.get('registros_cq_inspecao?status_workflow=neq.aprovada&status_workflow=neq.encerrada&select=id');
+    document.getElementById('kpiInspecoes').textContent = (rows || []).length;
   } catch(e) { console.warn('KPI inspeções:', e); }
 
-  // Fornecedores críticos (classificação C nos últimos 30 dias)
+  // 3. Fornecedores críticos (classe C nos últimos 30 dias — todas as fontes)
   try {
     const d30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const rows = await CQ_API.get(`cq_recebimentos?classificacao=eq.C&data_recebimento=gte.${d30}&select=fornecedor`);
-    const uniq = new Set(rows.map(r => r.fornecedor));
-    document.getElementById('kpiFornCriticos').textContent = uniq.size;
+    const fornCriticos = new Set();
+    try {
+      const r1 = await CQ_API.get(`cq_cargas?classificacao=eq.C&data_coleta=gte.${d30}&select=frigorifico`);
+      (r1 || []).forEach(r => { if (r.frigorifico) fornCriticos.add(r.frigorifico); });
+    } catch(e) {}
+    try {
+      const r2 = await CQ_API.get(`registros_cq_inspecao?classificacao=eq.C&data_inspecao=gte.${d30}&select=fornecedor`);
+      (r2 || []).forEach(r => { if (r.fornecedor) fornCriticos.add(r.fornecedor); });
+    } catch(e) {}
+    document.getElementById('kpiFornCriticos').textContent = fornCriticos.size;
   } catch(e) { console.warn('KPI fornecedores:', e); }
+
+  // 4. Última importação (data mais recente de cq_importacoes)
+  try {
+    const rows = await CQ_API.get('cq_importacoes?order=criado_em.desc&limit=1&select=criado_em,tipo');
+    if (rows && rows.length) {
+      const d = new Date(rows[0].criado_em);
+      const diff = Math.floor((Date.now() - d) / 60000);
+      let label;
+      if (diff < 1) label = 'agora';
+      else if (diff < 60) label = diff + ' min';
+      else if (diff < 1440) label = Math.floor(diff/60) + 'h';
+      else label = Math.floor(diff/1440) + 'd';
+      document.getElementById('kpiUltimaImport').textContent = label;
+    } else {
+      document.getElementById('kpiUltimaImport').textContent = '—';
+    }
+  } catch(e) { console.warn('KPI importação:', e); }
 }
 
 // ── Render Sections ──────────────────────────────────────────────

@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Dashboard de Embarques</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --ok: #4a9966; --ok2: #5cb85c;
+  --warn: #b87a28; --warn2: #f0a844;
+  --err: #9e3535; --err2: #e05c5c;
+  --info: #2a6090; --info2: #4a9ed0;
+  --grid: rgba(255,255,255,0.03);
+  --cls-a: #009E73; --cls-b: #E69F00; --cls-c: #D55E00;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+.hd{position:sticky;top:0;z-index:200;background:rgba(8,8,8,0.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px;}
+.hd-left{display:flex;align-items:center;gap:16px;}
+.hd-back{color:var(--muted);font-size:11px;text-decoration:none;letter-spacing:0.12em;font-family:'DM Mono',monospace;transition:color .2s;}
+.hd-back:hover{color:var(--accent);}
+.hd-sep{width:1px;height:20px;background:var(--border2);}
+.hd-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;}
+.hd-right{display:flex;align-items:center;gap:10px;}
+#huser{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+.btn-hd{background:transparent;border:1px solid var(--border2);border-radius:2px;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;padding:6px 12px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all .2s;}
+.btn-hd:hover{border-color:var(--accent);color:var(--accent);}
+.btn-hd.primary{border-color:var(--accent3);color:var(--accent);background:rgba(200,169,110,0.06);}
+.btn-hd.primary:hover{background:rgba(200,169,110,0.12);}
+
+main{max-width:1400px;margin:0 auto;padding:28px 24px 60px;}
+.page-hd{margin-bottom:8px;}
+.page-title{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;letter-spacing:0.04em;}
+#pageSub{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:4px;}
+
+.sec-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px;}
+.sec-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:1px;}
+
+.filter-bar{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:14px 18px;margin-bottom:24px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+.filter-bar label{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;}
+select.fil,input.fil{background:var(--s2);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 10px;outline:none;transition:border-color .2s;cursor:pointer;}
+select.fil:focus,input.fil:focus{border-color:var(--accent);}
+select.fil option{background:var(--s2);}
+.filter-sep{width:1px;height:28px;background:var(--border2);}
+#filtroStatus{font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;margin-left:auto;}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:18px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kpi:hover{border-color:var(--border2);}
+.kpi-label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'DM Mono',monospace;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;}
+@media(max-width:900px){.charts-grid,.charts-grid-3{grid-template-columns:1fr;}}
+
+.card{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.card-sub{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;font-weight:normal;text-transform:none;letter-spacing:0;}
+canvas{max-height:260px;}
+canvas.tall{max-height:340px;}
+
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;flex-wrap:wrap;}
+.tab{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+.rank-table{width:100%;border-collapse:collapse;}
+.rank-table th{font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;}
+.rank-table td{font-size:12px;padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.03);}
+.rank-table tr:last-child td{border-bottom:none;}
+.rank-table tr:hover td{background:rgba(255,255,255,0.015);}
+.mono{font-family:'DM Mono',monospace;font-size:11px;}
+
+.data-table{width:100%;border-collapse:collapse;font-size:11px;}
+.data-table th{font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;white-space:nowrap;}
+.data-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.025);vertical-align:middle;}
+.data-table tr:hover td{background:rgba(255,255,255,0.015);}
+.table-wrap{overflow-x:auto;}
+
+.empty{text-align:center;color:var(--muted);padding:40px;font-size:12px;font-family:'DM Mono',monospace;}
+
+.badge-cls{display:inline-block;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;border-radius:2px;padding:2px 8px;font-family:'DM Mono',monospace;font-weight:600;}
+.badge-cls-a{background:rgba(0,158,115,0.15);color:var(--cls-a);border:1px solid rgba(0,158,115,0.3);}
+.badge-cls-b{background:rgba(230,159,0,0.15);color:var(--cls-b);border:1px solid rgba(230,159,0,0.3);}
+.badge-cls-c{background:rgba(213,94,0,0.15);color:var(--cls-c);border:1px solid rgba(213,94,0,0.3);}
+
+/* Print */
+.print-only{display:none;}
+@media print {
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  body{background:#fff!important;color:#111!important;font-size:10pt;min-height:auto;}
+  .hd,.filter-bar,.tabs,.btn-hd,.tab:not(.active),.no-print{display:none!important;}
+  .print-only{display:block!important;}
+  main{max-width:100%;padding:0;margin:0;}
+  .kpi-row{grid-template-columns:repeat(6,1fr)!important;gap:8px;margin-bottom:14px;}
+  .kpi{background:#f5f3ef!important;border:1px solid #ddd!important;padding:10px 8px;}
+  .kpi-label{color:#555!important;font-size:7pt;}
+  .kpi-val{font-size:16pt;color:#111!important;}
+  .tab-content{display:block!important;}
+  .tab-content#tab-geral{display:none!important;}
+  .tab-content#tab-trend{display:none!important;}
+  .charts-grid,.charts-grid-3{display:none!important;}
+  .card{background:#fff!important;border:1px solid #ddd!important;padding:12px;margin-bottom:12px;}
+  .card-title{color:#333!important;font-size:9pt;}
+  .rank-table th,.data-table th{color:#555!important;font-size:7pt;border-bottom:1px solid #aaa!important;}
+  .rank-table td{font-size:9pt;border-bottom:1px solid #ddd!important;padding:5px 8px;}
+  .data-table td{font-size:8pt;border-bottom:1px solid #ddd!important;padding:4px 6px;}
+  canvas{display:none!important;}
+  @page{size:landscape;margin:10mm;}
+}
+</style>
+</head>
+<body>
+
+<div class="hd">
+  <div class="hd-left">
+    <a href="app.html" class="hd-back">← MENU</a>
+    <div class="hd-sep"></div>
+    <div class="hd-title">Dashboard Embarques</div>
+  </div>
+  <div class="hd-right">
+    <span id="huser">...</span>
+    <button class="btn-hd primary" onclick="carregarDados()">Atualizar</button>
+    <button class="btn-hd" onclick="window.print()">Imprimir</button>
+    <button class="btn-hd" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</div>
+
+<main>
+  <!-- Print Header -->
+  <div class="print-only" style="border-bottom:2px solid #c8a96e;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;">
+    <h1 style="font-family:'Syne',sans-serif;font-size:16pt;font-weight:800;">Relatório de Embarques — Classic CQ</h1>
+    <div style="font-size:8pt;color:#666;font-family:'DM Mono',monospace;text-align:right;" id="printMeta"></div>
+  </div>
+
+  <div class="page-hd no-print">
+    <div class="page-title">Embarques — Classificação A/B/C</div>
+    <div id="pageSub">Carregando dados...</div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar">
+    <label>De</label>
+    <input type="date" class="fil" id="filtDe">
+    <label>Até</label>
+    <input type="date" class="fil" id="filtAte">
+    <div class="filter-sep"></div>
+    <label>Carga</label>
+    <select class="fil" id="filtCarga"><option value="">Todas</option></select>
+    <label>Frigorífico</label>
+    <select class="fil" id="filtFrigo"><option value="">Todos</option></select>
+    <label>Classificação</label>
+    <select class="fil" id="filtClass">
+      <option value="">Todas</option>
+      <option value="A">A</option>
+      <option value="B">B</option>
+      <option value="C">C</option>
+    </select>
+    <div class="filter-sep"></div>
+    <button class="btn-hd primary" onclick="aplicarFiltro()">Filtrar</button>
+    <button class="btn-hd" onclick="limparFiltros()">Limpar</button>
+    <span id="filtroStatus"></span>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Total Embarques</div><div class="kpi-val" id="kTotal" style="color:var(--text)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Frigoríficos</div><div class="kpi-val" id="kFrigo" style="color:var(--info2)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Total Peças</div><div class="kpi-val" id="kPecas" style="color:var(--accent)">—</div></div>
+    <div class="kpi"><div class="kpi-label">% Classe A</div><div class="kpi-val" id="kPctA" style="color:var(--cls-a)">—</div></div>
+    <div class="kpi"><div class="kpi-label">% Classe C</div><div class="kpi-val" id="kPctC" style="color:var(--cls-c)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Cargas</div><div class="kpi-val" id="kCargas" style="color:var(--text)">—</div></div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab active" data-tab="geral" onclick="switchTab('geral')">Visão Geral</div>
+    <div class="tab" data-tab="frigo" onclick="switchTab('frigo')">Por Frigorífico</div>
+    <div class="tab" data-tab="trend" onclick="switchTab('trend')">Tendência</div>
+    <div class="tab" data-tab="regs" onclick="switchTab('regs')">Registros</div>
+  </div>
+
+  <!-- Tab: Visão Geral -->
+  <div class="tab-content active" id="tab-geral">
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">Classificação por Carga <span class="card-sub">barras empilhadas A/B/C</span></div><canvas id="chartCargaStack" class="tall"></canvas></div>
+      <div class="card"><div class="card-title">Distribuição Geral A/B/C</div><canvas id="chartDonut"></canvas></div>
+    </div>
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">Top 10 Frigoríficos <span class="card-sub">por volume</span></div><canvas id="chartTopFrigo" class="tall"></canvas></div>
+      <div class="card"><div class="card-title">Volume por Carga</div><canvas id="chartVolCarga"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Por Frigorífico -->
+  <div class="tab-content" id="tab-frigo">
+    <div class="card" style="margin-bottom:20px;">
+      <div class="card-title">Ranking de Frigoríficos <span class="card-sub" id="frigoCount"></span></div>
+      <div class="table-wrap">
+        <table class="rank-table">
+          <thead><tr><th>#</th><th>Frigorífico</th><th>Embarques</th><th>Peças</th><th>%A</th><th>%B</th><th>%C</th><th>Classificação</th></tr></thead>
+          <tbody id="frigoRankBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">Melhores — % Classe A <span class="card-sub">top 10</span></div><canvas id="chartBestA" class="tall"></canvas></div>
+      <div class="card"><div class="card-title">Piores — % Classe C <span class="card-sub">top 10</span></div><canvas id="chartWorstC" class="tall"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Tendência -->
+  <div class="tab-content" id="tab-trend">
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">Evolução % Classe A <span class="card-sub">por carga</span></div><canvas id="chartTrendA"></canvas></div>
+      <div class="card"><div class="card-title">Evolução % Classe C <span class="card-sub">por carga</span></div><canvas id="chartTrendC"></canvas></div>
+    </div>
+    <div class="charts-grid">
+      <div class="card"><div class="card-title">Volume por Carga <span class="card-sub">peças totais</span></div><canvas id="chartTrendVol"></canvas></div>
+      <div class="card"><div class="card-title">Embarques por Carga</div><canvas id="chartTrendEmb"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Registros -->
+  <div class="tab-content" id="tab-regs">
+    <div class="card">
+      <div class="card-title">Todos os Registros <span class="card-sub" id="regCount"></span></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Data</th><th>Carga</th><th>Frigorífico</th><th>Cnt Frigo</th><th>Cnt Classic</th><th>Pcs A</th><th>%A</th><th>Pcs B</th><th>%B</th><th>Pcs C</th><th>%C</th><th>Repasse</th><th>Class.</th></tr></thead>
+          <tbody id="regBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script>
+// Cores classificação (colorblind-safe Wong)
+const CLS_A = '#009E73', CLS_B = '#E69F00', CLS_C = '#D55E00';
+const GRID_C = 'rgba(255,255,255,0.03)';
+const TICK_C = '#666';
+
+let todosRegistros = [];
+let dadosFiltrados = [];
+let _charts = {};
+
+// ── Auth ──
+(async () => {
+  const u = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','industrial','diretoria'],
+    redirectLogin: true
+  });
+  if (!u) return;
+  document.getElementById('huser').innerHTML = `<strong>${u.nome||u.email}</strong> · ${u.perfil}`;
+  await carregarDados();
+})();
+
+// ── Charts Helper ──
+function makeChart(id, config) {
+  if (_charts[id]) _charts[id].destroy();
+  const ctx = document.getElementById(id)?.getContext('2d');
+  if (!ctx) return null;
+  _charts[id] = new Chart(ctx, config);
+  return _charts[id];
+}
+
+// ── Tabs ──
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === 'tab-'+name));
+}
+
+// ── Load Data ──
+async function carregarDados() {
+  document.getElementById('pageSub').textContent = 'Carregando dados...';
+  try {
+    const dados = await CQ_API.get('cq_embarques?order=data_embarque.desc&limit=10000');
+    todosRegistros = dados || [];
+    popularFiltros();
+    aplicarFiltro();
+  } catch(e) {
+    console.error('Erro:', e);
+    document.getElementById('pageSub').textContent = 'Erro ao carregar dados.';
+  }
+}
+
+// ── Filtros ──
+function popularFiltros() {
+  const cargas = [...new Set(todosRegistros.map(r=>r.numero_carga).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const frigos = [...new Set(todosRegistros.map(r=>r.frigorifico).filter(Boolean))].sort();
+
+  fillSelect('filtCarga', cargas.map(c => 'CARGA '+c));
+  fillSelect('filtFrigo', frigos);
+}
+
+function fillSelect(id, items) {
+  const sel = document.getElementById(id);
+  const val = sel.value;
+  const first = sel.options[0].outerHTML;
+  sel.innerHTML = first;
+  items.forEach(it => { const o = document.createElement('option'); o.value = it; o.textContent = it; sel.appendChild(o); });
+  sel.value = val;
+}
+
+function aplicarFiltro() {
+  const de = document.getElementById('filtDe').value;
+  const ate = document.getElementById('filtAte').value;
+  const carga = document.getElementById('filtCarga').value;
+  const frigo = document.getElementById('filtFrigo').value;
+  const cls = document.getElementById('filtClass').value;
+
+  dadosFiltrados = todosRegistros.filter(r => {
+    if (de && r.data_embarque < de) return false;
+    if (ate && r.data_embarque > ate) return false;
+    if (carga && ('CARGA '+r.numero_carga) !== carga) return false;
+    if (frigo && r.frigorifico !== frigo) return false;
+    if (cls && r.classificacao !== cls) return false;
+    return true;
+  });
+
+  const filtros = [de,ate,carga,frigo,cls].filter(Boolean).length;
+  document.getElementById('filtroStatus').textContent = filtros ? `${filtros} filtro(s) ativo(s)` : '';
+  renderAll();
+}
+
+function limparFiltros() {
+  document.getElementById('filtDe').value = '';
+  document.getElementById('filtAte').value = '';
+  document.getElementById('filtCarga').value = '';
+  document.getElementById('filtFrigo').value = '';
+  document.getElementById('filtClass').value = '';
+  aplicarFiltro();
+}
+
+// ── Render All ──
+function renderAll() {
+  const d = dadosFiltrados;
+  renderKPIs(d);
+  renderGeral(d);
+  renderFrigo(d);
+  renderTrend(d);
+  renderRegistros(d);
+  updateSub(d);
+}
+
+function updateSub(d) {
+  if (d.length === 0) {
+    document.getElementById('pageSub').textContent = 'Nenhum embarque encontrado. Importe dados em Importar Embarques.';
+    return;
+  }
+  const datas = d.map(r=>r.data_embarque).filter(Boolean).sort();
+  const min = datas[0], max = datas[datas.length-1];
+  document.getElementById('pageSub').textContent = `${d.length} registros · ${min} a ${max}`;
+
+  // print meta
+  const pm = document.getElementById('printMeta');
+  if (pm) pm.innerHTML = `Período: ${min} a ${max}<br>Gerado: ${new Date().toLocaleDateString('pt-BR')}`;
+}
+
+// ── KPIs ──
+function renderKPIs(d) {
+  document.getElementById('kTotal').textContent = d.length.toLocaleString('pt-BR');
+  document.getElementById('kFrigo').textContent = new Set(d.map(r=>r.frigorifico)).size;
+  const totalPecas = d.reduce((s,r) => s + (r.cnt_classic||0), 0);
+  document.getElementById('kPecas').textContent = totalPecas.toLocaleString('pt-BR');
+
+  // % A ponderada
+  const totalA = d.reduce((s,r) => s + (r.pcs_a||0), 0);
+  const pctA = totalPecas > 0 ? (totalA/totalPecas*100) : 0;
+  document.getElementById('kPctA').textContent = pctA.toFixed(1) + '%';
+
+  // % C ponderada
+  const totalC = d.reduce((s,r) => s + (r.pcs_c||0), 0);
+  const pctC = totalPecas > 0 ? (totalC/totalPecas*100) : 0;
+  document.getElementById('kPctC').textContent = pctC.toFixed(1) + '%';
+
+  document.getElementById('kCargas').textContent = new Set(d.map(r=>r.numero_carga)).size;
+}
+
+// ── Visão Geral ──
+function renderGeral(d) {
+  if (d.length === 0) return;
+
+  // 1) Barras empilhadas A/B/C por carga
+  const cargaMap = {};
+  d.forEach(r => {
+    const k = r.numero_carga || '?';
+    if (!cargaMap[k]) cargaMap[k] = {a:0,b:0,c:0};
+    cargaMap[k].a += r.pcs_a||0;
+    cargaMap[k].b += r.pcs_b||0;
+    cargaMap[k].c += r.pcs_c||0;
+  });
+  const cargaLabels = Object.keys(cargaMap).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  makeChart('chartCargaStack', {
+    type:'bar',
+    data:{
+      labels: cargaLabels.map(c=>'CG '+c),
+      datasets:[
+        {label:'A', data:cargaLabels.map(c=>cargaMap[c].a), backgroundColor:CLS_A},
+        {label:'B', data:cargaLabels.map(c=>cargaMap[c].b), backgroundColor:CLS_B},
+        {label:'C', data:cargaLabels.map(c=>cargaMap[c].c), backgroundColor:CLS_C}
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{color:TICK_C,font:{size:10}}}},
+      scales:{
+        x:{stacked:true, ticks:{color:TICK_C,font:{size:10}}, grid:{color:GRID_C}},
+        y:{stacked:true, ticks:{color:TICK_C}, grid:{color:GRID_C}}
+      }
+    }
+  });
+
+  // 2) Doughnut geral
+  const totA = d.reduce((s,r)=>s+(r.pcs_a||0),0);
+  const totB = d.reduce((s,r)=>s+(r.pcs_b||0),0);
+  const totC = d.reduce((s,r)=>s+(r.pcs_c||0),0);
+  makeChart('chartDonut', {
+    type:'doughnut',
+    data:{
+      labels:['Classe A','Classe B','Classe C'],
+      datasets:[{data:[totA,totB,totC], backgroundColor:[CLS_A,CLS_B,CLS_C], borderWidth:0}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{color:TICK_C,font:{size:11},padding:16}}}
+    }
+  });
+
+  // 3) Top 10 frigoríficos por volume
+  const frigoVol = {};
+  d.forEach(r => { const k = r.frigorifico||'?'; frigoVol[k] = (frigoVol[k]||0) + (r.cnt_classic||0); });
+  const topFrigo = Object.entries(frigoVol).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  makeChart('chartTopFrigo', {
+    type:'bar',
+    data:{
+      labels: topFrigo.map(f=>f[0].substring(0,20)),
+      datasets:[{label:'Peças', data:topFrigo.map(f=>f[1]), backgroundColor:'rgba(200,169,110,0.7)', borderRadius:2}]
+    },
+    options:{
+      indexAxis:'horizontal', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TICK_C,font:{size:9}},grid:{color:GRID_C}}, y:{ticks:{color:TICK_C},grid:{color:GRID_C}}}
+    }
+  });
+
+  // 4) Volume por carga
+  makeChart('chartVolCarga', {
+    type:'bar',
+    data:{
+      labels: cargaLabels.map(c=>'CG '+c),
+      datasets:[{label:'Peças', data:cargaLabels.map(c=>(cargaMap[c].a+cargaMap[c].b+cargaMap[c].c)), backgroundColor:'rgba(86,180,233,0.6)', borderRadius:2}]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}}, y:{ticks:{color:TICK_C},grid:{color:GRID_C}}}
+    }
+  });
+}
+
+// ── Por Frigorífico ──
+function renderFrigo(d) {
+  // Build ranking
+  const frigoStats = {};
+  d.forEach(r => {
+    const k = r.frigorifico||'?';
+    if (!frigoStats[k]) frigoStats[k] = {embarques:0, pecas:0, a:0, b:0, c:0};
+    frigoStats[k].embarques++;
+    frigoStats[k].pecas += r.cnt_classic||0;
+    frigoStats[k].a += r.pcs_a||0;
+    frigoStats[k].b += r.pcs_b||0;
+    frigoStats[k].c += r.pcs_c||0;
+  });
+
+  const ranking = Object.entries(frigoStats).map(([nome, s]) => {
+    const tot = s.a+s.b+s.c || 1;
+    return { nome, ...s, pctA: s.a/tot*100, pctB: s.b/tot*100, pctC: s.c/tot*100 };
+  }).sort((a,b) => b.pctA - a.pctA);
+
+  document.getElementById('frigoCount').textContent = ranking.length + ' frigoríficos';
+
+  // Table
+  const tbody = document.getElementById('frigoRankBody');
+  tbody.innerHTML = ranking.map((f, i) => {
+    const cls = f.pctA >= 70 ? 'a' : f.pctA >= 30 ? 'b' : 'c';
+    const label = cls.toUpperCase();
+    return `<tr>
+      <td class="mono">${i+1}</td>
+      <td>${f.nome}</td>
+      <td class="mono">${f.embarques}</td>
+      <td class="mono">${f.pecas.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${CLS_A}">${f.pctA.toFixed(1)}%</td>
+      <td class="mono" style="color:${CLS_B}">${f.pctB.toFixed(1)}%</td>
+      <td class="mono" style="color:${CLS_C}">${f.pctC.toFixed(1)}%</td>
+      <td><span class="badge-cls badge-cls-${cls}">${label}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Chart: Best %A (top 10)
+  const bestA = ranking.slice(0,10);
+  makeChart('chartBestA', {
+    type:'bar',
+    data:{
+      labels: bestA.map(f=>f.nome.substring(0,18)),
+      datasets:[{label:'%A', data:bestA.map(f=>f.pctA), backgroundColor:CLS_A, borderRadius:2}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{max:100, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}},
+        y:{ticks:{color:TICK_C,font:{size:10}}, grid:{display:false}}
+      }
+    }
+  });
+
+  // Chart: Worst %C (top 10)
+  const worstC = [...ranking].sort((a,b)=>b.pctC-a.pctC).slice(0,10);
+  makeChart('chartWorstC', {
+    type:'bar',
+    data:{
+      labels: worstC.map(f=>f.nome.substring(0,18)),
+      datasets:[{label:'%C', data:worstC.map(f=>f.pctC), backgroundColor:CLS_C, borderRadius:2}]
+    },
+    options:{
+      indexAxis:'y', responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{max:100, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}},
+        y:{ticks:{color:TICK_C,font:{size:10}}, grid:{display:false}}
+      }
+    }
+  });
+}
+
+// ── Tendência ──
+function renderTrend(d) {
+  if (d.length === 0) return;
+
+  // Agrupar por numero_carga
+  const cargaMap = {};
+  d.forEach(r => {
+    const k = r.numero_carga || '?';
+    if (!cargaMap[k]) cargaMap[k] = {a:0,b:0,c:0,total:0,embarques:0};
+    cargaMap[k].a += r.pcs_a||0;
+    cargaMap[k].b += r.pcs_b||0;
+    cargaMap[k].c += r.pcs_c||0;
+    cargaMap[k].total += r.cnt_classic||0;
+    cargaMap[k].embarques++;
+  });
+  const labels = Object.keys(cargaMap).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+
+  // Evolução %A
+  makeChart('chartTrendA', {
+    type:'line',
+    data:{
+      labels: labels.map(c=>'CG '+c),
+      datasets:[{
+        label:'% Classe A',
+        data: labels.map(c => { const s = cargaMap[c]; const t = s.a+s.b+s.c||1; return +(s.a/t*100).toFixed(1); }),
+        borderColor:CLS_A, backgroundColor:'rgba(0,158,115,0.1)',
+        fill:true, tension:0.3, pointRadius:4, pointBackgroundColor:CLS_A
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}},
+        y:{min:0,max:100, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}}
+      }
+    }
+  });
+
+  // Evolução %C
+  makeChart('chartTrendC', {
+    type:'line',
+    data:{
+      labels: labels.map(c=>'CG '+c),
+      datasets:[{
+        label:'% Classe C',
+        data: labels.map(c => { const s = cargaMap[c]; const t = s.a+s.b+s.c||1; return +(s.c/t*100).toFixed(1); }),
+        borderColor:CLS_C, backgroundColor:'rgba(213,94,0,0.1)',
+        fill:true, tension:0.3, pointRadius:4, pointBackgroundColor:CLS_C
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}},
+        y:{min:0, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}}
+      }
+    }
+  });
+
+  // Volume por carga
+  makeChart('chartTrendVol', {
+    type:'bar',
+    data:{
+      labels: labels.map(c=>'CG '+c),
+      datasets:[{
+        label:'Peças', data: labels.map(c=>cargaMap[c].total),
+        backgroundColor:'rgba(200,169,110,0.6)', borderRadius:2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}}, y:{ticks:{color:TICK_C},grid:{color:GRID_C}}}
+    }
+  });
+
+  // Embarques por carga
+  makeChart('chartTrendEmb', {
+    type:'bar',
+    data:{
+      labels: labels.map(c=>'CG '+c),
+      datasets:[{
+        label:'Embarques', data: labels.map(c=>cargaMap[c].embarques),
+        backgroundColor:'rgba(86,180,233,0.6)', borderRadius:2
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}}, y:{ticks:{color:TICK_C},grid:{color:GRID_C}}}
+    }
+  });
+}
+
+// ── Registros ──
+function renderRegistros(d) {
+  document.getElementById('regCount').textContent = d.length + ' registros';
+  const tbody = document.getElementById('regBody');
+  if (d.length === 0) { tbody.innerHTML = '<tr><td colspan="13" class="empty">Nenhum registro encontrado</td></tr>'; return; }
+
+  tbody.innerHTML = d.slice(0, 500).map(r => {
+    const cls = (r.classificacao||'').toLowerCase();
+    const badgeClass = cls === 'a' ? 'badge-cls-a' : cls === 'b' ? 'badge-cls-b' : cls === 'c' ? 'badge-cls-c' : '';
+    return `<tr>
+      <td class="mono">${r.data_embarque||''}</td>
+      <td class="mono">${r.numero_carga||''}</td>
+      <td>${r.frigorifico||''}</td>
+      <td class="mono">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>
+      <td class="mono">${(r.cnt_classic||0).toLocaleString('pt-BR')}</td>
+      <td class="mono">${(r.pcs_a||0).toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${CLS_A}">${(r.pct_a||0).toFixed(1)}%</td>
+      <td class="mono">${(r.pcs_b||0).toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${CLS_B}">${(r.pct_b||0).toFixed(1)}%</td>
+      <td class="mono">${(r.pcs_c||0).toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${CLS_C}">${(r.pct_c||0).toFixed(1)}%</td>
+      <td class="mono">${(r.repasse||0).toLocaleString('pt-BR')}</td>
+      <td><span class="badge-cls ${badgeClass}">${r.classificacao||'—'}</span></td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

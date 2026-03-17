@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Embarques — Classic CQ</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #1e1e1e;
+    --border2: #2a2a2a; --text: #e8e8e8; --muted: #666;
+    --accent: #c8a96e; --accent2: #a07840;
+    --success: #2a7a4a; --success-text: #4ade80;
+    --error: #7a2a2a; --error-text: #f87171;
+    --warn: #7a6020; --warn-text: #fbbf24;
+    --info: #1e3a5f; --info-text: #60a5fa;
+    --cls-a: #009E73; --cls-b: #E69F00; --cls-c: #D55E00;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border2);
+    padding: 12px 24px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left a { color: var(--muted); font-size: 12px; text-decoration: none; letter-spacing: 0.1em; }
+  .header-left a:hover { color: var(--accent); }
+  .header-sep { color: var(--border2); }
+  .header-mod { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  #headerUser { font-size: 12px; color: var(--muted); }
+  .btn-logout {
+    background: transparent; border: 1px solid var(--border2); border-radius: 2px;
+    color: var(--muted); font-size: 11px; padding: 6px 12px; cursor: pointer;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .btn-logout:hover { border-color: var(--accent); color: var(--accent); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+  .page-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: 0.05em; margin-bottom: 6px; }
+  .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border2); border-radius: 8px;
+    padding: 48px 24px; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface); margin-bottom: 24px;
+  }
+  .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); background: rgba(200,169,110,0.05); }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .drop-sub { font-size: 13px; color: var(--muted); }
+  .drop-sub span { color: var(--accent); text-decoration: underline; cursor: pointer; }
+  #fileInput { display: none; }
+
+  .info-box {
+    background: var(--info); border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 6px; padding: 14px 16px; margin-bottom: 24px;
+    font-size: 13px; color: var(--info-text); line-height: 1.6;
+  }
+  .info-box strong { font-weight: 600; }
+
+  .preview-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; overflow: hidden; margin-bottom: 24px; }
+  .preview-header { padding: 14px 20px; border-bottom: 1px solid var(--border2); display: flex; justify-content: space-between; align-items: center; }
+  .preview-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); }
+  .badge { font-size: 11px; padding: 3px 10px; border-radius: 20px; font-weight: 600; letter-spacing: 0.05em; }
+  .badge-ok { background: rgba(74,222,128,0.1); color: var(--success-text); border: 1px solid rgba(74,222,128,0.2); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #1a1a1a; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border2); white-space: nowrap; }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  .kpi-strip { display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap; }
+  .kpi-box { flex: 1; min-width: 120px; background: var(--surface); border: 1px solid var(--border2); border-radius: 6px; padding: 14px 8px; text-align: center; overflow: hidden; }
+  .kpi-val { font-family: 'Syne', sans-serif; font-size: 20px; font-weight: 800; color: var(--accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .kpi-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+  .alert { border-radius: 6px; padding: 12px 16px; font-size: 13px; margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start; }
+  .alert-error { background: var(--error); border: 1px solid rgba(248,113,113,0.3); color: var(--error-text); }
+  .alert-success { background: var(--success); border: 1px solid rgba(74,222,128,0.3); color: var(--success-text); }
+  .alert-warn { background: var(--warn); border: 1px solid rgba(251,191,36,0.3); color: var(--warn-text); }
+
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn { padding: 12px 24px; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: 0.05em; text-transform: uppercase; border: none; transition: opacity 0.2s; display: flex; align-items: center; gap: 8px; }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1000; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn-danger { background: #9e3535; color: #fff; }
+
+  .progress-wrap { margin-top: 16px; display: none; }
+  .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .progress-bar { height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.3s; }
+
+  .result-card { background: var(--surface); border: 1px solid var(--border2); border-radius: 8px; padding: 24px; margin-top: 24px; display: none; }
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 16px; }
+  .result-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; }
+  .result-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .num-ok { color: var(--success-text); } .num-skip { color: var(--warn-text); } .num-err { color: var(--error-text); }
+
+  .cls-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 3px; letter-spacing: 0.08em; }
+  .cls-a { background: rgba(0,158,115,0.15); color: var(--cls-a); }
+  .cls-b { background: rgba(230,159,0,0.15); color: var(--cls-b); }
+  .cls-c { background: rgba(213,94,0,0.15); color: var(--cls-c); }
+  .spinner { display: inline-block; width: 14px; height: 14px; border: 2px solid rgba(0,0,0,0.2); border-top-color: #000; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="app.html">← MENU</a>
+    <span class="header-sep">|</span>
+    <span class="header-mod">IMPORTAR EMBARQUES</span>
+    <span class="header-sep">|</span>
+    <a href="dashboard_embarques.html" style="color:var(--accent);font-size:12px;text-decoration:none;letter-spacing:0.1em;">📊 DASHBOARD</a>
+  </div>
+  <div class="header-right">
+    <span id="headerUser">Carregando...</span>
+    <button class="btn-logout" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</header>
+
+<main>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="page-title">Importar Embarques (Cargas)</div>
+      <div class="page-sub">Importa a planilha <strong style="color:var(--accent)">CARGAS 2026</strong> — classificação A/B/C por frigorífico e carga semanal</div>
+    </div>
+    <button onclick="limparEmbarques()" class="btn btn-danger" style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.05em;white-space:nowrap;">
+      🗑️ LIMPAR EMBARQUES
+    </button>
+  </div>
+
+  <div class="info-box">
+    <strong>📋 Formato esperado:</strong> Planilha Excel (.xlsx) — CARGAS 2026.
+    Abas semanais (CARGA 01, CARGA 02, ...) com colunas: Data, Frigorífico, Contagem Frigo, Contagem Classic, Pcs A/B/C e percentuais.
+    <br><strong>Registros duplicados (mesma data + frigorífico + carga) serão ignorados.</strong>
+  </div>
+
+  <div id="alerts"></div>
+
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">📦</div>
+    <div class="drop-title">Arraste a planilha CARGAS aqui</div>
+    <div class="drop-sub">ou <span>clique para selecionar</span> · .xlsx</div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls">
+
+  <div class="kpi-strip" id="kpiStrip" style="display:none">
+    <div class="kpi-box"><div class="kpi-val" id="kpiCargas">0</div><div class="kpi-lbl">Cargas</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiRegistros">0</div><div class="kpi-lbl">Registros</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiFrigos">0</div><div class="kpi-lbl">Frigoríficos</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiPecas">0</div><div class="kpi-lbl">Peças Total</div></div>
+    <div class="kpi-box"><div class="kpi-val" style="color:var(--cls-a)" id="kpiPctA">0%</div><div class="kpi-lbl">% Classe A</div></div>
+    <div class="kpi-box"><div class="kpi-val" style="color:var(--cls-c)" id="kpiPctC">0%</div><div class="kpi-lbl">% Classe C</div></div>
+  </div>
+
+  <div id="previewSection" style="display:none">
+    <div class="preview-card">
+      <div class="preview-header">
+        <div>
+          <div class="preview-title" id="previewTitle">Pré-visualização</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;" id="previewMeta"></div>
+        </div>
+        <span class="badge badge-ok" id="previewBadge"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Carga</th><th>Data</th><th>Frigorífico</th><th>Frigo</th><th>Classic</th><th>Pcs A</th><th>%A</th><th>Pcs B</th><th>%B</th><th>Pcs C</th><th>%C</th><th>Class.</th></tr>
+          </thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnImportar" onclick="importar()">⬆ Importar para o sistema</button>
+      <button class="btn btn-ghost" onclick="resetar()">✕ Cancelar</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label"><span id="progressLabel">Importando...</span><span id="progressPct">0%</span></div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text)">Importação concluída</div>
+    <div class="result-grid">
+      <div class="result-item"><div class="result-num num-ok" id="resOk">0</div><div class="result-label">Importados</div></div>
+      <div class="result-item"><div class="result-num num-skip" id="resSkip">0</div><div class="result-label">Já existiam</div></div>
+      <div class="result-item"><div class="result-num num-err" id="resErr">0</div><div class="result-label">Erros</div></div>
+    </div>
+    <div style="margin-top:20px;display:flex;gap:12px;">
+      <button class="btn btn-primary" onclick="resetar()">Importar outro arquivo</button>
+      <a href="dashboard_embarques.html" class="btn btn-ghost">📊 Ver Dashboard</a>
+    </div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script>
+let dadosParaImportar = [];
+let arquivoAtual = null;
+
+// Auth
+(async () => {
+  const u = await CQAuth.init({ perfisPermitidos: ['administrador','qualidade'], redirectLogin: true });
+  if (!u) return;
+  document.getElementById('headerUser').innerHTML = `<strong>${u.nome||u.email}</strong> · ${u.perfil}`;
+})();
+
+// ── Drag & Drop ──
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('dragover'); if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]); });
+document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processarArquivo(e.target.files[0]); });
+
+function addAlert(type, msg) {
+  const icons = { error: '❌', success: '✅', warn: '⚠️' };
+  document.getElementById('alerts').innerHTML += `<div class="alert alert-${type}"><span class="alert-icon">${icons[type]||''}</span><div>${msg}</div></div>`;
+}
+
+function excelDateToISO(v) {
+  if (!v) return null;
+  if (typeof v === 'string') {
+    // Try DD/MM/YYYY
+    const m = v.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    // Try YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.substring(0,10);
+    return null;
+  }
+  if (typeof v === 'number') {
+    const d = new Date((v - 25569) * 86400000);
+    return d.toISOString().split('T')[0];
+  }
+  if (v instanceof Date) return v.toISOString().split('T')[0];
+  return null;
+}
+
+function numVal(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v;
+  const n = parseFloat(String(v).replace(/[^\d.,\-]/g,'').replace(',','.'));
+  return isNaN(n) ? 0 : n;
+}
+
+function classificar(pctA) {
+  if (pctA >= 70) return 'A';
+  if (pctA >= 30) return 'B';
+  return 'C';
+}
+
+// ── Parser ──
+async function processarArquivo(file) {
+  document.getElementById('alerts').innerHTML = '';
+  arquivoAtual = file;
+  dadosParaImportar = [];
+
+  try {
+    const ab = await file.arrayBuffer();
+    const wb = XLSX.read(ab, { type: 'array', cellDates: true });
+
+    for (const sheetName of wb.SheetNames) {
+      // Apenas abas que começam com "CARGA"
+      const norm = sheetName.toUpperCase().trim();
+      if (!norm.startsWith('CARGA')) continue;
+      if (norm.includes('RESUMO') || norm.includes('CLASSE')) continue;
+
+      // Extrair número da carga
+      const numMatch = sheetName.match(/(\d+)/);
+      const numeroCarga = numMatch ? numMatch[1].padStart(2,'0') : sheetName;
+
+      const ws = wb.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+
+      // Pular header (primeira linha)
+      for (let i = 1; i < rows.length; i++) {
+        const row = rows[i];
+        if (!row || row.length < 6) continue;
+
+        // Col B=1 data, C=2 frigo, D=3 cnt_frigo, E=4 cnt_classic, F=5 pcs_a, G=6 %a, H=7 pcs_b, I=8 %b, J=9 pcs_c, K=10 %c, L=11 repasse
+        const dataEmbarque = excelDateToISO(row[1]);
+        const frigorifico = row[2] ? String(row[2]).trim() : null;
+
+        if (!dataEmbarque || !frigorifico) continue;
+        if (frigorifico.toUpperCase() === 'REPASSE') continue;
+        if (frigorifico.toUpperCase().includes('TOTAL') || frigorifico.toUpperCase().includes('FRIGORIFICO')) continue;
+
+        const pcsA = Math.round(numVal(row[5]));
+        const pcsB = Math.round(numVal(row[7]));
+        const pcsC = Math.round(numVal(row[9]));
+        const cntClassic = pcsA + pcsB + pcsC;
+        const cntFrigo = Math.round(numVal(row[3])) || cntClassic;
+
+        if (cntClassic === 0) continue;
+
+        const pctA = Math.round(pcsA / cntClassic * 10000) / 100;
+        const pctB = Math.round(pcsB / cntClassic * 10000) / 100;
+        const pctC = Math.round(pcsC / cntClassic * 10000) / 100;
+
+        dadosParaImportar.push({
+          numero_carga: numeroCarga,
+          data_embarque: dataEmbarque,
+          frigorifico,
+          cnt_frigo: cntFrigo,
+          cnt_classic: cntClassic,
+          pcs_a: pcsA, pct_a: pctA,
+          pcs_b: pcsB, pct_b: pctB,
+          pcs_c: pcsC, pct_c: pctC,
+          repasse: Math.round(numVal(row[11])),
+          classificacao: classificar(pctA),
+          origem_dado: 'planilha',
+          arquivo_origem: file.name
+        });
+      }
+    }
+
+    if (dadosParaImportar.length === 0) {
+      addAlert('error', 'Nenhum registro válido encontrado. Verifique se a planilha tem abas "CARGA 01", "CARGA 02", etc.');
+      return;
+    }
+
+    renderPreview();
+  } catch(e) {
+    addAlert('error', 'Erro ao processar: ' + e.message);
+  }
+}
+
+function renderPreview() {
+  // KPIs
+  const cargas = new Set(dadosParaImportar.map(r => r.numero_carga));
+  const frigos = new Set(dadosParaImportar.map(r => r.frigorifico));
+  const totalPecas = dadosParaImportar.reduce((s,r) => s + r.cnt_classic, 0);
+  const totalA = dadosParaImportar.reduce((s,r) => s + r.pcs_a, 0);
+  const totalC = dadosParaImportar.reduce((s,r) => s + r.pcs_c, 0);
+
+  document.getElementById('kpiCargas').textContent = cargas.size;
+  document.getElementById('kpiRegistros').textContent = dadosParaImportar.length;
+  document.getElementById('kpiFrigos').textContent = frigos.size;
+  document.getElementById('kpiPecas').textContent = totalPecas.toLocaleString('pt-BR');
+  document.getElementById('kpiPctA').textContent = (totalPecas > 0 ? (totalA/totalPecas*100).toFixed(1) : 0) + '%';
+  document.getElementById('kpiPctC').textContent = (totalPecas > 0 ? (totalC/totalPecas*100).toFixed(1) : 0) + '%';
+  document.getElementById('kpiStrip').style.display = 'flex';
+
+  // Preview table
+  document.getElementById('previewTitle').textContent = arquivoAtual.name;
+  document.getElementById('previewMeta').textContent = `${dadosParaImportar.length} registros · ${cargas.size} cargas · ${frigos.size} frigoríficos`;
+  document.getElementById('previewBadge').textContent = dadosParaImportar.length + ' registros';
+
+  const show = dadosParaImportar.slice(0, 30);
+  document.getElementById('previewBody').innerHTML = show.map((r, i) => {
+    const clsCls = r.classificacao === 'A' ? 'cls-a' : r.classificacao === 'B' ? 'cls-b' : 'cls-c';
+    const dt = r.data_embarque.split('-').reverse().join('/');
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td style="font-weight:600;color:var(--accent)">${r.numero_carga}</td>
+      <td>${dt}</td>
+      <td>${r.frigorifico}</td>
+      <td style="text-align:right">${r.cnt_frigo}</td>
+      <td style="text-align:right;font-weight:600">${r.cnt_classic}</td>
+      <td style="text-align:right;color:var(--cls-a)">${r.pcs_a}</td>
+      <td style="text-align:right;color:var(--cls-a)">${r.pct_a.toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--cls-b)">${r.pcs_b}</td>
+      <td style="text-align:right;color:var(--cls-b)">${r.pct_b.toFixed(1)}%</td>
+      <td style="text-align:right;color:var(--cls-c)">${r.pcs_c}</td>
+      <td style="text-align:right;color:var(--cls-c)">${r.pct_c.toFixed(1)}%</td>
+      <td><span class="cls-badge ${clsCls}">${r.classificacao}</span></td>
+    </tr>`;
+  }).join('') + (dadosParaImportar.length > 30 ? `<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:12px;">... mais ${dadosParaImportar.length-30} registros</td></tr>` : '');
+
+  document.getElementById('previewSection').style.display = 'block';
+}
+
+// ── Import ──
+async function importar() {
+  const btn = document.getElementById('btnImportar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Importando...';
+
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const progressPct = document.getElementById('progressPct');
+  progressWrap.style.display = 'block';
+
+  let importados = 0, duplicados = 0, erros = 0;
+  const total = dadosParaImportar.length;
+  const BATCH_SIZE = 50;
+
+  for (let start = 0; start < total; start += BATCH_SIZE) {
+    const batch = dadosParaImportar.slice(start, start + BATCH_SIZE);
+    const pct = Math.round(Math.min(start + BATCH_SIZE, total) / total * 100);
+    progressFill.style.width = pct + '%';
+    progressPct.textContent = pct + '%';
+    progressLabel.textContent = `${Math.min(start + BATCH_SIZE, total)} de ${total} registros...`;
+
+    try {
+      const res = await CQ_API.fetch('cq_embarques?on_conflict=data_embarque,frigorifico,numero_carga', {
+        method: 'POST',
+        headers: {
+          'Prefer': 'return=representation,resolution=ignore-duplicates',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(batch)
+      });
+
+      if (res.ok) {
+        const inserted = await res.json();
+        const cnt = Array.isArray(inserted) ? inserted.length : 0;
+        importados += cnt;
+        duplicados += batch.length - cnt;
+      } else {
+        erros += batch.length;
+        const errBody = await res.text();
+        console.error('Erro batch:', errBody);
+      }
+    } catch(e) {
+      erros += batch.length;
+      console.error('Erro:', e);
+    }
+  }
+
+  // Result
+  document.getElementById('resOk').textContent = importados;
+  document.getElementById('resSkip').textContent = duplicados;
+  document.getElementById('resErr').textContent = erros;
+  document.getElementById('resultCard').style.display = 'block';
+  document.getElementById('previewSection').style.display = 'none';
+  progressWrap.style.display = 'none';
+  btn.disabled = false;
+  btn.innerHTML = '⬆ Importar para o sistema';
+
+  if (importados > 0) addAlert('success', `${importados} embarques importados com sucesso!`);
+  if (duplicados > 0) addAlert('warn', `${duplicados} registros já existiam (ignorados).`);
+  if (erros > 0) addAlert('error', `${erros} registros com erro.`);
+}
+
+function resetar() {
+  dadosParaImportar = [];
+  arquivoAtual = null;
+  document.getElementById('alerts').innerHTML = '';
+  document.getElementById('previewSection').style.display = 'none';
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('kpiStrip').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+}
+
+async function limparEmbarques() {
+  const c1 = confirm('ATENÇÃO: Isso vai apagar TODOS os registros de embarques importados.\n\nTem certeza?');
+  if (!c1) return;
+  const senha = prompt('Para confirmar, digite "LIMPAR" (em maiúsculas):');
+  if (senha !== 'LIMPAR') { alert('Operação cancelada.'); return; }
+  try {
+    const res = await CQ_API.fetch('rpc/limpar_embarques', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
+    });
+    if (res.ok) {
+      const count = await res.json();
+      alert(count + ' registros de embarques removidos com sucesso!');
+      location.reload();
+    } else {
+      alert('Erro: ' + (await res.text()).substring(0, 100));
+    }
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+</script>
+</body>
+</html>

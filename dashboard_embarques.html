@@ -205,18 +205,20 @@ canvas.tall{max-height:340px;}
 
   <!-- Tab: Por Frigorífico -->
   <div class="tab-content" id="tab-frigo">
+    <!-- Destaques -->
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;" id="frigoDestaques"></div>
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-title">Ranking de Frigoríficos <span class="card-sub" id="frigoCount"></span></div>
+      <div class="card-title">Ranking de Frigoríficos <span class="card-sub" id="frigoCount">ordenado por volume (maior → menor)</span></div>
       <div class="table-wrap">
         <table class="rank-table">
-          <thead><tr><th>#</th><th>Frigorífico</th><th>Embarques</th><th>Peças</th><th>%A</th><th>%B</th><th>%C</th><th>Classificação</th></tr></thead>
+          <thead><tr><th>#</th><th>Frigorífico</th><th>Emb.</th><th>Peças</th><th>Pçs A</th><th>%A</th><th>Pçs B</th><th>%B</th><th>Pçs C</th><th>%C</th><th>Class.</th></tr></thead>
           <tbody id="frigoRankBody"></tbody>
         </table>
       </div>
     </div>
     <div class="charts-grid">
-      <div class="card"><div class="card-title">Melhores — % Classe A <span class="card-sub">top 10</span></div><canvas id="chartBestA" class="tall"></canvas></div>
-      <div class="card"><div class="card-title">Piores — % Classe C <span class="card-sub">top 10</span></div><canvas id="chartWorstC" class="tall"></canvas></div>
+      <div class="card"><div class="card-title">Top 10 — Volume Classe A <span class="card-sub">peças</span></div><canvas id="chartBestA" class="tall"></canvas></div>
+      <div class="card"><div class="card-title">Top 10 — Volume Classe C <span class="card-sub">peças</span></div><canvas id="chartWorstC" class="tall"></canvas></div>
     </div>
   </div>
 
@@ -504,58 +506,87 @@ function renderFrigo(d) {
   const ranking = Object.entries(frigoStats).map(([nome, s]) => {
     const tot = s.a+s.b+s.c || 1;
     return { nome, ...s, pctA: s.a/tot*100, pctB: s.b/tot*100, pctC: s.c/tot*100 };
-  }).sort((a,b) => b.pctA - a.pctA);
+  }).sort((a,b) => b.pecas - a.pecas);  // ordenar por volume (maior → menor)
 
-  document.getElementById('frigoCount').textContent = ranking.length + ' frigoríficos';
+  document.getElementById('frigoCount').textContent = ranking.length + ' frigoríficos · ordenado por volume';
+
+  // Destaques: maior A, maior B, maior C por volume
+  const maiorA = [...ranking].sort((a,b) => b.a - a.a)[0];
+  const maiorB = [...ranking].sort((a,b) => b.b - a.b)[0];
+  const maiorC = [...ranking].sort((a,b) => b.c - a.c)[0];
+
+  document.getElementById('frigoDestaques').innerHTML = `
+    <div class="card" style="border-left:3px solid ${CLS_A};">
+      <div class="card-title" style="color:${CLS_A}">🏆 Maior Volume Classe A</div>
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px;">${maiorA?.nome||'—'}</div>
+      <div class="mono" style="font-size:12px;color:var(--muted)">${(maiorA?.a||0).toLocaleString('pt-BR')} peças A (${(maiorA?.pctA||0).toFixed(1)}%) · ${(maiorA?.pecas||0).toLocaleString('pt-BR')} total</div>
+    </div>
+    <div class="card" style="border-left:3px solid ${CLS_B};">
+      <div class="card-title" style="color:${CLS_B}">📦 Maior Volume Classe B</div>
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px;">${maiorB?.nome||'—'}</div>
+      <div class="mono" style="font-size:12px;color:var(--muted)">${(maiorB?.b||0).toLocaleString('pt-BR')} peças B (${(maiorB?.pctB||0).toFixed(1)}%) · ${(maiorB?.pecas||0).toLocaleString('pt-BR')} total</div>
+    </div>
+    <div class="card" style="border-left:3px solid ${CLS_C};">
+      <div class="card-title" style="color:${CLS_C}">⚠ Maior Volume Classe C</div>
+      <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:800;margin-bottom:4px;">${maiorC?.nome||'—'}</div>
+      <div class="mono" style="font-size:12px;color:var(--muted)">${(maiorC?.c||0).toLocaleString('pt-BR')} peças C (${(maiorC?.pctC||0).toFixed(1)}%) · ${(maiorC?.pecas||0).toLocaleString('pt-BR')} total</div>
+    </div>`;
 
   // Table
   const tbody = document.getElementById('frigoRankBody');
   tbody.innerHTML = ranking.map((f, i) => {
     const cls = f.pctA >= 70 ? 'a' : f.pctA >= 30 ? 'b' : 'c';
     const label = cls.toUpperCase();
+    // Highlight leaders
+    const isTopA = f.nome === maiorA?.nome ? 'font-weight:700;' : '';
+    const isTopB = f.nome === maiorB?.nome ? 'font-weight:700;' : '';
+    const isTopC = f.nome === maiorC?.nome ? 'font-weight:700;' : '';
     return `<tr>
       <td class="mono">${i+1}</td>
-      <td>${f.nome}</td>
+      <td style="font-weight:600">${f.nome}</td>
       <td class="mono">${f.embarques}</td>
-      <td class="mono">${f.pecas.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="font-weight:700">${f.pecas.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${CLS_A};${isTopA}">${f.a.toLocaleString('pt-BR')}</td>
       <td class="mono" style="color:${CLS_A}">${f.pctA.toFixed(1)}%</td>
+      <td class="mono" style="color:${CLS_B};${isTopB}">${f.b.toLocaleString('pt-BR')}</td>
       <td class="mono" style="color:${CLS_B}">${f.pctB.toFixed(1)}%</td>
+      <td class="mono" style="color:${CLS_C};${isTopC}">${f.c.toLocaleString('pt-BR')}</td>
       <td class="mono" style="color:${CLS_C}">${f.pctC.toFixed(1)}%</td>
       <td><span class="badge-cls badge-cls-${cls}">${label}</span></td>
     </tr>`;
   }).join('');
 
-  // Chart: Best %A (top 10)
-  const bestA = ranking.slice(0,10);
+  // Chart: Top 10 por volume A (peças)
+  const bestA = [...ranking].sort((a,b)=>b.a-a.a).slice(0,10);
   makeChart('chartBestA', {
     type:'bar',
     data:{
       labels: bestA.map(f=>f.nome.substring(0,18)),
-      datasets:[{label:'%A', data:bestA.map(f=>f.pctA), backgroundColor:CLS_A, borderRadius:2}]
+      datasets:[{label:'Pçs A', data:bestA.map(f=>f.a), backgroundColor:CLS_A, borderRadius:2}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
-        x:{max:100, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}},
+        x:{ticks:{color:TICK_C}, grid:{color:GRID_C}},
         y:{ticks:{color:TICK_C,font:{size:10}}, grid:{display:false}}
       }
     }
   });
 
-  // Chart: Worst %C (top 10)
-  const worstC = [...ranking].sort((a,b)=>b.pctC-a.pctC).slice(0,10);
+  // Chart: Top 10 por volume C (peças)
+  const worstC = [...ranking].sort((a,b)=>b.c-a.c).slice(0,10);
   makeChart('chartWorstC', {
     type:'bar',
     data:{
       labels: worstC.map(f=>f.nome.substring(0,18)),
-      datasets:[{label:'%C', data:worstC.map(f=>f.pctC), backgroundColor:CLS_C, borderRadius:2}]
+      datasets:[{label:'Pçs C', data:worstC.map(f=>f.c), backgroundColor:CLS_C, borderRadius:2}]
     },
     options:{
       indexAxis:'y', responsive:true, maintainAspectRatio:false,
       plugins:{legend:{display:false}},
       scales:{
-        x:{max:100, ticks:{color:TICK_C,callback:v=>v+'%'}, grid:{color:GRID_C}},
+        x:{ticks:{color:TICK_C}, grid:{color:GRID_C}},
         y:{ticks:{color:TICK_C,font:{size:10}}, grid:{display:false}}
       }
     }

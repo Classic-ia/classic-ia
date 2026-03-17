@@ -737,8 +737,8 @@ async function limparProducao() {
   }
 
   try {
-    // Delete all records from cq_producao where origem_dado = wrprd600
-    const res = await apiFetch('cq_producao?origem_dado=eq.wrprd600', {
+    // Delete ALL records from cq_producao (não filtra por origem)
+    const res = await CQ_API.fetch('cq_producao?id=gt.0', {
       method: 'DELETE',
       headers: { 'Prefer': 'return=representation' }
     });
@@ -746,9 +746,11 @@ async function limparProducao() {
     if (res.ok) {
       const deleted = await res.json();
       const count = Array.isArray(deleted) ? deleted.length : 0;
-      alert(count + ' registros de produção removidos.\n\nAgora reimporte o WRPRD600.');
+      alert(count + ' registros de produção removidos com sucesso!\n\nAgora reimporte o WRPRD600.');
+      location.reload();
     } else {
-      alert('Erro ao limpar: ' + (await res.text()).substring(0, 100));
+      const errText = await res.text();
+      alert('Erro ao limpar: ' + errText.substring(0, 200));
     }
   } catch(e) {
     alert('Erro: ' + e.message);

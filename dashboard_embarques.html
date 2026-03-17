@@ -237,7 +237,7 @@ canvas.tall{max-height:340px;}
     <!-- Destaques -->
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px;" id="frigoDestaques"></div>
     <div class="card" style="margin-bottom:20px;">
-      <div class="card-title">Ranking de Frigoríficos <span class="card-sub" id="frigoCount">ordenado por volume (maior → menor)</span></div>
+      <div class="card-title">Ranking de Frigoríficos <span class="card-sub" id="frigoCount">ordenado por %C (maior → menor)</span></div>
       <div class="table-wrap">
         <table class="rank-table">
           <thead><tr><th>#</th><th>Frigorífico</th><th>Emb.</th><th>Peças</th><th>Pçs A</th><th>%A</th><th>Pçs B</th><th>%B</th><th>Pçs C</th><th>%C</th><th>Class.</th></tr></thead>
@@ -325,6 +325,14 @@ let todosRegistros = [];
 let dadosFiltrados = [];
 let dadosWrlog = [];
 let _charts = {};
+
+// Formata data ISO (YYYY-MM-DD) para DD/MM/AAAA
+function fmtData(d) {
+  if (!d) return '';
+  const p = String(d).split('-');
+  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+  return d;
+}
 
 // ── Auth ──
 (async () => {
@@ -451,11 +459,11 @@ function updateSub(d) {
   }
   const datas = d.map(r=>r.data_embarque).filter(Boolean).sort();
   const min = datas[0], max = datas[datas.length-1];
-  document.getElementById('pageSub').textContent = `${d.length} registros · ${min} a ${max}`;
+  document.getElementById('pageSub').textContent = `${d.length} registros · ${fmtData(min)} a ${fmtData(max)}`;
 
   // print meta
   const pm = document.getElementById('printMeta');
-  if (pm) pm.innerHTML = `Período: ${min} a ${max}<br>Gerado: ${new Date().toLocaleDateString('pt-BR')}`;
+  if (pm) pm.innerHTML = `Período: ${fmtData(min)} a ${fmtData(max)}<br>Gerado: ${new Date().toLocaleDateString('pt-BR')}`;
 }
 
 // ── KPIs ──
@@ -626,9 +634,9 @@ function renderFrigo(d) {
   const ranking = Object.entries(frigoStats).map(([nome, s]) => {
     const tot = s.a+s.b+s.c || 1;
     return { nome, ...s, pctA: s.a/tot*100, pctB: s.b/tot*100, pctC: s.c/tot*100 };
-  }).sort((a,b) => b.pecas - a.pecas);  // ordenar por volume (maior → menor)
+  }).sort((a,b) => b.pctC - a.pctC);  // ordenar por %C decrescente (pior primeiro)
 
-  document.getElementById('frigoCount').textContent = ranking.length + ' frigoríficos · ordenado por volume';
+  document.getElementById('frigoCount').textContent = ranking.length + ' frigoríficos · ordenado por %C (maior → menor)';
 
   // Destaques: maior A, maior B, maior C por volume
   const maiorA = [...ranking].sort((a,b) => b.a - a.a)[0];
@@ -1079,12 +1087,29 @@ function gerarRelatorio(dados, titulo) {
   });
   const ranking = Object.entries(frigoStats)
     .map(([nome,s]) => { const t=s.a+s.b+s.c||1; return {nome,...s, pctA:(s.a/t*100).toFixed(1), pctB:(s.b/t*100).toFixed(1), pctC:(s.c/t*100).toFixed(1)}; })
-    .sort((a,b) => b.pecas - a.pecas);
+    .sort((a,b) => parseFloat(b.pctC) - parseFloat(a.pctC));  // Ordenar por %C decrescente (pior primeiro)
 
-  // Dados ordenados por carga + volume desc
+  // Dados WRLOG510 para pedidos desta carga
+  const pedidosAtivos = [...new Set(dados.map(r => r.numero_pedido).filter(Boolean))];
+  let wrlogInfo = null;
+  if (dadosWrlog && dadosWrlog.length > 0 && pedidosAtivos.length > 0) {
+    const wrFiltrado = dadosWrlog.filter(w => pedidosAtivos.includes(w.numero_pedido));
+    if (wrFiltrado.length > 0) {
+      const tFA = wrFiltrado.reduce((s,w) => s + (w.fardos_a||0), 0);
+      const tFB = wrFiltrado.reduce((s,w) => s + (w.fardos_b||0), 0);
+      const tFC = wrFiltrado.reduce((s,w) => s + (w.fardos_c||0), 0);
+      const tPA = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_a||0), 0);
+      const tPB = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_b||0), 0);
+      const tPC = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_c||0), 0);
+      const tF = tFA + tFB + tFC;
+      const tP = tPA + tPB + tPC;
+      wrlogInfo = { fardos_a:tFA, fardos_b:tFB, fardos_c:tFC, peso_a:tPA, peso_b:tPB, peso_c:tPC, total_fardos:tF, total_peso:tP };
+    }
+  }
+
+  // Dados ordenados por %C desc (pior primeiro), igual ao Excel
   const dadosOrdenados = [...dados].sort((a,b) => {
-    const cmp = (a.numero_carga||'').localeCompare(b.numero_carga||'',undefined,{numeric:true});
-    return cmp !== 0 ? cmp : (b.cnt_classic||0) - (a.cnt_classic||0);
+    return (b.pct_c||0) - (a.pct_c||0);
   });
 
   const w = window.open('', '_blank');
@@ -1132,6 +1157,15 @@ function gerarRelatorio(dados, titulo) {
       <div class="kpi-box"><div class="kpi-v">${pctB}%</div><div class="kpi-l">Classe B</div></div>
       <div class="kpi-box kpi-c"><div class="kpi-v">${pctC}%</div><div class="kpi-l">Classe C</div></div>
     </div>
+
+    ${wrlogInfo ? `<div class="kpis" style="margin-top:-8px;">
+      <div class="kpi-box"><div class="kpi-v">${wrlogInfo.total_fardos.toLocaleString('pt-BR')}</div><div class="kpi-l">Total Fardos</div></div>
+      <div class="kpi-box"><div class="kpi-v">${wrlogInfo.total_peso.toLocaleString('pt-BR',{minimumFractionDigits:2})}</div><div class="kpi-l">Peso Total (kg)</div></div>
+      <div class="kpi-box kpi-a"><div class="kpi-v">${wrlogInfo.fardos_a > 0 ? (wrlogInfo.peso_a/wrlogInfo.fardos_a).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div><div class="kpi-l">Média kg/A</div></div>
+      <div class="kpi-box"><div class="kpi-v">${wrlogInfo.fardos_b > 0 ? (wrlogInfo.peso_b/wrlogInfo.fardos_b).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div><div class="kpi-l">Média kg/B</div></div>
+      <div class="kpi-box kpi-c"><div class="kpi-v">${wrlogInfo.fardos_c > 0 ? (wrlogInfo.peso_c/wrlogInfo.fardos_c).toLocaleString('pt-BR',{minimumFractionDigits:2}) : '—'}</div><div class="kpi-l">Média kg/C</div></div>
+      <div class="kpi-box kpi-a"><div class="kpi-v">${wrlogInfo.total_fardos > 0 ? (wrlogInfo.fardos_a/wrlogInfo.total_fardos*100).toFixed(1) : 0}%</div><div class="kpi-l">% Fardos A</div></div>
+    </div>` : ''}
 
     ${transporteInfo.length > 0 ? '<div class="transport">' + transporteInfo.join('<br>') + '</div>' : ''}
 
@@ -1222,7 +1256,7 @@ function gerarRelatorio(dados, titulo) {
 
     <!-- Ranking de Frigoríficos -->
     <div class="section">
-      <div class="section-title">Ranking de Fornecedores (maior → menor volume)</div>
+      <div class="section-title">Ranking de Fornecedores (maior %C → menor %C)</div>
       <table>
         <thead><tr><th>#</th><th>Frigorífico</th><th class="right">Embarques</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Class.</th><th>Distribuição</th></tr></thead>
         <tbody>${ranking.map((f,i) => {
@@ -1254,7 +1288,7 @@ function gerarRelatorio(dados, titulo) {
           const cls = (r.classificacao||'').toLowerCase();
           return `<tr>
             <td class="bold">${r.numero_carga||''}${r.numero_pedido ? ' - '+r.numero_pedido : ''}</td>
-            <td>${r.data_embarque||''}</td>
+            <td>${fmtData(r.data_embarque)}</td>
             <td>${r.frigorifico||''}</td>
             <td class="right">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>
             <td class="right bold">${(r.cnt_classic||0).toLocaleString('pt-BR')}</td>
@@ -1286,7 +1320,7 @@ function renderRegistros(d) {
     const cls = (r.classificacao||'').toLowerCase();
     const badgeClass = cls === 'a' ? 'badge-cls-a' : cls === 'b' ? 'badge-cls-b' : cls === 'c' ? 'badge-cls-c' : '';
     return `<tr>
-      <td class="mono">${r.data_embarque||''}</td>
+      <td class="mono">${fmtData(r.data_embarque)}</td>
       <td class="mono">${r.numero_carga||''}${r.numero_pedido ? ' - '+r.numero_pedido : ''}</td>
       <td>${r.frigorifico||''}</td>
       <td class="mono">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>

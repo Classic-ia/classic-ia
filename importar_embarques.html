@@ -309,16 +309,39 @@ function addAlert(type, msg) {
   document.getElementById('alerts').innerHTML += `<div class="alert alert-${type}"><span class="alert-icon">${icons[type]||''}</span><div>${msg}</div></div>`;
 }
 
-function excelDateToISO(v) {
+const MESES_PT = {jan:'01',fev:'02',mar:'03',abr:'04',mai:'05',jun:'06',jul:'07',ago:'08',set:'09',out:'10',nov:'11',dez:'12'};
+
+function excelDateToISO(v, anoBase) {
   if (!v) return null;
   if (typeof v === 'string') {
+    // DD/MM/YYYY or DD-MM-YYYY
     const m = v.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
     if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    // YYYY-MM-DD
     if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.substring(0,10);
+    // DD/mes (ex: "27/out", "10/mar", "31/dez") — usa anoBase ou ano atual
+    const mpt = v.match(/(\d{1,2})[\/\-](\w{3})/i);
+    if (mpt) {
+      const mes = MESES_PT[mpt[2].toLowerCase()];
+      if (mes) {
+        const ano = anoBase || new Date().getFullYear();
+        return `${ano}-${mes}-${mpt[1].padStart(2,'0')}`;
+      }
+    }
     return null;
   }
-  if (typeof v === 'number') { const d = new Date((v - 25569) * 86400000); return d.toISOString().split('T')[0]; }
-  if (v instanceof Date) return v.toISOString().split('T')[0];
+  if (typeof v === 'number') {
+    // Validar serial: datas < 1950 são provavelmente erro (ex: "27/out" virou serial)
+    const d = new Date((v - 25569) * 86400000);
+    const ano = d.getFullYear();
+    if (ano < 1950 || ano > 2100) return null; // Data inválida
+    return d.toISOString().split('T')[0];
+  }
+  if (v instanceof Date) {
+    const ano = v.getFullYear();
+    if (ano < 1950 || ano > 2100) return null;
+    return v.toISOString().split('T')[0];
+  }
   return null;
 }
 

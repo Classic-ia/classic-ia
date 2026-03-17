@@ -737,15 +737,15 @@ async function limparProducao() {
   }
 
   try {
-    // Delete ALL records from cq_producao (não filtra por origem)
-    const res = await CQ_API.fetch('cq_producao?id=not.is.null', {
-      method: 'DELETE',
-      headers: { 'Prefer': 'return=representation' }
+    // Chama função RPC com SECURITY DEFINER (bypassa RLS)
+    const res = await CQ_API.fetch('rpc/limpar_producao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}'
     });
 
     if (res.ok) {
-      const deleted = await res.json();
-      const count = Array.isArray(deleted) ? deleted.length : 0;
+      const count = await res.json();
       alert(count + ' registros de produção removidos com sucesso!\n\nAgora reimporte o WRPRD600.');
       location.reload();
     } else {

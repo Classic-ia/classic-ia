@@ -158,13 +158,21 @@
   </div>
   <div class="header-right">
     <span id="headerUser">Carregando...</span>
+    <button class="btn-logout" style="border-color:var(--err,#9e3535);color:#e05c5c;" onclick="limparProducao()">Limpar Dados</button>
     <button class="btn-logout" onclick="CQAuth.logout()">Sair</button>
   </div>
 </header>
 
 <main>
-  <div class="page-title">Importar Produção Individual</div>
-  <div class="page-sub">Importa o relatório <strong style="color:var(--accent)">WRPRD600</strong> do ATAK — produção por funcionário, produto, horas e quantidade</div>
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+    <div>
+      <div class="page-title">Importar Produção Individual</div>
+      <div class="page-sub">Importa o relatório <strong style="color:var(--accent)">WRPRD600</strong> do ATAK — produção por funcionário, produto, horas e quantidade</div>
+    </div>
+    <button onclick="limparProducao()" style="background:#9e3535;color:#fff;border:none;padding:12px 24px;border-radius:6px;font-family:'Syne',sans-serif;font-size:13px;font-weight:700;cursor:pointer;letter-spacing:0.05em;white-space:nowrap;">
+      🗑️ LIMPAR DADOS DE PRODUÇÃO
+    </button>
+  </div>
 
   <div class="info-box">
     <strong>📋 Formato esperado:</strong> Planilha Excel (.xlsx) exportada do ATAK — relatório WRPRD600.
@@ -255,6 +263,19 @@
     <div style="margin-top:20px;">
       <button class="btn btn-primary" onclick="resetar()">Importar outro arquivo</button>
     </div>
+  </div>
+
+  <!-- Limpar dados -->
+  <div style="background:var(--s1);border:1px solid var(--err);border-radius:4px;padding:18px 20px;margin-top:30px;display:flex;align-items:center;justify-content:space-between;">
+    <div>
+      <div style="font-size:12px;color:var(--err2);font-weight:600;margin-bottom:4px;">Zona de perigo</div>
+      <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;">
+        Apaga todos os registros de produção importados. Use para reimportar com dados corrigidos.
+      </div>
+    </div>
+    <button class="btn btn-ghost" style="font-size:11px;padding:8px 16px;border-color:var(--err);color:var(--err2);" onclick="limparProducao()">
+      Limpar dados de produção
+    </button>
   </div>
 </main>
 
@@ -508,8 +529,17 @@ async function processarArquivo(file) {
           const horasText = colC;
           let horas = 0;
           if (horasText) {
-            const hMatch = horasText.toString().match(/(\d+)/);
-            if (hMatch) horas = parseInt(hMatch[1]);
+            const ht = horasText.toString().trim();
+            // Formato HH:MM (ex: 8:30 = 8.5h, 0:45 = 0.75h)
+            const hmMatch = ht.match(/(\d+):(\d+)/);
+            if (hmMatch) {
+              horas = parseInt(hmMatch[1]) + parseInt(hmMatch[2]) / 60;
+            } else {
+              // Formato decimal BR (ex: 8,5 ou 8.5)
+              const decMatch = ht.replace(',', '.').match(/([\d.]+)/);
+              if (decMatch) horas = parseFloat(decMatch[1]);
+            }
+            horas = Math.round(horas * 100) / 100;
           }
           const quantidade = numBR(colD);
           const qtdeHora = horas > 0 ? Math.round((quantidade / horas) * 100) / 100 : 0;
@@ -693,6 +723,36 @@ async function importar() {
   progressWrap.style.display = 'none';
   btn.disabled = false;
   btn.innerHTML = '⬆ Importar para o sistema';
+}
+
+async function limparProducao() {
+  // Segurança: dupla confirmação
+  const c1 = confirm('ATENÇÃO: Isso vai apagar TODOS os registros de produção importados.\n\nTem certeza?');
+  if (!c1) return;
+
+  const senha = prompt('Para confirmar, digite "LIMPAR" (em maiúsculas):');
+  if (senha !== 'LIMPAR') {
+    alert('Operação cancelada. Texto não confere.');
+    return;
+  }
+
+  try {
+    // Delete all records from cq_producao where origem_dado = wrprd600
+    const res = await apiFetch('cq_producao?origem_dado=eq.wrprd600', {
+      method: 'DELETE',
+      headers: { 'Prefer': 'return=representation' }
+    });
+
+    if (res.ok) {
+      const deleted = await res.json();
+      const count = Array.isArray(deleted) ? deleted.length : 0;
+      alert(count + ' registros de produção removidos.\n\nAgora reimporte o WRPRD600.');
+    } else {
+      alert('Erro ao limpar: ' + (await res.text()).substring(0, 100));
+    }
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
 }
 </script>
 </body>

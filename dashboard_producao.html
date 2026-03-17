@@ -290,7 +290,7 @@ canvas.tall{max-height:340px;}
         <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Cód (Crachá)</label><input class="fil" id="cadCod" placeholder="00000" maxlength="5" style="width:90px;"></div>
         <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Nome</label><input class="fil" id="cadNome" placeholder="Nome do funcionário" style="width:220px;"></div>
         <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Setor</label>
-          <select class="fil" id="cadSetor">
+          <select class="fil" id="cadSetor" onchange="if(this.value==='__novo__'){const n=prompt('Nome do novo setor:');if(n){const o=document.createElement('option');o.value=n;o.textContent=n;this.insertBefore(o,this.lastElementChild);this.value=n;}else{this.value='';}}">
             <option value="">Selecione</option>
             <option>Produção Maq</option>
             <option>Bate Sal</option>
@@ -300,6 +300,7 @@ canvas.tall{max-height:340px;}
             <option>Conf. Salga</option>
             <option>Salga</option>
             <option>Qualidade</option>
+            <option value="__novo__" style="color:var(--accent);">+ Novo setor...</option>
           </select>
         </div>
         <button class="btn-hd primary" onclick="salvarCadastro()">Salvar</button>
@@ -307,7 +308,9 @@ canvas.tall{max-height:340px;}
       </div>
     </div>
     <div class="card">
-      <div class="card-title">Funcionários Cadastrados <span class="card-sub" id="cadCount"></span></div>
+      <div class="card-title">Funcionários Cadastrados <span class="card-sub" id="cadCount"></span>
+        <button class="btn-hd" onclick="corrigirNomes()" style="font-size:9px;">Corrigir Nomes</button>
+      </div>
       <div class="table-wrap">
         <table class="data-table">
           <thead><tr><th>Cód</th><th>Nome</th><th>Setor</th><th>Atualizado</th><th></th></tr></thead>
@@ -447,6 +450,22 @@ document.getElementById('setorFileInput').addEventListener('change', async (e) =
     });
 
     if (res.ok) {
+      // Corrigir nomes usando cq_producao como fonte confiável
+      try {
+        const prodFuncs = await CQ_API.get('cq_producao?select=cod_funcionario,nome_funcionario&limit=5000');
+        const nomesReais = {};
+        (prodFuncs||[]).forEach(r => { if (r.nome_funcionario && r.nome_funcionario.length > 2) nomesReais[r.cod_funcionario] = r.nome_funcionario; });
+        for (const f of final) {
+          const nomeReal = nomesReais[f.cod_funcionario];
+          if (nomeReal && nomeReal !== f.nome_funcionario) {
+            await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + f.cod_funcionario, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nome_funcionario: nomeReal })
+            });
+          }
+        }
+      } catch(e) { console.warn('Erro ao corrigir nomes:', e); }
       result.textContent = `${final.length} funcionários mapeados para ${new Set(final.map(f=>f.setor)).size} setores.`;
       result.style.color = 'var(--ok2)';
       await carregarSetores();
@@ -845,6 +864,29 @@ async function cadastrarRapido(cod, nome) {
     } else {
       alert('Erro: ' + (await res.text()).substring(0, 100));
     }
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function corrigirNomes() {
+  try {
+    const prodFuncs = await CQ_API.get('cq_producao?select=cod_funcionario,nome_funcionario&limit=5000');
+    const nomesReais = {};
+    (prodFuncs||[]).forEach(r => { if (r.nome_funcionario && r.nome_funcionario.length > 2) nomesReais[r.cod_funcionario] = r.nome_funcionario; });
+
+    let corrigidos = 0;
+    for (const cad of cadastroData) {
+      const nomeReal = nomesReais[cad.cod_funcionario];
+      if (nomeReal && nomeReal !== cad.nome_funcionario) {
+        await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + cad.cod_funcionario, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ nome_funcionario: nomeReal })
+        });
+        corrigidos++;
+      }
+    }
+    alert(corrigidos + ' nome(s) corrigido(s) com base nos dados de produção.');
+    renderCadastro();
   } catch(e) { alert('Erro: ' + e.message); }
 }
 

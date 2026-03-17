@@ -384,6 +384,10 @@ function resetar() {
 }
 
 // ── Helpers ──
+function removeAcentos(s) {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
 function cell(row, col) {
   return row && row[col] != null ? String(row[col]).trim() : '';
 }
@@ -455,12 +459,15 @@ async function processarArquivo(file) {
         const colB = cell(row, 1);
         const colC = cell(row, 2);
         const colD = cell(row, 3);
+        const colA_norm = removeAcentos(colA).toUpperCase();
+        const colB_norm = removeAcentos(colB).toUpperCase();
+        const colC_norm = removeAcentos(colC).toUpperCase();
 
         // Skip empty rows
         if (!colA && !colB) continue;
 
         // 1. DATA DE PRODUCAO: DD/MM/YYYY
-        if (colA.toUpperCase().indexOf('DATA DE PRODUCAO') !== -1) {
+        if (colA_norm.indexOf('DATA DE PRODUCAO') !== -1) {
           const match = colA.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/);
           if (match) {
             dataAtual = formatarDataBR(match[1]);
@@ -477,7 +484,7 @@ async function processarArquivo(file) {
         }
 
         // 2. FUNCIONARIO: 86010 - ADILSON BUENO DOS SANTOS
-        if (colA.toUpperCase().indexOf('FUNCIONARIO') !== -1) {
+        if (colA_norm.indexOf('FUNCIONARIO') !== -1) {
           const match = colA.match(/(\d{4,6})\s*-\s*(.+)/);
           if (match) {
             funcCodigo = match[1].trim();
@@ -487,13 +494,13 @@ async function processarArquivo(file) {
         }
 
         // 3. Skip TOTAL lines
-        if (colA.toUpperCase().indexOf('TOTAL') !== -1) continue;
+        if (colA_norm.indexOf('TOTAL') !== -1) continue;
 
         // 4. Skip header rows (HORAS TRABALHADAS, QUANTIDADE, etc.)
-        if (colC && colC.toUpperCase().indexOf('HORAS TRABALHADAS') !== -1) continue;
+        if (colC && colC_norm.indexOf('HORAS TRABALHADAS') !== -1) continue;
 
         // 5. QTDE/HORA line (summary) - skip
-        if (colB && colB.toUpperCase().indexOf('QTDE/HORA') !== -1) continue;
+        if (colB && colB_norm.indexOf('QTDE/HORA') !== -1) continue;
 
         // 6. Data row: col A = product code (numeric), col B = product name, col C = hours text, col D = quantity
         const codProduto = colA.replace(/[^\d]/g, '');

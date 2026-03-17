@@ -55,7 +55,7 @@ select.fil option{background:var(--s2);}
 .kpi{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:18px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
 .kpi:hover{border-color:var(--border2);}
 .kpi-label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'DM Mono',monospace;}
-.kpi-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;line-height:1;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
 .charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;}
@@ -97,6 +97,41 @@ canvas.tall{max-height:340px;}
 #setorFileInput{display:none;}
 
 .badge-setor{display:inline-block;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;border-radius:1px;padding:2px 7px;font-family:'DM Mono',monospace;background:rgba(200,169,110,0.1);color:var(--accent);}
+
+/* ── Print Report ── */
+.print-only{display:none;}
+@media print {
+  *{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;color-adjust:exact!important;}
+  body{background:#fff!important;color:#111!important;font-size:10pt;min-height:auto;}
+  .hd,.filter-bar,.tabs,.setor-upload,.btn-hd,.tab:not(.active),.no-print{display:none!important;}
+  .print-only{display:block!important;}
+  main{max-width:100%;padding:0;margin:0;}
+  .page-hd{margin-bottom:12px;}
+  .page-title{font-size:16pt;color:#111;}
+  #pageSub{color:#444;font-size:9pt;}
+  .print-header{border-bottom:2px solid #c8a96e;padding-bottom:8px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:flex-end;}
+  .print-header h1{font-family:'Syne',sans-serif;font-size:16pt;font-weight:800;margin:0;}
+  .print-header .print-meta{font-size:8pt;color:#666;font-family:'DM Mono',monospace;text-align:right;}
+  .kpi-row{grid-template-columns:repeat(6,1fr)!important;gap:8px;margin-bottom:14px;}
+  .kpi{background:#f5f3ef!important;border:1px solid #ddd!important;padding:10px 8px;break-inside:avoid;}
+  .kpi-label{color:#555!important;font-size:7pt;margin-bottom:4px;}
+  .kpi-val{font-size:16pt;color:#111!important;}
+  .tab-content{display:block!important;break-before:auto;page-break-inside:avoid;}
+  .tab-content#tab-geral{display:none!important;}
+  .tab-content#tab-trend{display:none!important;}
+  .charts-grid,.charts-grid-3{display:none!important;}
+  .card{background:#fff!important;border:1px solid #ddd!important;padding:12px;break-inside:avoid;margin-bottom:12px;}
+  .card-title{color:#333!important;font-size:9pt;margin-bottom:8px;}
+  .rank-table th{color:#555!important;font-size:7pt;border-bottom:1px solid #aaa!important;}
+  .rank-table td{font-size:9pt;border-bottom:1px solid #ddd!important;padding:5px 8px;}
+  .rank-table tr:nth-child(even) td{background:#f8f7f4!important;}
+  .data-table th{color:#555!important;font-size:7pt;border-bottom:1px solid #aaa!important;}
+  .data-table td{font-size:8pt;border-bottom:1px solid #ddd!important;padding:4px 6px;}
+  .data-table tr:nth-child(even) td{background:#f8f7f4!important;}
+  .badge-setor{background:#e8e4dc!important;color:#555!important;font-size:7pt;}
+  canvas{display:none!important;}
+  @page{size:landscape;margin:10mm;}
+}
 </style>
 </head>
 <body>
@@ -110,13 +145,23 @@ canvas.tall{max-height:340px;}
   <div class="hd-right">
     <span id="huser">...</span>
     <button class="btn-hd primary" onclick="carregarDados()">Atualizar</button>
+    <button class="btn-hd" onclick="window.print()">Imprimir</button>
     <button class="btn-hd" onclick="toggleSetorUpload()">Setores</button>
     <button class="btn-hd" onclick="CQAuth.logout()">Sair</button>
   </div>
 </div>
 
 <main>
-  <div class="page-hd">
+  <!-- Print Header -->
+  <div class="print-only print-header">
+    <h1>Relatório de Produção — Classic CQ</h1>
+    <div class="print-meta">
+      <div id="printPeriodo"></div>
+      <div id="printData"></div>
+    </div>
+  </div>
+
+  <div class="page-hd no-print">
     <div class="page-title">Produção Individual</div>
     <div id="pageSub">Carregando dados...</div>
   </div>
@@ -169,6 +214,7 @@ canvas.tall{max-height:340px;}
     <div class="tab" data-tab="func" onclick="switchTab('func')">Por Funcionário</div>
     <div class="tab" data-tab="trend" onclick="switchTab('trend')">Tendência</div>
     <div class="tab" data-tab="regs" onclick="switchTab('regs')">Registros</div>
+    <div class="tab" data-tab="cad" onclick="switchTab('cad');renderCadastro()">Cadastro Setores <span id="cadBadge" style="display:none;background:var(--warn);color:#fff;font-size:9px;padding:1px 6px;border-radius:10px;margin-left:4px;"></span></div>
   </div>
 
   <!-- Tab: Visão Geral -->
@@ -222,13 +268,68 @@ canvas.tall{max-height:340px;}
       </div>
     </div>
   </div>
+
+  <!-- Tab: Cadastro Setores -->
+  <div class="tab-content" id="tab-cad">
+    <!-- Alerta: Funcionários sem setor -->
+    <div id="cadAlerta" style="display:none;background:var(--s1);border:1px solid var(--warn);border-radius:3px;padding:14px 18px;margin-bottom:16px;">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--warn2);">⚠ Funcionários sem setor cadastrado</div>
+        <span class="card-sub" id="cadSemSetorCount"></span>
+      </div>
+      <div class="table-wrap" style="max-height:300px;overflow-y:auto;">
+        <table class="data-table">
+          <thead><tr><th>Cód</th><th>Nome</th><th>Registros</th><th>Ação</th></tr></thead>
+          <tbody id="cadSemSetorBody"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">Novo Funcionário</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+        <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Cód (Crachá)</label><input class="fil" id="cadCod" placeholder="00000" maxlength="5" style="width:90px;"></div>
+        <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Nome</label><input class="fil" id="cadNome" placeholder="Nome do funcionário" style="width:220px;"></div>
+        <div><label class="filter-bar-label" style="font-size:9px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;display:block;margin-bottom:4px;">Setor</label>
+          <select class="fil" id="cadSetor">
+            <option value="">Selecione</option>
+            <option>Produção Maq</option>
+            <option>Bate Sal</option>
+            <option>Classificação</option>
+            <option>Lavação</option>
+            <option>Sebo</option>
+            <option>Conf. Salga</option>
+            <option>Salga</option>
+            <option>Qualidade</option>
+          </select>
+        </div>
+        <button class="btn-hd primary" onclick="salvarCadastro()">Salvar</button>
+        <span id="cadStatus" style="font-size:11px;font-family:'DM Mono',monospace;"></span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Funcionários Cadastrados <span class="card-sub" id="cadCount"></span></div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Cód</th><th>Nome</th><th>Setor</th><th>Atualizado</th><th></th></tr></thead>
+          <tbody id="cadBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
 </main>
 
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
 <script>
-const COLORS = ['#c8a96e','#4a9ed0','#5cb85c','#f0a844','#e05c5c','#9b59b6','#1abc9c','#e67e22','#3498db','#e74c3c'];
+// Paleta colorblind-safe (Wong + adaptações)
+const COLORS = ['#E69F00','#56B4E9','#009E73','#F0E442','#0072B2','#D55E00','#CC79A7','#999999','#E69F00','#56B4E9'];
+const CB_GOLD = '#E69F00';
+const CB_BLUE = '#56B4E9';
+const CB_GREEN = '#009E73';
+const CB_DKBLUE = '#0072B2';
+const CB_ORANGE = '#D55E00';
+const CB_PINK = '#CC79A7';
 const GRID = 'rgba(255,255,255,0.03)';
 const TICK = '#666';
 
@@ -376,7 +477,7 @@ async function carregarDados() {
     const dados = await CQ_API.get('cq_producao?order=data_producao.desc&limit=5000');
     todosRegistros = (dados || []).map(r => ({
       ...r,
-      setor: setoresMap[r.cod_funcionario] || '—'
+      setor: setoresMap[r.cod_funcionario] || 'Sem setor'
     }));
     popularFiltros();
     aplicarFiltro();
@@ -388,7 +489,7 @@ async function carregarDados() {
 
 // ── Filtros ──
 function popularFiltros() {
-  const setores = [...new Set(todosRegistros.map(r=>r.setor).filter(s=>s&&s!=='—'))].sort();
+  const setores = [...new Set(todosRegistros.map(r=>r.setor).filter(Boolean))].sort();
   const funcs = [...new Set(todosRegistros.map(r=>r.nome_funcionario).filter(Boolean))].sort();
   const prods = [...new Set(todosRegistros.map(r=>r.nome_produto).filter(Boolean))].sort();
 
@@ -425,11 +526,28 @@ function aplicarFiltro() {
   document.getElementById('filtroStatus').textContent = dadosFiltrados.length + ' registros' + (filtros ? ` · ${filtros} filtro(s)` : '');
   document.getElementById('pageSub').innerHTML = `${dadosFiltrados.length} registros · atualizado às <span style="color:var(--accent)">${new Date().toLocaleTimeString('pt-BR')}</span>`;
 
+  // Print header
+  const datas = dadosFiltrados.map(r=>r.data_producao).filter(Boolean).sort();
+  const pDe = datas[0] ? datas[0].split('-').reverse().join('/') : '—';
+  const pAte = datas.length ? datas[datas.length-1].split('-').reverse().join('/') : '—';
+  document.getElementById('printPeriodo').textContent = `Período: ${pDe} a ${pAte}`;
+  document.getElementById('printData').textContent = `Emitido: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`;
+
   renderKPIs();
   renderGeral();
   renderFuncionarios();
   renderTendencia();
   renderRegistros();
+
+  // Badge de funcionários sem setor
+  const semSetorCount = new Set(todosRegistros.filter(r => r.setor === 'Sem setor').map(r => r.cod_funcionario)).size;
+  const badge = document.getElementById('cadBadge');
+  if (semSetorCount > 0) {
+    badge.style.display = 'inline';
+    badge.textContent = semSetorCount;
+  } else {
+    badge.style.display = 'none';
+  }
 }
 
 function limparFiltros() {
@@ -486,31 +604,31 @@ function renderGeral() {
 
   // Produção por Setor (bar horizontal)
   const porSetor = {};
-  d.forEach(r => { const k=r.setor||'—'; porSetor[k]=(porSetor[k]||0)+(parseFloat(r.quantidade)||0); });
+  d.forEach(r => { const k=r.setor||'Sem setor'; porSetor[k]=(porSetor[k]||0)+(parseFloat(r.quantidade)||0); });
   const setores = Object.entries(porSetor).sort((a,b)=>b[1]-a[1]);
-  barH('chartSetor', setores.map(s=>s[0]), setores.map(s=>Math.round(s[1])), COLORS);
+  barH('chartSetor', setores.map(s=>s[0]), setores.map(s=>Math.round(s[1])), setores.map((_,i)=>COLORS[i%COLORS.length]));
 
-  // Top 10 Quantidade
+  // Top 10 Quantidade — cada barra com cor diferente
   const porFunc = agruparPorFunc(d);
   const top10 = Object.entries(porFunc).sort((a,b)=>b[1].qtd-a[1].qtd).slice(0,10);
-  barH('chartTopQtd', top10.map(f=>f[0]), top10.map(f=>Math.round(f[1].qtd)), '#c8a96e');
+  barH('chartTopQtd', top10.map(f=>f[0]), top10.map(f=>Math.round(f[1].qtd)), top10.map((_,i)=>COLORS[i%COLORS.length]));
 
-  // Top 10 Pçs/Hora
+  // Top 10 Pçs/Hora — cada barra com cor diferente
   const top10PH = Object.entries(porFunc).filter(f=>f[1].horas>0).map(f=>[f[0],f[1].qtd/f[1].horas]).sort((a,b)=>b[1]-a[1]).slice(0,10);
-  barH('chartTopPH', top10PH.map(f=>f[0]), top10PH.map(f=>Math.round(f[1]*10)/10), '#5cb85c');
+  barH('chartTopPH', top10PH.map(f=>f[0]), top10PH.map(f=>Math.round(f[1]*10)/10), top10PH.map((_,i)=>COLORS[i%COLORS.length]));
 
-  // Horas por Setor
+  // Horas por Setor — cada barra com cor diferente
   const horasSetor = {};
-  d.forEach(r => { const k=r.setor||'—'; horasSetor[k]=(horasSetor[k]||0)+(parseFloat(r.horas)||0); });
+  d.forEach(r => { const k=r.setor||'Sem setor'; horasSetor[k]=(horasSetor[k]||0)+(parseFloat(r.horas)||0); });
   const hs = Object.entries(horasSetor).sort((a,b)=>b[1]-a[1]);
-  barH('chartHorasSetor', hs.map(s=>s[0]), hs.map(s=>Math.round(s[1])), '#4a9ed0');
+  barH('chartHorasSetor', hs.map(s=>s[0]), hs.map(s=>Math.round(s[1])), hs.map((_,i)=>COLORS[i%COLORS.length]));
 }
 
 function agruparPorFunc(d) {
   const porFunc = {};
   d.forEach(r => {
     const k = r.nome_funcionario || r.cod_funcionario;
-    if (!porFunc[k]) porFunc[k] = {qtd:0,horas:0,setor:r.setor||'—'};
+    if (!porFunc[k]) porFunc[k] = {qtd:0,horas:0,setor:r.setor||'Sem setor'};
     porFunc[k].qtd += parseFloat(r.quantidade)||0;
     porFunc[k].horas += parseFloat(r.horas)||0;
   });
@@ -533,12 +651,12 @@ function renderFuncionarios() {
     <td class="mono" style="text-align:right;color:var(--ok2);font-weight:600">${f.ph.toFixed(1)}</td>
   </tr>`).join('');
 
-  // Charts
+  // Charts — cores distintas por barra
   const top15Qtd = ranking.sort((a,b)=>b.qtd-a.qtd).slice(0,15);
-  barH('chartFuncQtd', top15Qtd.map(f=>f.nome), top15Qtd.map(f=>Math.round(f.qtd)), '#c8a96e');
+  barH('chartFuncQtd', top15Qtd.map(f=>f.nome), top15Qtd.map(f=>Math.round(f.qtd)), top15Qtd.map((_,i)=>COLORS[i%COLORS.length]));
 
   const top15PH = [...ranking].sort((a,b)=>b.ph-a.ph).slice(0,15);
-  barH('chartFuncPH', top15PH.map(f=>f.nome), top15PH.map(f=>Math.round(f.ph*10)/10), '#5cb85c');
+  barH('chartFuncPH', top15PH.map(f=>f.nome), top15PH.map(f=>Math.round(f.ph*10)/10), top15PH.map((_,i)=>COLORS[i%COLORS.length]));
 }
 
 // ── Tab: Tendência ──
@@ -559,21 +677,21 @@ function renderTendencia() {
   // Produção diária (line)
   makeChart('chartTrendPecas', {
     type:'line',
-    data:{ labels, datasets:[{label:'Peças',data:dias.map(d=>Math.round(porDia[d].pecas)),borderColor:'#c8a96e',backgroundColor:'rgba(200,169,110,0.1)',fill:true,tension:0.3,pointRadius:4}] },
+    data:{ labels, datasets:[{label:'Peças',data:dias.map(d=>Math.round(porDia[d].pecas)),borderColor:CB_GOLD,backgroundColor:'rgba(230,159,0,0.1)',fill:true,tension:0.3,pointRadius:4}] },
     options:{ plugins:{legend:{display:false}}, scales:{ x:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}}}, y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}},beginAtZero:true} } }
   });
 
   // Horas por dia (bar)
   makeChart('chartTrendHoras', {
     type:'bar',
-    data:{ labels, datasets:[{data:dias.map(d=>Math.round(porDia[d].horas)),backgroundColor:'#4a9ed0',borderRadius:2}] },
+    data:{ labels, datasets:[{data:dias.map(d=>Math.round(porDia[d].horas)),backgroundColor:CB_BLUE,borderRadius:2}] },
     options:{ plugins:{legend:{display:false}}, scales:{ x:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}}}, y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}},beginAtZero:true} } }
   });
 
   // Eficiência (line)
   makeChart('chartTrendPH', {
     type:'line',
-    data:{ labels, datasets:[{label:'Pçs/Hora',data:dias.map(d=>porDia[d].horas>0?Math.round(porDia[d].pecas/porDia[d].horas*10)/10:0),borderColor:'#5cb85c',backgroundColor:'rgba(92,184,92,0.1)',fill:true,tension:0.3,pointRadius:4}] },
+    data:{ labels, datasets:[{label:'Pçs/Hora',data:dias.map(d=>porDia[d].horas>0?Math.round(porDia[d].pecas/porDia[d].horas*10)/10:0),borderColor:CB_GREEN,backgroundColor:'rgba(0,158,115,0.1)',fill:true,tension:0.3,pointRadius:4}] },
     options:{ plugins:{legend:{display:false}}, scales:{ x:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}}}, y:{grid:{color:GRID},ticks:{color:TICK,font:{size:10,family:'DM Mono'}},beginAtZero:true} } }
   });
 }
@@ -590,13 +708,153 @@ function renderRegistros() {
       <td class="mono">${data}</td>
       <td class="mono" style="color:var(--accent)">${r.cod_funcionario||''}</td>
       <td>${r.nome_funcionario||'—'}</td>
-      <td><span class="badge-setor">${r.setor||'—'}</span></td>
+      <td><span class="badge-setor">${r.setor||'Sem setor'}</span></td>
       <td>${r.nome_produto||'—'}</td>
       <td class="mono" style="text-align:right">${r.horas||0}h</td>
       <td class="mono" style="text-align:right;font-weight:600">${(parseFloat(r.quantidade)||0).toLocaleString('pt-BR')}</td>
       <td class="mono" style="text-align:right;color:var(--ok2)">${(parseFloat(r.qtde_hora)||0).toFixed(1)}</td>
     </tr>`;
   }).join('') + (d.length>200 ? `<tr><td colspan="8" class="mono" style="text-align:center;color:var(--muted);padding:16px">... mais ${d.length-200} registros</td></tr>` : '');
+}
+
+// ── Tab: Cadastro Setores ──
+let cadastroData = [];
+
+async function renderCadastro() {
+  try {
+    cadastroData = await CQ_API.get('cq_funcionario_setor?order=nome_funcionario.asc') || [];
+  } catch(e) { cadastroData = []; }
+
+  // Identificar funcionários na produção SEM setor cadastrado
+  const codsCadastrados = new Set(cadastroData.map(r => r.cod_funcionario));
+  const semSetor = {};
+  todosRegistros.forEach(r => {
+    if (!codsCadastrados.has(r.cod_funcionario)) {
+      if (!semSetor[r.cod_funcionario]) semSetor[r.cod_funcionario] = { nome: r.nome_funcionario, count: 0 };
+      semSetor[r.cod_funcionario].count++;
+    }
+  });
+  const listaSemSetor = Object.entries(semSetor).sort((a,b) => b[1].count - a[1].count);
+
+  const alertaEl = document.getElementById('cadAlerta');
+  if (listaSemSetor.length > 0) {
+    alertaEl.style.display = 'block';
+    document.getElementById('cadSemSetorCount').textContent = listaSemSetor.length + ' funcionário(s)';
+    document.getElementById('cadSemSetorBody').innerHTML = listaSemSetor.map(([cod, info]) => `<tr>
+      <td class="mono" style="color:var(--warn2)">${cod}</td>
+      <td>${info.nome || '—'}</td>
+      <td class="mono" style="text-align:center">${info.count}</td>
+      <td>
+        <select class="fil" style="font-size:10px;padding:3px 6px;width:130px;" id="selSetor_${cod}">
+          <option value="">Selecione</option>
+          ${['Produção Maq','Bate Sal','Classificação','Lavação','Sebo','Conf. Salga','Salga','Qualidade'].map(s => `<option>${s}</option>`).join('')}
+        </select>
+        <button class="btn-hd primary" style="font-size:9px;padding:3px 8px;margin-left:4px;" onclick="cadastrarRapido('${cod}','${(info.nome||'').replace(/'/g,"\\'")}')">OK</button>
+      </td>
+    </tr>`).join('');
+  } else {
+    alertaEl.style.display = 'none';
+  }
+
+  document.getElementById('cadCount').textContent = cadastroData.length + ' registros';
+  document.getElementById('cadBody').innerHTML = cadastroData.map(r => {
+    const dt = r.atualizado_em ? new Date(r.atualizado_em).toLocaleDateString('pt-BR') : '—';
+    return `<tr>
+      <td class="mono" style="color:var(--accent)">${r.cod_funcionario}</td>
+      <td>${r.nome_funcionario||'—'}</td>
+      <td>
+        <select class="fil" style="font-size:11px;padding:4px 6px;" onchange="atualizarSetor('${r.cod_funcionario}',this.value)">
+          ${['Produção Maq','Bate Sal','Classificação','Lavação','Sebo','Conf. Salga','Salga','Qualidade'].map(s =>
+            `<option${s===r.setor?' selected':''}>${s}</option>`
+          ).join('')}
+        </select>
+      </td>
+      <td class="mono" style="color:var(--muted)">${dt}</td>
+      <td><button class="btn-hd" style="font-size:9px;padding:3px 8px;color:var(--err2);border-color:var(--err)" onclick="excluirCadastro('${r.cod_funcionario}')">×</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" class="empty">Nenhum funcionário cadastrado</td></tr>';
+}
+
+async function salvarCadastro() {
+  const cod = document.getElementById('cadCod').value.trim();
+  const nome = document.getElementById('cadNome').value.trim();
+  const setor = document.getElementById('cadSetor').value;
+  const status = document.getElementById('cadStatus');
+
+  if (!cod || !nome || !setor) {
+    status.textContent = 'Preencha todos os campos';
+    status.style.color = 'var(--err2)';
+    return;
+  }
+  if (!/^\d{5}$/.test(cod)) {
+    status.textContent = 'Crachá deve ter 5 dígitos';
+    status.style.color = 'var(--err2)';
+    return;
+  }
+
+  try {
+    const res = await CQ_API.fetch('cq_funcionario_setor?on_conflict=cod_funcionario', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates', 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ cod_funcionario: cod, nome_funcionario: nome, setor, atualizado_em: new Date().toISOString() }])
+    });
+    if (res.ok) {
+      status.textContent = 'Salvo!';
+      status.style.color = 'var(--ok2)';
+      document.getElementById('cadCod').value = '';
+      document.getElementById('cadNome').value = '';
+      document.getElementById('cadSetor').selectedIndex = 0;
+      await carregarSetores();
+      renderCadastro();
+    } else {
+      status.textContent = 'Erro: ' + (await res.text()).substring(0, 80);
+      status.style.color = 'var(--err2)';
+    }
+  } catch(e) {
+    status.textContent = 'Erro: ' + e.message;
+    status.style.color = 'var(--err2)';
+  }
+}
+
+async function atualizarSetor(cod, novoSetor) {
+  try {
+    await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + cod, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ setor: novoSetor, atualizado_em: new Date().toISOString() })
+    });
+    setoresMap[cod] = novoSetor;
+  } catch(e) { console.error(e); }
+}
+
+async function cadastrarRapido(cod, nome) {
+  const sel = document.getElementById('selSetor_' + cod);
+  if (!sel || !sel.value) { alert('Selecione o setor'); return; }
+  try {
+    const res = await CQ_API.fetch('cq_funcionario_setor?on_conflict=cod_funcionario', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates', 'Content-Type': 'application/json' },
+      body: JSON.stringify([{ cod_funcionario: cod, nome_funcionario: nome, setor: sel.value, atualizado_em: new Date().toISOString() }])
+    });
+    if (res.ok) {
+      setoresMap[cod] = sel.value;
+      // Atualizar setor nos registros carregados
+      todosRegistros.forEach(r => { if (r.cod_funcionario === cod) r.setor = sel.value; });
+      await carregarSetores();
+      renderCadastro();
+    } else {
+      alert('Erro: ' + (await res.text()).substring(0, 100));
+    }
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function excluirCadastro(cod) {
+  if (!confirm('Remover funcionário ' + cod + ' do cadastro de setores?')) return;
+  try {
+    await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + cod, { method: 'DELETE' });
+    delete setoresMap[cod];
+    renderCadastro();
+  } catch(e) { console.error(e); }
 }
 </script>
 </body>

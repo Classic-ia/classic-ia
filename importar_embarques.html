@@ -276,14 +276,21 @@ async function processarArquivo(file) {
     const ab = await file.arrayBuffer();
     const wb = XLSX.read(ab, { type: 'array', cellDates: true });
 
+    // Log abas encontradas
+    const abasIgnoradas = [];
+    const abasProcessadas = [];
+    console.log('📋 Abas encontradas:', wb.SheetNames);
+
     for (const sheetName of wb.SheetNames) {
-      // Apenas abas que começam com "CARGA"
       const norm = sheetName.toUpperCase().trim();
-      if (!norm.startsWith('CARGA')) continue;
-      if (norm.includes('RESUMO') || norm.includes('CLASSE')) continue;
+      // Ignorar abas de resumo/classe/total
+      if (norm.includes('RESUMO') || norm.includes('CLASSE') || norm.includes('TOTAL')) { abasIgnoradas.push(sheetName); continue; }
+      // Aceitar: "CARGA 01", "01", "02", ..., "11", ou qualquer aba com número
+      const numMatch = sheetName.match(/(\d+)/);
+      if (!numMatch && !norm.includes('CARGA')) { abasIgnoradas.push(sheetName); continue; }
+      abasProcessadas.push(sheetName);
 
       // Extrair número da carga
-      const numMatch = sheetName.match(/(\d+)/);
       const numeroCarga = numMatch ? numMatch[1].padStart(2,'0') : sheetName;
 
       const ws = wb.Sheets[sheetName];
@@ -331,8 +338,15 @@ async function processarArquivo(file) {
       }
     }
 
+    console.log('✅ Abas processadas:', abasProcessadas);
+    console.log('⏭ Abas ignoradas:', abasIgnoradas);
+
+    if (abasIgnoradas.length > 0) {
+      addAlert('warn', `Abas ignoradas: ${abasIgnoradas.join(', ')}. Processadas: ${abasProcessadas.join(', ')}`);
+    }
+
     if (dadosParaImportar.length === 0) {
-      addAlert('error', 'Nenhum registro válido encontrado. Verifique se a planilha tem abas "CARGA 01", "CARGA 02", etc.');
+      addAlert('error', `Nenhum registro válido. Abas na planilha: [${wb.SheetNames.join(', ')}]. Verifique se contêm "CARGA" no nome.`);
       return;
     }
 

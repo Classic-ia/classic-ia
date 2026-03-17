@@ -715,11 +715,10 @@ async function importar() {
     document.getElementById('progressLabel').textContent = `Inserindo lote ${Math.floor(i / BATCH_SIZE) + 1} (${i+1}-${batchEnd} de ${total})`;
 
     try {
-      const res = await apiFetch('cq_recebimentos', {
+      const res = await apiFetch('cq_recebimentos?on_conflict=id_recebimento', {
         method: 'POST',
         headers: {
-          'Prefer': 'return=representation,resolution=ignore-duplicates',
-          'on_conflict': 'id_recebimento'
+          'Prefer': 'return=representation,resolution=ignore-duplicates'
         },
         body: JSON.stringify(batch)
       });
@@ -736,13 +735,12 @@ async function importar() {
         // Try individual inserts as fallback
         for (let j = 0; j < batch.length; j++) {
           try {
-            const singleRes = await apiFetch('cq_recebimentos', {
+            const singleRes = await apiFetch('cq_recebimentos?on_conflict=id_recebimento', {
               method: 'POST',
               headers: {
-                'Prefer': 'return=representation,resolution=ignore-duplicates',
-                'on_conflict': 'id_recebimento'
+                'Prefer': 'return=representation,resolution=ignore-duplicates'
               },
-              body: JSON.stringify(batch[j])
+              body: JSON.stringify([batch[j]])
             });
             if (singleRes.ok) {
               const singleData = await singleRes.json();

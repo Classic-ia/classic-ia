@@ -131,7 +131,7 @@ canvas.tall{max-height:340px;}
   <div class="hd-right">
     <span id="huser">...</span>
     <button class="btn-hd primary" onclick="carregarDados()">Atualizar</button>
-    <button class="btn-hd" onclick="window.print()">Imprimir</button>
+    <button class="btn-hd" onclick="imprimirPeriodo()">Relatório</button>
     <button class="btn-hd" onclick="CQAuth.logout()">Sair</button>
   </div>
 </div>
@@ -187,6 +187,7 @@ canvas.tall{max-height:340px;}
     <div class="tab active" data-tab="geral" onclick="switchTab('geral')">Visão Geral</div>
     <div class="tab" data-tab="frigo" onclick="switchTab('frigo')">Por Frigorífico</div>
     <div class="tab" data-tab="trend" onclick="switchTab('trend')">Tendência</div>
+    <div class="tab" data-tab="cargas" onclick="switchTab('cargas');renderCargas()">Cargas / Transporte</div>
     <div class="tab" data-tab="regs" onclick="switchTab('regs')">Registros</div>
   </div>
 
@@ -228,6 +229,19 @@ canvas.tall{max-height:340px;}
     <div class="charts-grid">
       <div class="card"><div class="card-title">Volume por Carga <span class="card-sub">peças totais</span></div><canvas id="chartTrendVol"></canvas></div>
       <div class="card"><div class="card-title">Embarques por Carga</div><canvas id="chartTrendEmb"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Tab: Cargas / Transporte -->
+  <div class="tab-content" id="tab-cargas">
+    <div class="card">
+      <div class="card-title">Identificação de Transporte por Carga <span class="card-sub">container, placa cavalo e carreta</span></div>
+      <div class="table-wrap">
+        <table class="data-table" id="tblCargas">
+          <thead><tr><th>Carga</th><th>Embarques</th><th>Peças</th><th>Container</th><th>Placa Cavalo</th><th>Placa Carreta 1</th><th>Placa Carreta 2</th><th></th></tr></thead>
+          <tbody id="cargasBody"></tbody>
+        </table>
+      </div>
     </div>
   </div>
 
@@ -642,6 +656,230 @@ function renderTrend(d) {
       scales:{x:{ticks:{color:TICK_C,font:{size:10}},grid:{color:GRID_C}}, y:{ticks:{color:TICK_C},grid:{color:GRID_C}}}
     }
   });
+}
+
+// ── Cargas / Transporte ──
+function renderCargas() {
+  const d = dadosFiltrados;
+  const cargaMap = {};
+  d.forEach(r => {
+    const k = r.numero_carga || '?';
+    if (!cargaMap[k]) cargaMap[k] = { embarques:0, pecas:0, container: r.container||'', placa_cavalo: r.placa_cavalo||'', placa_carreta: r.placa_carreta||'', placa_carreta2: r.placa_carreta2||'' };
+    cargaMap[k].embarques++;
+    cargaMap[k].pecas += r.cnt_classic||0;
+    if (r.container && !cargaMap[k].container) cargaMap[k].container = r.container;
+    if (r.placa_cavalo && !cargaMap[k].placa_cavalo) cargaMap[k].placa_cavalo = r.placa_cavalo;
+    if (r.placa_carreta && !cargaMap[k].placa_carreta) cargaMap[k].placa_carreta = r.placa_carreta;
+    if (r.placa_carreta2 && !cargaMap[k].placa_carreta2) cargaMap[k].placa_carreta2 = r.placa_carreta2;
+  });
+
+  const cargas = Object.keys(cargaMap).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+  const tbody = document.getElementById('cargasBody');
+  tbody.innerHTML = cargas.map(c => {
+    const s = cargaMap[c];
+    return `<tr>
+      <td class="mono" style="font-weight:600;color:var(--accent)">CARGA ${c}</td>
+      <td class="mono">${s.embarques}</td>
+      <td class="mono">${s.pecas.toLocaleString('pt-BR')}</td>
+      <td><input class="fil" data-carga="${c}" data-field="container" value="${s.container}" placeholder="Ex: TEMU 968062" style="width:150px;font-size:11px;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_cavalo" value="${s.placa_cavalo}" placeholder="Ex: GOT9D69" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_carreta" value="${s.placa_carreta}" placeholder="Ex: AYZ4I66" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_carreta2" value="${s.placa_carreta2}" placeholder="2ª placa" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
+      <td><button class="btn-hd primary" onclick="salvarTransporte('${c}')" style="font-size:9px;">Salvar</button></td>
+    </tr>`;
+  }).join('');
+}
+
+async function salvarTransporte(numeroCarga) {
+  const row = document.querySelector(`input[data-carga="${numeroCarga}"][data-field="container"]`).closest('tr');
+  const container = row.querySelector('[data-field="container"]').value.trim();
+  const placa_cavalo = row.querySelector('[data-field="placa_cavalo"]').value.trim().toUpperCase();
+  const placa_carreta = row.querySelector('[data-field="placa_carreta"]').value.trim().toUpperCase();
+  const placa_carreta2 = row.querySelector('[data-field="placa_carreta2"]').value.trim().toUpperCase();
+
+  try {
+    const res = await CQ_API.fetch(`cq_embarques?numero_carga=eq.${numeroCarga}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ container, placa_cavalo, placa_carreta, placa_carreta2 })
+    });
+    if (res.ok) {
+      todosRegistros.forEach(r => {
+        if (r.numero_carga === numeroCarga) {
+          r.container = container;
+          r.placa_cavalo = placa_cavalo;
+          r.placa_carreta = placa_carreta;
+          r.placa_carreta2 = placa_carreta2;
+        }
+      });
+      const btn = row.querySelector('.btn-hd');
+      btn.textContent = '✓ Salvo';
+      btn.style.color = 'var(--cls-a)';
+      btn.style.borderColor = 'var(--cls-a)';
+      setTimeout(() => { btn.textContent = 'Salvar'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+    } else {
+      alert('Erro ao salvar: ' + (await res.text()).substring(0, 100));
+    }
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
+}
+
+// ── Relatório por Carga (impressão) ──
+function imprimirCarga(numeroCarga) {
+  const d = todosRegistros.filter(r => r.numero_carga === numeroCarga);
+  if (d.length === 0) { alert('Nenhum dado para esta carga.'); return; }
+  gerarRelatorio(d, `Carga ${numeroCarga}`);
+}
+
+function imprimirPeriodo() {
+  if (dadosFiltrados.length === 0) { alert('Nenhum dado filtrado.'); return; }
+  const de = document.getElementById('filtDe').value;
+  const ate = document.getElementById('filtAte').value;
+  const titulo = (de && ate) ? `Período ${de} a ${ate}` : 'Todos os registros filtrados';
+  gerarRelatorio(dadosFiltrados, titulo);
+}
+
+function gerarRelatorio(dados, titulo) {
+  const totalPecas = dados.reduce((s,r)=>s+(r.cnt_classic||0),0);
+  const totalA = dados.reduce((s,r)=>s+(r.pcs_a||0),0);
+  const totalB = dados.reduce((s,r)=>s+(r.pcs_b||0),0);
+  const totalC = dados.reduce((s,r)=>s+(r.pcs_c||0),0);
+  const pctA = totalPecas>0 ? (totalA/totalPecas*100).toFixed(1) : '0.0';
+  const pctB = totalPecas>0 ? (totalB/totalPecas*100).toFixed(1) : '0.0';
+  const pctC = totalPecas>0 ? (totalC/totalPecas*100).toFixed(1) : '0.0';
+  const frigos = new Set(dados.map(r=>r.frigorifico)).size;
+  const cargas = [...new Set(dados.map(r=>r.numero_carga))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
+
+  // Container/placa info
+  const transporteInfo = cargas.map(c => {
+    const r = dados.find(d => d.numero_carga === c && (d.container || d.placa_cavalo));
+    if (!r) return null;
+    let info = `<strong>Carga ${c}:</strong> Container: ${r.container||'—'} | Cavalo: ${r.placa_cavalo||'—'} | Carreta: ${r.placa_carreta||'—'}`;
+    if (r.placa_carreta2) info += ` / ${r.placa_carreta2}`;
+    return info;
+  }).filter(Boolean);
+
+  // Ranking frigoríficos por volume (maior → menor)
+  const frigoStats = {};
+  dados.forEach(r => {
+    const k = r.frigorifico||'?';
+    if (!frigoStats[k]) frigoStats[k] = {pecas:0, a:0, b:0, c:0, embarques:0};
+    frigoStats[k].pecas += r.cnt_classic||0;
+    frigoStats[k].a += r.pcs_a||0;
+    frigoStats[k].b += r.pcs_b||0;
+    frigoStats[k].c += r.pcs_c||0;
+    frigoStats[k].embarques++;
+  });
+  const ranking = Object.entries(frigoStats)
+    .map(([nome,s]) => { const t=s.a+s.b+s.c||1; return {nome,...s, pctA:(s.a/t*100).toFixed(1), pctB:(s.b/t*100).toFixed(1), pctC:(s.c/t*100).toFixed(1)}; })
+    .sort((a,b) => b.pecas - a.pecas);
+
+  // Dados ordenados por carga + volume desc
+  const dadosOrdenados = [...dados].sort((a,b) => {
+    const cmp = (a.numero_carga||'').localeCompare(b.numero_carga||'',undefined,{numeric:true});
+    return cmp !== 0 ? cmp : (b.cnt_classic||0) - (a.cnt_classic||0);
+  });
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Relatório Embarques — ${titulo}</title>
+    <style>
+      *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+      body{font-family:'Segoe UI',Arial,sans-serif;font-size:10pt;color:#111;padding:20px 30px;}
+      .header{border-bottom:3px solid #c8a96e;padding-bottom:10px;margin-bottom:16px;display:flex;justify-content:space-between;align-items:flex-end;}
+      .header h1{font-size:16pt;font-weight:800;color:#333;}
+      .header .meta{font-size:8pt;color:#666;text-align:right;}
+      .kpis{display:flex;gap:10px;margin-bottom:16px;}
+      .kpi-box{flex:1;background:#f5f3ef;border:1px solid #ddd;border-radius:4px;padding:10px;text-align:center;}
+      .kpi-v{font-size:18pt;font-weight:800;color:#333;}
+      .kpi-l{font-size:7pt;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-top:2px;}
+      .kpi-a .kpi-v{color:#009E73;} .kpi-c .kpi-v{color:#D55E00;}
+      .transport{background:#f8f7f4;border:1px solid #ddd;border-radius:4px;padding:10px 14px;margin-bottom:16px;font-size:9pt;color:#444;line-height:1.8;}
+      .section{margin-bottom:18px;}
+      .section-title{font-size:11pt;font-weight:700;color:#c8a96e;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid #ddd;text-transform:uppercase;letter-spacing:0.08em;}
+      table{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:6px;}
+      th{background:#e8e4dc;color:#333;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;font-size:7pt;padding:6px 8px;text-align:left;border-bottom:2px solid #c8a96e;}
+      td{padding:5px 8px;border-bottom:1px solid #ddd;}
+      tr:nth-child(even) td{background:#fafaf8;}
+      .right{text-align:right;}
+      .bold{font-weight:700;}
+      .cls-a{background:#009E73;color:#fff;padding:1px 6px;border-radius:2px;font-size:8pt;font-weight:600;}
+      .cls-b{background:#E69F00;color:#fff;padding:1px 6px;border-radius:2px;font-size:8pt;font-weight:600;}
+      .cls-c{background:#D55E00;color:#fff;padding:1px 6px;border-radius:2px;font-size:8pt;font-weight:600;}
+      .bar-wrap{width:100px;height:14px;background:#eee;border-radius:2px;display:inline-block;vertical-align:middle;overflow:hidden;}
+      .bar-fill{height:100%;border-radius:2px;}
+      .footer{margin-top:20px;border-top:1px solid #ddd;padding-top:8px;font-size:7pt;color:#999;text-align:center;}
+      @page{size:landscape;margin:10mm;}
+      @media print{.no-print{display:none!important;}}
+    </style></head><body>
+    <div class="header">
+      <h1>Relatório de Embarques — ${titulo}</h1>
+      <div class="meta">Classic Importação e Exportação de Couros<br>Controle de Qualidade<br>${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}</div>
+    </div>
+
+    <div class="kpis">
+      <div class="kpi-box"><div class="kpi-v">${dados.length}</div><div class="kpi-l">Embarques</div></div>
+      <div class="kpi-box"><div class="kpi-v">${frigos}</div><div class="kpi-l">Frigoríficos</div></div>
+      <div class="kpi-box"><div class="kpi-v">${totalPecas.toLocaleString('pt-BR')}</div><div class="kpi-l">Peças Total</div></div>
+      <div class="kpi-box kpi-a"><div class="kpi-v">${pctA}%</div><div class="kpi-l">Classe A</div></div>
+      <div class="kpi-box"><div class="kpi-v">${pctB}%</div><div class="kpi-l">Classe B</div></div>
+      <div class="kpi-box kpi-c"><div class="kpi-v">${pctC}%</div><div class="kpi-l">Classe C</div></div>
+    </div>
+
+    ${transporteInfo.length > 0 ? '<div class="transport">' + transporteInfo.join('<br>') + '</div>' : ''}
+
+    <!-- Ranking de Frigoríficos -->
+    <div class="section">
+      <div class="section-title">Ranking de Fornecedores (maior → menor volume)</div>
+      <table>
+        <thead><tr><th>#</th><th>Frigorífico</th><th class="right">Embarques</th><th class="right">Peças</th><th class="right">%A</th><th class="right">%B</th><th class="right">%C</th><th>Classificação</th><th>Distribuição</th></tr></thead>
+        <tbody>${ranking.map((f,i) => {
+          const cls = f.pctA >= 70 ? 'a' : f.pctA >= 30 ? 'b' : 'c';
+          return `<tr>
+            <td class="bold">${i+1}</td>
+            <td class="bold">${f.nome}</td>
+            <td class="right">${f.embarques}</td>
+            <td class="right bold">${f.pecas.toLocaleString('pt-BR')}</td>
+            <td class="right" style="color:#009E73">${f.pctA}%</td>
+            <td class="right" style="color:#E69F00">${f.pctB}%</td>
+            <td class="right" style="color:#D55E00">${f.pctC}%</td>
+            <td><span class="cls-${cls}">${cls.toUpperCase()}</span></td>
+            <td><div class="bar-wrap"><div class="bar-fill" style="width:${f.pctA}%;background:#009E73;float:left;"></div><div class="bar-fill" style="width:${f.pctB}%;background:#E69F00;float:left;"></div><div class="bar-fill" style="width:${f.pctC}%;background:#D55E00;float:left;"></div></div></td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+
+    <!-- Detalhamento por Carga -->
+    <div class="section">
+      <div class="section-title">Detalhamento por Carga</div>
+      <table>
+        <thead><tr><th>Carga</th><th>Data</th><th>Frigorífico</th><th class="right">Cnt Frigo</th><th class="right">Cnt Classic</th><th class="right">Pcs A</th><th class="right">%A</th><th class="right">Pcs B</th><th class="right">%B</th><th class="right">Pcs C</th><th class="right">%C</th><th class="right">Repasse</th><th>Class.</th></tr></thead>
+        <tbody>${dadosOrdenados.map(r => {
+          const cls = (r.classificacao||'').toLowerCase();
+          return `<tr>
+            <td class="bold">${r.numero_carga||''}</td>
+            <td>${r.data_embarque||''}</td>
+            <td>${r.frigorifico||''}</td>
+            <td class="right">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>
+            <td class="right bold">${(r.cnt_classic||0).toLocaleString('pt-BR')}</td>
+            <td class="right">${(r.pcs_a||0).toLocaleString('pt-BR')}</td>
+            <td class="right" style="color:#009E73">${(r.pct_a||0).toFixed(1)}%</td>
+            <td class="right">${(r.pcs_b||0).toLocaleString('pt-BR')}</td>
+            <td class="right" style="color:#E69F00">${(r.pct_b||0).toFixed(1)}%</td>
+            <td class="right">${(r.pcs_c||0).toLocaleString('pt-BR')}</td>
+            <td class="right" style="color:#D55E00">${(r.pct_c||0).toFixed(1)}%</td>
+            <td class="right">${(r.repasse||0).toLocaleString('pt-BR')}</td>
+            <td><span class="cls-${cls}">${r.classificacao||'—'}</span></td></tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>
+
+    <div class="footer">Classic Importação e Exportação de Couros · Controle de Qualidade · Gerado automaticamente</div>
+    <script>setTimeout(()=>window.print(),400)<\/script>
+  </body></html>`);
+  w.document.close();
 }
 
 // ── Registros ──

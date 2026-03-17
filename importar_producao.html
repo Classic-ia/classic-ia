@@ -1,0 +1,692 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Produção WRPRD600 — Classic CQ</title>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #1e1e1e;
+    --border2: #2a2a2a; --text: #e8e8e8; --muted: #666;
+    --accent: #c8a96e; --accent2: #a07840;
+    --success: #2a7a4a; --success-text: #4ade80;
+    --error: #7a2a2a; --error-text: #f87171;
+    --warn: #7a6020; --warn-text: #fbbf24;
+    --info: #1e3a5f; --info-text: #60a5fa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--text); font-family: 'Inter', sans-serif; min-height: 100vh; }
+
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--border2);
+    padding: 12px 24px; display: flex; align-items: center;
+    justify-content: space-between; position: sticky; top: 0; z-index: 100;
+  }
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left a { color: var(--muted); font-size: 12px; text-decoration: none; letter-spacing: 0.1em; }
+  .header-left a:hover { color: var(--accent); }
+  .header-sep { color: var(--border2); }
+  .header-mod { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 16px; }
+  #headerUser { font-size: 12px; color: var(--muted); }
+  .btn-logout {
+    background: transparent; border: 1px solid var(--border2); border-radius: 2px;
+    color: var(--muted); font-size: 11px; padding: 6px 12px; cursor: pointer;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .btn-logout:hover { border-color: var(--accent); color: var(--accent); }
+
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; }
+
+  .page-title {
+    font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800;
+    color: var(--text); letter-spacing: 0.05em; margin-bottom: 6px;
+  }
+  .page-sub { font-size: 13px; color: var(--muted); margin-bottom: 32px; }
+
+  .drop-zone {
+    border: 2px dashed var(--border2); border-radius: 8px;
+    padding: 48px 24px; text-align: center; cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: var(--surface); margin-bottom: 24px;
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent); background: rgba(200,169,110,0.05);
+  }
+  .drop-icon { font-size: 40px; margin-bottom: 12px; }
+  .drop-title { font-family: 'Syne', sans-serif; font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 8px; }
+  .drop-sub { font-size: 13px; color: var(--muted); }
+  .drop-sub span { color: var(--accent); text-decoration: underline; cursor: pointer; }
+  #fileInput { display: none; }
+
+  .info-box {
+    background: var(--info); border: 1px solid rgba(96,165,250,0.3);
+    border-radius: 6px; padding: 14px 16px; margin-bottom: 24px;
+    font-size: 13px; color: var(--info-text); line-height: 1.6;
+  }
+  .info-box strong { font-weight: 600; }
+
+  .preview-card {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 8px; overflow: hidden; margin-bottom: 24px;
+  }
+  .preview-header {
+    padding: 14px 20px; border-bottom: 1px solid var(--border2);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .preview-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--text); }
+  .badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    font-weight: 600; letter-spacing: 0.05em;
+  }
+  .badge-ok { background: rgba(74,222,128,0.1); color: var(--success-text); border: 1px solid rgba(74,222,128,0.2); }
+
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th {
+    background: #1a1a1a; color: var(--muted); font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px;
+    padding: 10px 14px; text-align: left; border-bottom: 1px solid var(--border2);
+    white-space: nowrap;
+  }
+  td { padding: 10px 14px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+
+  /* KPI strip */
+  .kpi-strip {
+    display: flex; gap: 12px; margin-bottom: 24px; flex-wrap: wrap;
+  }
+  .kpi-box {
+    flex: 1; min-width: 140px;
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 6px; padding: 16px; text-align: center;
+  }
+  .kpi-val { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; color: var(--accent); }
+  .kpi-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+  .alert {
+    border-radius: 6px; padding: 12px 16px; font-size: 13px;
+    margin-bottom: 16px; display: flex; gap: 10px; align-items: flex-start;
+  }
+  .alert-error { background: var(--error); border: 1px solid rgba(248,113,113,0.3); color: var(--error-text); }
+  .alert-success { background: var(--success); border: 1px solid rgba(74,222,128,0.3); color: var(--success-text); }
+  .alert-warn { background: var(--warn); border: 1px solid rgba(251,191,36,0.3); color: var(--warn-text); }
+  .alert-icon { font-size: 16px; flex-shrink: 0; }
+
+  .btn-row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .btn {
+    padding: 12px 24px; border-radius: 4px; font-size: 13px;
+    font-weight: 600; cursor: pointer; letter-spacing: 0.05em;
+    text-transform: uppercase; border: none; transition: opacity 0.2s, transform 0.1s;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1000; }
+  .btn-primary:hover:not(:disabled) { opacity: 0.9; }
+  .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn-ghost { background: transparent; border: 1px solid var(--border2); color: var(--muted); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+
+  .progress-wrap { margin-top: 16px; display: none; }
+  .progress-label { font-size: 12px; color: var(--muted); margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .progress-bar { height: 4px; background: var(--border2); border-radius: 2px; overflow: hidden; }
+  .progress-fill { height: 100%; background: linear-gradient(90deg, var(--accent), var(--accent2)); border-radius: 2px; transition: width 0.3s; }
+
+  .result-card {
+    background: var(--surface); border: 1px solid var(--border2);
+    border-radius: 8px; padding: 24px; margin-top: 24px; display: none;
+  }
+  .result-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; margin-top: 16px; }
+  .result-item { text-align: center; }
+  .result-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; }
+  .result-label { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .num-ok { color: var(--success-text); }
+  .num-skip { color: var(--warn-text); }
+  .num-err { color: var(--error-text); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="app.html">← MENU</a>
+    <span class="header-sep">|</span>
+    <span class="header-mod">IMPORTAR PRODUÇÃO WRPRD600</span>
+  </div>
+  <div class="header-right">
+    <span id="headerUser">Carregando...</span>
+    <button class="btn-logout" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">Importar Produção Individual</div>
+  <div class="page-sub">Importa o relatório <strong style="color:var(--accent)">WRPRD600</strong> do ATAK — produção por funcionário, produto, horas e quantidade</div>
+
+  <div class="info-box">
+    <strong>📋 Formato esperado:</strong> Planilha Excel (.xlsx) exportada do ATAK — relatório WRPRD600.
+    Contém blocos por funcionário com código, produto, horas trabalhadas e quantidade produzida.
+    <br><strong>Registros já existentes (mesmo funcionário + data + produto) serão ignorados automaticamente.</strong>
+  </div>
+
+  <div id="alerts"></div>
+
+  <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+    <div class="drop-icon">🏭</div>
+    <div class="drop-title">Arraste o WRPRD600 aqui</div>
+    <div class="drop-sub">ou <span>clique para selecionar</span> · .xlsx · .xls</div>
+  </div>
+  <input type="file" id="fileInput" accept=".xlsx,.xls,.XLS,.XLSX">
+
+  <!-- KPIs -->
+  <div class="kpi-strip" id="kpiStrip" style="display:none">
+    <div class="kpi-box"><div class="kpi-val" id="kpiDias">0</div><div class="kpi-lbl">Dias</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiFuncionarios">0</div><div class="kpi-lbl">Funcionários</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiRegistros">0</div><div class="kpi-lbl">Registros</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiPecas">0</div><div class="kpi-lbl">Peças Total</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiHoras">0</div><div class="kpi-lbl">Horas Total</div></div>
+    <div class="kpi-box"><div class="kpi-val" id="kpiMedia">0</div><div class="kpi-lbl">Pçs/Hora</div></div>
+  </div>
+
+  <!-- Preview -->
+  <div id="previewSection" style="display:none">
+    <div class="preview-card">
+      <div class="preview-header">
+        <div>
+          <div class="preview-title" id="previewTitle">Pré-visualização</div>
+          <div style="font-size:11px;color:var(--muted);margin-top:3px;" id="previewMeta"></div>
+        </div>
+        <span class="badge badge-ok" id="previewBadge"></span>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Data</th>
+              <th>Cód.</th>
+              <th>Funcionário</th>
+              <th>Produto</th>
+              <th>Horas</th>
+              <th>Quantidade</th>
+              <th>Pçs/Hora</th>
+            </tr>
+          </thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnImportar" onclick="importar()">
+        ⬆ Importar para o sistema
+      </button>
+      <button class="btn btn-ghost" onclick="resetar()">✕ Cancelar</button>
+    </div>
+
+    <div class="progress-wrap" id="progressWrap">
+      <div class="progress-label">
+        <span id="progressLabel">Importando...</span>
+        <span id="progressPct">0%</span>
+      </div>
+      <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+    </div>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <div style="font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text)">Importação concluída</div>
+    <div class="result-grid">
+      <div class="result-item">
+        <div class="result-num num-ok" id="resOk">0</div>
+        <div class="result-label">Importados</div>
+      </div>
+      <div class="result-item">
+        <div class="result-num num-skip" id="resSkip">0</div>
+        <div class="result-label">Já existiam (ignorados)</div>
+      </div>
+      <div class="result-item">
+        <div class="result-num num-err" id="resErr">0</div>
+        <div class="result-label">Erros</div>
+      </div>
+    </div>
+    <div style="margin-top:20px;">
+      <button class="btn btn-primary" onclick="resetar()">Importar outro arquivo</button>
+    </div>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script>
+let dadosParaImportar = [];
+let arquivoAtual = null;
+let importacaoId = null;
+let usuarioAtual = null;
+
+// Auth
+(async () => {
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','industrial'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+  usuarioAtual = usuario;
+  document.getElementById('headerUser').innerHTML =
+    `<strong>${usuario.nome || usuario.email}</strong> · ${usuario.perfil}`;
+})();
+
+// ── Utilitários de rastreabilidade ──
+async function calcularHash(arrayBuffer) {
+  const hashBuffer = await crypto.subtle.digest('SHA-256', arrayBuffer);
+  return Array.from(new Uint8Array(hashBuffer)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function gerarCodigoImportacao() {
+  const now = new Date();
+  const ts = now.toISOString().replace(/[-:T]/g,'').slice(0,14);
+  const rand = Math.random().toString(36).substring(2,5).toUpperCase();
+  return `IMP-${ts}-${rand}`;
+}
+
+async function verificarHashDuplicado(hash) {
+  try {
+    const r = await apiFetch(`cq_importacoes?select=id,codigo_importacao,iniciado_em&arquivo_hash=eq.${hash}&limit=1`);
+    const data = await r.json();
+    return data && data.length > 0 ? data[0] : null;
+  } catch { return null; }
+}
+
+async function criarLoteImportacao(arquivo, totalLinhas, metadados) {
+  const codigo = gerarCodigoImportacao();
+  const payload = {
+    codigo_importacao: codigo,
+    tipo_fonte: 'wrprd600',
+    arquivo_nome: arquivo.name,
+    arquivo_tamanho: arquivo.size,
+    arquivo_hash: arquivo.hash,
+    tabela_destino: 'cq_producao',
+    total_linhas: totalLinhas,
+    status: 'em_progresso',
+    usuario_email: usuarioAtual?.email || null,
+    usuario_nome: usuarioAtual?.user_metadata?.nome || usuarioAtual?.email || null,
+    metadados: metadados || {}
+  };
+  const r = await apiFetch('cq_importacoes', {
+    method: 'POST',
+    headers: { 'Prefer': 'return=representation' },
+    body: JSON.stringify(payload)
+  });
+  if (!r.ok) { console.error('Erro ao criar lote:', await r.text()); return null; }
+  const data = await r.json();
+  return data[0];
+}
+
+async function atualizarLoteImportacao(id, dados) {
+  await apiFetch(`cq_importacoes?id=eq.${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(dados)
+  });
+}
+
+async function registrarErroImportacao(importacaoId, linha, tipo, severidade, mensagem, dadosRegistro) {
+  try {
+    await apiFetch('cq_importacao_erros', {
+      method: 'POST',
+      body: JSON.stringify({
+        importacao_id: importacaoId,
+        linha_arquivo: linha,
+        tipo_erro: tipo,
+        severidade: severidade,
+        mensagem: mensagem,
+        dados_registro: dadosRegistro || null
+      })
+    });
+  } catch(e) { console.error('Erro ao registrar erro:', e); }
+}
+
+function apiFetch(endpoint, options = {}) {
+  options.headers = { 'Prefer': 'return=minimal', ...(options.headers || {}) };
+  return CQ_API.fetch(endpoint, options);
+}
+
+// ── Drag & Drop ──
+const dz = document.getElementById('dropZone');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragover'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+dz.addEventListener('drop', e => {
+  e.preventDefault();
+  dz.classList.remove('dragover');
+  const file = e.dataTransfer.files[0];
+  if (file) processarArquivo(file);
+});
+document.getElementById('fileInput').addEventListener('change', e => {
+  if (e.target.files[0]) processarArquivo(e.target.files[0]);
+});
+
+function mostrarAlerta(tipo, msg) {
+  const icons = { error: '⚠', success: '✓', warn: 'ℹ' };
+  document.getElementById('alerts').innerHTML =
+    `<div class="alert alert-${tipo}"><span class="alert-icon">${icons[tipo]}</span><div>${msg}</div></div>`;
+}
+function limparAlertas() { document.getElementById('alerts').innerHTML = ''; }
+
+function resetar() {
+  dadosParaImportar = [];
+  document.getElementById('previewSection').style.display = 'none';
+  document.getElementById('resultCard').style.display = 'none';
+  document.getElementById('kpiStrip').style.display = 'none';
+  document.getElementById('fileInput').value = '';
+  limparAlertas();
+}
+
+// ── Helpers ──
+function cell(row, col) {
+  return row && row[col] != null ? String(row[col]).trim() : '';
+}
+
+function numBR(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  if (typeof v === 'number') return v;
+  const s = String(v).replace(/\./g, '').replace(',', '.');
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : n;
+}
+
+function formatarDataBR(val) {
+  if (!val) return null;
+  if (typeof val === 'string') {
+    // DD/MM/YYYY
+    const m = val.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})/);
+    if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+    // YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}/.test(val)) return val.slice(0, 10);
+  }
+  if (val instanceof Date && !isNaN(val)) {
+    return val.toISOString().slice(0, 10);
+  }
+  if (typeof val === 'number') {
+    // Excel serial
+    const d = new Date(Math.round((val - 25569) * 86400 * 1000));
+    return d.toISOString().slice(0, 10);
+  }
+  return null;
+}
+
+// ── Parser WRPRD600 ──
+async function processarArquivo(file) {
+  limparAlertas();
+  if (!file.name.match(/\.xlsx?$/i)) {
+    mostrarAlerta('error', 'Selecione um arquivo Excel (.xlsx ou .xls)');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const arrayBuffer = e.target.result;
+      const hash = await calcularHash(arrayBuffer);
+      arquivoAtual = { name: file.name, size: file.size, hash };
+
+      const impExistente = await verificarHashDuplicado(hash);
+      if (impExistente) {
+        const dataImp = new Date(impExistente.iniciado_em).toLocaleString('pt-BR');
+        mostrarAlerta('warn', `Este arquivo já foi importado em <strong>${dataImp}</strong> (lote: ${impExistente.codigo_importacao}). Registros duplicados serão ignorados.`);
+      }
+
+      const wb = XLSX.read(arrayBuffer, { type: 'array', cellDates: true });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const raw = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null, raw: true });
+
+      // Parse WRPRD600 structure
+      const registros = [];
+      let dataAtual = null;
+      let funcCodigo = null;
+      let funcNome = null;
+
+      for (let i = 0; i < raw.length; i++) {
+        const row = raw[i];
+        if (!row) continue;
+
+        const colA = cell(row, 0);
+        const colB = cell(row, 1);
+        const colC = cell(row, 2);
+        const colD = cell(row, 3);
+
+        // Skip empty rows
+        if (!colA && !colB) continue;
+
+        // 1. DATA DE PRODUCAO: DD/MM/YYYY
+        if (colA.toUpperCase().indexOf('DATA DE PRODUCAO') !== -1) {
+          const match = colA.match(/(\d{1,2}[\/\-]\d{1,2}[\/\-]\d{4})/);
+          if (match) {
+            dataAtual = formatarDataBR(match[1]);
+          } else {
+            // Date might be in col B or as a Date object
+            for (let c = 0; c < row.length; c++) {
+              if (row[c] instanceof Date) {
+                dataAtual = formatarDataBR(row[c]);
+                break;
+              }
+            }
+          }
+          continue;
+        }
+
+        // 2. FUNCIONARIO: 86010 - ADILSON BUENO DOS SANTOS
+        if (colA.toUpperCase().indexOf('FUNCIONARIO') !== -1) {
+          const match = colA.match(/(\d{4,6})\s*-\s*(.+)/);
+          if (match) {
+            funcCodigo = match[1].trim();
+            funcNome = match[2].trim();
+          }
+          continue;
+        }
+
+        // 3. Skip TOTAL lines
+        if (colA.toUpperCase().indexOf('TOTAL') !== -1) continue;
+
+        // 4. Skip header rows (HORAS TRABALHADAS, QUANTIDADE, etc.)
+        if (colC && colC.toUpperCase().indexOf('HORAS TRABALHADAS') !== -1) continue;
+
+        // 5. QTDE/HORA line (summary) - skip
+        if (colB && colB.toUpperCase().indexOf('QTDE/HORA') !== -1) continue;
+
+        // 6. Data row: col A = product code (numeric), col B = product name, col C = hours text, col D = quantity
+        const codProduto = colA.replace(/[^\d]/g, '');
+        if (codProduto.length >= 3 && funcCodigo && dataAtual && colB) {
+          const horasText = colC;
+          let horas = 0;
+          if (horasText) {
+            const hMatch = horasText.toString().match(/(\d+)/);
+            if (hMatch) horas = parseInt(hMatch[1]);
+          }
+          const quantidade = numBR(colD);
+          const qtdeHora = horas > 0 ? Math.round((quantidade / horas) * 100) / 100 : 0;
+
+          registros.push({
+            data_producao: dataAtual,
+            cod_funcionario: funcCodigo,
+            nome_funcionario: funcNome,
+            cod_produto: codProduto,
+            nome_produto: colB,
+            horas: horas,
+            quantidade: Math.round(quantidade * 100) / 100,
+            qtde_hora: qtdeHora,
+            _linha: i + 1
+          });
+        }
+      }
+
+      if (registros.length === 0) {
+        mostrarAlerta('error', 'Nenhum registro de produção encontrado. Verifique se o arquivo é um WRPRD600.');
+        return;
+      }
+
+      dadosParaImportar = registros;
+      renderizarPreview(registros, file.name);
+
+    } catch(err) {
+      mostrarAlerta('error', 'Erro ao ler planilha: ' + err.message);
+      console.error(err);
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function renderizarPreview(registros, nomeArquivo) {
+  // KPIs
+  const dias = new Set(registros.map(r => r.data_producao));
+  const funcs = new Set(registros.map(r => r.cod_funcionario));
+  const totalPecas = registros.reduce((s, r) => s + r.quantidade, 0);
+  const totalHoras = registros.reduce((s, r) => s + r.horas, 0);
+  const mediaPH = totalHoras > 0 ? (totalPecas / totalHoras) : 0;
+
+  document.getElementById('kpiDias').textContent = dias.size;
+  document.getElementById('kpiFuncionarios').textContent = funcs.size;
+  document.getElementById('kpiRegistros').textContent = registros.length;
+  document.getElementById('kpiPecas').textContent = totalPecas.toLocaleString('pt-BR');
+  document.getElementById('kpiHoras').textContent = totalHoras.toLocaleString('pt-BR');
+  document.getElementById('kpiMedia').textContent = mediaPH.toFixed(1);
+  document.getElementById('kpiStrip').style.display = 'flex';
+
+  // Preview table
+  document.getElementById('previewTitle').textContent = nomeArquivo;
+  document.getElementById('previewMeta').textContent =
+    `${dias.size} dias · ${funcs.size} funcionários · ${registros.length} registros`;
+  document.getElementById('previewBadge').textContent = registros.length + ' registros';
+
+  const tbody = document.getElementById('previewBody');
+  const mostra = registros.slice(0, 30);
+  tbody.innerHTML = mostra.map((r, i) => `<tr>
+    <td style="color:var(--muted)">${i+1}</td>
+    <td>${r.data_producao ? r.data_producao.split('-').reverse().join('/') : '—'}</td>
+    <td style="color:var(--accent);font-family:monospace">${r.cod_funcionario}</td>
+    <td>${r.nome_funcionario}</td>
+    <td>${r.nome_produto}</td>
+    <td style="text-align:right">${r.horas}h</td>
+    <td style="text-align:right;font-weight:600">${r.quantidade.toLocaleString('pt-BR')}</td>
+    <td style="text-align:right;color:var(--accent)">${r.qtde_hora.toFixed(1)}</td>
+  </tr>`).join('') +
+  (registros.length > 30 ? `<tr><td colspan="8" style="text-align:center;color:var(--muted);font-size:11px;">… mais ${registros.length - 30} registros</td></tr>` : '');
+
+  document.getElementById('previewSection').style.display = 'block';
+  document.getElementById('resultCard').style.display = 'none';
+}
+
+// ── Importação ──
+async function importar() {
+  const btn = document.getElementById('btnImportar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Importando...';
+
+  const progressWrap = document.getElementById('progressWrap');
+  const progressFill = document.getElementById('progressFill');
+  const progressLabel = document.getElementById('progressLabel');
+  const progressPct = document.getElementById('progressPct');
+  progressWrap.style.display = 'block';
+
+  let importados = 0, duplicados = 0, erros = 0;
+
+  try {
+    // Criar lote de importação
+    const lote = await criarLoteImportacao(arquivoAtual, dadosParaImportar.length, {
+      dias: [...new Set(dadosParaImportar.map(r => r.data_producao))],
+      funcionarios: [...new Set(dadosParaImportar.map(r => r.cod_funcionario))].length
+    });
+    importacaoId = lote?.id || null;
+
+    const total = dadosParaImportar.length;
+
+    for (let i = 0; i < total; i++) {
+      const r = dadosParaImportar[i];
+      const pct = Math.round(((i+1)/total)*100);
+      progressFill.style.width = pct + '%';
+      progressPct.textContent = pct + '%';
+      progressLabel.textContent = `${i+1} de ${total}: ${r.nome_funcionario}`;
+
+      try {
+        const payload = {
+          data_producao: r.data_producao,
+          cod_funcionario: r.cod_funcionario,
+          nome_funcionario: r.nome_funcionario,
+          cod_produto: r.cod_produto,
+          nome_produto: r.nome_produto,
+          horas: r.horas,
+          quantidade: r.quantidade,
+          qtde_hora: r.qtde_hora,
+          origem_dado: 'wrprd600',
+          importacao_id: importacaoId,
+          arquivo_origem: arquivoAtual?.name || null
+        };
+
+        const res = await apiFetch('cq_producao', {
+          method: 'POST',
+          headers: {
+            'Prefer': 'return=minimal',
+            'on_conflict': 'data_producao,cod_funcionario,cod_produto',
+            'resolution': 'ignore-duplicates'
+          },
+          body: JSON.stringify(payload)
+        });
+
+        if (res.ok || res.status === 201) {
+          importados++;
+        } else if (res.status === 409) {
+          duplicados++;
+          if (importacaoId) {
+            await registrarErroImportacao(importacaoId, r._linha, 'duplicata', 'aviso',
+              `Registro já existe: ${r.cod_funcionario} / ${r.data_producao} / ${r.cod_produto}`,
+              { cod_funcionario: r.cod_funcionario, data: r.data_producao });
+          }
+        } else {
+          erros++;
+          const errBody = await res.text();
+          console.error('Insert error:', errBody);
+          if (importacaoId) {
+            await registrarErroImportacao(importacaoId, r._linha, 'insercao', 'erro',
+              `Falha ao inserir: ${errBody.substring(0, 200)}`,
+              { cod_funcionario: r.cod_funcionario });
+          }
+        }
+      } catch(e) {
+        erros++;
+        console.error('Exception:', e);
+      }
+    }
+
+    // Atualizar lote
+    if (importacaoId) {
+      await atualizarLoteImportacao(importacaoId, {
+        total_importados: importados,
+        total_duplicados: duplicados,
+        total_erros: erros,
+        status: erros > 0 ? 'concluido_com_erros' : 'concluido',
+        concluido_em: new Date().toISOString()
+      });
+    }
+  } catch(e) {
+    console.error('Erro geral:', e);
+    mostrarAlerta('error', 'Erro durante a importação: ' + e.message);
+  }
+
+  // Resultados
+  document.getElementById('resOk').textContent = importados;
+  document.getElementById('resSkip').textContent = duplicados;
+  document.getElementById('resErr').textContent = erros;
+  document.getElementById('resultCard').style.display = 'block';
+
+  if (importados > 0) {
+    mostrarAlerta('success', `${importados} registros de produção importados com sucesso!`);
+  }
+
+  progressWrap.style.display = 'none';
+  btn.disabled = false;
+  btn.innerHTML = '⬆ Importar para o sistema';
+}
+</script>
+</body>
+</html>

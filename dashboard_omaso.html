@@ -204,6 +204,12 @@ canvas{max-height:280px;}
     <div class="alert-body">
       <div class="alert-title">Alerta de Qualidade — %C acima de 40%</div>
       <ul class="alert-list" id="alertList"></ul>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+        <button onclick="enviarAlertasCQ()" id="btnEnviarAlerta" class="btn-hd primary" style="border-color:var(--cls-c);color:#fff;background:rgba(239,68,68,0.25);font-size:11px;padding:8px 16px;">
+          📩 Enviar Alertas → Fila de Inspeções
+        </button>
+        <span id="alertEnvioStatus" style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;"></span>
+      </div>
     </div>
   </div>
 
@@ -255,7 +261,7 @@ canvas{max-height:280px;}
       <div class="card-title" style="color:var(--cls-c);">Top 5 — Pior %C <span class="card-sub">fornecedores com mais classe C</span></div>
       <div class="table-wrap">
         <table class="worst-table">
-          <thead><tr><th>#</th><th>Frigorífico</th><th style="text-align:right">Peças</th><th style="text-align:right">Pçs C</th><th style="text-align:right">%C</th><th>Status</th><th>Ação</th></tr></thead>
+          <thead><tr><th>#</th><th>Frigorífico</th><th>Pedido</th><th style="text-align:right">Peças</th><th style="text-align:right">Pçs C</th><th style="text-align:right">%C</th><th>Status</th><th>Ação</th></tr></thead>
           <tbody id="top5Body"></tbody>
         </table>
       </div>
@@ -290,7 +296,7 @@ canvas{max-height:280px;}
     <div class="card-title">Ranking Completo <span class="card-sub" id="rankSub">pior → melhor (%C desc)</span></div>
     <div class="table-wrap">
       <table class="rank-table">
-        <thead><tr><th>#</th><th>Frigorífico</th><th>Status</th><th style="text-align:right">Emb.</th><th style="text-align:right">Peças</th><th style="text-align:right">Pçs A</th><th style="text-align:right">%A</th><th style="text-align:right">Pçs B</th><th style="text-align:right">%B</th><th style="text-align:right">Pçs C</th><th style="text-align:right">%C</th><th style="width:120px">Distribuição</th><th>Variação</th><th>Ação</th></tr></thead>
+        <thead><tr><th>#</th><th>Frigorífico</th><th>Pedido</th><th>Status</th><th style="text-align:right">Emb.</th><th style="text-align:right">Peças</th><th style="text-align:right">Pçs A</th><th style="text-align:right">%A</th><th style="text-align:right">Pçs B</th><th style="text-align:right">%B</th><th style="text-align:right">Pçs C</th><th style="text-align:right">%C</th><th style="width:120px">Distribuição</th><th>Variação</th><th>Ação</th></tr></thead>
         <tbody id="rankBody"></tbody>
       </table>
     </div>
@@ -422,6 +428,10 @@ function cargaLabel(numeroCarga) {
   const pedido = (todosRegistros.find(r => r.numero_carga === numeroCarga && r.numero_pedido) || {}).numero_pedido || '';
   return pedido ? `CG ${numeroCarga}-${pedido}` : `CG ${numeroCarga}`;
 }
+function pedidoLabel(pedidos) {
+  if (!pedidos || pedidos.size === 0) return '';
+  return [...pedidos].join(', ');
+}
 
 // ── Filtros ──
 function popularFiltros() {
@@ -488,7 +498,7 @@ function buildFrigoStats(dados) {
   const stats = {};
   dados.forEach(r => {
     const k = r.frigorifico || '?';
-    if (!stats[k]) stats[k] = { emb:0, pecas:0, a:0, b:0, c:0, cntFrigo:0, cntClassic:0, cargas: new Set(), pctC_list: [] };
+    if (!stats[k]) stats[k] = { emb:0, pecas:0, a:0, b:0, c:0, cntFrigo:0, cntClassic:0, cargas: new Set(), pedidos: new Set(), pctC_list: [] };
     stats[k].emb++;
     stats[k].pecas += r.cnt_classic || 0;
     stats[k].a += r.pcs_a || 0;
@@ -497,6 +507,7 @@ function buildFrigoStats(dados) {
     stats[k].cntFrigo += r.cnt_frigo || 0;
     stats[k].cntClassic += r.cnt_classic || 0;
     if (r.numero_carga) stats[k].cargas.add(r.numero_carga);
+    if (r.numero_pedido) stats[k].pedidos.add(r.numero_pedido);
     // individual %C per row for variability
     const tot = (r.pcs_a||0) + (r.pcs_b||0) + (r.pcs_c||0);
     if (tot > 0) stats[k].pctC_list.push((r.pcs_c||0) / tot * 100);
@@ -606,7 +617,11 @@ function renderAlerts(frigoStats) {
 
   list.innerHTML = alertas.map(([nome, s]) => {
     const st = s.status;
-    return `<li>${tagStatus(st)} <strong>${nome}</strong> — <span class="alert-pct">${fmtPct(s.pctC)}</span> classe C (${fmtNum(s.c)} de ${fmtNum(s.a+s.b+s.c)} pçs) → ${acaoSugerida(st)}</li>`;
+    const ped = pedidoLabel(s.pedidos);
+    return `<li>${tagStatus(st)} <strong>${nome}</strong>${ped ? ' <span style="color:var(--accent);font-size:10px;">(Ped. '+ped+')</span>' : ''} — <span class="alert-pct">${fmtPct(s.pctC)}</span> classe C
+    <span style="color:var(--muted);font-size:10px;">(${fmtNum(s.c)} de ${fmtNum(s.a+s.b+s.c)} pçs)</span>
+    <span style="font-size:10px;"> · <span style="color:var(--cls-a);">A: ${fmtNum(s.a)}</span> · <span style="color:var(--cls-b);">B: ${fmtNum(s.b)}</span> · <span style="color:var(--cls-c);">C: ${fmtNum(s.c)}</span></span>
+    → ${acaoSugerida(st)}</li>`;
   }).join('');
   banner.classList.add('show');
 }
@@ -666,6 +681,7 @@ function renderCritico(frigoStats, cargaStats) {
   document.getElementById('top5Body').innerHTML = ranking.map((f, i) => `<tr>
     <td class="mono" style="font-weight:700;">${i+1}</td>
     <td style="font-weight:600;">${f.nome}</td>
+    <td class="mono" style="color:var(--accent);font-size:10px;">${pedidoLabel(f.pedidos)}</td>
     <td class="mono" style="text-align:right">${fmtNum(f.a+f.b+f.c)}</td>
     <td class="mono" style="text-align:right;color:${CLS_C};font-weight:700;">${fmtNum(f.c)}</td>
     <td class="mono" style="text-align:right;color:${CLS_C};font-weight:700;font-size:13px;">${fmtPct(f.pctC)}</td>
@@ -712,6 +728,7 @@ function renderRanking(frigoStats) {
     return `<tr>
       <td class="mono" style="font-weight:700;">${i+1}</td>
       <td style="font-weight:600;">${f.nome}</td>
+      <td class="mono" style="color:var(--accent);font-size:10px;">${pedidoLabel(f.pedidos)}</td>
       <td>${tagStatus(f.status)}</td>
       <td class="mono" style="text-align:right">${f.emb}</td>
       <td class="mono" style="text-align:right;font-weight:700;">${fmtNum(f.pecas)}</td>
@@ -1068,10 +1085,11 @@ ${criticos.length > 0 ? `
     <div class="bloco-count">${criticos.length} fornecedor(es)</div>
   </div>
   <table>
-    <thead><tr><th>#</th><th>Frigorífico</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
+    <thead><tr><th>#</th><th>Frigorífico</th><th>Pedido</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
     <tbody>${criticos.map((f,i) => `<tr style="background:rgba(220,38,38,0.04);">
       <td class="bold">${i+1}</td>
       <td class="bold">${f.nome}</td>
+      <td style="font-size:8pt;color:#c8a96e;">${pedidoLabel(f.pedidos)}</td>
       <td>${stBadge('CRITICO')}</td>
       <td class="right bold">${fmtNum(f.a+f.b+f.c)}</td>
       <td class="right" style="color:#22c55e">${fmtNum(f.a)}</td>
@@ -1094,10 +1112,11 @@ ${atencao.length > 0 ? `
     <div class="bloco-count">${atencao.length} fornecedor(es)</div>
   </div>
   <table>
-    <thead><tr><th>#</th><th>Frigorífico</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
+    <thead><tr><th>#</th><th>Frigorífico</th><th>Pedido</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
     <tbody>${atencao.map((f,i) => `<tr style="background:rgba(245,158,11,0.04);">
       <td class="bold">${i+1}</td>
       <td class="bold">${f.nome}</td>
+      <td style="font-size:8pt;color:#c8a96e;">${pedidoLabel(f.pedidos)}</td>
       <td>${stBadge('ATENCAO')}</td>
       <td class="right bold">${fmtNum(f.a+f.b+f.c)}</td>
       <td class="right" style="color:#22c55e">${fmtNum(f.a)}</td>
@@ -1186,6 +1205,94 @@ ${oks.length > 0 ? `
 <script>setTimeout(()=>window.print(),500)<\/script>
 </body></html>`);
   w.document.close();
+}
+
+// ══════════════════════════════════════════════════════════
+// ── ENVIAR ALERTAS → FILA DE INSPEÇÕES (cq_alertas_qualidade) ──
+// ══════════════════════════════════════════════════════════
+async function enviarAlertasCQ() {
+  const btn = document.getElementById('btnEnviarAlerta');
+  const statusEl = document.getElementById('alertEnvioStatus');
+  btn.disabled = true;
+  btn.textContent = '⏳ Enviando...';
+  statusEl.textContent = '';
+
+  try {
+    const d = dadosFiltrados;
+    const frigoStats = buildFrigoStats(d);
+    const user = CQAuth?.getUser?.() || {};
+
+    // Fornecedores com %C > limiar de alerta (40%)
+    const alertas = Object.entries(frigoStats)
+      .filter(([, s]) => s.pctC > LIMIAR_C_ALERTA)
+      .sort((a, b) => b[1].pctC - a[1].pctC);
+
+    if (alertas.length === 0) {
+      statusEl.innerHTML = '<span style="color:var(--cls-a);">✓ Nenhum fornecedor acima do limiar</span>';
+      btn.disabled = false;
+      btn.textContent = '📩 Enviar Alertas → Fila de Inspeções';
+      return;
+    }
+
+    let enviados = 0, duplicados = 0, erros = 0;
+
+    for (const [nome, s] of alertas) {
+      const gravidade = s.pctC > LIMIAR_C_CRITICO ? 'critica' : 'atencao';
+      const cargas = [...s.cargas].join(', ');
+      const pedidos = pedidoLabel(s.pedidos);
+      const total = s.a + s.b + s.c;
+
+      const payload = {
+        tipo: 'fornecedor_critico',
+        gravidade,
+        frigorifico: nome,
+        numero_pedido: pedidos || null,
+        numero_carga: cargas || null,
+        total_pecas: total,
+        pcs_a: s.a,
+        pcs_b: s.b,
+        pcs_c: s.c,
+        pct_a: +s.pctA.toFixed(2),
+        pct_b: +s.pctB.toFixed(2),
+        pct_c: +s.pctC.toFixed(2),
+        mensagem: `${nome} — ${fmtPct(s.pctC)} classe C (${fmtNum(s.c)} de ${fmtNum(total)} peças). A: ${fmtNum(s.a)} (${fmtPct(s.pctA)}) · B: ${fmtNum(s.b)} (${fmtPct(s.pctB)}) · C: ${fmtNum(s.c)} (${fmtPct(s.pctC)})`,
+        acao_sugerida: gravidade === 'critica' ? 'ALERTAR CQ — investigar causa raiz, notificar fornecedor' : 'MONITORAR — acompanhar próximas cargas',
+        produto: 'Omaso Bovino',
+        origem: 'dashboard_omaso',
+        criado_por: user.nome || user.email || 'sistema',
+      };
+
+      try {
+        // Check for existing open alert for same supplier today
+        const hoje = new Date().toISOString().split('T')[0];
+        const existing = await CQ_API.get(`cq_alertas_qualidade?frigorifico=eq.${encodeURIComponent(nome)}&status=in.(aberto,visto,em_tratamento)&criado_em=gte.${hoje}T00:00:00`);
+
+        if (existing && existing.length > 0) {
+          duplicados++;
+          continue;
+        }
+
+        await CQ_API.post('cq_alertas_qualidade', payload);
+        enviados++;
+      } catch (e) {
+        console.error('Erro ao enviar alerta para', nome, e);
+        erros++;
+      }
+    }
+
+    let msg = `<span style="color:var(--cls-a);">✓ ${enviados} alerta(s) enviado(s)</span>`;
+    if (duplicados > 0) msg += ` · <span style="color:var(--cls-b);">${duplicados} já existente(s)</span>`;
+    if (erros > 0) msg += ` · <span style="color:var(--cls-c);">${erros} erro(s)</span>`;
+    msg += ' → <a href="fila_inspecoes.html" style="color:var(--accent);text-decoration:underline;">Ver na Fila</a>';
+    statusEl.innerHTML = msg;
+
+  } catch (e) {
+    console.error('Erro geral:', e);
+    statusEl.innerHTML = '<span style="color:var(--cls-c);">❌ Erro ao enviar alertas: ' + e.message + '</span>';
+  }
+
+  btn.disabled = false;
+  btn.textContent = '📩 Enviar Alertas → Fila de Inspeções';
 }
 </script>
 </body>

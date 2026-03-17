@@ -179,6 +179,63 @@ body {
 .toast.ok  { border-color: #27ae60; color: #27ae60; }
 @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
 
+/* ── ALERTAS QUALIDADE ────────────── */
+.alertas-section {
+  margin-bottom: 16px;
+}
+.alertas-title {
+  font-size: 12px; font-weight: 700; color: #e74c3c;
+  font-family: 'Syne', sans-serif; letter-spacing: .06em;
+  text-transform: uppercase; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 8px;
+}
+.alertas-title .badge-count {
+  background: #e74c3c; color: #fff; font-size: 10px;
+  padding: 2px 8px; border-radius: 10px; font-family: 'DM Sans', sans-serif;
+}
+.alerta-card {
+  background: var(--bg2); border: 1px solid rgba(231,76,60,0.3);
+  border-left: 3px solid #e74c3c; border-radius: var(--radius);
+  padding: 14px 16px; margin-bottom: 8px; transition: all .2s;
+}
+.alerta-card.atencao { border-left-color: #f39c12; border-color: rgba(243,156,18,0.3); }
+.alerta-card .alerta-header {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.alerta-card .alerta-frigo { font-size: 14px; font-weight: 700; }
+.alerta-card .alerta-grav {
+  font-size: 9px; padding: 2px 8px; border-radius: 4px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+}
+.alerta-grav.critica { background: rgba(231,76,60,.15); color: #e74c3c; border: 1px solid rgba(231,76,60,.3); }
+.alerta-grav.atencao { background: rgba(243,156,18,.15); color: #f39c12; border: 1px solid rgba(243,156,18,.3); }
+.alerta-card .alerta-data { font-size: 10px; color: var(--muted); margin-left: auto; }
+.alerta-card .alerta-metricas {
+  display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; margin-bottom: 8px;
+}
+.alerta-card .alerta-metricas .met { display: flex; align-items: center; gap: 4px; }
+.alerta-card .alerta-metricas .met-label { color: var(--muted); font-size: 10px; }
+.alerta-card .alerta-metricas .met-val { font-weight: 700; font-family: monospace; }
+.alerta-card .alerta-acoes {
+  display: flex; gap: 8px; align-items: center;
+}
+.alerta-card .alerta-acoes button {
+  font-size: 11px; padding: 6px 14px; border-radius: 6px;
+  border: 1px solid var(--border2); background: var(--bg3);
+  color: var(--text); cursor: pointer; transition: all .15s;
+}
+.alerta-card .alerta-acoes button:hover {
+  border-color: var(--accent); color: var(--accent);
+}
+.alerta-card .alerta-acoes .btn-resolver {
+  background: rgba(39,174,96,.12); border-color: rgba(39,174,96,.4); color: #27ae60;
+}
+.alerta-card .alerta-acoes .btn-resolver:hover { background: rgba(39,174,96,.25); }
+.alerta-card .alerta-status-tag {
+  font-size: 9px; padding: 2px 8px; border-radius: 4px;
+  font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+}
+
 /* ── RESPONSIVE ──────────────────── */
 @media (max-width: 600px) {
   .page { padding: 12px 8px; }
@@ -241,6 +298,15 @@ body {
     ">+ Nova Inspeção</a>
   </div>
 
+  <!-- ALERTAS DE QUALIDADE -->
+  <div class="alertas-section" id="alertas-section" style="display:none;">
+    <div class="alertas-title">
+      🚨 Alertas de Qualidade — Omaso
+      <span class="badge-count" id="alertas-count">0</span>
+    </div>
+    <div id="alertas-container"></div>
+  </div>
+
   <!-- LISTA -->
   <div id="lista-container">
     <div class="loading">
@@ -289,6 +355,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('filtro-status').onchange = () => { paginaAtual = 1; carregarLista(); };
 
   // Carregar
+  await carregarAlertasQualidade();
   await carregarContadores();
   await carregarLista();
 });
@@ -471,6 +538,99 @@ function limparFiltros() {
   paginaAtual = 1;
   carregarContadores();
   carregarLista();
+}
+
+// ── ALERTAS DE QUALIDADE ──────────────────────────────────
+async function carregarAlertasQualidade() {
+  const section = document.getElementById('alertas-section');
+  const container = document.getElementById('alertas-container');
+  const countBadge = document.getElementById('alertas-count');
+
+  try {
+    const alertas = await CQ_API.get('cq_alertas_qualidade?status=in.(aberto,visto,em_tratamento)&order=criado_em.desc&limit=50');
+
+    if (!alertas || alertas.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    countBadge.textContent = alertas.length;
+
+    container.innerHTML = alertas.map(a => {
+      const isC = a.gravidade === 'critica';
+      const gravClass = isC ? 'critica' : 'atencao';
+      const cardClass = isC ? '' : 'atencao';
+      const dataFmt = new Date(a.criado_em).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' });
+
+      const statusTag = a.status === 'aberto'
+        ? '<span class="alerta-status-tag" style="background:rgba(231,76,60,.15);color:#e74c3c;border:1px solid rgba(231,76,60,.3);">Aberto</span>'
+        : a.status === 'visto'
+        ? '<span class="alerta-status-tag" style="background:rgba(52,152,219,.15);color:#3498db;border:1px solid rgba(52,152,219,.3);">Visto</span>'
+        : a.status === 'em_tratamento'
+        ? '<span class="alerta-status-tag" style="background:rgba(243,156,18,.15);color:#f39c12;border:1px solid rgba(243,156,18,.3);">Em Tratamento</span>'
+        : '';
+
+      return `<div class="alerta-card ${cardClass}">
+        <div class="alerta-header">
+          <span class="alerta-frigo">${a.frigorifico}</span>
+          <span class="alerta-grav ${gravClass}">${isC ? '🚨 CRÍTICO' : '⚠ ATENÇÃO'}</span>
+          ${statusTag}
+          ${a.numero_pedido ? `<span style="font-size:10px;color:#c8a96e;font-family:monospace;">Ped. ${a.numero_pedido}</span>` : ''}
+          <span class="alerta-data">${dataFmt} · ${a.criado_por || ''}</span>
+        </div>
+        <div class="alerta-metricas">
+          <div class="met"><span class="met-label">Total:</span> <span class="met-val">${(a.total_pecas||0).toLocaleString('pt-BR')}</span></div>
+          <div class="met"><span class="met-label" style="color:#27ae60;">A:</span> <span class="met-val" style="color:#27ae60;">${(a.pcs_a||0).toLocaleString('pt-BR')} (${(a.pct_a||0).toFixed(1)}%)</span></div>
+          <div class="met"><span class="met-label" style="color:#f39c12;">B:</span> <span class="met-val" style="color:#f39c12;">${(a.pcs_b||0).toLocaleString('pt-BR')} (${(a.pct_b||0).toFixed(1)}%)</span></div>
+          <div class="met"><span class="met-label" style="color:#e74c3c;">C:</span> <span class="met-val" style="color:#e74c3c;">${(a.pcs_c||0).toLocaleString('pt-BR')} (${(a.pct_c||0).toFixed(1)}%)</span></div>
+          ${a.numero_carga ? `<div class="met"><span class="met-label">Carga:</span> <span class="met-val">${a.numero_carga}</span></div>` : ''}
+        </div>
+        <div class="alerta-acoes">
+          ${a.status === 'aberto' ? `<button onclick="atualizarAlerta('${a.id}','visto')">👁 Marcar como Visto</button>` : ''}
+          ${a.status !== 'em_tratamento' ? `<button onclick="atualizarAlerta('${a.id}','em_tratamento')">🔧 Em Tratamento</button>` : ''}
+          <button class="btn-resolver" onclick="resolverAlerta('${a.id}')">✓ Resolver</button>
+        </div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    console.error('Erro ao carregar alertas:', e);
+    section.style.display = 'none';
+  }
+}
+
+async function atualizarAlerta(id, novoStatus) {
+  try {
+    await CQ_API.fetch(`cq_alertas_qualidade?id=eq.${id}`, {
+      method: 'PATCH',
+      body: { status: novoStatus, atualizado_em: new Date().toISOString() },
+    });
+    toast(`Alerta atualizado → ${novoStatus}`, 'ok');
+    await carregarAlertasQualidade();
+  } catch (e) {
+    toast('Erro ao atualizar alerta: ' + e.message, 'err');
+  }
+}
+
+async function resolverAlerta(id) {
+  const obs = prompt('Observação da resolução (opcional):');
+  const user = CQAuth.getUser();
+  try {
+    await CQ_API.fetch(`cq_alertas_qualidade?id=eq.${id}`, {
+      method: 'PATCH',
+      body: {
+        status: 'resolvido',
+        resolvido_por: user?.nome || user?.email || 'sistema',
+        data_resolucao: new Date().toISOString(),
+        obs_resolucao: obs || null,
+        atualizado_em: new Date().toISOString(),
+      },
+    });
+    toast('Alerta resolvido ✓', 'ok');
+    await carregarAlertasQualidade();
+  } catch (e) {
+    toast('Erro ao resolver: ' + e.message, 'err');
+  }
 }
 
 // ── TOAST ─────────────────────────────────────────────────

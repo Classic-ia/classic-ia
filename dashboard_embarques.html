@@ -94,6 +94,24 @@ canvas.tall{max-height:340px;}
 .badge-cls-b{background:rgba(230,159,0,0.15);color:var(--cls-b);border:1px solid rgba(230,159,0,0.3);}
 .badge-cls-c{background:rgba(213,94,0,0.15);color:var(--cls-c);border:1px solid rgba(213,94,0,0.3);}
 
+/* Modal Relatório */
+.modal-overlay{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.7);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.open{display:flex;}
+.modal-box{background:var(--s1);border:1px solid var(--border2);border-radius:6px;width:480px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);}
+.modal-hd{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--border);}
+.modal-hd h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.15em;text-transform:uppercase;color:var(--accent);}
+.modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:16px 20px;overflow-y:auto;flex:1;}
+.modal-footer{padding:12px 20px;border-top:1px solid var(--border);display:flex;gap:8px;justify-content:flex-end;align-items:center;}
+.modal-footer .modal-info{margin-right:auto;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+.carga-check{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:3px;cursor:pointer;transition:background .15s;}
+.carga-check:hover{background:var(--s2);}
+.carga-check input[type="checkbox"]{accent-color:var(--accent);width:16px;height:16px;cursor:pointer;}
+.carga-check label{cursor:pointer;font-size:12px;flex:1;display:flex;justify-content:space-between;align-items:center;}
+.carga-check .carga-meta{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);}
+.modal-actions{display:flex;gap:8px;margin-bottom:12px;}
+
 /* Print */
 .print-only{display:none;}
 @media print {
@@ -131,7 +149,7 @@ canvas.tall{max-height:340px;}
   <div class="hd-right">
     <span id="huser">...</span>
     <button class="btn-hd primary" onclick="carregarDados()">Atualizar</button>
-    <button class="btn-hd" onclick="imprimirPeriodo()">Relatório</button>
+    <button class="btn-hd" onclick="abrirModalRelatorio()">Relatório</button>
     <button class="btn-hd" onclick="CQAuth.logout()">Sair</button>
   </div>
 </div>
@@ -178,8 +196,19 @@ canvas.tall{max-height:340px;}
     <div class="kpi"><div class="kpi-label">Frigoríficos</div><div class="kpi-val" id="kFrigo" style="color:var(--info2)">—</div></div>
     <div class="kpi"><div class="kpi-label">Total Peças</div><div class="kpi-val" id="kPecas" style="color:var(--accent)">—</div></div>
     <div class="kpi"><div class="kpi-label">% Classe A</div><div class="kpi-val" id="kPctA" style="color:var(--cls-a)">—</div></div>
+    <div class="kpi"><div class="kpi-label">% Classe B</div><div class="kpi-val" id="kPctB" style="color:var(--cls-b)">—</div></div>
     <div class="kpi"><div class="kpi-label">% Classe C</div><div class="kpi-val" id="kPctC" style="color:var(--cls-c)">—</div></div>
     <div class="kpi"><div class="kpi-label">Cargas</div><div class="kpi-val" id="kCargas" style="color:var(--text)">—</div></div>
+  </div>
+  <!-- KPIs WRLOG510 (Peso/Fardos) -->
+  <div class="kpi-row" id="kpiRowWrlog" style="display:none">
+    <div class="kpi"><div class="kpi-label">Total Fardos</div><div class="kpi-val" id="kFardos" style="color:var(--accent)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Peso Total (kg)</div><div class="kpi-val" id="kPesoTotal" style="color:var(--accent)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Média kg A</div><div class="kpi-val" id="kMediaA" style="color:var(--cls-a)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Média kg B</div><div class="kpi-val" id="kMediaB" style="color:var(--cls-b)">—</div></div>
+    <div class="kpi"><div class="kpi-label">Média kg C</div><div class="kpi-val" id="kMediaC" style="color:var(--cls-c)">—</div></div>
+    <div class="kpi"><div class="kpi-label">% Fardos A</div><div class="kpi-val" id="kPctFA" style="color:var(--cls-a)">—</div></div>
+    <div class="kpi"><div class="kpi-label">% Fardos C</div><div class="kpi-val" id="kPctFC" style="color:var(--cls-c)">—</div></div>
   </div>
 
   <!-- Tabs -->
@@ -261,6 +290,28 @@ canvas.tall{max-height:340px;}
   </div>
 </main>
 
+<!-- Modal Relatório -->
+<div class="modal-overlay" id="modalRelatorio">
+  <div class="modal-box">
+    <div class="modal-hd">
+      <h3>Gerar Relatório</h3>
+      <button class="modal-close" onclick="fecharModalRelatorio()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-actions">
+        <button class="btn-hd primary" onclick="selecionarTodasCargas(true)" style="font-size:10px;">Selecionar Todas</button>
+        <button class="btn-hd" onclick="selecionarTodasCargas(false)" style="font-size:10px;">Limpar Seleção</button>
+      </div>
+      <div id="cargaCheckList"></div>
+    </div>
+    <div class="modal-footer">
+      <span class="modal-info" id="modalCargaInfo">Nenhuma carga selecionada</span>
+      <button class="btn-hd" onclick="fecharModalRelatorio()">Cancelar</button>
+      <button class="btn-hd primary" onclick="gerarRelatorioSelecionado()" id="btnGerarRel">Gerar Relatório</button>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
@@ -272,6 +323,7 @@ const TICK_C = '#666';
 
 let todosRegistros = [];
 let dadosFiltrados = [];
+let dadosWrlog = [];
 let _charts = {};
 
 // ── Auth ──
@@ -304,8 +356,12 @@ function switchTab(name) {
 async function carregarDados() {
   document.getElementById('pageSub').textContent = 'Carregando dados...';
   try {
-    const dados = await CQ_API.get('cq_embarques?order=data_embarque.desc&limit=10000');
+    const [dados, wrlog] = await Promise.all([
+      CQ_API.get('cq_embarques?order=data_embarque.desc&limit=10000'),
+      CQ_API.get('cq_embarques_wrlog?order=created_at.desc').catch(() => [])
+    ]);
     todosRegistros = dados || [];
+    dadosWrlog = wrlog || [];
     popularFiltros();
     aplicarFiltro();
   } catch(e) {
@@ -414,12 +470,61 @@ function renderKPIs(d) {
   const pctA = totalPecas > 0 ? (totalA/totalPecas*100) : 0;
   document.getElementById('kPctA').textContent = pctA.toFixed(1) + '%';
 
+  // % B ponderada
+  const totalB = d.reduce((s,r) => s + (r.pcs_b||0), 0);
+  const pctB = totalPecas > 0 ? (totalB/totalPecas*100) : 0;
+  document.getElementById('kPctB').textContent = pctB.toFixed(1) + '%';
+
   // % C ponderada
   const totalC = d.reduce((s,r) => s + (r.pcs_c||0), 0);
   const pctC = totalPecas > 0 ? (totalC/totalPecas*100) : 0;
   document.getElementById('kPctC').textContent = pctC.toFixed(1) + '%';
 
   document.getElementById('kCargas').textContent = new Set(d.map(r=>r.numero_carga)).size;
+
+  // ── WRLOG510 KPIs (Peso/Fardos) ──
+  renderWrlogKPIs(d);
+}
+
+function renderWrlogKPIs(d) {
+  if (!dadosWrlog || dadosWrlog.length === 0) {
+    document.getElementById('kpiRowWrlog').style.display = 'none';
+    return;
+  }
+
+  // Filtrar WRLOGs por pedidos ativos (matching numero_pedido dos dados filtrados)
+  const pedidosAtivos = [...new Set(d.map(r => r.numero_pedido).filter(Boolean))];
+  let wrFiltrado = dadosWrlog;
+  if (pedidosAtivos.length > 0) {
+    wrFiltrado = dadosWrlog.filter(w => pedidosAtivos.includes(w.numero_pedido));
+  }
+
+  if (wrFiltrado.length === 0) {
+    document.getElementById('kpiRowWrlog').style.display = 'none';
+    return;
+  }
+
+  // Somar todos os WRLOGs filtrados
+  const totFA = wrFiltrado.reduce((s,w) => s + (w.fardos_a||0), 0);
+  const totFB = wrFiltrado.reduce((s,w) => s + (w.fardos_b||0), 0);
+  const totFC = wrFiltrado.reduce((s,w) => s + (w.fardos_c||0), 0);
+  const totPA = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_a||0), 0);
+  const totPB = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_b||0), 0);
+  const totPC = wrFiltrado.reduce((s,w) => s + parseFloat(w.peso_c||0), 0);
+  const totalFardos = totFA + totFB + totFC;
+  const totalPeso = totPA + totPB + totPC;
+
+  const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  document.getElementById('kFardos').textContent = totalFardos.toLocaleString('pt-BR');
+  document.getElementById('kPesoTotal').textContent = fmt(totalPeso);
+  document.getElementById('kMediaA').textContent = totFA > 0 ? fmt(totPA / totFA) : '—';
+  document.getElementById('kMediaB').textContent = totFB > 0 ? fmt(totPB / totFB) : '—';
+  document.getElementById('kMediaC').textContent = totFC > 0 ? fmt(totPC / totFC) : '—';
+  document.getElementById('kPctFA').textContent = totalFardos > 0 ? (totFA / totalFardos * 100).toFixed(1) + '%' : '—';
+  document.getElementById('kPctFC').textContent = totalFardos > 0 ? (totFC / totalFardos * 100).toFixed(1) + '%' : '—';
+
+  document.getElementById('kpiRowWrlog').style.display = 'grid';
 }
 
 // ── Visão Geral ──
@@ -841,7 +946,88 @@ async function uploadRelatorio(numeroCarga, input) {
   }
 }
 
-// ── Relatório por Carga (impressão) ──
+// ── Modal Relatório ──
+function abrirModalRelatorio() {
+  if (dadosFiltrados.length === 0) { alert('Nenhum dado filtrado.'); return; }
+
+  // Montar lista de cargas disponíveis nos dados filtrados
+  const cargaMap = {};
+  dadosFiltrados.forEach(r => {
+    const k = r.numero_carga || '?';
+    if (!cargaMap[k]) cargaMap[k] = { embarques: 0, pecas: 0 };
+    cargaMap[k].embarques++;
+    cargaMap[k].pecas += r.cnt_classic || 0;
+  });
+  const cargas = Object.keys(cargaMap).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const list = document.getElementById('cargaCheckList');
+  list.innerHTML = cargas.map(c => {
+    const s = cargaMap[c];
+    return `<div class="carga-check">
+      <input type="checkbox" id="chkCarga_${c}" value="${c}" onchange="atualizarInfoModal()">
+      <label for="chkCarga_${c}">
+        <span>${cargaLabel(c)}</span>
+        <span class="carga-meta">${s.embarques} emb. · ${s.pecas.toLocaleString('pt-BR')} pçs</span>
+      </label>
+    </div>`;
+  }).join('');
+
+  atualizarInfoModal();
+  document.getElementById('modalRelatorio').classList.add('open');
+}
+
+function fecharModalRelatorio() {
+  document.getElementById('modalRelatorio').classList.remove('open');
+}
+
+// Fechar modal clicando fora
+document.getElementById('modalRelatorio').addEventListener('click', function(e) {
+  if (e.target === this) fecharModalRelatorio();
+});
+
+function selecionarTodasCargas(marcar) {
+  document.querySelectorAll('#cargaCheckList input[type="checkbox"]').forEach(cb => cb.checked = marcar);
+  atualizarInfoModal();
+}
+
+function atualizarInfoModal() {
+  const selecionadas = [...document.querySelectorAll('#cargaCheckList input[type="checkbox"]:checked')].map(cb => cb.value);
+  const info = document.getElementById('modalCargaInfo');
+  const btn = document.getElementById('btnGerarRel');
+  if (selecionadas.length === 0) {
+    info.textContent = 'Nenhuma carga selecionada';
+    btn.style.opacity = '0.5';
+  } else {
+    info.textContent = `${selecionadas.length} carga(s) selecionada(s)`;
+    btn.style.opacity = '1';
+  }
+}
+
+function gerarRelatorioSelecionado() {
+  const selecionadas = [...document.querySelectorAll('#cargaCheckList input[type="checkbox"]:checked')].map(cb => cb.value);
+  if (selecionadas.length === 0) { alert('Selecione pelo menos uma carga.'); return; }
+
+  const dados = dadosFiltrados.filter(r => selecionadas.includes(r.numero_carga));
+  if (dados.length === 0) { alert('Nenhum dado encontrado para as cargas selecionadas.'); return; }
+
+  let titulo;
+  if (selecionadas.length === 1) {
+    const c = selecionadas[0];
+    const pedido = (dados.find(r => r.numero_pedido) || {}).numero_pedido || '';
+    titulo = pedido ? `Carga ${c} - ${pedido}` : `Carga ${c}`;
+  } else {
+    const labels = selecionadas.map(c => {
+      const pedido = (dados.find(r => r.numero_carga === c && r.numero_pedido) || {}).numero_pedido || '';
+      return pedido ? `${c}-${pedido}` : c;
+    });
+    titulo = `Cargas: ${labels.join(', ')}`;
+  }
+
+  fecharModalRelatorio();
+  gerarRelatorio(dados, titulo);
+}
+
+// ── Relatório por Carga (impressão direta da aba Cargas) ──
 function imprimirCarga(numeroCarga) {
   const d = todosRegistros.filter(r => r.numero_carga === numeroCarga);
   if (d.length === 0) { alert('Nenhum dado para esta carga.'); return; }

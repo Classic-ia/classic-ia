@@ -163,7 +163,7 @@ canvas{max-height:280px;}
   <div class="hd-right">
     <span id="huser">...</span>
     <button class="btn-hd primary" onclick="carregarDados()">Atualizar</button>
-    <button class="btn-hd" onclick="window.print()">Imprimir</button>
+    <button class="btn-hd primary" onclick="gerarRelatorioQualidade()" style="border-color:var(--cls-c);color:var(--cls-c);background:rgba(239,68,68,0.06);">🚨 Relatório CQ</button>
     <button class="btn-hd" onclick="CQAuth.logout()">Sair</button>
   </div>
 </div>
@@ -904,6 +904,277 @@ function renderConfiabilidade(frigoStats) {
       }
     }
   });
+}
+
+// ══════════════════════════════════════════════════════════════════
+// ── RELATÓRIO DE QUALIDADE — Gerador de relatório para CQ ──
+// ══════════════════════════════════════════════════════════════════
+function gerarRelatorioQualidade() {
+  const d = dadosFiltrados;
+  if (d.length === 0) { alert('Nenhum dado disponível.'); return; }
+
+  const frigoStats = buildFrigoStats(d);
+  const cargaStats = buildCargaStats(d);
+
+  const totalPecas = d.reduce((s,r) => s + (r.cnt_classic||0), 0);
+  const totalA = d.reduce((s,r) => s + (r.pcs_a||0), 0);
+  const totalB = d.reduce((s,r) => s + (r.pcs_b||0), 0);
+  const totalC = d.reduce((s,r) => s + (r.pcs_c||0), 0);
+  const tp = totalA + totalB + totalC || 1;
+  const pctA = (totalA/tp*100).toFixed(1);
+  const pctB = (totalB/tp*100).toFixed(1);
+  const pctC = (totalC/tp*100).toFixed(1);
+
+  const ranking = Object.entries(frigoStats)
+    .map(([nome, s]) => ({ nome, ...s }))
+    .sort((a,b) => b.pctC - a.pctC);
+
+  const criticos = ranking.filter(f => f.status === 'CRITICO');
+  const atencao = ranking.filter(f => f.status === 'ATENCAO');
+  const oks = ranking.filter(f => f.status === 'OK');
+
+  const datas = d.map(r => r.data_embarque).filter(Boolean).sort();
+  const periodo = datas.length > 0 ? `${fmtData(datas[0])} a ${fmtData(datas[datas.length-1])}` : '—';
+  const cargas = [...new Set(d.map(r => r.numero_carga))].sort((a,b) => a.localeCompare(b,undefined,{numeric:true}));
+  const cargasLabel = cargas.map(c => cargaLabel(c)).join(', ');
+  const dataHoje = new Date().toLocaleDateString('pt-BR');
+  const horaHoje = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
+
+  // Build status badge (for print)
+  function stBadge(status) {
+    if (status === 'CRITICO') return '<span style="background:#dc2626;color:#fff;padding:2px 8px;border-radius:3px;font-size:8pt;font-weight:700;">CRÍTICO</span>';
+    if (status === 'ATENCAO') return '<span style="background:#f59e0b;color:#fff;padding:2px 8px;border-radius:3px;font-size:8pt;font-weight:700;">ATENÇÃO</span>';
+    return '<span style="background:#22c55e;color:#fff;padding:2px 8px;border-radius:3px;font-size:8pt;font-weight:700;">OK</span>';
+  }
+  function acaoBadge(status) {
+    if (status === 'CRITICO') return '<span style="color:#dc2626;font-weight:700;">🚨 ALERTAR CQ</span>';
+    if (status === 'ATENCAO') return '<span style="color:#f59e0b;font-weight:700;">⚠ MONITORAR</span>';
+    return '<span style="color:#22c55e;">✓ OK</span>';
+  }
+  function barHtml(pA, pB, pC) {
+    return '<div style="display:flex;height:14px;border-radius:2px;overflow:hidden;background:#eee;width:120px;">' +
+      '<div style="width:'+pA.toFixed(0)+'%;background:#22c55e;height:100%;"></div>' +
+      '<div style="width:'+pB.toFixed(0)+'%;background:#eab308;height:100%;"></div>' +
+      '<div style="width:'+pC.toFixed(0)+'%;background:#ef4444;height:100%;"></div></div>';
+  }
+
+  const w = window.open('', '_blank');
+  w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>Relatório CQ — Omaso Bovino</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}
+  body{font-family:'Segoe UI',Arial,sans-serif;font-size:10pt;color:#222;padding:24px 32px;line-height:1.5;}
+
+  .header{border-bottom:3px solid #c8a96e;padding-bottom:10px;margin-bottom:18px;display:flex;justify-content:space-between;align-items:flex-end;}
+  .header h1{font-size:15pt;font-weight:800;color:#222;}
+  .header h1 span{color:#dc2626;}
+  .header .meta{font-size:8pt;color:#666;text-align:right;line-height:1.6;}
+
+  .sumario{background:#fef9ee;border:1px solid #e8d5a8;border-radius:6px;padding:16px 20px;margin-bottom:20px;}
+  .sumario-title{font-size:9pt;font-weight:700;color:#c8a96e;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:10px;}
+  .sumario-grid{display:flex;gap:16px;flex-wrap:wrap;}
+  .sum-item{flex:1;min-width:100px;text-align:center;padding:8px;background:#fff;border:1px solid #e8d5a8;border-radius:4px;}
+  .sum-val{font-size:18pt;font-weight:800;}
+  .sum-label{font-size:7pt;text-transform:uppercase;letter-spacing:0.1em;color:#666;margin-top:2px;}
+
+  .bloco{margin-bottom:22px;page-break-inside:avoid;}
+  .bloco-hd{display:flex;align-items:center;gap:8px;margin-bottom:10px;padding-bottom:6px;border-bottom:2px solid;}
+  .bloco-hd.critico{border-color:#dc2626;}
+  .bloco-hd.atencao{border-color:#f59e0b;}
+  .bloco-hd.ok{border-color:#22c55e;}
+  .bloco-hd.geral{border-color:#c8a96e;}
+  .bloco-title{font-size:11pt;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;}
+  .bloco-hd.critico .bloco-title{color:#dc2626;}
+  .bloco-hd.atencao .bloco-title{color:#f59e0b;}
+  .bloco-hd.ok .bloco-title{color:#22c55e;}
+  .bloco-hd.geral .bloco-title{color:#c8a96e;}
+  .bloco-count{font-size:8pt;color:#666;margin-left:auto;}
+
+  table{width:100%;border-collapse:collapse;font-size:9pt;margin-bottom:4px;}
+  th{background:#f0ece4;color:#444;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;font-size:7pt;padding:6px 8px;text-align:left;border-bottom:2px solid #c8a96e;}
+  td{padding:5px 8px;border-bottom:1px solid #e5e5e5;}
+  tr:nth-child(even) td{background:#fafaf8;}
+  .right{text-align:right;}
+  .bold{font-weight:700;}
+
+  .alerta-box{background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;padding:12px 16px;margin-bottom:14px;}
+  .alerta-box .alerta-title{font-size:9pt;font-weight:700;color:#dc2626;margin-bottom:6px;}
+  .alerta-item{font-size:9pt;padding:4px 0;border-bottom:1px solid #fee2e2;}
+  .alerta-item:last-child{border-bottom:none;}
+
+  .nota{background:#f8f7f4;border:1px solid #ddd;border-radius:4px;padding:10px 14px;font-size:8pt;color:#555;line-height:1.7;margin-top:14px;}
+
+  .footer{margin-top:24px;border-top:1px solid #ddd;padding-top:8px;font-size:7pt;color:#999;text-align:center;}
+
+  @page{size:portrait;margin:12mm;}
+  @media print{.no-print{display:none!important;}}
+</style></head><body>
+
+<!-- CABEÇALHO -->
+<div class="header">
+  <h1>Relatório de Qualidade — <span>Omaso Bovino</span></h1>
+  <div class="meta">
+    Classic Importação e Exportação de Couros<br>
+    Controle de Qualidade<br>
+    ${dataHoje} ${horaHoje}<br>
+    Período: ${periodo}<br>
+    ${cargasLabel}
+  </div>
+</div>
+
+<!-- SUMÁRIO EXECUTIVO -->
+<div class="sumario">
+  <div class="sumario-title">Resumo Executivo</div>
+  <div class="sumario-grid">
+    <div class="sum-item"><div class="sum-val">${d.length}</div><div class="sum-label">Lotes</div></div>
+    <div class="sum-item"><div class="sum-val">${Object.keys(frigoStats).length}</div><div class="sum-label">Frigoríficos</div></div>
+    <div class="sum-item"><div class="sum-val">${fmtNum(totalPecas)}</div><div class="sum-label">Total Peças</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#22c55e;">${pctA}%</div><div class="sum-label">Classe A</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#eab308;">${pctB}%</div><div class="sum-label">Classe B</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#ef4444;">${pctC}%</div><div class="sum-label">Classe C</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#dc2626;">${criticos.length}</div><div class="sum-label">Fornec. Críticos</div></div>
+    <div class="sum-item"><div class="sum-val" style="color:#f59e0b;">${atencao.length}</div><div class="sum-label">Fornec. Atenção</div></div>
+  </div>
+</div>
+
+<!-- ALERTAS CRÍTICOS -->
+${criticos.length > 0 ? `
+<div class="alerta-box">
+  <div class="alerta-title">🚨 ALERTAS CRÍTICOS — Fornecedores com %C acima de 50%</div>
+  ${criticos.map(f => `<div class="alerta-item">
+    <strong>${f.nome}</strong> — <span style="color:#dc2626;font-weight:700;">${fmtPct(f.pctC)} classe C</span>
+    (${fmtNum(f.c)} de ${fmtNum(f.a+f.b+f.c)} peças) ·
+    A: ${fmtPct(f.pctA)} · B: ${fmtPct(f.pctB)} →
+    <strong style="color:#dc2626;">🚨 ALERTAR CQ</strong>
+  </div>`).join('')}
+</div>` : ''}
+
+<!-- BLOCO 1: FORNECEDORES CRÍTICOS -->
+${criticos.length > 0 ? `
+<div class="bloco">
+  <div class="bloco-hd critico">
+    <div class="bloco-title">Fornecedores Críticos — %C &gt; 50%</div>
+    <div class="bloco-count">${criticos.length} fornecedor(es)</div>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Frigorífico</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
+    <tbody>${criticos.map((f,i) => `<tr style="background:rgba(220,38,38,0.04);">
+      <td class="bold">${i+1}</td>
+      <td class="bold">${f.nome}</td>
+      <td>${stBadge('CRITICO')}</td>
+      <td class="right bold">${fmtNum(f.a+f.b+f.c)}</td>
+      <td class="right" style="color:#22c55e">${fmtNum(f.a)}</td>
+      <td class="right" style="color:#22c55e">${fmtPct(f.pctA)}</td>
+      <td class="right" style="color:#eab308">${fmtNum(f.b)}</td>
+      <td class="right" style="color:#eab308">${fmtPct(f.pctB)}</td>
+      <td class="right bold" style="color:#dc2626">${fmtNum(f.c)}</td>
+      <td class="right bold" style="color:#dc2626;font-size:11pt;">${fmtPct(f.pctC)}</td>
+      <td>${barHtml(f.pctA,f.pctB,f.pctC)}</td>
+      <td>${acaoBadge('CRITICO')}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+<!-- BLOCO 2: FORNECEDORES ATENÇÃO -->
+${atencao.length > 0 ? `
+<div class="bloco">
+  <div class="bloco-hd atencao">
+    <div class="bloco-title">Fornecedores em Atenção — %C entre 30% e 50%</div>
+    <div class="bloco-count">${atencao.length} fornecedor(es)</div>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Frigorífico</th><th>Status</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Distrib.</th><th>Ação</th></tr></thead>
+    <tbody>${atencao.map((f,i) => `<tr style="background:rgba(245,158,11,0.04);">
+      <td class="bold">${i+1}</td>
+      <td class="bold">${f.nome}</td>
+      <td>${stBadge('ATENCAO')}</td>
+      <td class="right bold">${fmtNum(f.a+f.b+f.c)}</td>
+      <td class="right" style="color:#22c55e">${fmtNum(f.a)}</td>
+      <td class="right" style="color:#22c55e">${fmtPct(f.pctA)}</td>
+      <td class="right" style="color:#eab308">${fmtNum(f.b)}</td>
+      <td class="right" style="color:#eab308">${fmtPct(f.pctB)}</td>
+      <td class="right bold" style="color:#dc2626">${fmtNum(f.c)}</td>
+      <td class="right bold" style="color:#dc2626">${fmtPct(f.pctC)}</td>
+      <td>${barHtml(f.pctA,f.pctB,f.pctC)}</td>
+      <td>${acaoBadge('ATENCAO')}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+<!-- BLOCO 3: FORNECEDORES OK -->
+${oks.length > 0 ? `
+<div class="bloco">
+  <div class="bloco-hd ok">
+    <div class="bloco-title">Fornecedores OK — %C abaixo de 30%</div>
+    <div class="bloco-count">${oks.length} fornecedor(es)</div>
+  </div>
+  <table>
+    <thead><tr><th>#</th><th>Frigorífico</th><th class="right">Peças</th><th class="right">%A</th><th class="right">%B</th><th class="right">%C</th><th>Distrib.</th></tr></thead>
+    <tbody>${oks.map((f,i) => `<tr>
+      <td class="bold">${i+1}</td>
+      <td>${f.nome}</td>
+      <td class="right">${fmtNum(f.a+f.b+f.c)}</td>
+      <td class="right" style="color:#22c55e">${fmtPct(f.pctA)}</td>
+      <td class="right" style="color:#eab308">${fmtPct(f.pctB)}</td>
+      <td class="right" style="color:#ef4444">${fmtPct(f.pctC)}</td>
+      <td>${barHtml(f.pctA,f.pctB,f.pctC)}</td>
+    </tr>`).join('')}</tbody>
+  </table>
+</div>` : ''}
+
+<!-- CLASSIFICAÇÃO GERAL -->
+<div class="bloco">
+  <div class="bloco-hd geral">
+    <div class="bloco-title">Distribuição de Classificação</div>
+  </div>
+  <table style="max-width:500px;">
+    <thead><tr><th style="width:120px;">Classe</th><th class="right">Peças</th><th class="right">%</th><th style="width:160px">Distribuição</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><span style="background:#22c55e;color:#fff;padding:2px 10px;border-radius:3px;font-weight:700;">CLASSE A</span></td>
+        <td class="right bold">${fmtNum(totalA)}</td>
+        <td class="right bold" style="color:#22c55e;font-size:12pt;">${pctA}%</td>
+        <td><div style="display:flex;height:18px;border-radius:3px;overflow:hidden;background:#eee;width:160px;"><div style="width:${pctA}%;background:#22c55e;height:100%;"></div></div></td>
+      </tr>
+      <tr>
+        <td><span style="background:#eab308;color:#fff;padding:2px 10px;border-radius:3px;font-weight:700;">CLASSE B</span></td>
+        <td class="right bold">${fmtNum(totalB)}</td>
+        <td class="right bold" style="color:#eab308;font-size:12pt;">${pctB}%</td>
+        <td><div style="display:flex;height:18px;border-radius:3px;overflow:hidden;background:#eee;width:160px;"><div style="width:${pctB}%;background:#eab308;height:100%;"></div></div></td>
+      </tr>
+      <tr>
+        <td><span style="background:#ef4444;color:#fff;padding:2px 10px;border-radius:3px;font-weight:700;">CLASSE C</span></td>
+        <td class="right bold">${fmtNum(totalC)}</td>
+        <td class="right bold" style="color:#ef4444;font-size:12pt;">${pctC}%</td>
+        <td><div style="display:flex;height:18px;border-radius:3px;overflow:hidden;background:#eee;width:160px;"><div style="width:${pctC}%;background:#ef4444;height:100%;"></div></div></td>
+      </tr>
+      <tr style="border-top:2px solid #c8a96e;">
+        <td class="bold" style="padding-top:8px;">TOTAL</td>
+        <td class="right bold" style="font-size:12pt;padding-top:8px;">${fmtNum(totalA+totalB+totalC)}</td>
+        <td class="right bold" style="padding-top:8px;">100%</td>
+        <td></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- NOTA -->
+<div class="nota">
+  <strong>Critérios de classificação de fornecedor:</strong><br>
+  🚨 <strong style="color:#dc2626;">CRÍTICO</strong> — %C acima de 50%. Requer ação imediata do CQ: investigar causa raiz, notificar fornecedor, avaliar suspensão temporária.<br>
+  ⚠ <strong style="color:#f59e0b;">ATENÇÃO</strong> — %C entre 30% e 50%. Monitorar próximas cargas, solicitar plano de ação ao fornecedor.<br>
+  ✓ <strong style="color:#22c55e;">OK</strong> — %C abaixo de 30%. Dentro do padrão aceitável. Manter acompanhamento regular.<br>
+  <br>
+  <strong>Classificação por peças:</strong> Cada peça de omaso é classificada individualmente como A (alta qualidade), B (média) ou C (baixa qualidade) pela equipe de qualidade da Classic. Os percentuais refletem a proporção de peças em cada classe sobre o total classificado.
+</div>
+
+<div class="footer">
+  Classic Importação e Exportação de Couros · Controle de Qualidade · Relatório gerado automaticamente em ${dataHoje} às ${horaHoje}
+</div>
+
+<script>setTimeout(()=>window.print(),500)<\/script>
+</body></html>`);
+  w.document.close();
 }
 </script>
 </body>

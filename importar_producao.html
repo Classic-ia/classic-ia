@@ -507,6 +507,9 @@ async function processarArquivo(file) {
           const quantidade = numBR(colD);
           const qtdeHora = horas > 0 ? Math.round((quantidade / horas) * 100) / 100 : 0;
 
+          // Validações: horas > 0 e quantidade >= 0
+          if (horas <= 0 && quantidade <= 0) continue;
+
           registros.push({
             data_producao: dataAtual,
             cod_funcionario: funcCodigo,
@@ -600,61 +603,58 @@ async function importar() {
     importacaoId = lote?.id || null;
 
     const total = dadosParaImportar.length;
+    const BATCH_SIZE = 50;
 
-    for (let i = 0; i < total; i++) {
-      const r = dadosParaImportar[i];
-      const pct = Math.round(((i+1)/total)*100);
+    // Batch insert com deduplicação
+    for (let start = 0; start < total; start += BATCH_SIZE) {
+      const batch = dadosParaImportar.slice(start, start + BATCH_SIZE);
+      const pct = Math.round(Math.min(start + BATCH_SIZE, total) / total * 100);
       progressFill.style.width = pct + '%';
       progressPct.textContent = pct + '%';
-      progressLabel.textContent = `${i+1} de ${total}: ${r.nome_funcionario}`;
+      progressLabel.textContent = `${Math.min(start + BATCH_SIZE, total)} de ${total} registros...`;
+
+      const payloads = batch.map(r => ({
+        data_producao: r.data_producao,
+        cod_funcionario: r.cod_funcionario,
+        nome_funcionario: r.nome_funcionario,
+        cod_produto: r.cod_produto,
+        nome_produto: r.nome_produto,
+        horas: r.horas,
+        quantidade: r.quantidade,
+        qtde_hora: r.qtde_hora,
+        origem_dado: 'wrprd600',
+        importacao_id: importacaoId,
+        arquivo_origem: arquivoAtual?.name || null
+      }));
 
       try {
-        const payload = {
-          data_producao: r.data_producao,
-          cod_funcionario: r.cod_funcionario,
-          nome_funcionario: r.nome_funcionario,
-          cod_produto: r.cod_produto,
-          nome_produto: r.nome_produto,
-          horas: r.horas,
-          quantidade: r.quantidade,
-          qtde_hora: r.qtde_hora,
-          origem_dado: 'wrprd600',
-          importacao_id: importacaoId,
-          arquivo_origem: arquivoAtual?.name || null
-        };
-
-        const res = await apiFetch('cq_producao', {
+        const res = await apiFetch('cq_producao?on_conflict=data_producao,cod_funcionario,cod_produto', {
           method: 'POST',
           headers: {
-            'Prefer': 'return=minimal',
-            'on_conflict': 'data_producao,cod_funcionario,cod_produto',
-            'resolution': 'ignore-duplicates'
+            'Prefer': 'return=representation,resolution=ignore-duplicates',
+            'Content-Type': 'application/json'
           },
-          body: JSON.stringify(payload)
+          body: JSON.stringify(payloads)
         });
 
-        if (res.ok || res.status === 201) {
-          importados++;
-        } else if (res.status === 409) {
-          duplicados++;
-          if (importacaoId) {
-            await registrarErroImportacao(importacaoId, r._linha, 'duplicata', 'aviso',
-              `Registro já existe: ${r.cod_funcionario} / ${r.data_producao} / ${r.cod_produto}`,
-              { cod_funcionario: r.cod_funcionario, data: r.data_producao });
-          }
+        if (res.ok) {
+          const inserted = await res.json();
+          const insertedCount = Array.isArray(inserted) ? inserted.length : 0;
+          importados += insertedCount;
+          duplicados += batch.length - insertedCount;
         } else {
-          erros++;
           const errBody = await res.text();
-          console.error('Insert error:', errBody);
+          console.error('Batch insert error:', errBody);
+          erros += batch.length;
           if (importacaoId) {
-            await registrarErroImportacao(importacaoId, r._linha, 'insercao', 'erro',
-              `Falha ao inserir: ${errBody.substring(0, 200)}`,
-              { cod_funcionario: r.cod_funcionario });
+            await registrarErroImportacao(importacaoId, batch[0]._linha, 'insercao', 'erro',
+              `Falha no lote de ${batch.length} registros: ${errBody.substring(0, 200)}`,
+              { batch_start: start, batch_size: batch.length });
           }
         }
       } catch(e) {
-        erros++;
-        console.error('Exception:', e);
+        erros += batch.length;
+        console.error('Batch exception:', e);
       }
     }
 

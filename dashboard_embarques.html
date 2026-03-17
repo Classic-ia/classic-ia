@@ -51,11 +51,11 @@ select.fil option{background:var(--s2);}
 .filter-sep{width:1px;height:28px;background:var(--border2);}
 #filtroStatus{font-size:11px;color:var(--accent);font-family:'DM Mono',monospace;margin-left:auto;}
 
-.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;margin-bottom:24px;}
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:12px;margin-bottom:24px;}
 .kpi{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:18px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
 .kpi:hover{border-color:var(--border2);}
 .kpi-label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'DM Mono',monospace;}
-.kpi-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;line-height:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:18px;font-weight:800;line-height:1;white-space:nowrap;}
 
 .charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
 .charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:20px;}
@@ -240,7 +240,7 @@ canvas.tall{max-height:340px;}
       <div class="card-title">Identificação de Transporte por Carga <span class="card-sub">container, placa cavalo e carreta</span></div>
       <div class="table-wrap">
         <table class="data-table" id="tblCargas">
-          <thead><tr><th>Carga</th><th>Embarques</th><th>Peças</th><th>Container</th><th>Placa Cavalo</th><th>Placa Carreta 1</th><th>Placa Carreta 2</th><th></th></tr></thead>
+          <thead><tr><th>Carga</th><th>Emb.</th><th>Peças</th><th>Nº Pedido</th><th>Container</th><th>Placa Cavalo</th><th>Carreta 1</th><th>Carreta 2</th><th>Relatório ATAK</th><th></th></tr></thead>
           <tbody id="cargasBody"></tbody>
         </table>
       </div>
@@ -314,13 +314,23 @@ async function carregarDados() {
   }
 }
 
+// ── Label helper: "CARGA 11 - 98" ──
+function cargaLabel(numeroCarga) {
+  const pedido = (todosRegistros.find(r => r.numero_carga === numeroCarga && r.numero_pedido) || {}).numero_pedido || '';
+  return pedido ? `CARGA ${numeroCarga} - ${pedido}` : `CARGA ${numeroCarga}`;
+}
+function cargaLabelShort(numeroCarga) {
+  const pedido = (todosRegistros.find(r => r.numero_carga === numeroCarga && r.numero_pedido) || {}).numero_pedido || '';
+  return pedido ? `CG ${numeroCarga}-${pedido}` : `CG ${numeroCarga}`;
+}
+
 // ── Filtros ──
 function popularFiltros() {
   const cargas = [...new Set(todosRegistros.map(r=>r.numero_carga).filter(Boolean))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   const frigos = [...new Set(todosRegistros.map(r=>r.frigorifico).filter(Boolean))].sort();
 
-  fillSelect('filtCarga', cargas.map(c => 'CARGA '+c));
-  fillSelect('filtFrigo', frigos);
+  fillSelect('filtCarga', cargas.map(c => ({value:'CARGA '+c, text:cargaLabel(c)})));
+  fillSelect('filtFrigo', frigos.map(f => ({value:f, text:f})));
 }
 
 function fillSelect(id, items) {
@@ -328,7 +338,12 @@ function fillSelect(id, items) {
   const val = sel.value;
   const first = sel.options[0].outerHTML;
   sel.innerHTML = first;
-  items.forEach(it => { const o = document.createElement('option'); o.value = it; o.textContent = it; sel.appendChild(o); });
+  items.forEach(it => {
+    const o = document.createElement('option');
+    if (typeof it === 'object') { o.value = it.value; o.textContent = it.text; }
+    else { o.value = it; o.textContent = it; }
+    sel.appendChild(o);
+  });
   sel.value = val;
 }
 
@@ -424,7 +439,7 @@ function renderGeral(d) {
   makeChart('chartCargaStack', {
     type:'bar',
     data:{
-      labels: cargaLabels.map(c=>'CG '+c),
+      labels: cargaLabels.map(c=>cargaLabelShort(c)),
       datasets:[
         {label:'A', data:cargaLabels.map(c=>cargaMap[c].a), backgroundColor:CLS_A},
         {label:'B', data:cargaLabels.map(c=>cargaMap[c].b), backgroundColor:CLS_B},
@@ -478,7 +493,7 @@ function renderGeral(d) {
   makeChart('chartVolCarga', {
     type:'bar',
     data:{
-      labels: cargaLabels.map(c=>'CG '+c),
+      labels: cargaLabels.map(c=>cargaLabelShort(c)),
       datasets:[{label:'Peças', data:cargaLabels.map(c=>(cargaMap[c].a+cargaMap[c].b+cargaMap[c].c)), backgroundColor:'rgba(86,180,233,0.6)', borderRadius:2}]
     },
     options:{
@@ -614,7 +629,7 @@ function renderTrend(d) {
   makeChart('chartTrendA', {
     type:'line',
     data:{
-      labels: labels.map(c=>'CG '+c),
+      labels: labels.map(c=>cargaLabelShort(c)),
       datasets:[{
         label:'% Classe A',
         data: labels.map(c => { const s = cargaMap[c]; const t = s.a+s.b+s.c||1; return +(s.a/t*100).toFixed(1); }),
@@ -636,7 +651,7 @@ function renderTrend(d) {
   makeChart('chartTrendC', {
     type:'line',
     data:{
-      labels: labels.map(c=>'CG '+c),
+      labels: labels.map(c=>cargaLabelShort(c)),
       datasets:[{
         label:'% Classe C',
         data: labels.map(c => { const s = cargaMap[c]; const t = s.a+s.b+s.c||1; return +(s.c/t*100).toFixed(1); }),
@@ -658,7 +673,7 @@ function renderTrend(d) {
   makeChart('chartTrendVol', {
     type:'bar',
     data:{
-      labels: labels.map(c=>'CG '+c),
+      labels: labels.map(c=>cargaLabelShort(c)),
       datasets:[{
         label:'Peças', data: labels.map(c=>cargaMap[c].total),
         backgroundColor:'rgba(200,169,110,0.6)', borderRadius:2
@@ -675,7 +690,7 @@ function renderTrend(d) {
   makeChart('chartTrendEmb', {
     type:'bar',
     data:{
-      labels: labels.map(c=>'CG '+c),
+      labels: labels.map(c=>cargaLabelShort(c)),
       datasets:[{
         label:'Embarques', data: labels.map(c=>cargaMap[c].embarques),
         backgroundColor:'rgba(86,180,233,0.6)', borderRadius:2
@@ -695,27 +710,38 @@ function renderCargas() {
   const cargaMap = {};
   d.forEach(r => {
     const k = r.numero_carga || '?';
-    if (!cargaMap[k]) cargaMap[k] = { embarques:0, pecas:0, container: r.container||'', placa_cavalo: r.placa_cavalo||'', placa_carreta: r.placa_carreta||'', placa_carreta2: r.placa_carreta2||'' };
+    if (!cargaMap[k]) cargaMap[k] = { embarques:0, pecas:0, container: r.container||'', placa_cavalo: r.placa_cavalo||'', placa_carreta: r.placa_carreta||'', placa_carreta2: r.placa_carreta2||'', numero_pedido: r.numero_pedido||'', relatorio_url: r.relatorio_url||'' };
     cargaMap[k].embarques++;
     cargaMap[k].pecas += r.cnt_classic||0;
     if (r.container && !cargaMap[k].container) cargaMap[k].container = r.container;
     if (r.placa_cavalo && !cargaMap[k].placa_cavalo) cargaMap[k].placa_cavalo = r.placa_cavalo;
     if (r.placa_carreta && !cargaMap[k].placa_carreta) cargaMap[k].placa_carreta = r.placa_carreta;
     if (r.placa_carreta2 && !cargaMap[k].placa_carreta2) cargaMap[k].placa_carreta2 = r.placa_carreta2;
+    if (r.numero_pedido && !cargaMap[k].numero_pedido) cargaMap[k].numero_pedido = r.numero_pedido;
+    if (r.relatorio_url && !cargaMap[k].relatorio_url) cargaMap[k].relatorio_url = r.relatorio_url;
   });
 
   const cargas = Object.keys(cargaMap).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
   const tbody = document.getElementById('cargasBody');
   tbody.innerHTML = cargas.map(c => {
     const s = cargaMap[c];
+    const hasFile = s.relatorio_url ? true : false;
     return `<tr>
-      <td class="mono" style="font-weight:600;color:var(--accent)">CARGA ${c}</td>
+      <td class="mono" style="font-weight:600;color:var(--accent)">${cargaLabel(c)}</td>
       <td class="mono">${s.embarques}</td>
       <td class="mono">${s.pecas.toLocaleString('pt-BR')}</td>
-      <td><input class="fil" data-carga="${c}" data-field="container" value="${s.container}" placeholder="Ex: TEMU 968062" style="width:150px;font-size:11px;"></td>
-      <td><input class="fil" data-carga="${c}" data-field="placa_cavalo" value="${s.placa_cavalo}" placeholder="Ex: GOT9D69" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
-      <td><input class="fil" data-carga="${c}" data-field="placa_carreta" value="${s.placa_carreta}" placeholder="Ex: AYZ4I66" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
-      <td><input class="fil" data-carga="${c}" data-field="placa_carreta2" value="${s.placa_carreta2}" placeholder="2ª placa" style="width:110px;font-size:11px;text-transform:uppercase;"></td>
+      <td style="min-width:120px;"><input class="fil" data-carga="${c}" data-field="numero_pedido" value="${s.numero_pedido}" placeholder="Nº Pedido" style="width:110px;font-size:11px;background:var(--s3);border-color:var(--accent3);"></td>
+      <td><input class="fil" data-carga="${c}" data-field="container" value="${s.container}" placeholder="Ex: TEMU 968062" style="width:140px;font-size:11px;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_cavalo" value="${s.placa_cavalo}" placeholder="Ex: GOT9D69" style="width:100px;font-size:11px;text-transform:uppercase;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_carreta" value="${s.placa_carreta}" placeholder="Ex: AYZ4I66" style="width:100px;font-size:11px;text-transform:uppercase;"></td>
+      <td><input class="fil" data-carga="${c}" data-field="placa_carreta2" value="${s.placa_carreta2}" placeholder="2ª placa" style="width:100px;font-size:11px;text-transform:uppercase;"></td>
+      <td style="white-space:nowrap;">
+        ${hasFile ? '<a href="'+s.relatorio_url+'" target="_blank" class="btn-hd" style="font-size:9px;color:var(--cls-a);border-color:var(--cls-a);margin-right:4px;" title="Ver relatório">📄 Ver PDF</a>' : ''}
+        <label class="btn-hd" style="font-size:9px;cursor:pointer;${hasFile?'':'color:var(--warn);border-color:var(--warn);'}">
+          ${hasFile ? '🔄 Trocar' : '📎 Anexar PDF'}
+          <input type="file" accept=".pdf" onchange="uploadRelatorio('${c}', this)" style="display:none;">
+        </label>
+      </td>
       <td><button class="btn-hd primary" onclick="salvarTransporte('${c}')" style="font-size:9px;">Salvar</button></td>
     </tr>`;
   }).join('');
@@ -723,6 +749,7 @@ function renderCargas() {
 
 async function salvarTransporte(numeroCarga) {
   const row = document.querySelector(`input[data-carga="${numeroCarga}"][data-field="container"]`).closest('tr');
+  const numero_pedido = row.querySelector('[data-field="numero_pedido"]').value.trim();
   const container = row.querySelector('[data-field="container"]').value.trim();
   const placa_cavalo = row.querySelector('[data-field="placa_cavalo"]').value.trim().toUpperCase();
   const placa_carreta = row.querySelector('[data-field="placa_carreta"]').value.trim().toUpperCase();
@@ -732,22 +759,25 @@ async function salvarTransporte(numeroCarga) {
     const res = await CQ_API.fetch(`cq_embarques?numero_carga=eq.${numeroCarga}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ container, placa_cavalo, placa_carreta, placa_carreta2 })
+      body: JSON.stringify({ numero_pedido, container, placa_cavalo, placa_carreta, placa_carreta2 })
     });
     if (res.ok) {
       todosRegistros.forEach(r => {
         if (r.numero_carga === numeroCarga) {
+          r.numero_pedido = numero_pedido;
           r.container = container;
           r.placa_cavalo = placa_cavalo;
           r.placa_carreta = placa_carreta;
           r.placa_carreta2 = placa_carreta2;
         }
       });
-      const btn = row.querySelector('.btn-hd');
-      btn.textContent = '✓ Salvo';
-      btn.style.color = 'var(--cls-a)';
-      btn.style.borderColor = 'var(--cls-a)';
-      setTimeout(() => { btn.textContent = 'Salvar'; btn.style.color = ''; btn.style.borderColor = ''; }, 2000);
+      popularFiltros();
+      renderCargas();
+      const newBtn = document.querySelector(`input[data-carga="${numeroCarga}"][data-field="container"]`).closest('tr').querySelector('button.btn-hd.primary');
+      newBtn.textContent = '✓ Salvo';
+      newBtn.style.color = 'var(--cls-a)';
+      newBtn.style.borderColor = 'var(--cls-a)';
+      setTimeout(() => { newBtn.textContent = 'Salvar'; newBtn.style.color = ''; newBtn.style.borderColor = ''; }, 2000);
     } else {
       alert('Erro ao salvar: ' + (await res.text()).substring(0, 100));
     }
@@ -756,11 +786,68 @@ async function salvarTransporte(numeroCarga) {
   }
 }
 
+// ── Upload Relatório ATAK (PDF) ──
+async function uploadRelatorio(numeroCarga, input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (file.type !== 'application/pdf') { alert('Apenas arquivos PDF são aceitos.'); input.value = ''; return; }
+  if (file.size > 10 * 1024 * 1024) { alert('Arquivo muito grande. Máximo 10MB.'); input.value = ''; return; }
+
+  const fileName = `carga_${numeroCarga}_${Date.now()}.pdf`;
+  const storageUrl = `${SB_URL}/storage/v1/object/relatorios-embarques/${fileName}`;
+
+  try {
+    // Upload para Supabase Storage
+    const uploadRes = await fetch(storageUrl, {
+      method: 'POST',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': file.type,
+        'x-upsert': 'true'
+      },
+      body: file
+    });
+
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text();
+      alert('Erro ao fazer upload: ' + errText.substring(0, 150));
+      input.value = '';
+      return;
+    }
+
+    // URL pública do arquivo
+    const publicUrl = `${SB_URL}/storage/v1/object/public/relatorios-embarques/${fileName}`;
+
+    // Salvar URL no banco para todos os registros dessa carga
+    const patchRes = await CQ_API.fetch(`cq_embarques?numero_carga=eq.${numeroCarga}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ relatorio_url: publicUrl })
+    });
+
+    if (patchRes.ok) {
+      todosRegistros.forEach(r => {
+        if (r.numero_carga === numeroCarga) r.relatorio_url = publicUrl;
+      });
+      renderCargas();
+      alert('✓ Relatório ATAK anexado com sucesso à ' + cargaLabel(numeroCarga) + '!');
+    } else {
+      alert('Upload OK, mas erro ao vincular: ' + (await patchRes.text()).substring(0, 100));
+    }
+  } catch(e) {
+    alert('Erro no upload: ' + e.message);
+    input.value = '';
+  }
+}
+
 // ── Relatório por Carga (impressão) ──
 function imprimirCarga(numeroCarga) {
   const d = todosRegistros.filter(r => r.numero_carga === numeroCarga);
   if (d.length === 0) { alert('Nenhum dado para esta carga.'); return; }
-  gerarRelatorio(d, `Carga ${numeroCarga}`);
+  const pedido = (d.find(r=>r.numero_pedido)||{}).numero_pedido||'';
+  const tit = pedido ? `Carga ${numeroCarga} - ${pedido}` : `Carga ${numeroCarga}`;
+  gerarRelatorio(d, tit);
 }
 
 function imprimirPeriodo() {
@@ -782,12 +869,14 @@ function gerarRelatorio(dados, titulo) {
   const frigos = new Set(dados.map(r=>r.frigorifico)).size;
   const cargas = [...new Set(dados.map(r=>r.numero_carga))].sort((a,b)=>a.localeCompare(b,undefined,{numeric:true}));
 
-  // Container/placa info
+  // Container/placa/pedido info
   const transporteInfo = cargas.map(c => {
-    const r = dados.find(d => d.numero_carga === c && (d.container || d.placa_cavalo));
+    const r = dados.find(d => d.numero_carga === c && (d.container || d.placa_cavalo || d.numero_pedido));
     if (!r) return null;
-    let info = `<strong>Carga ${c}:</strong> Container: ${r.container||'—'} | Cavalo: ${r.placa_cavalo||'—'} | Carreta: ${r.placa_carreta||'—'}`;
+    let info = r.numero_pedido ? `<strong>Carga ${c} - ${r.numero_pedido}:</strong>` : `<strong>Carga ${c}:</strong>`;
+    info += ` Container: ${r.container||'—'} | Cavalo: ${r.placa_cavalo||'—'} | Carreta: ${r.placa_carreta||'—'}`;
     if (r.placa_carreta2) info += ` / ${r.placa_carreta2}`;
+    if (r.relatorio_url) info += ` | <a href="${r.relatorio_url}" target="_blank" class="no-print" style="color:#c8a96e;text-decoration:underline;">📄 Relatório ATAK</a>`;
     return info;
   }).filter(Boolean);
 
@@ -860,11 +949,96 @@ function gerarRelatorio(dados, titulo) {
 
     ${transporteInfo.length > 0 ? '<div class="transport">' + transporteInfo.join('<br>') + '</div>' : ''}
 
+    <!-- Resumo de Classificação -->
+    <div class="section">
+      <div class="section-title">Resumo de Classificação</div>
+      ${(() => {
+        // Contagem por embarques (registros com classificação A/B/C)
+        const embA = dados.filter(r => r.classificacao === 'A').length;
+        const embB = dados.filter(r => r.classificacao === 'B').length;
+        const embC = dados.filter(r => r.classificacao === 'C').length;
+        const embTotal = embA + embB + embC || 1;
+        const pctEmbA = (embA/embTotal*100).toFixed(1);
+        const pctEmbB = (embB/embTotal*100).toFixed(1);
+        const pctEmbC = (embC/embTotal*100).toFixed(1);
+
+        return '<div style="display:flex;gap:20px;flex-wrap:wrap;align-items:flex-start;">' +
+
+        '<div style="flex:1;min-width:340px;">' +
+        '<div style="font-size:8pt;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">① Percentual por Peças Classificadas</div>' +
+        '<table style="width:100%;">' +
+        '<thead><tr><th style="width:120px;">Classe</th><th class="right">Pçs</th><th class="right">% Peças</th><th style="width:140px;">Distribuição</th></tr></thead>' +
+        '<tbody>' +
+        '<tr><td><span class="cls-a" style="display:inline-block;min-width:80px;text-align:center;">CLASSE A</span></td>' +
+        '<td class="right bold">' + totalA.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#009E73;font-size:11pt;">' + pctA + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctA + '%;background:#009E73;height:100%;"></div></div></td></tr>' +
+        '<tr><td><span class="cls-b" style="display:inline-block;min-width:80px;text-align:center;">CLASSE B</span></td>' +
+        '<td class="right bold">' + totalB.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#E69F00;font-size:11pt;">' + pctB + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctB + '%;background:#E69F00;height:100%;"></div></div></td></tr>' +
+        '<tr><td><span class="cls-c" style="display:inline-block;min-width:80px;text-align:center;">CLASSE C</span></td>' +
+        '<td class="right bold">' + totalC.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#D55E00;font-size:11pt;">' + pctC + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctC + '%;background:#D55E00;height:100%;"></div></div></td></tr>' +
+        '<tr style="border-top:2px solid #c8a96e;"><td class="bold" style="padding-top:6px;">TOTAL</td>' +
+        '<td class="right bold" style="font-size:11pt;padding-top:6px;">' + totalPecas.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="padding-top:6px;">100%</td><td></td></tr>' +
+        '</tbody></table>' +
+        '</div>' +
+
+        '<div style="flex:1;min-width:340px;">' +
+        '<div style="font-size:8pt;font-weight:700;color:#555;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:6px;">② Percentual por Embarques (Fornecedores)</div>' +
+        '<table style="width:100%;">' +
+        '<thead><tr><th style="width:120px;">Classe</th><th class="right">Embarques</th><th class="right">%</th><th style="width:140px;">Distribuição</th></tr></thead>' +
+        '<tbody>' +
+        '<tr><td><span class="cls-a" style="display:inline-block;min-width:80px;text-align:center;">CLASSE A</span></td>' +
+        '<td class="right bold">' + embA.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#009E73;font-size:11pt;">' + pctEmbA + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctEmbA + '%;background:#009E73;height:100%;"></div></div></td></tr>' +
+        '<tr><td><span class="cls-b" style="display:inline-block;min-width:80px;text-align:center;">CLASSE B</span></td>' +
+        '<td class="right bold">' + embB.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#E69F00;font-size:11pt;">' + pctEmbB + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctEmbB + '%;background:#E69F00;height:100%;"></div></div></td></tr>' +
+        '<tr><td><span class="cls-c" style="display:inline-block;min-width:80px;text-align:center;">CLASSE C</span></td>' +
+        '<td class="right bold">' + embC.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="color:#D55E00;font-size:11pt;">' + pctEmbC + '%</td>' +
+        '<td><div class="bar-wrap" style="width:140px;height:16px;"><div class="bar-fill" style="width:' + pctEmbC + '%;background:#D55E00;height:100%;"></div></div></td></tr>' +
+        '<tr style="border-top:2px solid #c8a96e;"><td class="bold" style="padding-top:6px;">TOTAL</td>' +
+        '<td class="right bold" style="font-size:11pt;padding-top:6px;">' + dados.length.toLocaleString('pt-BR') + '</td>' +
+        '<td class="right bold" style="padding-top:6px;">100%</td><td></td></tr>' +
+        '</tbody></table>' +
+        '</div>' +
+
+        '</div>' +
+
+        '<div style="margin-top:12px;background:#f8f7f4;border:1px solid #ddd;border-radius:4px;padding:10px 14px;font-size:8pt;color:#555;line-height:1.7;">' +
+        '<strong style="color:#333;">Nota explicativa:</strong><br>' +
+        '① <strong>% por Peças Classificadas</strong> — Calcula a proporção com base na <u>quantidade de peças</u> classificadas como A, B ou C em cada frigorífico (soma de Pçs A / Pçs B / Pçs C da planilha CARGAS 2026). Base: ' + totalPecas.toLocaleString('pt-BR') + ' peças.<br>' +
+        '② <strong>% por Embarques</strong> — Calcula a proporção com base no <u>número de embarques</u> (registros/fornecedores) classificados como A, B ou C. Um embarque é classificado conforme sua composição dominante (%A ≥ 70% = A, ≥ 30% = B, caso contrário = C). Base: ' + dados.length + ' embarques.<br>' +
+        '<em>O relatório WRLOG510 (ATAK) utiliza % por fardos/volumes de expedição, que pode diferir de ambas as métricas acima.</em>' +
+        '</div>';
+      })()}
+
+      <div style="margin-top:12px;display:flex;gap:14px;flex-wrap:wrap;">
+        ${(() => {
+          const maiorA = ranking.length > 0 ? ranking.reduce((a,b)=>b.a>a.a?b:a) : null;
+          const maiorB = ranking.length > 0 ? ranking.reduce((a,b)=>b.b>a.b?b:a) : null;
+          const maiorC = ranking.length > 0 ? ranking.reduce((a,b)=>b.c>a.c?b:a) : null;
+          let html = '';
+          if (maiorA) html += '<div style="background:#f0faf5;border:1px solid #009E73;border-radius:4px;padding:6px 12px;font-size:8pt;"><strong style="color:#009E73;">Maior volume A:</strong> ' + maiorA.nome + ' — ' + maiorA.a.toLocaleString('pt-BR') + ' pçs (' + maiorA.pctA + '%)</div>';
+          if (maiorB) html += '<div style="background:#fdf6e3;border:1px solid #E69F00;border-radius:4px;padding:6px 12px;font-size:8pt;"><strong style="color:#E69F00;">Maior volume B:</strong> ' + maiorB.nome + ' — ' + maiorB.b.toLocaleString('pt-BR') + ' pçs (' + maiorB.pctB + '%)</div>';
+          if (maiorC) html += '<div style="background:#fdf0ea;border:1px solid #D55E00;border-radius:4px;padding:6px 12px;font-size:8pt;"><strong style="color:#D55E00;">Maior volume C:</strong> ' + maiorC.nome + ' — ' + maiorC.c.toLocaleString('pt-BR') + ' pçs (' + maiorC.pctC + '%)</div>';
+          return html;
+        })()}
+      </div>
+    </div>
+
     <!-- Ranking de Frigoríficos -->
     <div class="section">
       <div class="section-title">Ranking de Fornecedores (maior → menor volume)</div>
       <table>
-        <thead><tr><th>#</th><th>Frigorífico</th><th class="right">Embarques</th><th class="right">Peças</th><th class="right">%A</th><th class="right">%B</th><th class="right">%C</th><th>Classificação</th><th>Distribuição</th></tr></thead>
+        <thead><tr><th>#</th><th>Frigorífico</th><th class="right">Embarques</th><th class="right">Peças</th><th class="right">Pçs A</th><th class="right">%A</th><th class="right">Pçs B</th><th class="right">%B</th><th class="right">Pçs C</th><th class="right">%C</th><th>Class.</th><th>Distribuição</th></tr></thead>
         <tbody>${ranking.map((f,i) => {
           const cls = f.pctA >= 70 ? 'a' : f.pctA >= 30 ? 'b' : 'c';
           return `<tr>
@@ -872,8 +1046,11 @@ function gerarRelatorio(dados, titulo) {
             <td class="bold">${f.nome}</td>
             <td class="right">${f.embarques}</td>
             <td class="right bold">${f.pecas.toLocaleString('pt-BR')}</td>
+            <td class="right" style="color:#009E73">${f.a.toLocaleString('pt-BR')}</td>
             <td class="right" style="color:#009E73">${f.pctA}%</td>
+            <td class="right" style="color:#E69F00">${f.b.toLocaleString('pt-BR')}</td>
             <td class="right" style="color:#E69F00">${f.pctB}%</td>
+            <td class="right" style="color:#D55E00">${f.c.toLocaleString('pt-BR')}</td>
             <td class="right" style="color:#D55E00">${f.pctC}%</td>
             <td><span class="cls-${cls}">${cls.toUpperCase()}</span></td>
             <td><div class="bar-wrap"><div class="bar-fill" style="width:${f.pctA}%;background:#009E73;float:left;"></div><div class="bar-fill" style="width:${f.pctB}%;background:#E69F00;float:left;"></div><div class="bar-fill" style="width:${f.pctC}%;background:#D55E00;float:left;"></div></div></td>
@@ -890,7 +1067,7 @@ function gerarRelatorio(dados, titulo) {
         <tbody>${dadosOrdenados.map(r => {
           const cls = (r.classificacao||'').toLowerCase();
           return `<tr>
-            <td class="bold">${r.numero_carga||''}</td>
+            <td class="bold">${r.numero_carga||''}${r.numero_pedido ? ' - '+r.numero_pedido : ''}</td>
             <td>${r.data_embarque||''}</td>
             <td>${r.frigorifico||''}</td>
             <td class="right">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>
@@ -924,7 +1101,7 @@ function renderRegistros(d) {
     const badgeClass = cls === 'a' ? 'badge-cls-a' : cls === 'b' ? 'badge-cls-b' : cls === 'c' ? 'badge-cls-c' : '';
     return `<tr>
       <td class="mono">${r.data_embarque||''}</td>
-      <td class="mono">${r.numero_carga||''}</td>
+      <td class="mono">${r.numero_carga||''}${r.numero_pedido ? ' - '+r.numero_pedido : ''}</td>
       <td>${r.frigorifico||''}</td>
       <td class="mono">${(r.cnt_frigo||0).toLocaleString('pt-BR')}</td>
       <td class="mono">${(r.cnt_classic||0).toLocaleString('pt-BR')}</td>

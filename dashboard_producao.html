@@ -309,7 +309,11 @@ canvas.tall{max-height:340px;}
     </div>
     <div class="card">
       <div class="card-title">Funcionários Cadastrados <span class="card-sub" id="cadCount"></span>
-        <button class="btn-hd" onclick="corrigirNomes()" style="font-size:9px;">Corrigir Nomes</button>
+        <div style="display:flex;gap:6px;">
+          <button class="btn-hd primary" onclick="importarDaProducao()" style="font-size:9px;">Importar da Produção</button>
+          <button class="btn-hd" onclick="corrigirNomes()" style="font-size:9px;">Corrigir Nomes</button>
+          <button class="btn-hd" onclick="limparCadastroLixo()" style="font-size:9px;color:var(--err2);border-color:var(--err);">Limpar Inválidos</button>
+        </div>
       </div>
       <div class="table-wrap">
         <table class="data-table">
@@ -888,6 +892,92 @@ async function corrigirNomes() {
     alert(corrigidos + ' nome(s) corrigido(s) com base nos dados de produção.');
     renderCadastro();
   } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ── Importar funcionários direto da produção (WRPRD600) ──
+async function importarDaProducao() {
+  try {
+    const prodFuncs = await CQ_API.get('cq_producao?select=cod_funcionario,nome_funcionario&limit=5000');
+    if (!prodFuncs || !prodFuncs.length) { alert('Nenhum dado de produção encontrado.'); return; }
+
+    // Pegar nomes únicos por código (nome mais frequente)
+    const nomesPorCod = {};
+    prodFuncs.forEach(r => {
+      if (!r.cod_funcionario) return;
+      if (!nomesPorCod[r.cod_funcionario]) nomesPorCod[r.cod_funcionario] = {};
+      const n = r.nome_funcionario || '';
+      nomesPorCod[r.cod_funcionario][n] = (nomesPorCod[r.cod_funcionario][n] || 0) + 1;
+    });
+
+    // Selecionar o nome mais frequente para cada código
+    const funcionarios = {};
+    Object.entries(nomesPorCod).forEach(([cod, nomes]) => {
+      const melhorNome = Object.entries(nomes).sort((a,b) => b[1] - a[1])[0][0];
+      if (melhorNome.length > 1) funcionarios[cod] = melhorNome;
+    });
+
+    // Identificar quais já estão cadastrados
+    const jaCadastrados = new Set(cadastroData.map(r => r.cod_funcionario));
+    const novos = Object.entries(funcionarios).filter(([cod]) => !jaCadastrados.has(cod));
+
+    if (novos.length === 0) {
+      alert('Todos os funcionários da produção já estão cadastrados.\nUse "Corrigir Nomes" para atualizar nomes incorretos.');
+      return;
+    }
+
+    if (!confirm(`Encontrados ${novos.length} funcionário(s) da produção sem cadastro.\n\nDeseja importá-los? (setor ficará como "Sem setor" para você definir depois)`)) return;
+
+    // Upsert com setor padrão "Sem setor"
+    const batch = novos.map(([cod, nome]) => ({
+      cod_funcionario: cod,
+      nome_funcionario: nome,
+      setor: 'Sem setor',
+      atualizado_em: new Date().toISOString()
+    }));
+
+    const res = await CQ_API.fetch('cq_funcionario_setor?on_conflict=cod_funcionario', {
+      method: 'POST',
+      headers: { 'Prefer': 'resolution=merge-duplicates', 'Content-Type': 'application/json' },
+      body: JSON.stringify(batch)
+    });
+
+    if (res.ok) {
+      alert(`${novos.length} funcionário(s) importado(s) com sucesso!\n\nAgora defina o setor de cada um na tabela abaixo.`);
+      await carregarSetores();
+      renderCadastro();
+    } else {
+      alert('Erro: ' + (await res.text()).substring(0, 100));
+    }
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ── Limpar cadastros com dados inválidos (nomes numéricos, lixo) ──
+async function limparCadastroLixo() {
+  // Identificar registros com nomes que são puramente numéricos ou vazios
+  const lixo = cadastroData.filter(r => {
+    const n = (r.nome_funcionario || '').trim();
+    return !n || /^\d+$/.test(n.replace(/\D/g,'')) && n.replace(/[^a-zA-ZÀ-ú]/g,'').length < 2;
+  });
+
+  if (lixo.length === 0) {
+    alert('Nenhum cadastro com dados inválidos encontrado.');
+    return;
+  }
+
+  if (!confirm(`Encontrados ${lixo.length} cadastro(s) com nomes inválidos (números, dados corrompidos).\n\nDeseja removê-los?`)) return;
+
+  let removidos = 0;
+  for (const r of lixo) {
+    try {
+      await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + r.cod_funcionario, { method: 'DELETE' });
+      delete setoresMap[r.cod_funcionario];
+      removidos++;
+    } catch(e) { console.error(e); }
+  }
+
+  alert(`${removidos} cadastro(s) inválido(s) removido(s).`);
+  await carregarSetores();
+  renderCadastro();
 }
 
 async function excluirCadastro(cod) {

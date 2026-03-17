@@ -1,0 +1,150 @@
+{
+  "name": "ATAK → CQ | Score Fornecedor + Alertas",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "trigger-cron-6h",
+      "name": "Cron 6h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Recalcula score de todos os fornecedores a cada 6 horas"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/fn_listar_fornecedores_ativos",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "listar-fornecedores",
+      "name": "Listar Fornecedores Ativos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0],
+      "notes": "Busca todos os fornecedores com cargas nos últimos 90 dias"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/fn_atualizar_score_fornecedor",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "p_fornecedor_codigo", "value": "={{$json.fornecedor_codigo}}" }
+          ]
+        },
+        "options": { "batching": { "batch": { "batchSize": 10, "batchInterval": 200 } } }
+      },
+      "id": "atualizar-score",
+      "name": "Atualizar Score",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_fornecedor_score?is_critico=eq.true&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-criticos",
+      "name": "Buscar Fornecedores Críticos",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{$input.all().length}}", "operation": "largerThan", "value2": 0 }]
+        }
+      },
+      "id": "filter-criticos",
+      "name": "Tem Críticos?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gerar alertas de qualidade para fornecedores críticos\nconst criticos = $input.all();\nconst alertas = [];\n\nfor (const item of criticos) {\n  const f = item.json;\n  alertas.push({\n    json: {\n      tipo: 'fornecedor_critico',\n      gravidade: f.status_fornecedor === 'bloqueado' ? 'critica' : 'atencao',\n      status: 'aberto',\n      frigorifico: f.fornecedor_codigo,\n      total_pecas: f.total_pecas,\n      pcs_a: f.pecas_a,\n      pcs_b: f.pecas_b,\n      pcs_c: f.pecas_c,\n      pct_a: f.pct_a,\n      pct_b: f.pct_b,\n      pct_c: f.pct_c,\n      mensagem: `Fornecedor ${f.fornecedor_nome || f.fornecedor_codigo} - Status: ${f.status_fornecedor.toUpperCase()} | Score: ${f.score} | %C: ${f.pct_c}% (limite: ${f.limite_pct_c}%) | ${f.divergencias_abertas} divergências abertas`,\n      acao_sugerida: f.status_fornecedor === 'bloqueado'\n        ? 'BLOQUEIO IMEDIATO: Suspender recebimento até reunião com fornecedor'\n        : 'Agendar reunião com fornecedor para plano de ação corretiva',\n      origem: 'n8n_score_fornecedor',\n      criado_por: 'n8n_automatico'\n    }\n  });\n}\n\nreturn alertas;"
+      },
+      "id": "gerar-alertas-criticos",
+      "name": "Gerar Alertas Críticos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_alertas_qualidade",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "inserir-alertas-criticos",
+      "name": "Inserir Alertas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0]
+    }
+  ],
+  "connections": {
+    "Cron 6h": { "main": [[{ "node": "Listar Fornecedores Ativos", "type": "main", "index": 0 }]] },
+    "Listar Fornecedores Ativos": { "main": [[{ "node": "Atualizar Score", "type": "main", "index": 0 }]] },
+    "Atualizar Score": { "main": [[{ "node": "Buscar Fornecedores Críticos", "type": "main", "index": 0 }]] },
+    "Buscar Fornecedores Críticos": { "main": [[{ "node": "Tem Críticos?", "type": "main", "index": 0 }]] },
+    "Tem Críticos?": { "main": [[{ "node": "Gerar Alertas Críticos", "type": "main", "index": 0 }]] },
+    "Gerar Alertas Críticos": { "main": [[{ "node": "Inserir Alertas", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    { "name": "atak-cq" },
+    { "name": "score" },
+    { "name": "fornecedor" }
+  ]
+}

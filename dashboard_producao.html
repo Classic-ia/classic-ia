@@ -98,6 +98,31 @@ canvas.tall{max-height:340px;}
 
 .badge-setor{display:inline-block;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;border-radius:1px;padding:2px 7px;font-family:'DM Mono',monospace;background:rgba(200,169,110,0.1);color:var(--accent);}
 
+/* ── Modal Troca Setor ── */
+.modal-overlay{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.6);z-index:500;align-items:center;justify-content:center;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--s1);border:1px solid var(--border2);border-radius:6px;width:460px;max-width:92vw;box-shadow:0 8px 40px rgba(0,0,0,0.5);}
+.modal-header{display:flex;justify-content:space-between;align-items:center;padding:16px 20px;border-bottom:1px solid var(--border);}
+.modal-header h3{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:var(--text);}
+.modal-close{background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer;padding:4px 8px;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:20px;}
+.modal-warn{display:flex;align-items:flex-start;gap:10px;background:rgba(184,122,40,0.08);border:1px solid rgba(184,122,40,0.2);border-radius:3px;padding:12px 14px;margin-bottom:16px;}
+.modal-warn-icon{font-size:20px;line-height:1;}
+.modal-warn-text{font-size:12px;color:var(--text);line-height:1.5;}
+.modal-warn-text strong{color:var(--warn2);}
+.modal-option{display:flex;align-items:flex-start;gap:8px;padding:10px 0;cursor:pointer;}
+.modal-option input[type=radio]{margin-top:2px;accent-color:var(--accent);}
+.modal-option label{cursor:pointer;font-size:12px;color:var(--text);font-family:'DM Sans',sans-serif;}
+.modal-dates{display:flex;align-items:center;gap:8px;margin:8px 0 0 22px;}
+.modal-dates label{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;text-transform:uppercase;letter-spacing:0.1em;}
+.modal-footer{display:flex;gap:10px;padding:16px 20px;border-top:1px solid var(--border);justify-content:flex-start;}
+.btn-modal{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.08em;padding:8px 20px;border-radius:3px;cursor:pointer;border:1px solid;transition:all .2s;}
+.btn-modal.primary{background:var(--accent);border-color:var(--accent);color:#111;font-weight:500;}
+.btn-modal.primary:hover{background:var(--accent2);}
+.btn-modal.secondary{background:transparent;border-color:var(--border2);color:var(--muted);}
+.btn-modal.secondary:hover{border-color:var(--accent);color:var(--text);}
+
 /* ── Print Report ── */
 .print-only{display:none;}
 @media print {
@@ -325,6 +350,43 @@ canvas.tall{max-height:340px;}
           <thead><tr><th>Cód</th><th>Nome</th><th>Setor</th><th>Atualizado</th><th></th></tr></thead>
           <tbody id="cadBody"></tbody>
         </table>
+      </div>
+    </div>
+  </div>
+  <!-- Modal: Troca de Setor -->
+  <div class="modal-overlay" id="modalTrocaSetor">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3>Troca de Setor</h3>
+        <button class="modal-close" onclick="fecharModalSetor()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-warn">
+          <div class="modal-warn-icon">⚠</div>
+          <div class="modal-warn-text">
+            <strong>Atenção</strong><br>
+            A modificação de setor pode alterar registros de produção de dias anteriores.<br>
+            <span id="modalFuncInfo" style="color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;"></span>
+          </div>
+        </div>
+        <div class="modal-option">
+          <input type="radio" name="modalOpcao" id="optRecalcular" value="recalcular" checked>
+          <label for="optRecalcular">Aplicar nos registros de produção anteriores</label>
+        </div>
+        <div class="modal-dates" id="modalDatesWrap">
+          <label>De</label>
+          <input type="date" class="fil" id="modalDe">
+          <label>Até</label>
+          <input type="date" class="fil" id="modalAte">
+        </div>
+        <div class="modal-option">
+          <input type="radio" name="modalOpcao" id="optSomenteNovos" value="somente_novos">
+          <label for="optSomenteNovos">Aplicar esta modificação somente para as novas importações</label>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-modal primary" onclick="confirmarTrocaSetor()">Concluir</button>
+        <button class="btn-modal secondary" onclick="fecharModalSetor()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -846,17 +908,88 @@ async function salvarCadastro() {
   }
 }
 
-async function atualizarSetor(cod, novoSetor) {
+// ── Modal Troca de Setor ──
+let _modalCod = '', _modalNovoSetor = '', _modalNomeFunc = '';
+
+function atualizarSetor(cod, novoSetor) {
+  _modalCod = cod;
+  _modalNovoSetor = novoSetor;
+  // Buscar nome do funcionário
+  const cad = cadastroData.find(r => r.cod_funcionario === cod);
+  _modalNomeFunc = cad ? cad.nome_funcionario : cod;
+
+  // Buscar datas min/max do funcionário na produção
+  const regsFunc = todosRegistros.filter(r => r.cod_funcionario === cod);
+  const datas = regsFunc.map(r => r.data_producao).filter(Boolean).sort();
+  const hoje = new Date().toISOString().split('T')[0];
+
+  document.getElementById('modalFuncInfo').textContent =
+    `${_modalNomeFunc} (${cod}) → ${novoSetor}`;
+
+  document.getElementById('modalDe').value = datas.length ? datas[0] : hoje;
+  document.getElementById('modalAte').value = hoje;
+  document.getElementById('optRecalcular').checked = true;
+  document.getElementById('modalDatesWrap').style.display = 'flex';
+  document.getElementById('modalTrocaSetor').classList.add('show');
+}
+
+// Toggle datas quando muda opção
+document.addEventListener('change', e => {
+  if (e.target.name === 'modalOpcao') {
+    document.getElementById('modalDatesWrap').style.display = e.target.value === 'recalcular' ? 'flex' : 'none';
+  }
+});
+
+function fecharModalSetor() {
+  document.getElementById('modalTrocaSetor').classList.remove('show');
+}
+
+async function confirmarTrocaSetor() {
+  const opcao = document.querySelector('input[name="modalOpcao"]:checked').value;
+
   try {
-    // Atualiza cadastro (para futuras importações)
-    await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + cod, {
+    // 1. Sempre atualizar o cadastro (para futuras importações)
+    await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + _modalCod, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ setor: novoSetor, atualizado_em: new Date().toISOString() })
+      body: JSON.stringify({ setor: _modalNovoSetor, atualizado_em: new Date().toISOString() })
     });
-    setoresMap[cod] = novoSetor;
-    // NÃO altera registros passados — setor fica gravado por registro
-  } catch(e) { console.error(e); }
+    setoresMap[_modalCod] = _modalNovoSetor;
+
+    // 2. Se recalcular, aplicar nos registros de produção do período
+    if (opcao === 'recalcular') {
+      const de = document.getElementById('modalDe').value;
+      const ate = document.getElementById('modalAte').value;
+
+      let filtro = 'cq_producao?cod_funcionario=eq.' + _modalCod;
+      if (de) filtro += '&data_producao=gte.' + de;
+      if (ate) filtro += '&data_producao=lte.' + ate;
+
+      await CQ_API.fetch(filtro, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setor: _modalNovoSetor })
+      });
+
+      // Atualizar na memória
+      todosRegistros.forEach(r => {
+        if (r.cod_funcionario === _modalCod) {
+          if ((!de || r.data_producao >= de) && (!ate || r.data_producao <= ate)) {
+            r.setor = _modalNovoSetor;
+          }
+        }
+      });
+
+      alert(`Setor atualizado para ${_modalNomeFunc}.\n${de ? de.split('-').reverse().join('/') : 'início'} até ${ate ? ate.split('-').reverse().join('/') : 'hoje'}\nRegistros de produção do período foram atualizados.`);
+    } else {
+      alert(`Setor atualizado para ${_modalNomeFunc}.\nSomente novas importações usarão o setor "${_modalNovoSetor}".`);
+    }
+
+    fecharModalSetor();
+    aplicarFiltro();
+  } catch(e) {
+    alert('Erro: ' + e.message);
+  }
 }
 
 async function cadastrarRapido(cod, nome) {

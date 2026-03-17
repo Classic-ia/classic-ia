@@ -628,6 +628,13 @@ async function importar() {
   let importados = 0, duplicados = 0, erros = 0;
 
   try {
+    // Carregar mapa de setores para gravar junto
+    let setoresMap = {};
+    try {
+      const fs = await CQ_API.get('cq_funcionario_setor?select=cod_funcionario,setor');
+      (fs || []).forEach(r => { setoresMap[r.cod_funcionario] = r.setor; });
+    } catch(e) { console.warn('Setores:', e); }
+
     // Criar lote de importação
     const lote = await criarLoteImportacao(arquivoAtual, dadosParaImportar.length, {
       dias: [...new Set(dadosParaImportar.map(r => r.data_producao))],
@@ -655,6 +662,7 @@ async function importar() {
         horas: r.horas,
         quantidade: r.quantidade,
         qtde_hora: r.qtde_hora,
+        setor: setoresMap[r.cod_funcionario] || null,
         origem_dado: 'wrprd600',
         importacao_id: importacaoId,
         arquivo_origem: arquivoAtual?.name || null

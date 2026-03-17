@@ -315,6 +315,7 @@ canvas.tall{max-height:340px;}
       <div class="card-title">Funcionários Cadastrados <span class="card-sub" id="cadCount"></span>
         <div style="display:flex;gap:6px;">
           <button class="btn-hd primary" onclick="importarDaProducao()" style="font-size:9px;">Importar da Produção</button>
+          <button class="btn-hd primary" onclick="gravarSetoresNosRegistros()" style="font-size:9px;">Gravar Setores</button>
           <button class="btn-hd" onclick="corrigirNomes()" style="font-size:9px;">Corrigir Nomes</button>
           <button class="btn-hd" onclick="limparCadastroLixo()" style="font-size:9px;color:var(--err2);border-color:var(--err);">Limpar Inválidos</button>
         </div>
@@ -509,7 +510,8 @@ async function carregarDados() {
     const dados = await CQ_API.get('cq_producao?order=data_producao.desc&limit=5000');
     todosRegistros = (dados || []).map(r => ({
       ...r,
-      setor: setoresMap[r.cod_funcionario] || 'Sem setor'
+      // Usa setor gravado no registro; fallback para cadastro (legado)
+      setor: r.setor || setoresMap[r.cod_funcionario] || 'Sem setor'
     }));
     popularFiltros();
     aplicarFiltro();
@@ -846,30 +848,39 @@ async function salvarCadastro() {
 
 async function atualizarSetor(cod, novoSetor) {
   try {
+    // Atualiza cadastro (para futuras importações)
     await CQ_API.fetch('cq_funcionario_setor?cod_funcionario=eq.' + cod, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ setor: novoSetor, atualizado_em: new Date().toISOString() })
     });
     setoresMap[cod] = novoSetor;
+    // NÃO altera registros passados — setor fica gravado por registro
   } catch(e) { console.error(e); }
 }
 
 async function cadastrarRapido(cod, nome) {
   const sel = document.getElementById('selSetor_' + cod);
   if (!sel || !sel.value) { alert('Selecione o setor'); return; }
+  const setor = sel.value;
   try {
     const res = await CQ_API.fetch('cq_funcionario_setor?on_conflict=cod_funcionario', {
       method: 'POST',
       headers: { 'Prefer': 'resolution=merge-duplicates', 'Content-Type': 'application/json' },
-      body: JSON.stringify([{ cod_funcionario: cod, nome_funcionario: nome, setor: sel.value, atualizado_em: new Date().toISOString() }])
+      body: JSON.stringify([{ cod_funcionario: cod, nome_funcionario: nome, setor, atualizado_em: new Date().toISOString() }])
     });
     if (res.ok) {
-      setoresMap[cod] = sel.value;
-      // Atualizar setor nos registros carregados
-      todosRegistros.forEach(r => { if (r.cod_funcionario === cod) r.setor = sel.value; });
+      setoresMap[cod] = setor;
+      // Gravar setor nos registros de produção SEM setor
+      await CQ_API.fetch('cq_producao?cod_funcionario=eq.' + cod + '&setor=is.null', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setor })
+      });
+      todosRegistros.forEach(r => { if (r.cod_funcionario === cod && (!r.setor || r.setor === 'Sem setor')) r.setor = setor; });
       await carregarSetores();
       renderCadastro();
+      aplicarFiltro();
     } else {
       alert('Erro: ' + (await res.text()).substring(0, 100));
     }
@@ -897,6 +908,51 @@ async function corrigirNomes() {
     alert(corrigidos + ' nome(s) corrigido(s) com base nos dados de produção.');
     renderCadastro();
   } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ── Gravar setor nos registros de produção que não têm setor ──
+async function gravarSetoresNosRegistros() {
+  // Buscar registros sem setor
+  const semSetor = todosRegistros.filter(r => !r.setor || r.setor === 'Sem setor');
+  if (semSetor.length === 0) {
+    alert('Todos os registros já têm setor gravado!');
+    return;
+  }
+
+  // Agrupar por funcionário
+  const codsSemSetor = [...new Set(semSetor.map(r => r.cod_funcionario))];
+  const codsComCadastro = codsSemSetor.filter(c => setoresMap[c]);
+  const codsSemCadastro = codsSemSetor.filter(c => !setoresMap[c]);
+
+  let msg = `${semSetor.length} registro(s) sem setor gravado.\n`;
+  msg += `${codsComCadastro.length} funcionário(s) com setor cadastrado → serão gravados.\n`;
+  if (codsSemCadastro.length) msg += `${codsSemCadastro.length} funcionário(s) sem cadastro → permanecerão sem setor.\n`;
+  msg += '\nGravar setores nos registros de produção?';
+
+  if (!confirm(msg)) return;
+
+  let gravados = 0;
+  for (const cod of codsComCadastro) {
+    try {
+      const res = await CQ_API.fetch('cq_producao?cod_funcionario=eq.' + cod + '&setor=is.null', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ setor: setoresMap[cod] })
+      });
+      if (res.ok) gravados++;
+    } catch(e) { console.error(e); }
+  }
+
+  // Atualizar registros na memória
+  todosRegistros.forEach(r => {
+    if ((!r.setor || r.setor === 'Sem setor') && setoresMap[r.cod_funcionario]) {
+      r.setor = setoresMap[r.cod_funcionario];
+    }
+  });
+
+  alert(`Setores gravados para ${gravados} funcionário(s)!\nOs registros agora mantêm o setor fixo.`);
+  aplicarFiltro();
+  renderCadastro();
 }
 
 // ── Importar funcionários direto da produção (WRPRD600) ──

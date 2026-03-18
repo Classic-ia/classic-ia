@@ -280,12 +280,22 @@ tbody tr.row-critico:hover { background: rgba(213,94,0,.1); }
     <div id="blocoProdutos"></div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 4: ANALISE DE DEFEITOS                          -->
+    <!-- BLOCO 4: QUALIDADE POR LOTE                           -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="blocoLotes"></div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 5: QUALIDADE POR SETOR                          -->
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <div id="blocoSetores"></div>
+
+    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 6: ANALISE DE DEFEITOS                          -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div id="blocoDefeitos"></div>
 
     <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 5: PIPELINE OPERACIONAL                         -->
+    <!-- BLOCO 7: PIPELINE OPERACIONAL                         -->
     <!-- ═══════════════════════════════════════════════════════ -->
     <div id="blocoPipeline"></div>
 
@@ -333,10 +343,12 @@ async function carregarTudo() {
   document.getElementById('dashContent').style.display = 'none';
 
   try {
-    const [alertas, fornecedores, produtos, defRanking, defForn, pipeline] = await Promise.all([
+    const [alertas, fornecedores, produtos, lotes, setores, defRanking, defForn, pipeline] = await Promise.all([
       api('vw_dash_alertas?select=*&limit=20'),
-      api('vw_dash_ranking_fornecedores?select=*&limit=30'),
-      api('vw_dash_qualidade_produto?select=*&limit=20'),
+      api('vw_qualidade_fornecedor?select=*&limit=30'),
+      api('vw_qualidade_produto?select=*&limit=20'),
+      api('vw_qualidade_lote?select=*&limit=50'),
+      api('vw_qualidade_setor?select=*'),
       api('vw_dash_defeitos_ranking?select=*&limit=15'),
       api('vw_dash_defeitos_fornecedor?select=*&limit=30'),
       api('vw_dash_pipeline?select=*&order=ordem'),
@@ -345,6 +357,8 @@ async function carregarTudo() {
     renderAlertas(alertas);
     renderFornecedores(fornecedores);
     renderProdutos(produtos);
+    renderLotes(lotes);
+    renderSetores(setores);
     renderDefeitos(defRanking, defForn);
     renderPipeline(pipeline);
 
@@ -418,7 +432,7 @@ function renderAlertas(alertas) {
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 2: RANKING DE FORNECEDORES
+// BLOCO 2: QUALIDADE POR FORNECEDOR
 // ══════════════════════════════════════════════════════════════
 function renderFornecedores(dados) {
   const el = document.getElementById('blocoFornecedores');
@@ -427,37 +441,17 @@ function renderFornecedores(dados) {
     el.innerHTML = `
       <div class="block-header" style="margin-top:28px">
         <div class="block-dot" style="background:var(--cb-orange)"></div>
-        <div class="block-title" style="color:var(--cb-orange)">Ranking Fornecedores</div>
+        <div class="block-title" style="color:var(--cb-orange)">Qualidade por Fornecedor</div>
       </div>
       <div class="empty-block">Sem dados de fornecedores no periodo.</div>
     `;
     return;
   }
 
-  const tendenciaIcon = t => {
-    if (t === 'melhorando') return '<span class="badge badge-up" title="Melhorando">&#9650;</span>';
-    if (t === 'piorando')   return '<span class="badge badge-down" title="Piorando">&#9660;</span>';
-    return '<span class="badge badge-flat" title="Estavel">&#9654;</span>';
-  };
-
-  const scoreColor = s => {
-    if (s == null) return 'var(--muted)';
-    if (s < 50) return 'var(--cb-red)';
-    if (s < 70) return 'var(--cb-orange)';
-    return 'var(--cb-blue)';
-  };
-
-  const scoreBarColor = s => {
-    if (s == null) return 'var(--muted2)';
-    if (s < 50) return 'var(--cb-red)';
-    if (s < 70) return 'var(--cb-orange)';
-    return 'var(--cb-teal)';
-  };
-
   el.innerHTML = `
     <div class="block-header" style="margin-top:28px">
       <div class="block-dot" style="background:var(--cb-orange)"></div>
-      <div class="block-title" style="color:var(--cb-orange)">Ranking Fornecedores</div>
+      <div class="block-title" style="color:var(--cb-orange)">Qualidade por Fornecedor</div>
       <div class="block-count">${dados.length} fornecedor${dados.length > 1 ? 'es' : ''}</div>
     </div>
     <div class="panel">
@@ -465,33 +459,41 @@ function renderFornecedores(dados) {
         <table>
           <thead><tr>
             <th>Fornecedor</th>
-            <th style="text-align:right">Volume</th>
+            <th style="text-align:center">UF</th>
+            <th style="text-align:right">Lotes</th>
+            <th style="text-align:right">Pecas</th>
             <th style="text-align:right">Score</th>
             <th></th>
             <th style="text-align:right">%A</th>
             <th style="text-align:right">%B</th>
             <th style="text-align:right">%C</th>
+            <th style="text-align:right">%Def</th>
             <th style="text-align:center">30d</th>
           </tr></thead>
           <tbody>
             ${dados.map(f => {
-              const isCrit = (f.score_qualidade != null && f.score_qualidade < 50)
-                          || f.status_fornecedor === 'bloqueado' || f.status_fornecedor === 'critico';
+              const s = f.score;
+              const isCrit = (s != null && s < 50) || f.status_fornecedor === 'bloqueado' || f.status_fornecedor === 'critico';
+              const var30 = f.variacao_30d || 0;
+              const tend = var30 > 3 ? 'melhorando' : var30 < -3 ? 'piorando' : 'estavel';
               return `<tr class="${isCrit ? 'row-critico' : ''}">
                 <td>
                   <span style="font-weight:600">${esc(f.fornecedor_nome || f.fornecedor_codigo || '—')}</span>
                   ${f.status_fornecedor === 'bloqueado' ? '<span class="badge badge-c" style="margin-left:6px">BLOQ</span>' : ''}
                   ${f.status_fornecedor === 'critico' ? '<span class="badge badge-c" style="margin-left:6px">CRIT</span>' : ''}
                 </td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(f.volume_total)}</td>
-                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(f.score_qualidade)}">${f.score_qualidade != null ? f.score_qualidade : '—'}</td>
-                <td style="width:70px">
-                  <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(f.score_qualidade || 0, 100)}%;background:${scoreBarColor(f.score_qualidade)}"></div></div>
+                <td style="text-align:center;font-family:'DM Mono';font-size:10px;color:var(--muted)">${esc(f.fornecedor_uf || '—')}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(f.total_lotes)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(f.total_pecas)}</td>
+                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s)}">${s != null ? s : '—'}</td>
+                <td style="width:60px">
+                  <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(s || 0, 100)}%;background:${scoreBarFill(s)}"></div></div>
                 </td>
                 <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(f.pct_a)}</td>
                 <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(f.pct_b)}</td>
                 <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtPct(f.pct_c)}</td>
-                <td style="text-align:center">${tendenciaIcon(f.tendencia)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(f.pct_defeitos)}</td>
+                <td style="text-align:center">${tendIcon(tend)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -519,13 +521,6 @@ function renderProdutos(dados) {
     return;
   }
 
-  const scoreColor = s => {
-    if (s == null) return 'var(--muted)';
-    if (s < 50) return 'var(--cb-red)';
-    if (s < 70) return 'var(--cb-orange)';
-    return 'var(--cb-blue)';
-  };
-
   el.innerHTML = `
     <div class="block-header" style="margin-top:28px">
       <div class="block-dot" style="background:var(--cb-yellow)"></div>
@@ -537,22 +532,34 @@ function renderProdutos(dados) {
         <table>
           <thead><tr>
             <th>Produto</th>
-            <th style="text-align:right">Volume</th>
+            <th style="text-align:center">Grupo</th>
+            <th style="text-align:right">Lotes</th>
+            <th style="text-align:right">Pecas</th>
             <th style="text-align:right">Score</th>
+            <th style="text-align:right">%A</th>
+            <th style="text-align:right">%B</th>
             <th style="text-align:right">%C</th>
-            <th style="text-align:right">%Defeitos</th>
+            <th style="text-align:right">%Def</th>
             <th>Principal Defeito</th>
+            <th style="text-align:center">30d</th>
           </tr></thead>
           <tbody>
             ${dados.map(p => {
               const isCrit = (p.pct_c != null && p.pct_c > 10);
+              const var30 = p.variacao_30d || 0;
+              const tend = var30 > 3 ? 'melhorando' : var30 < -3 ? 'piorando' : 'estavel';
               return `<tr class="${isCrit ? 'row-critico' : ''}">
-                <td style="font-weight:600">${esc(p.produto || '—')}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(p.volume)}</td>
+                <td style="font-weight:600">${esc(p.produto_nome || p.produto_codigo || '—')}</td>
+                <td style="text-align:center;font-family:'DM Mono';font-size:10px;color:var(--muted)">${esc(p.produto_grupo || '—')}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(p.total_lotes)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(p.total_pecas)}</td>
                 <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(p.score)}">${p.score != null ? p.score : '—'}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(p.pct_a)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(p.pct_b)}</td>
                 <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:${(p.pct_c > 10) ? 'var(--cb-red)' : 'var(--text)'}">${fmtPct(p.pct_c)}</td>
                 <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(p.pct_defeitos)}</td>
-                <td style="font-size:11px;color:var(--muted)">${esc(fmtDefeito(p.principal_defeito))}</td>
+                <td style="font-size:11px;color:var(--muted)">${esc(p.principal_defeito || '—')}</td>
+                <td style="text-align:center">${tendIcon(tend)}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -564,7 +571,140 @@ function renderProdutos(dados) {
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 4: ANALISE DE DEFEITOS
+// BLOCO 4: QUALIDADE POR LOTE
+// ══════════════════════════════════════════════════════════════
+function renderLotes(dados) {
+  const el = document.getElementById('blocoLotes');
+
+  if (!dados || !dados.length) {
+    el.innerHTML = `
+      <div class="block-header" style="margin-top:28px">
+        <div class="block-dot" style="background:var(--cb-purple)"></div>
+        <div class="block-title" style="color:var(--cb-purple)">Qualidade por Lote</div>
+      </div>
+      <div class="empty-block">Sem lotes inspecionados no periodo.</div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="block-header" style="margin-top:28px">
+      <div class="block-dot" style="background:var(--cb-purple)"></div>
+      <div class="block-title" style="color:var(--cb-purple)">Qualidade por Lote</div>
+      <div class="block-count">${dados.length} lote${dados.length > 1 ? 's' : ''}</div>
+    </div>
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Lote</th>
+            <th>Data</th>
+            <th>Fornecedor</th>
+            <th style="text-align:right">Pecas</th>
+            <th style="text-align:right">Score</th>
+            <th style="text-align:center">Class.</th>
+            <th style="text-align:right">%A</th>
+            <th style="text-align:right">%B</th>
+            <th style="text-align:right">%C</th>
+            <th style="text-align:right">%Def</th>
+            <th style="text-align:right">Prod.</th>
+            <th>Inspetor</th>
+          </tr></thead>
+          <tbody>
+            ${dados.map(l => {
+              const s = l.score;
+              const isCrit = l.classificacao_lote === 'C' || (s != null && s < 50);
+              const classColor = l.classificacao_lote === 'A' ? 'var(--cb-blue)'
+                : l.classificacao_lote === 'B' ? 'var(--cb-orange)' : 'var(--cb-red)';
+              return `<tr class="${isCrit ? 'row-critico' : ''}" title="${loteTooltip(l)}">
+                <td style="font-family:'DM Mono';font-size:11px;color:var(--accent)">${esc(l.id_lote || '—')}</td>
+                <td style="font-family:'DM Mono';font-size:11px">${fmtDate(l.data_inspecao)}</td>
+                <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.fornecedor_nome || '—')}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(l.total_pecas)}</td>
+                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s)}">${s != null ? s : '—'}</td>
+                <td style="text-align:center;font-family:'Syne';font-weight:700;color:${classColor}">${l.classificacao_lote || '—'}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(l.pct_a)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(l.pct_b)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtPct(l.pct_c)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(l.pct_defeitos)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--muted)">${l.qtd_produtos || 0}</td>
+                <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.inspetor_nome || '—')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// BLOCO 5: QUALIDADE POR SETOR
+// ══════════════════════════════════════════════════════════════
+function renderSetores(dados) {
+  const el = document.getElementById('blocoSetores');
+
+  if (!dados || !dados.length) {
+    el.innerHTML = `
+      <div class="block-header" style="margin-top:28px">
+        <div class="block-dot" style="background:var(--cb-teal)"></div>
+        <div class="block-title" style="color:var(--cb-teal)">Qualidade por Setor</div>
+      </div>
+      <div class="empty-block">Sem dados de producao por setor no periodo.</div>
+    `;
+    return;
+  }
+
+  el.innerHTML = `
+    <div class="block-header" style="margin-top:28px">
+      <div class="block-dot" style="background:var(--cb-teal)"></div>
+      <div class="block-title" style="color:var(--cb-teal)">Qualidade por Setor</div>
+      <div class="block-count">${dados.length} setor${dados.length > 1 ? 'es' : ''}</div>
+    </div>
+    <div class="panel">
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Setor</th>
+            <th style="text-align:right">Produzido</th>
+            <th style="text-align:right">Aprovado</th>
+            <th style="text-align:right">Rejeitado</th>
+            <th style="text-align:right">%Aprov.</th>
+            <th style="text-align:right">%Rejeic.</th>
+            <th style="text-align:right">Score</th>
+            <th></th>
+            <th>Turnos</th>
+            <th style="text-align:center">30d</th>
+          </tr></thead>
+          <tbody>
+            ${dados.map(s => {
+              const isCrit = s.pct_rejeicao > 10 || (s.score != null && s.score < 80);
+              return `<tr class="${isCrit ? 'row-critico' : ''}">
+                <td style="font-weight:600">${esc(s.setor || '—')}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(s.total_produzido)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-teal)">${fmtNum(s.total_aprovado)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtNum(s.total_rejeitado)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-teal)">${fmtPct(s.pct_aprovacao)}</td>
+                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:${s.pct_rejeicao > 10 ? 'var(--cb-red)' : 'var(--text)'}">${fmtPct(s.pct_rejeicao)}</td>
+                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s.score)}">${s.score != null ? s.score : '—'}</td>
+                <td style="width:60px">
+                  <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(s.score || 0, 100)}%;background:${scoreBarFill(s.score)}"></div></div>
+                </td>
+                <td style="font-size:11px;color:var(--muted)">${Array.isArray(s.turnos) ? s.turnos.filter(Boolean).join(', ') : '—'}</td>
+                <td style="text-align:center">${tendIcon(s.tendencia || 'estavel')}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// BLOCO 6: ANALISE DE DEFEITOS
 // ══════════════════════════════════════════════════════════════
 function renderDefeitos(ranking, porFornecedor) {
   const el = document.getElementById('blocoDefeitos');
@@ -640,7 +780,7 @@ function renderDefeitos(ranking, porFornecedor) {
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 5: PIPELINE OPERACIONAL
+// BLOCO 7: PIPELINE OPERACIONAL
 // ══════════════════════════════════════════════════════════════
 function renderPipeline(dados) {
   const el = document.getElementById('blocoPipeline');
@@ -710,6 +850,13 @@ function fmtPct(n) {
   return Number(n).toFixed(1) + '%';
 }
 
+function fmtDate(d) {
+  if (!d) return '—';
+  const parts = d.split('-');
+  if (parts.length === 3) return parts[2] + '/' + parts[1];
+  return d;
+}
+
 function fmtDefeito(codigo) {
   if (!codigo) return '—';
   const map = {
@@ -726,6 +873,33 @@ function fmtDefeito(codigo) {
     outro_defeito: 'Outro',
   };
   return map[codigo] || codigo;
+}
+
+function scoreColor(s) {
+  if (s == null) return 'var(--muted)';
+  if (s < 50) return 'var(--cb-red)';
+  if (s < 70) return 'var(--cb-orange)';
+  return 'var(--cb-blue)';
+}
+
+function scoreBarFill(s) {
+  if (s == null) return 'var(--muted2)';
+  if (s < 50) return 'var(--cb-red)';
+  if (s < 70) return 'var(--cb-orange)';
+  return 'var(--cb-teal)';
+}
+
+function tendIcon(t) {
+  if (t === 'melhorando') return '<span class="badge badge-up" title="Melhorando">&#9650;</span>';
+  if (t === 'piorando')   return '<span class="badge badge-down" title="Piorando">&#9660;</span>';
+  return '<span class="badge badge-flat" title="Estavel">&#9654;</span>';
+}
+
+function loteTooltip(l) {
+  if (!l.produtos || !Array.isArray(l.produtos)) return '';
+  return l.produtos.map(p =>
+    (p.produto || '?') + ': A=' + (p.class_a||0) + ' B=' + (p.class_b||0) + ' C=' + (p.class_c||0)
+  ).join(' | ');
 }
 
 </script>

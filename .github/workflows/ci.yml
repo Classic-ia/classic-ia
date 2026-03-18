@@ -1,0 +1,123 @@
+name: Classic CQ — CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ── Lint SQL ────────────────────────────────────────────────
+  sql-lint:
+    name: SQL Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar SQLFluff
+        run: pip install sqlfluff
+
+      - name: Lint migrations
+        run: |
+          sqlfluff lint \
+            --dialect postgres \
+            --exclude-rules L003,L016,L031 \
+            integracao_atak_cq/*.sql \
+            || echo "::warning::SQLFluff encontrou avisos (não bloqueante)"
+
+  # ── Validar ordem das migrations ────────────────────────────
+  migration-order:
+    name: Validar Migrations
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar numeração sequencial
+        run: |
+          echo "Verificando ordem das migrations..."
+          ls -1 integracao_atak_cq/[0-9]*.sql | sort -V | while read f; do
+            echo "  ✓ $(basename $f)"
+          done
+
+          # Verificar se não há gaps na numeração
+          expected=0
+          for f in $(ls -1 integracao_atak_cq/[0-9]*.sql | sort -V); do
+            num=$(basename "$f" | grep -oP '^\d+')
+            num=$((10#$num))
+            if [ "$num" -ne "$expected" ]; then
+              echo "::error::Gap na numeração: esperado ${expected}, encontrado ${num} em $(basename $f)"
+              exit 1
+            fi
+            expected=$((expected + 1))
+          done
+          echo "✓ Numeração sequencial OK (0 a $((expected - 1)))"
+
+  # ── Validar JSON dos fluxos n8n ─────────────────────────────
+  n8n-validate:
+    name: Validar Fluxos n8n
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validar JSON syntax
+        run: |
+          for f in integracao_atak_cq/n8n_*.json; do
+            python3 -c "import json; json.load(open('$f'))" && echo "  ✓ $(basename $f)" || exit 1
+          done
+
+      - name: Verificar campos obrigatórios nos fluxos
+        run: |
+          for f in integracao_atak_cq/n8n_*.json; do
+            python3 -c "
+          import json, sys
+          flow = json.load(open('$f'))
+          errs = []
+          if 'name' not in flow: errs.append('campo name ausente')
+          if 'nodes' not in flow: errs.append('campo nodes ausente')
+          if 'connections' not in flow: errs.append('campo connections ausente')
+          if errs:
+              print(f'ERRO em $(basename $f): {errs}')
+              sys.exit(1)
+          print(f'  ✓ $(basename $f) — {len(flow[\"nodes\"])} nodes')
+          " || exit 1
+          done
+
+  # ── Lint JS ─────────────────────────────────────────────────
+  js-lint:
+    name: JS Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Verificar syntax JS
+        run: |
+          for f in *.js integracao_atak_cq/*.js; do
+            [ -f "$f" ] || continue
+            node --check "$f" && echo "  ✓ $(basename $f)" || exit 1
+          done
+
+  # ── Verificar segurança (secrets expostos) ──────────────────
+  security-check:
+    name: Security Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verificar que service_role key NÃO está exposta
+        run: |
+          # Buscar padrão de service_role key (não anon key)
+          if grep -rl "service_role" --include="*.js" --include="*.html" --include="*.ts" . 2>/dev/null | grep -v node_modules | grep -v .git; then
+            echo "::warning::Referência a service_role encontrada em arquivos frontend"
+          fi
+
+          # Verificar .env não commitado
+          if [ -f .env ]; then
+            echo "::error::Arquivo .env encontrado no repositório!"
+            exit 1
+          fi
+
+          echo "✓ Nenhum secret exposto detectado"

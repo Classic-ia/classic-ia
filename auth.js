@@ -2,8 +2,9 @@
 // Uso: <script src="auth.js"></script>
 // Depois chamar: await authGuard(['administrador','qualidade']) — passa array de perfis permitidos
 
-const SUPABASE_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+// Usa config.js centralizado (deve ser carregado antes deste script)
+// <script src="config.js"></script>
+// <script src="auth.js"></script>
 
 // Instância global
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON);

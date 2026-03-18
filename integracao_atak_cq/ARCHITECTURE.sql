@@ -429,3 +429,4 @@
 -- 16. 07_migration_cadastros_mestres.sql — Clientes, unidades, motivos, audit
 -- 17. 08_migration_eventos_validacoes.sql — Eventos, validações de negócio
 -- 18. 09_migration_backup_recuperacao.sql — Backup, changelog, snapshots
+-- 19. 10_migration_merge_estrutura.sql   — Merge SQL novo: movimentações, staging, defeitos normalizados

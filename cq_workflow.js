@@ -129,6 +129,9 @@ const CQWorkflow = (function () {
     payload.status_workflow = 'rascunho';
     payload.criador_id = user.id;
     payload.usuario_id = user.id;
+    // IDs UUID são resolvidos automaticamente pelo trigger trg_resolver_ids_inspecao
+    // se fornecedor_id/produto_id/motorista_id não forem passados, o trigger
+    // resolve a partir de fornecedor_codigo/fornecedor/produto/motorista/placa_caminhao
 
     await _fetch('/rest/v1/registros_cq_inspecao', {
       method: 'POST',

@@ -144,6 +144,7 @@ const CQRanking = (function () {
     const payload = {
       fornecedor_codigo: dados.fornecedor_codigo,
       fornecedor_nome: dados.fornecedor_nome,
+      fornecedor_id: dados.fornecedor_id || null,  // UUID FK (trigger resolve se null)
       data_inspecao: dados.data_inspecao || new Date().toISOString().split('T')[0],
       inspetor_id: user?.id || null,
       inspetor_nome: user?.nome || null,
@@ -168,6 +169,7 @@ const CQRanking = (function () {
     const payload = {
       lote_id: loteId,
       produto_codigo: dados.produto_codigo,
+      produto_id: dados.produto_id || null,  // UUID FK (trigger resolve se null)
       class_a: dados.class_a || 0,
       class_b: dados.class_b || 0,
       class_c: dados.class_c || 0,

@@ -1,0 +1,1310 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lote Base de Produção — Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0a0a0a; --surface: #141414; --surface2: #1a1a1a;
+  --border: #1e1e1e; --border2: #2a2a2a;
+  --text: #e8e8e8; --muted: #666; --muted2: #888;
+  --accent: #c8a96e; --accent2: #a07840; --accent-bg: rgba(200,169,110,0.08);
+  --success: #2a7a4a; --success-text: #4ade80; --success-bg: rgba(74,222,128,0.08);
+  --error: #7a2a2a; --error-text: #f87171; --error-bg: rgba(248,113,113,0.08);
+  --warn: #7a6020; --warn-text: #fbbf24; --warn-bg: rgba(251,191,36,0.08);
+  --info: #1e3a5f; --info-text: #60a5fa; --info-bg: rgba(96,165,250,0.08);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'Inter', 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* ── HEADER ── */
+header {
+  background: var(--surface); border-bottom: 1px solid var(--border2);
+  padding: 12px 24px; display: flex; align-items: center;
+  justify-content: space-between; position: sticky; top: 0; z-index: 100;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-left a { color: var(--muted); font-size: 12px; text-decoration: none; letter-spacing: 0.1em; }
+.header-left a:hover { color: var(--accent); }
+.header-sep { color: var(--border2); }
+.header-mod { font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; letter-spacing: 0.12em; color: var(--accent); }
+.header-right { display: flex; align-items: center; gap: 16px; }
+#headerUser { font-size: 12px; color: var(--muted); }
+.btn-logout {
+  background: transparent; border: 1px solid var(--border2); border-radius: 2px;
+  color: var(--muted); font-size: 11px; padding: 6px 12px; cursor: pointer;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.btn-logout:hover { border-color: var(--accent); color: var(--accent); }
+
+/* ── TABS ── */
+.top-tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border);
+  background: var(--surface); padding: 0 24px;
+}
+.ttab {
+  padding: 14px 20px; font-size: 12px; font-family: 'DM Mono', monospace; font-weight: 600;
+  color: var(--muted); cursor: pointer; border: none; background: none;
+  border-bottom: 2px solid transparent; transition: all 0.2s; white-space: nowrap;
+}
+.ttab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.ttab:hover:not(.active) { color: var(--muted2); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* ── MAIN ── */
+main { max-width: 1100px; margin: 0 auto; padding: 28px 24px; }
+.page-title { font-family: 'Syne', sans-serif; font-size: 22px; font-weight: 800; color: var(--text); letter-spacing: 0.05em; margin-bottom: 6px; }
+.page-sub { font-size: 13px; color: var(--muted); margin-bottom: 28px; }
+
+/* ── CARDS ── */
+.card {
+  background: var(--surface); border: 1px solid var(--border2); border-radius: 8px;
+  padding: 20px 22px; margin-bottom: 18px;
+}
+.card-title {
+  font-family: 'Syne', sans-serif; font-size: 12px; font-weight: 800;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 16px;
+  display: flex; align-items: center; gap: 8px;
+}
+.card-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+
+/* ── FORM FIELDS ── */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+.grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field label {
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); font-family: 'DM Mono', monospace;
+}
+.field input, .field select, .field textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 9px 12px; color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px;
+  transition: border-color 0.2s; width: 100%;
+}
+.field input:focus, .field select:focus, .field textarea:focus { outline: none; border-color: var(--accent); }
+select option { background: var(--surface); }
+
+/* ── BUTTONS ── */
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent), var(--accent2)); color: #1a1000;
+  border: none; border-radius: 4px; padding: 12px 24px; font-weight: 600;
+  cursor: pointer; text-transform: uppercase; font-size: 12px; letter-spacing: 0.08em;
+  transition: opacity 0.2s;
+}
+.btn-primary:hover { opacity: 0.9; }
+.btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-secondary {
+  background: transparent; border: 1px solid var(--border2); color: var(--muted2);
+  border-radius: 4px; padding: 10px 20px; font-size: 12px; cursor: pointer;
+  letter-spacing: 0.05em; text-transform: uppercase; transition: all 0.2s;
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger {
+  background: var(--error-bg); border: 1px solid rgba(248,113,113,0.3); color: var(--error-text);
+  border-radius: 4px; padding: 10px 20px; font-size: 12px; cursor: pointer;
+  letter-spacing: 0.05em; text-transform: uppercase; transition: all 0.2s;
+}
+.btn-danger:hover { background: rgba(248,113,113,0.15); }
+.btn-group { display: flex; gap: 10px; margin-top: 16px; flex-wrap: wrap; }
+
+/* ── KPI ROW ── */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+  padding: 16px; text-align: center;
+}
+.kpi-label { font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+.kpi-val { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 800; color: var(--accent); }
+.kpi-sub { font-size: 11px; color: var(--muted2); margin-top: 2px; }
+.kpi-accent-green .kpi-val { color: var(--success-text); }
+.kpi-accent-red .kpi-val { color: var(--error-text); }
+.kpi-accent-blue .kpi-val { color: var(--info-text); }
+
+/* ── TABLES ── */
+.table-wrap { overflow-x: auto; margin-top: 12px; }
+table.data-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+table.data-table th {
+  font-family: 'DM Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--muted); text-align: left;
+  padding: 10px 12px; border-bottom: 1px solid var(--border2);
+}
+table.data-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  color: var(--text); font-family: 'DM Mono', monospace; font-size: 12px;
+}
+table.data-table tr:hover td { background: var(--accent-bg); }
+table.data-table .mono { font-family: 'DM Mono', monospace; }
+table.data-table .bold { font-weight: 600; color: var(--accent); }
+
+/* ── BADGES ── */
+.badge {
+  display: inline-block; font-size: 10px; font-weight: 600; padding: 3px 10px;
+  border-radius: 20px; letter-spacing: 0.05em; text-transform: uppercase;
+}
+.badge-aberto { background: var(--info-bg); color: var(--info-text); border: 1px solid rgba(96,165,250,0.3); }
+.badge-fechado { background: var(--warn-bg); color: var(--warn-text); border: 1px solid rgba(251,191,36,0.3); }
+.badge-em_producao { background: var(--accent-bg); color: var(--accent); border: 1px solid rgba(200,169,110,0.3); }
+.badge-finalizado { background: var(--success-bg); color: var(--success-text); border: 1px solid rgba(74,222,128,0.3); }
+.badge-cancelado { background: var(--error-bg); color: var(--error-text); border: 1px solid rgba(248,113,113,0.3); }
+.badge-a { background: var(--success-bg); color: var(--success-text); border: 1px solid rgba(74,222,128,0.3); }
+.badge-b { background: var(--warn-bg); color: var(--warn-text); border: 1px solid rgba(251,191,36,0.3); }
+.badge-c { background: var(--error-bg); color: var(--error-text); border: 1px solid rgba(248,113,113,0.3); }
+
+/* ── ALERTS ── */
+.alert {
+  padding: 14px 16px; border-radius: 6px; font-size: 13px; line-height: 1.6;
+  margin-bottom: 16px; display: flex; align-items: flex-start; gap: 10px;
+}
+.alert-info { background: var(--info); border: 1px solid rgba(96,165,250,0.3); color: var(--info-text); }
+.alert-success { background: var(--success); border: 1px solid rgba(74,222,128,0.3); color: var(--success-text); }
+.alert-warn { background: var(--warn); border: 1px solid rgba(251,191,36,0.3); color: var(--warn-text); }
+.alert-error { background: var(--error); border: 1px solid rgba(248,113,113,0.3); color: var(--error-text); }
+
+/* ── ESTOQUE LIST (selectable) ── */
+.estoque-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.estoque-item {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 14px 16px; display: flex; align-items: center; gap: 14px;
+  cursor: pointer; transition: all 0.2s;
+}
+.estoque-item:hover { border-color: var(--accent); background: var(--accent-bg); }
+.estoque-item.selected { border-color: var(--accent); background: rgba(200,169,110,0.12); }
+.estoque-item .ei-check {
+  width: 20px; height: 20px; border: 2px solid var(--border2); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  font-size: 12px; transition: all 0.2s;
+}
+.estoque-item.selected .ei-check { background: var(--accent); border-color: var(--accent); color: #1a1000; }
+.estoque-item .ei-info { flex: 1; }
+.estoque-item .ei-lote { font-family: 'DM Mono', monospace; font-size: 14px; font-weight: 600; color: var(--accent); }
+.estoque-item .ei-detail { font-size: 11px; color: var(--muted2); margin-top: 2px; }
+.estoque-item .ei-qty {
+  text-align: right; min-width: 100px;
+}
+.estoque-item .ei-qty-val { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 600; }
+.estoque-item .ei-qty-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; }
+.estoque-item .ei-input {
+  width: 90px; background: var(--surface); border: 1px solid var(--accent);
+  border-radius: 6px; padding: 8px; color: var(--accent); font-family: 'DM Mono', monospace;
+  font-size: 14px; font-weight: 600; text-align: center;
+}
+.estoque-item .ei-input:focus { outline: none; box-shadow: 0 0 0 2px rgba(200,169,110,0.3); }
+
+/* ── COMPOSICAO (chips in lote base) ── */
+.composicao-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.composicao-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  font-size: 12px;
+}
+.composicao-item .ci-lote { font-family: 'DM Mono', monospace; font-weight: 600; color: var(--accent); min-width: 80px; }
+.composicao-item .ci-forn { color: var(--muted2); flex: 1; }
+.composicao-item .ci-qty { font-family: 'DM Mono', monospace; font-weight: 600; }
+.composicao-item .ci-remove {
+  background: none; border: none; color: var(--error-text); cursor: pointer;
+  font-size: 14px; padding: 2px 6px; opacity: 0.6; transition: opacity 0.2s;
+}
+.composicao-item .ci-remove:hover { opacity: 1; }
+
+/* ── TIMELINE ── */
+.timeline { position: relative; padding-left: 24px; margin-top: 16px; }
+.timeline::before {
+  content: ''; position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.tl-item { position: relative; padding-bottom: 20px; }
+.tl-item::before {
+  content: ''; position: absolute; left: -20px; top: 4px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--bg);
+}
+.tl-date { font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace; margin-bottom: 2px; }
+.tl-text { font-size: 13px; color: var(--text); }
+.tl-detail { font-size: 11px; color: var(--muted2); margin-top: 2px; }
+
+/* ── MODAL ── */
+.modal-overlay {
+  display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.7); z-index: 500; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal-box {
+  background: var(--surface); border: 1px solid var(--border2); border-radius: 8px;
+  width: 520px; max-width: 95vw; max-height: 85vh; display: flex; flex-direction: column;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+}
+.modal-hd {
+  padding: 16px 20px; border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-hd h3 { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; color: var(--accent); }
+.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; }
+.modal-body { padding: 20px; overflow-y: auto; flex: 1; }
+.modal-footer { padding: 14px 20px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+/* ── MODELO SWITCH ── */
+.modelo-switch {
+  display: flex; gap: 16px; margin-bottom: 24px;
+}
+.modelo-option {
+  flex: 1; background: var(--surface); border: 2px solid var(--border);
+  border-radius: 8px; padding: 20px; cursor: pointer; transition: all 0.2s;
+  text-align: center;
+}
+.modelo-option:hover { border-color: var(--accent); }
+.modelo-option.active { border-color: var(--accent); background: var(--accent-bg); }
+.modelo-option .mo-icon { font-size: 32px; margin-bottom: 8px; }
+.modelo-option .mo-title { font-family: 'Syne', sans-serif; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.modelo-option .mo-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.modelo-option .mo-badge {
+  display: inline-block; margin-top: 10px; font-size: 10px; padding: 3px 10px;
+  border-radius: 20px; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.mo-badge-atual { background: var(--info-bg); color: var(--info-text); border: 1px solid rgba(96,165,250,0.3); }
+.mo-badge-novo { background: var(--success-bg); color: var(--success-text); border: 1px solid rgba(74,222,128,0.3); }
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  text-align: center; padding: 48px 24px; color: var(--muted);
+}
+.empty-state .es-icon { font-size: 48px; margin-bottom: 12px; opacity: 0.5; }
+.empty-state .es-text { font-size: 14px; margin-bottom: 8px; }
+.empty-state .es-sub { font-size: 12px; color: var(--muted); }
+
+/* ── LOADING ── */
+.spinner { display: inline-block; width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.6s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .modelo-switch { flex-direction: column; }
+  main { padding: 20px 16px; }
+  header { padding: 10px 16px; }
+  .top-tabs { padding: 0 12px; overflow-x: auto; }
+  .ttab { padding: 12px 14px; font-size: 11px; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <a href="app.html">MENU</a>
+    <span class="header-sep">|</span>
+    <span class="header-mod">LOTE BASE PRODUÇÃO</span>
+  </div>
+  <div class="header-right">
+    <span id="headerUser"></span>
+    <button class="btn-logout" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</header>
+
+<div class="top-tabs">
+  <button class="ttab active" onclick="showTab('tab-lote-base')">Lote Base (Novo)</button>
+  <button class="ttab" onclick="showTab('tab-modelo-atual')">Modelo Atual (1:1)</button>
+  <button class="ttab" onclick="showTab('tab-rastreabilidade')">Rastreabilidade</button>
+  <button class="ttab" onclick="showTab('tab-lotes-abertos')">Lotes Abertos</button>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB 1: LOTE BASE (NOVO MODELO N:1) -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-lote-base" class="tab-content active">
+<main>
+  <div class="page-title">Lote Base de Produção</div>
+  <div class="page-sub">Consolide múltiplos lotes de matéria-prima em um lote base diário para produção.</div>
+
+  <div class="alert alert-info">
+    <span>i</span>
+    <div><strong>Novo modelo:</strong> Combine lotes 100, 101, 102... em um único BCH-DDMMAAAA. 
+    O lote base entra no fluxo ATAK normalmente a partir do T650.</div>
+  </div>
+
+  <!-- Step 1: Criar / Selecionar Lote Base -->
+  <div class="card" id="cardCriarLote">
+    <div class="card-title">1. Criar ou Selecionar Lote Base</div>
+    <div class="grid-3">
+      <div class="field">
+        <label>Data de Produção</label>
+        <input type="date" id="lbDataProd" />
+      </div>
+      <div class="field">
+        <label>Produto</label>
+        <select id="lbProduto">
+          <option value="">— Selecionar —</option>
+          <option value="45083">45083 - Bucho Bovino Salgado</option>
+          <option value="45084">45084 - Bucho Bovino Congelado</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Observações</label>
+        <input type="text" id="lbObs" placeholder="Opcional" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn-primary" onclick="criarLoteBase()">Criar Lote Base</button>
+      <button class="btn-secondary" onclick="selecionarLoteExistente()">Selecionar Existente</button>
+    </div>
+  </div>
+
+  <!-- Lote Base Ativo -->
+  <div class="card" id="cardLoteAtivo" style="display:none;">
+    <div class="card-title">Lote Base Ativo</div>
+    <div class="kpi-row">
+      <div class="kpi">
+        <div class="kpi-label">Código</div>
+        <div class="kpi-val" id="lbCodigo">—</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Total Peças</div>
+        <div class="kpi-val" id="lbTotalPecas">0</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Lotes de MP</div>
+        <div class="kpi-val" id="lbTotalLotes">0</div>
+      </div>
+      <div class="kpi">
+        <div class="kpi-label">Status</div>
+        <div class="kpi-val" id="lbStatus" style="font-size:14px;">—</div>
+      </div>
+    </div>
+
+    <!-- Composição atual -->
+    <div id="composicaoAtual">
+      <div style="font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:8px;">Composição atual</div>
+      <div class="composicao-list" id="listaComposicao">
+        <div class="empty-state" style="padding:20px;">
+          <div class="es-text">Nenhum lote de MP adicionado</div>
+          <div class="es-sub">Selecione lotes do estoque abaixo</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Selecionar MP do Estoque -->
+  <div class="card" id="cardEstoque" style="display:none;">
+    <div class="card-title">2. Adicionar Matéria-Prima do Estoque</div>
+    <div class="grid-3" style="margin-bottom:12px;">
+      <div class="field">
+        <label>Filtrar Produto</label>
+        <select id="filtProduto" onchange="carregarEstoqueMP()">
+          <option value="">Todos</option>
+          <option value="45083">45083 - Bucho Salgado</option>
+          <option value="45084">45084 - Bucho Congelado</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Filtrar Fornecedor</label>
+        <input type="text" id="filtFornecedor" placeholder="Código ou nome" oninput="filtrarEstoque()" />
+      </div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn-secondary" onclick="carregarEstoqueMP()">Atualizar</button>
+      </div>
+    </div>
+    <div class="estoque-list" id="listaEstoque">
+      <div class="empty-state">
+        <div class="es-icon">📦</div>
+        <div class="es-text">Carregando estoque...</div>
+      </div>
+    </div>
+    <div class="btn-group" id="btnConsumir" style="display:none;">
+      <button class="btn-primary" onclick="consumirSelecionados()">Adicionar Selecionados ao Lote Base</button>
+    </div>
+  </div>
+
+  <!-- Step 3: Fechar Lote Base -->
+  <div class="card" id="cardFechar" style="display:none;">
+    <div class="card-title">3. Fechar Lote Base</div>
+    <div class="alert alert-warn">
+      <span>!</span>
+      <div>Ao fechar, nenhuma MP adicional poderá ser adicionada. O lote ficará pronto para entrar no fluxo ATAK.</div>
+    </div>
+    <div class="btn-group">
+      <button class="btn-primary" onclick="fecharLoteBase()">Fechar Lote Base</button>
+    </div>
+  </div>
+
+</main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB 2: MODELO ATUAL (1:1) -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-modelo-atual" class="tab-content">
+<main>
+  <div class="page-title">Produção Modelo Atual (1:1)</div>
+  <div class="page-sub">Registro direto: 1 lote de matéria-prima gera 1 lote de produção no ATAK.</div>
+
+  <div class="alert alert-info">
+    <span>i</span>
+    <div><strong>Modelo atual:</strong> Cada lote de MP entra individualmente na produção. 
+    Ideal para lotes que não precisam ser combinados.</div>
+  </div>
+
+  <!-- Registro 1:1 -->
+  <div class="card">
+    <div class="card-title">Registrar Produção 1:1</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Lote de MP (Origem)</label>
+        <input type="text" id="atualLoteMP" placeholder="Ex: 100, 101..." />
+      </div>
+      <div class="field">
+        <label>Data de Produção</label>
+        <input type="date" id="atualData" />
+      </div>
+    </div>
+    <div class="grid-3" style="margin-top:14px;">
+      <div class="field">
+        <label>Produto</label>
+        <select id="atualProduto">
+          <option value="">— Selecionar —</option>
+          <option value="45083">45083 - Bucho Bovino Salgado</option>
+          <option value="45084">45084 - Bucho Bovino Congelado</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Quantidade (peças)</label>
+        <input type="number" id="atualQtd" min="1" placeholder="0" />
+      </div>
+      <div class="field">
+        <label>Documento ATAK</label>
+        <input type="text" id="atualDocAtak" placeholder="Opcional" />
+      </div>
+    </div>
+    <div class="grid-2" style="margin-top:14px;">
+      <div class="field">
+        <label>Fornecedor</label>
+        <input type="text" id="atualFornecedor" placeholder="Código ou nome" />
+      </div>
+      <div class="field">
+        <label>Observações</label>
+        <input type="text" id="atualObs" placeholder="Opcional" />
+      </div>
+    </div>
+    <div class="btn-group">
+      <button class="btn-primary" onclick="registrarProducao11()">Registrar Produção</button>
+      <button class="btn-secondary" onclick="limparForm11()">Limpar</button>
+    </div>
+  </div>
+
+  <!-- Histórico 1:1 hoje -->
+  <div class="card">
+    <div class="card-title">Produções Registradas Hoje</div>
+    <div class="table-wrap" id="tabelaHist11">
+      <div class="empty-state">
+        <div class="es-icon">📋</div>
+        <div class="es-text">Nenhuma produção registrada hoje</div>
+      </div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB 3: RASTREABILIDADE -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-rastreabilidade" class="tab-content">
+<main>
+  <div class="page-title">Rastreabilidade</div>
+  <div class="page-sub">Consulte a composição de lotes base ou o destino de lotes de matéria-prima.</div>
+
+  <div class="modelo-switch">
+    <div class="modelo-option active" onclick="setModoRastreio('direta')">
+      <div class="mo-icon">🔍</div>
+      <div class="mo-title">Lote Base → MP</div>
+      <div class="mo-desc">Dado um lote base, quais lotes de MP o compõem?</div>
+      <span class="mo-badge mo-badge-novo">Direto</span>
+    </div>
+    <div class="modelo-option" onclick="setModoRastreio('reversa')">
+      <div class="mo-icon">🔄</div>
+      <div class="mo-title">MP → Lote Base</div>
+      <div class="mo-desc">Dado um lote de MP, em quais produções ele foi usado?</div>
+      <span class="mo-badge mo-badge-atual">Reverso</span>
+    </div>
+  </div>
+
+  <!-- Consulta direta -->
+  <div class="card" id="cardRastreioDireta">
+    <div class="card-title">Consultar Composição do Lote Base</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Código do Lote Base</label>
+        <input type="text" id="rastreioCodigo" placeholder="Ex: BCH-11032026" />
+      </div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn-primary" onclick="consultarComposicao()">Consultar</button>
+      </div>
+    </div>
+    <div id="resultadoDireta" style="margin-top:16px;"></div>
+  </div>
+
+  <!-- Consulta reversa -->
+  <div class="card" id="cardRastreioReversa" style="display:none;">
+    <div class="card-title">Rastrear Lote de MP na Produção</div>
+    <div class="grid-2">
+      <div class="field">
+        <label>Código do Lote de MP</label>
+        <input type="text" id="rastreioMP" placeholder="Ex: 100, 101..." />
+      </div>
+      <div class="field" style="justify-content:flex-end;">
+        <button class="btn-primary" onclick="rastrearMP()">Rastrear</button>
+      </div>
+    </div>
+    <div id="resultadoReversa" style="margin-top:16px;"></div>
+  </div>
+</main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TAB 4: LOTES ABERTOS -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="tab-lotes-abertos" class="tab-content">
+<main>
+  <div class="page-title">Lotes Base em Andamento</div>
+  <div class="page-sub">Todos os lotes base criados, filtráveis por status.</div>
+
+  <div class="grid-3" style="margin-bottom:20px;">
+    <div class="field">
+      <label>Status</label>
+      <select id="filtStatusLote" onchange="carregarLotesAbertos()">
+        <option value="">Todos</option>
+        <option value="aberto">Aberto</option>
+        <option value="fechado">Fechado</option>
+        <option value="em_producao">Em Produção</option>
+        <option value="finalizado">Finalizado</option>
+        <option value="cancelado">Cancelado</option>
+      </select>
+    </div>
+    <div class="field">
+      <label>Data</label>
+      <input type="date" id="filtDataLote" onchange="carregarLotesAbertos()" />
+    </div>
+    <div class="field" style="justify-content:flex-end;">
+      <button class="btn-secondary" onclick="carregarLotesAbertos()">Atualizar</button>
+    </div>
+  </div>
+
+  <div class="table-wrap" id="tabelaLotesAbertos">
+    <div class="empty-state">
+      <div class="es-icon">📋</div>
+      <div class="es-text">Carregando lotes...</div>
+    </div>
+  </div>
+</main>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- MODAL: Selecionar Lote Existente -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalSelecionarLote">
+  <div class="modal-box">
+    <div class="modal-hd">
+      <h3>Selecionar Lote Base Existente</h3>
+      <button class="modal-close" onclick="fecharModal('modalSelecionarLote')">×</button>
+    </div>
+    <div class="modal-body" id="modalLoteBody">
+      <div class="empty-state"><div class="es-text">Carregando...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- TOAST CONTAINER -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<div id="toastContainer" style="position:fixed;top:16px;right:16px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<!-- SCRIPTS -->
+<!-- ═══════════════════════════════════════════════════════════════════ -->
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script src="cq_toast.js"></script>
+<script>
+
+// ── STATE ───────────────────────────────────────────────
+let loteBaseAtivo = null; // { id, codigo, ... }
+let estoqueMP = [];       // lista do estoque disponível
+let selecoes = {};        // { lote_codigo: quantidade }
+let usuario = null;
+
+// ── INIT ────────────────────────────────────────────────
+(async () => {
+  usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador', 'qualidade', 'industrial'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+
+  document.getElementById('headerUser').textContent =
+    (usuario.nome || usuario.email) + ' · ' + (usuario.perfil || '');
+
+  // Default dates
+  const hoje = new Date().toISOString().slice(0, 10);
+  document.getElementById('lbDataProd').value = hoje;
+  document.getElementById('atualData').value = hoje;
+})();
+
+// ── TAB SWITCHING ───────────────────────────────────────
+function showTab(tabId) {
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.ttab').forEach(el => el.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+
+  // Lazy load
+  if (tabId === 'tab-lotes-abertos') carregarLotesAbertos();
+  if (tabId === 'tab-modelo-atual') carregarHistorico11();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 1: LOTE BASE (NOVO MODELO)
+// ═══════════════════════════════════════════════════════════════
+
+async function criarLoteBase() {
+  const data = document.getElementById('lbDataProd').value;
+  const produto = document.getElementById('lbProduto').value;
+  const produtoNome = produto ? document.getElementById('lbProduto').selectedOptions[0].text.split(' - ')[1] : null;
+  const obs = document.getElementById('lbObs').value;
+
+  if (!data) return toast('error', 'Informe a data de produção');
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_criar_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_data_producao: data,
+        p_produto_codigo: produto || null,
+        p_produto_nome: produtoNome || null,
+        p_observacoes: obs || null
+      })
+    });
+    const result = await res.json();
+
+    if (!result.ok) {
+      return toast('error', result.erro || 'Erro ao criar lote base');
+    }
+
+    toast('success', `Lote base ${result.codigo} criado`);
+    loteBaseAtivo = {
+      id: result.lote_base_id,
+      codigo: result.codigo,
+      data_producao: result.data_producao,
+      status: 'aberto',
+      total_pecas: 0,
+      total_lotes_origem: 0
+    };
+    ativarLoteBase();
+  } catch (e) {
+    toast('error', 'Erro de conexão: ' + e.message);
+  }
+}
+
+function ativarLoteBase() {
+  document.getElementById('cardCriarLote').style.display = 'none';
+  document.getElementById('cardLoteAtivo').style.display = '';
+  document.getElementById('cardEstoque').style.display = '';
+
+  const isAberto = loteBaseAtivo.status === 'aberto';
+  document.getElementById('cardFechar').style.display = isAberto ? '' : 'none';
+
+  document.getElementById('lbCodigo').textContent = loteBaseAtivo.codigo;
+  document.getElementById('lbTotalPecas').textContent = loteBaseAtivo.total_pecas || 0;
+  document.getElementById('lbTotalLotes').textContent = loteBaseAtivo.total_lotes_origem || 0;
+
+  const statusEl = document.getElementById('lbStatus');
+  statusEl.innerHTML = `<span class="badge badge-${loteBaseAtivo.status}">${loteBaseAtivo.status.toUpperCase()}</span>`;
+
+  carregarEstoqueMP();
+  carregarComposicao();
+}
+
+function desativarLoteBase() {
+  loteBaseAtivo = null;
+  selecoes = {};
+  document.getElementById('cardCriarLote').style.display = '';
+  document.getElementById('cardLoteAtivo').style.display = 'none';
+  document.getElementById('cardEstoque').style.display = 'none';
+  document.getElementById('cardFechar').style.display = 'none';
+}
+
+async function carregarComposicao() {
+  if (!loteBaseAtivo) return;
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_consultar_composicao_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_lote_base_id: loteBaseAtivo.id })
+    });
+    const result = await res.json();
+
+    if (!result.ok) return;
+
+    const comp = result.composicao || [];
+    const container = document.getElementById('listaComposicao');
+
+    if (comp.length === 0) {
+      container.innerHTML = `<div class="empty-state" style="padding:20px;">
+        <div class="es-text">Nenhum lote de MP adicionado</div>
+        <div class="es-sub">Selecione lotes do estoque abaixo</div>
+      </div>`;
+      return;
+    }
+
+    container.innerHTML = comp.map(c => `
+      <div class="composicao-item">
+        <span class="ci-lote">${esc(c.lote_origem)}</span>
+        <span class="ci-forn">${esc(c.fornecedor_nome || c.fornecedor_codigo || '—')}</span>
+        <span class="badge badge-${(c.classificacao_mp||'').toLowerCase()}">${c.classificacao_mp || '—'}</span>
+        <span class="ci-qty">${c.quantidade_consumida} pcs</span>
+      </div>
+    `).join('');
+
+    // Atualizar KPIs
+    const total = comp.reduce((s, c) => s + (c.quantidade_consumida || 0), 0);
+    document.getElementById('lbTotalPecas').textContent = total;
+    document.getElementById('lbTotalLotes').textContent = comp.length;
+    loteBaseAtivo.total_pecas = total;
+    loteBaseAtivo.total_lotes_origem = comp.length;
+
+  } catch (e) {
+    console.error('Erro composição:', e);
+  }
+}
+
+async function carregarEstoqueMP() {
+  const container = document.getElementById('listaEstoque');
+  container.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="es-text" style="margin-top:12px;">Carregando estoque...</div></div>';
+
+  const filtProd = document.getElementById('filtProduto').value;
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_listar_estoque_mp_disponivel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_produto_codigo: filtProd || null,
+        p_fornecedor_codigo: null
+      })
+    });
+    const result = await res.json();
+
+    if (!result.ok) {
+      container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(result.erro || 'Erro')}</div></div>`;
+      return;
+    }
+
+    estoqueMP = result.estoque || [];
+    filtrarEstoque();
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error"><span>!</span><div>Erro de conexão: ${esc(e.message)}</div></div>`;
+  }
+}
+
+function filtrarEstoque() {
+  const filtForn = (document.getElementById('filtFornecedor').value || '').toLowerCase();
+  const container = document.getElementById('listaEstoque');
+  const filtered = estoqueMP.filter(e => {
+    if (filtForn && !(e.fornecedor_nome || '').toLowerCase().includes(filtForn) && !(e.fornecedor_codigo || '').toLowerCase().includes(filtForn)) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    container.innerHTML = '<div class="empty-state"><div class="es-icon">📦</div><div class="es-text">Nenhum lote disponível</div></div>';
+    document.getElementById('btnConsumir').style.display = 'none';
+    return;
+  }
+
+  container.innerHTML = filtered.map(e => {
+    const sel = selecoes[e.lote_codigo];
+    return `
+    <div class="estoque-item ${sel ? 'selected' : ''}" onclick="toggleEstoqueItem('${esc(e.lote_codigo)}', ${e.quantidade_disponivel}, this)">
+      <div class="ei-check">${sel ? '✓' : ''}</div>
+      <div class="ei-info">
+        <div class="ei-lote">${esc(e.lote_codigo)} ${e.lote_atak ? `<span style="color:var(--muted);font-size:11px;">(${esc(e.lote_atak)})</span>` : ''}</div>
+        <div class="ei-detail">
+          ${esc(e.fornecedor_nome || e.fornecedor_codigo || '—')}
+          ${e.classificacao ? ` · <span class="badge badge-${e.classificacao.toLowerCase()}">${e.classificacao}</span>` : ''}
+          ${e.data_entrada ? ` · Entrada: ${formatDate(e.data_entrada)}` : ''}
+        </div>
+      </div>
+      <div class="ei-qty">
+        <div class="ei-qty-val">${e.quantidade_disponivel}</div>
+        <div class="ei-qty-label">Disponível</div>
+      </div>
+      ${sel ? `<input class="ei-input" type="number" value="${sel}" min="1" max="${e.quantidade_disponivel}" onclick="event.stopPropagation()" onchange="atualizarQtdSelecao('${esc(e.lote_codigo)}', this.value, ${e.quantidade_disponivel})" />` : ''}
+    </div>`;
+  }).join('');
+
+  document.getElementById('btnConsumir').style.display = Object.keys(selecoes).length > 0 ? '' : 'none';
+}
+
+function toggleEstoqueItem(loteCodigo, maxQtd, el) {
+  if (selecoes[loteCodigo]) {
+    delete selecoes[loteCodigo];
+  } else {
+    selecoes[loteCodigo] = maxQtd; // default: consumir tudo
+  }
+  filtrarEstoque();
+}
+
+function atualizarQtdSelecao(loteCodigo, val, max) {
+  const n = parseInt(val);
+  if (isNaN(n) || n < 1) selecoes[loteCodigo] = 1;
+  else if (n > max) selecoes[loteCodigo] = max;
+  else selecoes[loteCodigo] = n;
+}
+
+async function consumirSelecionados() {
+  if (!loteBaseAtivo) return toast('error', 'Nenhum lote base ativo');
+  const items = Object.entries(selecoes);
+  if (items.length === 0) return toast('error', 'Selecione ao menos um lote de MP');
+
+  let erros = 0;
+  let ok = 0;
+
+  for (const [loteCodigo, qtd] of items) {
+    try {
+      const res = await CQ_API.fetch('rpc/cq_consumir_mp_para_lote_base', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          p_lote_base_id: loteBaseAtivo.id,
+          p_lote_mp_codigo: loteCodigo,
+          p_quantidade: qtd
+        })
+      });
+      const result = await res.json();
+      if (result.ok) {
+        ok++;
+      } else {
+        erros++;
+        toast('error', `Lote ${loteCodigo}: ${result.erro}`);
+      }
+    } catch (e) {
+      erros++;
+      toast('error', `Lote ${loteCodigo}: ${e.message}`);
+    }
+  }
+
+  selecoes = {};
+  if (ok > 0) toast('success', `${ok} lote(s) adicionado(s) ao lote base`);
+  carregarComposicao();
+  carregarEstoqueMP();
+}
+
+async function fecharLoteBase() {
+  if (!loteBaseAtivo) return;
+  if (!confirm(`Confirma fechar o lote base ${loteBaseAtivo.codigo}?\n\nApós fechamento, não será possível adicionar mais MP.`)) return;
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_fechar_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_lote_base_id: loteBaseAtivo.id })
+    });
+    const result = await res.json();
+
+    if (!result.ok) return toast('error', result.erro || 'Erro ao fechar');
+
+    toast('success', `Lote base ${result.lote_base} fechado — ${result.total_pecas} peças, ${result.total_lotes_origem} lotes`);
+    loteBaseAtivo.status = 'fechado';
+    ativarLoteBase();
+  } catch (e) {
+    toast('error', 'Erro: ' + e.message);
+  }
+}
+
+async function selecionarLoteExistente() {
+  const modal = document.getElementById('modalSelecionarLote');
+  const body = document.getElementById('modalLoteBody');
+  modal.classList.add('open');
+  body.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="es-text" style="margin-top:8px;">Carregando...</div></div>';
+
+  try {
+    const rows = await CQ_API.get('cq_lote_base_producao?status=in.(aberto,fechado,em_producao)&order=criado_em.desc&limit=20');
+
+    if (!rows || rows.length === 0) {
+      body.innerHTML = '<div class="empty-state"><div class="es-text">Nenhum lote base em aberto</div></div>';
+      return;
+    }
+
+    body.innerHTML = rows.map(r => `
+      <div class="estoque-item" onclick="selecionarLote('${r.id}', '${esc(r.codigo)}', '${r.status}', ${r.total_pecas || 0}, ${r.total_lotes_origem || 0}, '${r.data_producao}')">
+        <div class="ei-info">
+          <div class="ei-lote">${esc(r.codigo)}</div>
+          <div class="ei-detail">${formatDate(r.data_producao)} · <span class="badge badge-${r.status}">${r.status}</span></div>
+        </div>
+        <div class="ei-qty">
+          <div class="ei-qty-val">${r.total_pecas || 0}</div>
+          <div class="ei-qty-label">Peças</div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    body.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+function selecionarLote(id, codigo, status, totalPecas, totalLotes, dataProd) {
+  loteBaseAtivo = { id, codigo, status, total_pecas: totalPecas, total_lotes_origem: totalLotes, data_producao: dataProd };
+  fecharModal('modalSelecionarLote');
+  ativarLoteBase();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 2: MODELO ATUAL (1:1)
+// ═══════════════════════════════════════════════════════════════
+
+async function registrarProducao11() {
+  const loteMP = document.getElementById('atualLoteMP').value.trim();
+  const data = document.getElementById('atualData').value;
+  const produtoSel = document.getElementById('atualProduto');
+  const produto = produtoSel.value;
+  const produtoNome = produto ? produtoSel.selectedOptions[0].text.split(' - ')[1] : null;
+  const qtd = parseInt(document.getElementById('atualQtd').value);
+  const docAtak = document.getElementById('atualDocAtak').value.trim();
+  const fornecedor = document.getElementById('atualFornecedor').value.trim();
+  const obs = document.getElementById('atualObs').value.trim();
+
+  if (!loteMP) return toast('error', 'Informe o lote de MP');
+  if (!data) return toast('error', 'Informe a data de produção');
+  if (!qtd || qtd < 1) return toast('error', 'Informe a quantidade');
+
+  try {
+    // 1. Criar lote base com 1 lote só
+    const resCriar = await CQ_API.fetch('rpc/cq_criar_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_data_producao: data,
+        p_produto_codigo: produto || null,
+        p_produto_nome: produtoNome || null,
+        p_observacoes: obs ? `[1:1] ${obs}` : '[1:1] Modelo atual - lote individual'
+      })
+    });
+    const rCriar = await resCriar.json();
+
+    if (!rCriar.ok) return toast('error', rCriar.erro || 'Erro ao criar lote');
+
+    // 2. Verificar se o lote de MP existe no estoque
+    const estoqueCheck = await CQ_API.get(`cq_estoque_mp?lote_codigo=eq.${encodeURIComponent(loteMP)}`);
+
+    if (!estoqueCheck || estoqueCheck.length === 0) {
+      // Criar entrada no estoque se não existe
+      const resIns = await CQ_API.fetch('cq_estoque_mp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({
+          lote_codigo: loteMP,
+          lote_atak: docAtak || null,
+          fornecedor_codigo: fornecedor || null,
+          fornecedor_nome: fornecedor || null,
+          produto_codigo: produto || null,
+          produto_nome: produtoNome || null,
+          quantidade_entrada: qtd,
+          status: 'disponivel',
+          data_entrada: data
+        })
+      });
+      if (!resIns.ok) {
+        const err = await resIns.text();
+        return toast('error', 'Erro ao registrar estoque MP: ' + err);
+      }
+    }
+
+    // 3. Consumir MP para o lote base
+    const resConsumir = await CQ_API.fetch('rpc/cq_consumir_mp_para_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        p_lote_base_id: rCriar.lote_base_id,
+        p_lote_mp_codigo: loteMP,
+        p_quantidade: qtd
+      })
+    });
+    const rConsumir = await resConsumir.json();
+
+    if (!rConsumir.ok) return toast('error', rConsumir.erro || 'Erro ao consumir MP');
+
+    // 4. Fechar imediatamente (1:1 = 1 lote só)
+    const resFechar = await CQ_API.fetch('rpc/cq_fechar_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_lote_base_id: rCriar.lote_base_id })
+    });
+    const rFechar = await resFechar.json();
+
+    toast('success', `Produção ${rCriar.codigo} registrada — ${qtd} pcs do lote ${loteMP}`);
+    limparForm11();
+    carregarHistorico11();
+  } catch (e) {
+    toast('error', 'Erro: ' + e.message);
+  }
+}
+
+function limparForm11() {
+  document.getElementById('atualLoteMP').value = '';
+  document.getElementById('atualQtd').value = '';
+  document.getElementById('atualDocAtak').value = '';
+  document.getElementById('atualFornecedor').value = '';
+  document.getElementById('atualObs').value = '';
+}
+
+async function carregarHistorico11() {
+  const container = document.getElementById('tabelaHist11');
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  try {
+    const rows = await CQ_API.get(`cq_lote_base_producao?data_producao=eq.${hoje}&order=criado_em.desc`);
+
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="es-icon">📋</div><div class="es-text">Nenhuma produção registrada hoje</div></div>';
+      return;
+    }
+
+    container.innerHTML = `<table class="data-table">
+      <thead><tr>
+        <th>Código</th><th>Produto</th><th>Peças</th><th>Lotes MP</th><th>Status</th><th>Criado</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td class="bold">${esc(r.codigo)}</td>
+        <td>${esc(r.produto_nome || r.produto_codigo || '—')}</td>
+        <td class="mono">${r.total_pecas || 0}</td>
+        <td class="mono">${r.total_lotes_origem || 0}</td>
+        <td><span class="badge badge-${r.status}">${r.status}</span></td>
+        <td class="mono">${formatTime(r.criado_em)}</td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 3: RASTREABILIDADE
+// ═══════════════════════════════════════════════════════════════
+
+function setModoRastreio(modo) {
+  document.querySelectorAll('#tab-rastreabilidade .modelo-option').forEach(el => el.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  document.getElementById('cardRastreioDireta').style.display = modo === 'direta' ? '' : 'none';
+  document.getElementById('cardRastreioReversa').style.display = modo === 'reversa' ? '' : 'none';
+}
+
+async function consultarComposicao() {
+  const codigo = document.getElementById('rastreioCodigo').value.trim();
+  if (!codigo) return toast('error', 'Informe o código do lote base');
+
+  const container = document.getElementById('resultadoDireta');
+  container.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_consultar_composicao_lote_base', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_lote_base_codigo: codigo })
+    });
+    const result = await res.json();
+
+    if (!result.ok) {
+      container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(result.erro)}</div></div>`;
+      return;
+    }
+
+    const lb = result.lote_base;
+    const comp = result.composicao || [];
+
+    container.innerHTML = `
+      <div class="kpi-row">
+        <div class="kpi"><div class="kpi-label">Código</div><div class="kpi-val" style="font-size:16px;">${esc(lb.codigo)}</div></div>
+        <div class="kpi"><div class="kpi-label">Total Peças</div><div class="kpi-val">${lb.total_pecas}</div></div>
+        <div class="kpi"><div class="kpi-label">Lotes MP</div><div class="kpi-val">${lb.total_lotes_origem}</div></div>
+        <div class="kpi"><div class="kpi-label">Status</div><div class="kpi-val" style="font-size:13px;"><span class="badge badge-${lb.status}">${lb.status}</span></div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);margin-bottom:8px;">
+        Data: ${formatDate(lb.data_producao)} · Produto: ${esc(lb.produto_nome || lb.produto_codigo || '—')} · Criado por: ${esc(lb.criado_por || '—')}
+      </div>
+      ${comp.length > 0 ? `
+        <div class="card-title" style="margin-top:16px;">Composição (Lotes de MP)</div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Lote MP</th><th>ATAK</th><th>Fornecedor</th><th>Class.</th><th>% Defeito</th><th>Quantidade</th><th>Data</th>
+          </tr></thead>
+          <tbody>${comp.map(c => `<tr>
+            <td class="bold">${esc(c.lote_origem)}</td>
+            <td class="mono">${esc(c.lote_atak || '—')}</td>
+            <td>${esc(c.fornecedor_nome || c.fornecedor_codigo || '—')}</td>
+            <td>${c.classificacao_mp ? `<span class="badge badge-${c.classificacao_mp.toLowerCase()}">${c.classificacao_mp}</span>` : '—'}</td>
+            <td class="mono">${c.percentual_defeitos != null ? c.percentual_defeitos + '%' : '—'}</td>
+            <td class="mono bold">${c.quantidade_consumida} pcs</td>
+            <td class="mono">${formatTime(c.criado_em)}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      ` : '<div class="empty-state"><div class="es-text">Lote base sem composição registrada</div></div>'}
+    `;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+async function rastrearMP() {
+  const loteMP = document.getElementById('rastreioMP').value.trim();
+  if (!loteMP) return toast('error', 'Informe o código do lote de MP');
+
+  const container = document.getElementById('resultadoReversa');
+  container.innerHTML = '<div class="spinner"></div>';
+
+  try {
+    const res = await CQ_API.fetch('rpc/cq_rastrear_mp_em_producao', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_lote_mp_codigo: loteMP })
+    });
+    const result = await res.json();
+
+    if (!result.ok) {
+      container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(result.erro || 'Erro')}</div></div>`;
+      return;
+    }
+
+    const est = result.estoque;
+    const usos = result.usado_em || [];
+
+    container.innerHTML = `
+      <div style="font-size:14px;font-weight:600;margin-bottom:12px;">Lote MP: <span style="color:var(--accent);">${esc(result.lote_mp)}</span></div>
+      ${est ? `
+        <div class="kpi-row">
+          <div class="kpi"><div class="kpi-label">Entrada</div><div class="kpi-val">${est.quantidade_entrada}</div></div>
+          <div class="kpi"><div class="kpi-label">Consumido</div><div class="kpi-val">${est.quantidade_consumida}</div></div>
+          <div class="kpi kpi-accent-green"><div class="kpi-label">Disponível</div><div class="kpi-val">${est.quantidade_disponivel}</div></div>
+          <div class="kpi"><div class="kpi-label">Status</div><div class="kpi-val" style="font-size:13px;"><span class="badge badge-${est.status === 'disponivel' ? 'aberto' : est.status === 'esgotado' ? 'cancelado' : 'fechado'}">${est.status}</span></div></div>
+        </div>
+      ` : '<div class="alert alert-warn"><span>!</span><div>Lote de MP não encontrado no estoque</div></div>'}
+      ${usos.length > 0 ? `
+        <div class="card-title" style="margin-top:16px;">Usado em Lotes Base</div>
+        <table class="data-table">
+          <thead><tr>
+            <th>Lote Base</th><th>Data Produção</th><th>Status</th><th>Qtd Consumida</th><th>Total Lote Base</th>
+          </tr></thead>
+          <tbody>${usos.map(u => `<tr>
+            <td class="bold">${esc(u.lote_base_codigo)}</td>
+            <td class="mono">${formatDate(u.data_producao)}</td>
+            <td><span class="badge badge-${u.status}">${u.status}</span></td>
+            <td class="mono bold">${u.quantidade_consumida} pcs</td>
+            <td class="mono">${u.total_pecas_lote_base} pcs</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      ` : '<div class="empty-state" style="margin-top:16px;"><div class="es-text">Este lote de MP não foi usado em nenhuma produção</div></div>'}
+    `;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TAB 4: LOTES ABERTOS
+// ═══════════════════════════════════════════════════════════════
+
+async function carregarLotesAbertos() {
+  const container = document.getElementById('tabelaLotesAbertos');
+  container.innerHTML = '<div class="empty-state"><div class="spinner"></div><div class="es-text" style="margin-top:8px;">Carregando...</div></div>';
+
+  let query = 'cq_lote_base_producao?order=criado_em.desc&limit=50';
+  const status = document.getElementById('filtStatusLote').value;
+  const data = document.getElementById('filtDataLote').value;
+  if (status) query += `&status=eq.${status}`;
+  if (data) query += `&data_producao=eq.${data}`;
+
+  try {
+    const rows = await CQ_API.get(query);
+
+    if (!rows || rows.length === 0) {
+      container.innerHTML = '<div class="empty-state"><div class="es-icon">📋</div><div class="es-text">Nenhum lote encontrado</div></div>';
+      return;
+    }
+
+    container.innerHTML = `<table class="data-table">
+      <thead><tr>
+        <th>Código</th><th>Data</th><th>Produto</th><th>Peças</th><th>Lotes MP</th><th>Status</th><th>Criado por</th><th>Ação</th>
+      </tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td class="bold">${esc(r.codigo)}</td>
+        <td class="mono">${formatDate(r.data_producao)}</td>
+        <td>${esc(r.produto_nome || r.produto_codigo || '—')}</td>
+        <td class="mono">${r.total_pecas || 0}</td>
+        <td class="mono">${r.total_lotes_origem || 0}</td>
+        <td><span class="badge badge-${r.status}">${r.status}</span></td>
+        <td>${esc(r.criado_por_nome || '—')}</td>
+        <td>
+          <button class="btn-secondary" style="padding:6px 12px;font-size:10px;" onclick="abrirLoteNaTab1('${r.id}', '${esc(r.codigo)}', '${r.status}', ${r.total_pecas || 0}, ${r.total_lotes_origem || 0}, '${r.data_producao}')">Abrir</button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table>`;
+  } catch (e) {
+    container.innerHTML = `<div class="alert alert-error"><span>!</span><div>${esc(e.message)}</div></div>`;
+  }
+}
+
+function abrirLoteNaTab1(id, codigo, status, totalPecas, totalLotes, dataProd) {
+  loteBaseAtivo = { id, codigo, status, total_pecas: totalPecas, total_lotes_origem: totalLotes, data_producao: dataProd };
+  // Switch to tab 1
+  document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+  document.querySelectorAll('.ttab').forEach(el => el.classList.remove('active'));
+  document.getElementById('tab-lote-base').classList.add('active');
+  document.querySelectorAll('.ttab')[0].classList.add('active');
+  ativarLoteBase();
+}
+
+// ═══════════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════════
+
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+function formatDate(d) {
+  if (!d) return '—';
+  const parts = d.split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return d;
+}
+
+function formatTime(dt) {
+  if (!dt) return '—';
+  try {
+    const d = new Date(dt);
+    return d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+  } catch { return dt; }
+}
+
+function fecharModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toast(type, msg) {
+  if (typeof CQToast !== 'undefined') {
+    CQToast[type] ? CQToast[type](msg) : CQToast.info(msg);
+    return;
+  }
+  // Fallback toast
+  const container = document.getElementById('toastContainer');
+  const colors = { success: '#4ade80', error: '#f87171', warn: '#fbbf24', info: '#60a5fa' };
+  const icons = { success: '✓', error: '✕', warn: '!', info: 'i' };
+  const el = document.createElement('div');
+  el.style.cssText = `background:var(--surface);border:1px solid ${colors[type] || colors.info};border-radius:6px;padding:12px 16px;display:flex;align-items:center;gap:10px;min-width:280px;max-width:420px;box-shadow:0 8px 24px rgba(0,0,0,0.4);animation:fadeIn 0.3s ease;cursor:pointer;`;
+  el.innerHTML = `<span style="color:${colors[type]};font-weight:700;font-size:14px;">${icons[type]}</span><span style="font-size:13px;color:var(--text);">${esc(msg)}</span>`;
+  el.onclick = () => el.remove();
+  container.appendChild(el);
+  setTimeout(() => el.remove(), type === 'error' ? 6000 : 3500);
+}
+
+</script>
+</body>
+</html>

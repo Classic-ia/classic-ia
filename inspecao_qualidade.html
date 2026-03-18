@@ -149,6 +149,8 @@ input, select, textarea, button { font-family: inherit; }
 }
 .field-input::placeholder { color: var(--muted2); }
 .field-input.error { border-color: var(--reprovado) !important; }
+.field-input.scannable { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M8 7v10M12 7v10M16 7v10'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
+.field-input.scan-ok { border-color: var(--green, #27ae60) !important; background-color: rgba(39,174,96,.08); transition: all .3s; }
 .field-input[type="date"],
 .field-input[type="time"] { cursor: pointer; }
 select.field-input { cursor: pointer; }
@@ -657,8 +659,8 @@ textarea.field-input {
         <div class="field">
           <label class="field-label">Lote ATAK <span class="req">*</span></label>
           <div style="display:flex;gap:8px;align-items:stretch;">
-            <input class="field-input" type="text" id="f-lote-atak"
-              placeholder="Ex: 0046" autocomplete="off" required
+            <input class="field-input scannable" type="text" id="f-lote-atak"
+              placeholder="Digite ou bipe com scanner" autocomplete="off" required
               style="text-transform:uppercase;flex:1;"
               oninput="updateSaveStatus()">
             <button type="button" onclick="abrirOCR('lote')" title="Fotografar etiqueta do lote"
@@ -673,8 +675,8 @@ textarea.field-input {
         <div class="field">
           <label class="field-label">Nº Etiqueta <span class="req">*</span></label>
           <div style="display:flex;gap:8px;align-items:stretch;">
-            <input class="field-input" type="text" id="f-etiqueta"
-              placeholder="Ex: 101-001-57670" inputmode="numeric" required
+            <input class="field-input scannable" type="text" id="f-etiqueta"
+              placeholder="Digite ou bipe com scanner" required
               style="flex:1;" oninput="updateSaveStatus()">
             <button type="button" onclick="abrirOCR('etiqueta')" title="Fotografar etiqueta"
               style="background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
@@ -1483,6 +1485,56 @@ function previewFoto(input, btnId, previewId){
   };
   reader.readAsDataURL(file);
 }
+
+// ══════════════════════════════════════════════════════════
+// SCANNER / BARCODE — detecção de leitura rápida (pistola USB)
+// ══════════════════════════════════════════════════════════
+(function initScannerDetection(){
+  const SCAN_THRESHOLD = 50; // ms entre teclas — scanner é muito rápido
+  const MIN_LENGTH = 3;      // mínimo de caracteres para considerar scan
+
+  document.querySelectorAll('.scannable').forEach(input => {
+    let buffer = '';
+    let lastKeyTime = 0;
+
+    input.addEventListener('keydown', e => {
+      const now = Date.now();
+      const delta = now - lastKeyTime;
+      lastKeyTime = now;
+
+      if(e.key === 'Enter'){
+        e.preventDefault();
+        // Se buffer preenchido rápido o suficiente = scan
+        if(buffer.length >= MIN_LENGTH){
+          input.value = buffer.toUpperCase();
+          input.classList.add('scan-ok');
+          toast('Codigo lido: ' + input.value);
+          updateSaveStatus();
+          setTimeout(() => input.classList.remove('scan-ok'), 2000);
+          // Pula pro próximo campo vazio
+          const nextScannable = [...document.querySelectorAll('.scannable')].find(
+            el => el !== input && !el.value.trim()
+          );
+          if(nextScannable) nextScannable.focus();
+        }
+        buffer = '';
+        return;
+      }
+
+      // Reset buffer se pausa longa (digitação humana)
+      if(delta > SCAN_THRESHOLD && buffer.length > 0){
+        buffer = '';
+      }
+
+      if(e.key.length === 1){ // caractere imprimível
+        buffer += e.key;
+      }
+    });
+
+    // Limpa buffer ao perder foco
+    input.addEventListener('blur', () => { buffer = ''; });
+  });
+})();
 
 // ══════════════════════════════════════════════════════════
 // VALIDAÇÃO + STATUS DA BARRA

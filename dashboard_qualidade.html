@@ -2,345 +2,95 @@
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#080808">
 <title>Dashboard Qualidade · Classic CQ</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
-<style>
-/* ── DESIGN SYSTEM ── */
-:root {
-  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
-  --border: #242424; --border2: #2e2e2e;
-  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
-  --text: #ede9e3; --muted: #666; --muted2: #444;
-  --cb-blue: #0072B2;
-  --cb-teal: #009E73;
-  --cb-orange: #E69F00;
-  --cb-purple: #CC79A7;
-  --cb-red: #D55E00;
-  --cb-gray: #666666;
-  --cb-yellow: #F0E442;
-  --radius: 10px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
-
-/* ── HEADER ── */
-.header {
-  position: sticky; top: 0; z-index: 100;
-  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 24px; height: 56px;
-  display: flex; align-items: center; gap: 12px;
-}
-.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
-.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: var(--accent); }
-.header-sub { font-size: 11px; color: var(--muted); margin-top: 1px; }
-.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
-.header-user { font-size: 12px; color: var(--muted); }
-.header-user strong { color: var(--text); }
-.header-avatar {
-  width: 32px; height: 32px; border-radius: 50%; background: var(--accent3);
-  display: flex; align-items: center; justify-content: center;
-  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--bg);
-}
-.btn-sm {
-  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
-  border: 1px solid var(--border); background: transparent; color: var(--muted);
-  transition: all .2s; text-decoration: none;
-}
-.btn-sm:hover { border-color: var(--accent); color: var(--text); }
-
-/* ── MAIN ── */
-.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
-
-/* ── FILTER BAR ── */
-.filter-bar {
-  display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
-}
-.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
-.filter-bar select {
-  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
-  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
-}
-.filter-bar select:focus { outline: none; border-color: var(--accent); }
-.btn-refresh {
-  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
-  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
-  font-family: 'DM Mono'; transition: all .2s;
-}
-.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
-
-/* ── BLOCK HEADER ── */
-.block-header {
-  display: flex; align-items: center; gap: 10px; margin: 28px 0 14px;
-}
-.block-header:first-child { margin-top: 0; }
-.block-dot {
-  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
-}
-.block-title {
-  font-family: 'Syne'; font-weight: 700; font-size: 13px;
-  text-transform: uppercase; letter-spacing: .06em;
-}
-.block-count {
-  font-family: 'DM Mono'; font-size: 11px; color: var(--muted);
-  margin-left: auto;
-}
-
-/* ── ALERT CARDS ── */
-.alert-list { display: flex; flex-direction: column; gap: 8px; }
-.alert-card {
-  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 14px 16px; display: flex; align-items: center; gap: 14px;
-  border-left: 4px solid var(--cb-red); transition: border-color .2s;
-}
-.alert-card.atencao { border-left-color: var(--cb-orange); }
-.alert-card .alert-icon { font-size: 20px; flex-shrink: 0; }
-.alert-card .alert-body { flex: 1; min-width: 0; }
-.alert-card .alert-nome {
-  font-family: 'Syne'; font-weight: 700; font-size: 13px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.alert-card .alert-desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.alert-card .alert-tipo {
-  font-family: 'DM Mono'; font-size: 9px; text-transform: uppercase;
-  letter-spacing: .05em; padding: 3px 8px; border-radius: 4px;
-  background: rgba(213,94,0,.12); color: var(--cb-red); flex-shrink: 0;
-}
-.alert-card.atencao .alert-tipo {
-  background: rgba(230,159,0,.12); color: var(--cb-orange);
-}
-
-/* ── TABLE ── */
-.panel {
-  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
-  overflow: hidden;
-}
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-thead th {
-  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
-  font-weight: 500; font-size: 10px; text-transform: uppercase;
-  letter-spacing: .05em; padding: 10px 12px; text-align: left;
-  border-bottom: 1px solid var(--border); position: sticky; top: 0;
-}
-tbody td {
-  padding: 10px 12px; border-bottom: 1px solid var(--border);
-  font-family: 'DM Sans'; color: var(--text);
-}
-tbody tr:hover { background: var(--s2); }
-tbody tr.row-critico { background: rgba(213,94,0,.05); }
-tbody tr.row-critico:hover { background: rgba(213,94,0,.1); }
-
-/* ── BADGES ── */
-.badge {
-  display: inline-flex; align-items: center; gap: 3px;
-  padding: 2px 7px; border-radius: 4px; font-family: 'DM Mono';
-  font-size: 10px; font-weight: 500; letter-spacing: .03em;
-  white-space: nowrap;
-}
-.badge-a { background: rgba(0,114,178,.15); color: var(--cb-blue); }
-.badge-b { background: rgba(230,159,0,.15); color: var(--cb-orange); }
-.badge-c { background: rgba(213,94,0,.15); color: var(--cb-red); }
-.badge-up { color: var(--cb-teal); }
-.badge-down { color: var(--cb-red); }
-.badge-flat { color: var(--muted); }
-
-/* ── SCORE BAR ── */
-.score-bar {
-  width: 60px; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden;
-  display: inline-block; vertical-align: middle; margin-left: 6px;
-}
-.score-bar-fill { height: 100%; border-radius: 3px; transition: width .3s; }
-
-/* ── PIPELINE CARDS ── */
-.pipeline-grid {
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 10px;
-}
-.pipe-card {
-  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px 14px; text-align: center; cursor: pointer; transition: all .2s;
-}
-.pipe-card:hover { border-color: var(--accent); background: var(--s2); }
-.pipe-card .pipe-num {
-  font-family: 'Syne'; font-weight: 800; font-size: 28px; line-height: 1;
-}
-.pipe-card .pipe-label {
-  font-family: 'DM Mono'; font-size: 10px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .04em; margin-top: 6px;
-}
-
-/* ── DEFEITO CHART AREA ── */
-.defeitos-grid {
-  display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
-}
-.chart-panel {
-  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px;
-}
-.chart-panel-title {
-  font-family: 'DM Mono'; font-size: 10px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 12px;
-}
-.chart-box { max-height: 260px; position: relative; }
-
-/* ── DEFEITO BAR INLINE ── */
-.def-bar-row {
-  display: flex; align-items: center; gap: 8px; padding: 6px 0;
-  border-bottom: 1px solid var(--border); font-size: 12px;
-}
-.def-bar-row:last-child { border-bottom: none; }
-.def-bar-name { width: 130px; font-family: 'DM Sans'; color: var(--text); flex-shrink: 0;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.def-bar-track { flex: 1; height: 8px; background: var(--s3); border-radius: 4px; overflow: hidden; }
-.def-bar-fill { height: 100%; border-radius: 4px; }
-.def-bar-pct { width: 50px; text-align: right; font-family: 'DM Mono'; font-size: 11px; color: var(--muted); }
-
-/* ── EMPTY STATE ── */
-.empty-block {
-  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 24px; text-align: center; color: var(--muted); font-size: 13px;
-}
-
-/* ── LOADING ── */
-.loading { text-align: center; padding: 60px; color: var(--muted); font-size: 14px; }
-.spin { display: inline-block; animation: spin 1s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* ── FOOTER ── */
-.footer {
-  text-align: center; padding: 16px; font-family: 'DM Mono';
-  font-size: 11px; color: var(--muted);
-}
-
-/* ── RESPONSIVE ── */
-@media (max-width: 768px) {
-  .defeitos-grid { grid-template-columns: 1fr; }
-  .pipeline-grid { grid-template-columns: repeat(3, 1fr); }
-}
-@media (max-width: 600px) {
-  .main { padding: 12px 12px 32px; }
-  .pipeline-grid { grid-template-columns: repeat(2, 1fr); }
-  .alert-card { flex-wrap: wrap; }
-  .alert-card .alert-tipo { margin-top: 4px; }
-}
-</style>
+<link rel="stylesheet" href="cq_layout.css">
 </head>
 <body>
 
-<!-- HEADER -->
-<header class="header">
-  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+<!-- ═══ SHELL ═══ -->
+<header class="cq-header">
+  <img id="logoImg" class="cq-header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
   <div>
-    <div class="header-title">Qualidade — Decisional</div>
-    <div class="header-sub">Onde agir agora · Classic CQ</div>
+    <div class="cq-header-title">Qualidade</div>
+    <div class="cq-header-sub">Onde agir agora</div>
   </div>
-  <div class="header-right">
-    <div class="header-user" id="userInfo"></div>
-    <div class="header-avatar" id="userAvatar"></div>
-    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
-    <a class="btn-sm" href="app.html">Menu</a>
+  <div class="cq-header-right">
+    <div class="cq-header-user desktop-only" id="userInfo"></div>
+    <div class="cq-header-avatar" id="userAvatar"></div>
+    <button class="btn btn-ghost btn-sm desktop-only" onclick="CQAuth.logout()">Sair</button>
   </div>
 </header>
 
-<main class="main">
-  <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando dados...</div>
+<nav class="cq-sidebar" id="sidebar"></nav>
+<nav class="cq-bottomnav" id="bottomnav"></nav>
 
-  <div id="dashContent" style="display:none;">
+<main class="cq-main">
+  <!-- Loading -->
+  <div id="loadingState" class="loading-state"><span class="spin">&#9203;</span> Carregando dados...</div>
 
-    <!-- FILTRO -->
+  <div id="dashContent" class="hidden">
+
+    <!-- Filtro -->
     <div class="filter-bar">
-      <label>Periodo</label>
-      <select id="filtroPeriodo" onchange="carregarTudo()">
+      <span class="input-label">Periodo</span>
+      <select id="filtroPeriodo" class="input" style="width:auto;min-width:110px" onchange="carregarTudo()">
         <option value="30">30 dias</option>
         <option value="7">7 dias</option>
         <option value="1">Hoje</option>
         <option value="90">90 dias</option>
       </select>
-      <button class="btn-refresh" onclick="carregarTudo()">Atualizar</button>
-      <span id="lastUpdate" style="font-family:'DM Mono';font-size:10px;color:var(--muted);margin-left:auto;"></span>
+      <button class="btn btn-ghost btn-sm" onclick="carregarTudo()">Atualizar</button>
+      <span id="lastUpdate" class="t-mono t-muted" style="margin-left:auto;font-size:10px"></span>
     </div>
 
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 1: ALERTAS IMEDIATOS                            -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 1: ALERTAS -->
     <div id="blocoAlertas"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 2: RANKING DE FORNECEDORES                      -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 2: FORNECEDORES -->
     <div id="blocoFornecedores"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 3: QUALIDADE POR PRODUTO                        -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 3: PRODUTOS -->
     <div id="blocoProdutos"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 4: QUALIDADE POR LOTE                           -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 4: LOTES -->
     <div id="blocoLotes"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 5: QUALIDADE POR SETOR                          -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 5: SETORES -->
     <div id="blocoSetores"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 6: ANALISE DE DEFEITOS                          -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 6: DEFEITOS -->
     <div id="blocoDefeitos"></div>
-
-    <!-- ═══════════════════════════════════════════════════════ -->
-    <!-- BLOCO 7: PIPELINE OPERACIONAL                         -->
-    <!-- ═══════════════════════════════════════════════════════ -->
+    <!-- BLOCO 7: PIPELINE -->
     <div id="blocoPipeline"></div>
 
   </div>
 </main>
 
-<div class="footer" id="footerInfo"></div>
-
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_ui.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════════
-// DASHBOARD DECISIONAL — JS
-// Todas as queries vão para views vw_dash_*
+// DASHBOARD DECISIONAL — Híbrido Mobile + Desktop
 // ══════════════════════════════════════════════════════════════
 
-// ── INIT ──
 (async function(){
-  const logo = localStorage.getItem('classic_logo');
-  if (logo) document.getElementById('logoImg').src = logo;
-
   const usuario = await CQAuth.init({
     perfisPermitidos: ['administrador','qualidade','diretoria','financeiro','gestor'],
     redirectLogin: true
   });
   if (!usuario) return;
 
-  document.getElementById('userInfo').innerHTML =
-    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
-  document.getElementById('userAvatar').textContent =
-    (usuario.nome || usuario.email).charAt(0).toUpperCase();
-
+  CQ.shell({ activePage: 'dashboard', usuario });
   await carregarTudo();
 })();
 
-// ── API HELPER ──
-async function api(endpoint) {
-  return CQ_API.get(endpoint);
-}
+async function api(ep) { return CQ_API.get(ep); }
 
-// ── CARREGAR TUDO ──
 async function carregarTudo() {
-  document.getElementById('loadingState').style.display = 'block';
-  document.getElementById('dashContent').style.display = 'none';
+  document.getElementById('loadingState').classList.remove('hidden');
+  document.getElementById('dashContent').classList.add('hidden');
 
   try {
     const [alertas, fornecedores, produtos, lotes, setores, defRanking, defForn, pipeline] = await Promise.all([
@@ -364,542 +114,243 @@ async function carregarTudo() {
 
     document.getElementById('lastUpdate').textContent =
       'Atualizado ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});
-
   } catch(e) {
     console.error('Erro dashboard:', e);
   }
 
-  document.getElementById('loadingState').style.display = 'none';
-  document.getElementById('dashContent').style.display = 'block';
+  document.getElementById('loadingState').classList.add('hidden');
+  document.getElementById('dashContent').classList.remove('hidden');
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 1: ALERTAS IMEDIATOS
+// BLOCO 1: ALERTAS
 // ══════════════════════════════════════════════════════════════
 function renderAlertas(alertas) {
   const el = document.getElementById('blocoAlertas');
-
   if (!alertas || !alertas.length) {
     el.innerHTML = `
-      <div class="block-header">
-        <div class="block-dot" style="background:var(--cb-teal)"></div>
-        <div class="block-title" style="color:var(--cb-teal)">Sem alertas criticos</div>
+      <div class="section-head">
+        <div class="section-dot" style="background:var(--good)"></div>
+        <div class="section-title" style="color:var(--good)">Sem alertas criticos</div>
       </div>
-      <div class="empty-block">Nenhum item exige acao imediata. Sistema operando normalmente.</div>
-    `;
+      <div class="empty-state">Nenhum item exige acao imediata.</div>`;
     return;
   }
 
   const tipoLabel = {
-    fornecedor_piorando: 'Fornecedor',
-    produto_critico: 'Produto',
-    defeito_acima_limite: 'Defeito',
-    defeito_recorrente: 'Recorrente',
-    degradacao_fornecedor: 'Degradacao',
-    inconsistencia_dados: 'Dados',
-  };
-
-  const tipoIcon = {
-    fornecedor_piorando: '&#9660;',
-    produto_critico: '&#9888;',
-    defeito_acima_limite: '&#10007;',
-    defeito_recorrente: '&#8635;',
-    degradacao_fornecedor: '&#9660;',
-    inconsistencia_dados: '&#9888;',
+    fornecedor_piorando:'Fornecedor', produto_critico:'Produto',
+    defeito_acima_limite:'Defeito', defeito_recorrente:'Recorrente',
+    degradacao_fornecedor:'Degradacao', inconsistencia_dados:'Dados',
   };
 
   el.innerHTML = `
-    <div class="block-header">
-      <div class="block-dot" style="background:var(--cb-red)"></div>
-      <div class="block-title" style="color:var(--cb-red)">Alertas Imediatos</div>
-      <div class="block-count">${alertas.length} item${alertas.length > 1 ? 's' : ''}</div>
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--danger)"></div>
+      <div class="section-title" style="color:var(--danger)">Alertas Imediatos</div>
+      <div class="section-count">${alertas.length} item${alertas.length>1?'s':''}</div>
     </div>
-    <div class="alert-list">
+    <div class="flex flex-col gap-sm">
       ${alertas.map(a => `
-        <div class="alert-card ${a.gravidade === 'atencao' ? 'atencao' : ''}">
-          <div class="alert-icon">${tipoIcon[a.tipo_alerta] || '&#9888;'}</div>
+        <div class="alert-card ${a.gravidade==='atencao'?'warn':''}">
           <div class="alert-body">
-            <div class="alert-nome">${esc(a.nome || a.codigo || '—')}</div>
-            <div class="alert-desc">${esc(a.descricao || '')}</div>
+            <div class="alert-title">${CQ.esc(a.nome||a.codigo||'—')}</div>
+            <div class="alert-desc">${CQ.esc(a.descricao||'')}</div>
           </div>
-          <div class="alert-tipo">${tipoLabel[a.tipo_alerta] || a.tipo_alerta}</div>
-        </div>
-      `).join('')}
-    </div>
-  `;
+          <div class="alert-tag">${tipoLabel[a.tipo_alerta]||a.tipo_alerta}</div>
+        </div>`).join('')}
+    </div>`;
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 2: QUALIDADE POR FORNECEDOR
+// BLOCO 2: FORNECEDORES (table desktop + cards mobile)
 // ══════════════════════════════════════════════════════════════
 function renderFornecedores(dados) {
   const el = document.getElementById('blocoFornecedores');
-
-  if (!dados || !dados.length) {
-    el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-orange)"></div>
-        <div class="block-title" style="color:var(--cb-orange)">Qualidade por Fornecedor</div>
-      </div>
-      <div class="empty-block">Sem dados de fornecedores no periodo.</div>
-    `;
-    return;
-  }
-
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-orange)"></div>
-      <div class="block-title" style="color:var(--cb-orange)">Qualidade por Fornecedor</div>
-      <div class="block-count">${dados.length} fornecedor${dados.length > 1 ? 'es' : ''}</div>
-    </div>
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Fornecedor</th>
-            <th style="text-align:center">UF</th>
-            <th style="text-align:right">Lotes</th>
-            <th style="text-align:right">Pecas</th>
-            <th style="text-align:right">Score</th>
-            <th></th>
-            <th style="text-align:right">%A</th>
-            <th style="text-align:right">%B</th>
-            <th style="text-align:right">%C</th>
-            <th style="text-align:right">%Def</th>
-            <th style="text-align:center">30d</th>
-          </tr></thead>
-          <tbody>
-            ${dados.map(f => {
-              const s = f.score;
-              const isCrit = (s != null && s < 50) || f.status_fornecedor === 'bloqueado' || f.status_fornecedor === 'critico';
-              const var30 = f.variacao_30d || 0;
-              const tend = var30 > 3 ? 'melhorando' : var30 < -3 ? 'piorando' : 'estavel';
-              return `<tr class="${isCrit ? 'row-critico' : ''}">
-                <td>
-                  <span style="font-weight:600">${esc(f.fornecedor_nome || f.fornecedor_codigo || '—')}</span>
-                  ${f.status_fornecedor === 'bloqueado' ? '<span class="badge badge-c" style="margin-left:6px">BLOQ</span>' : ''}
-                  ${f.status_fornecedor === 'critico' ? '<span class="badge badge-c" style="margin-left:6px">CRIT</span>' : ''}
-                </td>
-                <td style="text-align:center;font-family:'DM Mono';font-size:10px;color:var(--muted)">${esc(f.fornecedor_uf || '—')}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(f.total_lotes)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(f.total_pecas)}</td>
-                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s)}">${s != null ? s : '—'}</td>
-                <td style="width:60px">
-                  <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(s || 0, 100)}%;background:${scoreBarFill(s)}"></div></div>
-                </td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(f.pct_a)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(f.pct_b)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtPct(f.pct_c)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(f.pct_defeitos)}</td>
-                <td style="text-align:center">${tendIcon(tend)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--warn)"></div>
+      <div class="section-title" style="color:var(--warn)">Qualidade por Fornecedor</div>
+      ${dados?.length ? `<div class="section-count">${dados.length}</div>` : ''}
+    </div>` +
+    CQ.table(dados, [
+      { key:'fornecedor_nome', label:'Fornecedor', format:(v,d) => `<span style="font-weight:700">${CQ.esc(v||d.fornecedor_codigo||'—')}</span>${d.status_fornecedor==='bloqueado'?' <span class="badge badge-crit">BLOQ</span>':d.status_fornecedor==='critico'?' <span class="badge badge-crit">CRIT</span>':''}`, mobileLabel:'Fornecedor' },
+      { key:'fornecedor_uf', label:'UF', align:'center', mono:true, mobile:false },
+      { key:'total_lotes', label:'Lotes', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobileLabel:'Lotes' },
+      { key:'total_pecas', label:'Pecas', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobile:false },
+      { key:'score', label:'Score', align:'right', bold:true, color:(v)=>CQ.scoreColor(v), format:v=>v!=null?v:'—', mobileLabel:'Score' },
+      { key:'pct_a', label:'%A', align:'right', mono:true, color:'var(--ok)', format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'pct_b', label:'%B', align:'right', mono:true, color:'var(--warn)', format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'pct_c', label:'%C', align:'right', mono:true, color:'var(--danger)', format:v=>CQ.fmtPct(v), mobileLabel:'%C' },
+      { key:'pct_defeitos', label:'%Def', align:'right', mono:true, format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'variacao_30d', label:'30d', align:'center', format:(v)=>{const n=v||0;return CQ.tendIcon(n>3?'melhorando':n<-3?'piorando':'estavel');}, mobileLabel:'Trend' },
+    ], {
+      critFn: d => (d.score!=null&&d.score<50)||d.status_fornecedor==='bloqueado'||d.status_fornecedor==='critico',
+      emptyMsg: 'Sem dados de fornecedores no periodo.',
+    });
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 3: QUALIDADE POR PRODUTO
+// BLOCO 3: PRODUTOS
 // ══════════════════════════════════════════════════════════════
 function renderProdutos(dados) {
   const el = document.getElementById('blocoProdutos');
-
-  if (!dados || !dados.length) {
-    el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-yellow)"></div>
-        <div class="block-title" style="color:var(--cb-yellow)">Qualidade por Produto</div>
-      </div>
-      <div class="empty-block">Sem dados de produtos no periodo.</div>
-    `;
-    return;
-  }
-
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-yellow)"></div>
-      <div class="block-title" style="color:var(--cb-yellow)">Qualidade por Produto</div>
-      <div class="block-count">${dados.length} produto${dados.length > 1 ? 's' : ''}</div>
-    </div>
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Produto</th>
-            <th style="text-align:center">Grupo</th>
-            <th style="text-align:right">Lotes</th>
-            <th style="text-align:right">Pecas</th>
-            <th style="text-align:right">Score</th>
-            <th style="text-align:right">%A</th>
-            <th style="text-align:right">%B</th>
-            <th style="text-align:right">%C</th>
-            <th style="text-align:right">%Def</th>
-            <th>Principal Defeito</th>
-            <th style="text-align:center">30d</th>
-          </tr></thead>
-          <tbody>
-            ${dados.map(p => {
-              const isCrit = (p.pct_c != null && p.pct_c > 10);
-              const var30 = p.variacao_30d || 0;
-              const tend = var30 > 3 ? 'melhorando' : var30 < -3 ? 'piorando' : 'estavel';
-              return `<tr class="${isCrit ? 'row-critico' : ''}">
-                <td style="font-weight:600">${esc(p.produto_nome || p.produto_codigo || '—')}</td>
-                <td style="text-align:center;font-family:'DM Mono';font-size:10px;color:var(--muted)">${esc(p.produto_grupo || '—')}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(p.total_lotes)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(p.total_pecas)}</td>
-                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(p.score)}">${p.score != null ? p.score : '—'}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(p.pct_a)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(p.pct_b)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:${(p.pct_c > 10) ? 'var(--cb-red)' : 'var(--text)'}">${fmtPct(p.pct_c)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(p.pct_defeitos)}</td>
-                <td style="font-size:11px;color:var(--muted)">${esc(p.principal_defeito || '—')}</td>
-                <td style="text-align:center">${tendIcon(tend)}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+    <div class="section-head">
+      <div class="section-dot" style="background:#F0E442"></div>
+      <div class="section-title" style="color:#F0E442">Qualidade por Produto</div>
+      ${dados?.length ? `<div class="section-count">${dados.length}</div>` : ''}
+    </div>` +
+    CQ.table(dados, [
+      { key:'produto_nome', label:'Produto', format:(v,d)=>`<span style="font-weight:700">${CQ.esc(v||d.produto_codigo||'—')}</span>` },
+      { key:'produto_grupo', label:'Grupo', mono:true, mobile:false },
+      { key:'total_lotes', label:'Lotes', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobileLabel:'Lotes' },
+      { key:'score', label:'Score', align:'right', bold:true, color:v=>CQ.scoreColor(v), format:v=>v!=null?v:'—', mobileLabel:'Score' },
+      { key:'pct_c', label:'%C', align:'right', mono:true, color:(v)=>v>10?'var(--danger)':'var(--text)', format:v=>CQ.fmtPct(v), mobileLabel:'%C' },
+      { key:'pct_defeitos', label:'%Def', align:'right', mono:true, format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'principal_defeito', label:'Defeito', format:v=>CQ.esc(v||'—'), mobileLabel:'Defeito' },
+      { key:'variacao_30d', label:'30d', align:'center', format:v=>{const n=v||0;return CQ.tendIcon(n>3?'melhorando':n<-3?'piorando':'estavel');}, mobile:false },
+    ], {
+      critFn: d => d.pct_c!=null&&d.pct_c>10,
+      emptyMsg: 'Sem dados de produtos no periodo.',
+    });
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 4: QUALIDADE POR LOTE
+// BLOCO 4: LOTES
 // ══════════════════════════════════════════════════════════════
 function renderLotes(dados) {
   const el = document.getElementById('blocoLotes');
-
-  if (!dados || !dados.length) {
-    el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-purple)"></div>
-        <div class="block-title" style="color:var(--cb-purple)">Qualidade por Lote</div>
-      </div>
-      <div class="empty-block">Sem lotes inspecionados no periodo.</div>
-    `;
-    return;
-  }
-
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-purple)"></div>
-      <div class="block-title" style="color:var(--cb-purple)">Qualidade por Lote</div>
-      <div class="block-count">${dados.length} lote${dados.length > 1 ? 's' : ''}</div>
-    </div>
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Lote</th>
-            <th>Data</th>
-            <th>Fornecedor</th>
-            <th style="text-align:right">Pecas</th>
-            <th style="text-align:right">Score</th>
-            <th style="text-align:center">Class.</th>
-            <th style="text-align:right">%A</th>
-            <th style="text-align:right">%B</th>
-            <th style="text-align:right">%C</th>
-            <th style="text-align:right">%Def</th>
-            <th style="text-align:right">Prod.</th>
-            <th>Inspetor</th>
-          </tr></thead>
-          <tbody>
-            ${dados.map(l => {
-              const s = l.score;
-              const isCrit = l.classificacao_lote === 'C' || (s != null && s < 50);
-              const classColor = l.classificacao_lote === 'A' ? 'var(--cb-blue)'
-                : l.classificacao_lote === 'B' ? 'var(--cb-orange)' : 'var(--cb-red)';
-              return `<tr class="${isCrit ? 'row-critico' : ''}" title="${loteTooltip(l)}">
-                <td style="font-family:'DM Mono';font-size:11px;color:var(--accent)">${esc(l.id_lote || '—')}</td>
-                <td style="font-family:'DM Mono';font-size:11px">${fmtDate(l.data_inspecao)}</td>
-                <td style="font-weight:600;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.fornecedor_nome || '—')}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(l.total_pecas)}</td>
-                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s)}">${s != null ? s : '—'}</td>
-                <td style="text-align:center;font-family:'Syne';font-weight:700;color:${classColor}">${l.classificacao_lote || '—'}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-blue)">${fmtPct(l.pct_a)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-orange)">${fmtPct(l.pct_b)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtPct(l.pct_c)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtPct(l.pct_defeitos)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--muted)">${l.qtd_produtos || 0}</td>
-                <td style="font-size:11px;color:var(--muted);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(l.inspetor_nome || '—')}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--info)"></div>
+      <div class="section-title" style="color:var(--info)">Qualidade por Lote</div>
+      ${dados?.length ? `<div class="section-count">${dados.length}</div>` : ''}
+    </div>` +
+    CQ.table(dados, [
+      { key:'id_lote', label:'Lote', mono:true, color:'var(--accent)', format:v=>CQ.esc(v||'—') },
+      { key:'data_inspecao', label:'Data', mono:true, format:v=>CQ.fmtDate(v), mobileLabel:'Data' },
+      { key:'fornecedor_nome', label:'Fornecedor', format:v=>`<span style="font-weight:600">${CQ.esc(v||'—')}</span>`, mobileLabel:'Fornec.' },
+      { key:'total_pecas', label:'Pecas', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobile:false },
+      { key:'score', label:'Score', align:'right', bold:true, color:v=>CQ.scoreColor(v), format:v=>v!=null?v:'—', mobileLabel:'Score' },
+      { key:'classificacao_lote', label:'Class.', align:'center', bold:true, format:v=>CQ.classBadge(v), mobileLabel:'Class.' },
+      { key:'pct_a', label:'%A', align:'right', mono:true, color:'var(--ok)', format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'pct_c', label:'%C', align:'right', mono:true, color:'var(--danger)', format:v=>CQ.fmtPct(v), mobile:false },
+      { key:'inspetor_nome', label:'Inspetor', format:v=>CQ.esc(v||'—'), mobile:false },
+    ], {
+      critFn: d => d.classificacao_lote==='C'||(d.score!=null&&d.score<50),
+      emptyMsg: 'Sem lotes inspecionados no periodo.',
+    });
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 5: QUALIDADE POR SETOR
+// BLOCO 5: SETORES
 // ══════════════════════════════════════════════════════════════
 function renderSetores(dados) {
   const el = document.getElementById('blocoSetores');
-
-  if (!dados || !dados.length) {
-    el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-teal)"></div>
-        <div class="block-title" style="color:var(--cb-teal)">Qualidade por Setor</div>
-      </div>
-      <div class="empty-block">Sem dados de producao por setor no periodo.</div>
-    `;
-    return;
-  }
-
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-teal)"></div>
-      <div class="block-title" style="color:var(--cb-teal)">Qualidade por Setor</div>
-      <div class="block-count">${dados.length} setor${dados.length > 1 ? 'es' : ''}</div>
-    </div>
-    <div class="panel">
-      <div class="table-wrap">
-        <table>
-          <thead><tr>
-            <th>Setor</th>
-            <th style="text-align:right">Produzido</th>
-            <th style="text-align:right">Aprovado</th>
-            <th style="text-align:right">Rejeitado</th>
-            <th style="text-align:right">%Aprov.</th>
-            <th style="text-align:right">%Rejeic.</th>
-            <th style="text-align:right">Score</th>
-            <th></th>
-            <th>Turnos</th>
-            <th style="text-align:center">30d</th>
-          </tr></thead>
-          <tbody>
-            ${dados.map(s => {
-              const isCrit = s.pct_rejeicao > 10 || (s.score != null && s.score < 80);
-              return `<tr class="${isCrit ? 'row-critico' : ''}">
-                <td style="font-weight:600">${esc(s.setor || '—')}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px">${fmtNum(s.total_produzido)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-teal)">${fmtNum(s.total_aprovado)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-red)">${fmtNum(s.total_rejeitado)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:var(--cb-teal)">${fmtPct(s.pct_aprovacao)}</td>
-                <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:${s.pct_rejeicao > 10 ? 'var(--cb-red)' : 'var(--text)'}">${fmtPct(s.pct_rejeicao)}</td>
-                <td style="text-align:right;font-family:'Syne';font-weight:700;color:${scoreColor(s.score)}">${s.score != null ? s.score : '—'}</td>
-                <td style="width:60px">
-                  <div class="score-bar"><div class="score-bar-fill" style="width:${Math.min(s.score || 0, 100)}%;background:${scoreBarFill(s.score)}"></div></div>
-                </td>
-                <td style="font-size:11px;color:var(--muted)">${Array.isArray(s.turnos) ? s.turnos.filter(Boolean).join(', ') : '—'}</td>
-                <td style="text-align:center">${tendIcon(s.tendencia || 'estavel')}</td>
-              </tr>`;
-            }).join('')}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  `;
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--good)"></div>
+      <div class="section-title" style="color:var(--good)">Qualidade por Setor</div>
+      ${dados?.length ? `<div class="section-count">${dados.length}</div>` : ''}
+    </div>` +
+    CQ.table(dados, [
+      { key:'setor', label:'Setor', format:v=>`<span style="font-weight:700">${CQ.esc(v||'—')}</span>` },
+      { key:'total_produzido', label:'Produzido', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobileLabel:'Produz.' },
+      { key:'total_aprovado', label:'Aprovado', align:'right', mono:true, color:'var(--good)', format:v=>CQ.fmtNum(v), mobile:false },
+      { key:'total_rejeitado', label:'Rejeitado', align:'right', mono:true, color:'var(--danger)', format:v=>CQ.fmtNum(v), mobile:false },
+      { key:'pct_aprovacao', label:'%Aprov.', align:'right', mono:true, color:'var(--good)', format:v=>CQ.fmtPct(v), mobileLabel:'%Aprov.' },
+      { key:'pct_rejeicao', label:'%Rejeic.', align:'right', mono:true, color:(v)=>v>10?'var(--danger)':'var(--text)', format:v=>CQ.fmtPct(v), mobileLabel:'%Rej.' },
+      { key:'score', label:'Score', align:'right', bold:true, color:v=>CQ.scoreColor(v), format:v=>v!=null?v:'—', mobileLabel:'Score' },
+      { key:'tendencia', label:'30d', align:'center', format:v=>CQ.tendIcon(v||'estavel'), mobile:false },
+    ], {
+      critFn: d => d.pct_rejeicao>10||(d.score!=null&&d.score<80),
+      emptyMsg: 'Sem dados de producao por setor no periodo.',
+    });
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 6: ANALISE DE DEFEITOS
+// BLOCO 6: DEFEITOS
 // ══════════════════════════════════════════════════════════════
 function renderDefeitos(ranking, porFornecedor) {
   const el = document.getElementById('blocoDefeitos');
-
-  if ((!ranking || !ranking.length) && (!porFornecedor || !porFornecedor.length)) {
+  if ((!ranking||!ranking.length) && (!porFornecedor||!porFornecedor.length)) {
     el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-blue)"></div>
-        <div class="block-title" style="color:var(--cb-blue)">Analise de Defeitos</div>
+      <div class="section-head">
+        <div class="section-dot" style="background:var(--ok)"></div>
+        <div class="section-title" style="color:var(--ok)">Analise de Defeitos</div>
       </div>
-      <div class="empty-block">Sem dados de defeitos no periodo.</div>
-    `;
+      <div class="empty-state">Sem dados de defeitos no periodo.</div>`;
     return;
   }
 
-  // Max para escalar barras
-  const maxPct = ranking.length ? Math.max(...ranking.map(d => d.pct_sobre_total || 0), 1) : 1;
+  const maxPct = ranking.length ? Math.max(...ranking.map(d=>d.pct_sobre_total||0), 1) : 1;
+  const barColor = pct => pct>5?'var(--danger)':pct>2?'var(--warn)':'var(--ok)';
+  const top10 = (porFornecedor||[]).slice(0,10);
 
-  const defBarColor = pct => {
-    if (pct > 5) return 'var(--cb-red)';
-    if (pct > 2) return 'var(--cb-orange)';
-    return 'var(--cb-blue)';
-  };
-
-  // Agrupar defeitos por fornecedor (top 10 pares)
-  const top10Forn = (porFornecedor || []).slice(0, 10);
-
+  // Mobile: stacked, Desktop: side by side
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-blue)"></div>
-      <div class="block-title" style="color:var(--cb-blue)">Analise de Defeitos</div>
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--ok)"></div>
+      <div class="section-title" style="color:var(--ok)">Analise de Defeitos</div>
     </div>
-    <div class="defeitos-grid">
-      <!-- Ranking geral -->
-      <div class="chart-panel">
-        <div class="chart-panel-title">Defeitos mais frequentes</div>
-        ${ranking.map(d => `
-          <div class="def-bar-row">
-            <div class="def-bar-name" title="${esc(d.defeito_nome)}">${esc(fmtDefeito(d.defeito_nome))}</div>
-            <div class="def-bar-track">
-              <div class="def-bar-fill" style="width:${Math.min((d.pct_sobre_total / maxPct) * 100, 100)}%;background:${defBarColor(d.pct_sobre_total)}"></div>
-            </div>
-            <div class="def-bar-pct">${fmtPct(d.pct_sobre_total)}</div>
-          </div>
-        `).join('')}
+    <div class="g-2">
+      <div class="card">
+        <div class="t-mono t-muted" style="font-size:10px;text-transform:uppercase;margin-bottom:12px">Defeitos mais frequentes</div>
+        ${ranking.map(d=>`
+          <div class="bar-row">
+            <div class="bar-name">${CQ.esc(d.defeito_nome||'—')}</div>
+            <div class="bar-track"><div class="bar-fill" style="width:${Math.min((d.pct_sobre_total/maxPct)*100,100)}%;background:${barColor(d.pct_sobre_total)}"></div></div>
+            <div class="bar-pct">${CQ.fmtPct(d.pct_sobre_total)}</div>
+          </div>`).join('')}
       </div>
-
-      <!-- Defeitos por fornecedor -->
-      <div class="chart-panel">
-        <div class="chart-panel-title">Defeitos por fornecedor (top ofensores)</div>
-        ${top10Forn.length ? `
-          <div class="table-wrap">
-            <table>
-              <thead><tr><th>Fornecedor</th><th>Defeito</th><th style="text-align:right">%</th></tr></thead>
-              <tbody>
-                ${top10Forn.map(d => `
-                  <tr>
-                    <td style="font-size:11px">${esc(d.fornecedor_nome || d.fornecedor_codigo || '—')}</td>
-                    <td style="font-size:11px">${esc(fmtDefeito(d.defeito_nome))}</td>
-                    <td style="text-align:right;font-family:'DM Mono';font-size:11px;color:${d.pct_defeito > 5 ? 'var(--cb-red)' : 'var(--text)'}">
-                      ${fmtPct(d.pct_defeito)}
-                    </td>
-                  </tr>
-                `).join('')}
-              </tbody>
-            </table>
-          </div>
-        ` : '<div style="color:var(--muted);font-size:12px;padding:12px">Sem ofensores acima do limite.</div>'}
+      <div class="card">
+        <div class="t-mono t-muted" style="font-size:10px;text-transform:uppercase;margin-bottom:12px">Top ofensores por fornecedor</div>
+        ${top10.length ? top10.map(d=>`
+          <div class="bar-row">
+            <div class="bar-name" title="${CQ.esc(d.fornecedor_nome)}">${CQ.esc(d.fornecedor_nome||'—')}</div>
+            <div style="flex:1;font-size:11px;color:var(--muted)">${CQ.esc(d.defeito_nome||'')}</div>
+            <div class="bar-pct" style="color:${d.pct_defeito>5?'var(--danger)':'var(--text)'}">${CQ.fmtPct(d.pct_defeito)}</div>
+          </div>`).join('') : '<div class="t-muted" style="font-size:12px;padding:12px">Sem ofensores acima do limite.</div>'}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 
 // ══════════════════════════════════════════════════════════════
-// BLOCO 7: PIPELINE OPERACIONAL
+// BLOCO 7: PIPELINE
 // ══════════════════════════════════════════════════════════════
 function renderPipeline(dados) {
   const el = document.getElementById('blocoPipeline');
-
-  const etapaConfig = {
-    cargas_pendentes:           { label: 'Cargas Pendentes',       color: 'var(--cb-orange)',  link: 'fila_inspecoes.html' },
-    inspecoes_andamento:        { label: 'Inspecoes em Andamento',  color: 'var(--cb-blue)',    link: 'fila_inspecoes.html?status=em_analise' },
-    inspecoes_concluidas_hoje:  { label: 'Concluidas Hoje',        color: 'var(--cb-teal)',    link: null },
-    inspecoes_concluidas_semana:{ label: 'Concluidas Semana',      color: 'var(--cb-teal)',    link: null },
-    ncs_abertas:                { label: 'NCs Abertas',            color: 'var(--cb-red)',     link: 'dashboard_nc_planos.html' },
-    divergencias_abertas:       { label: 'Divergencias',           color: 'var(--cb-purple)',  link: null },
+  const cfg = {
+    cargas_pendentes:            { label:'Cargas Pendentes',      color:'var(--warn)',   link:'lancamento_cargas.html' },
+    inspecoes_andamento:         { label:'Em Andamento',          color:'var(--ok)',     link:'fila_inspecoes.html?status=em_analise' },
+    inspecoes_concluidas_hoje:   { label:'Concluidas Hoje',       color:'var(--good)' },
+    inspecoes_concluidas_semana: { label:'Concluidas Semana',     color:'var(--good)' },
+    ncs_abertas:                 { label:'NCs Abertas',           color:'var(--danger)', link:'dashboard_nc_planos.html' },
+    divergencias_abertas:        { label:'Divergencias',          color:'var(--info)' },
   };
 
-  const items = (dados || []).filter(d => etapaConfig[d.etapa]);
-
-  if (!items.length) {
-    el.innerHTML = `
-      <div class="block-header" style="margin-top:28px">
-        <div class="block-dot" style="background:var(--cb-teal)"></div>
-        <div class="block-title" style="color:var(--cb-teal)">Pipeline Operacional</div>
-      </div>
-      <div class="empty-block">Sem dados operacionais disponiveis.</div>
-    `;
-    return;
-  }
-
+  const items = (dados||[]).filter(d=>cfg[d.etapa]);
   el.innerHTML = `
-    <div class="block-header" style="margin-top:28px">
-      <div class="block-dot" style="background:var(--cb-teal)"></div>
-      <div class="block-title" style="color:var(--cb-teal)">Pipeline Operacional</div>
-    </div>
+    <div class="section-head">
+      <div class="section-dot" style="background:var(--good)"></div>
+      <div class="section-title" style="color:var(--good)">Pipeline Operacional</div>
+    </div>` + (!items.length ? '<div class="empty-state">Sem dados operacionais.</div>' : `
     <div class="pipeline-grid">
-      ${items.map(d => {
-        const cfg = etapaConfig[d.etapa];
-        const isZero = d.quantidade === 0;
-        return `
-          <div class="pipe-card" ${cfg.link ? `onclick="location.href='${cfg.link}'"` : ''}
-               style="${isZero ? 'opacity:.5' : ''}">
-            <div class="pipe-num" style="color:${cfg.color}">${d.quantidade}</div>
-            <div class="pipe-label">${cfg.label}</div>
-          </div>
-        `;
+      ${items.map(d=>{
+        const c=cfg[d.etapa];
+        return `<div class="pipe-card" ${c.link?`onclick="location.href='${c.link}'"`:''} style="${d.quantidade===0?'opacity:.5':''}">
+          <div class="pipe-num" style="color:${c.color}">${d.quantidade}</div>
+          <div class="pipe-label">${c.label}</div>
+        </div>`;
       }).join('')}
-    </div>
-  `;
-}
-
-
-// ══════════════════════════════════════════════════════════════
-// HELPERS
-// ══════════════════════════════════════════════════════════════
-
-function esc(s) {
-  if (!s) return '';
-  const d = document.createElement('div');
-  d.textContent = s;
-  return d.innerHTML;
-}
-
-function fmtNum(n) {
-  if (n == null) return '—';
-  return Number(n).toLocaleString('pt-BR');
-}
-
-function fmtPct(n) {
-  if (n == null) return '—';
-  return Number(n).toFixed(1) + '%';
-}
-
-function fmtDate(d) {
-  if (!d) return '—';
-  const parts = d.split('-');
-  if (parts.length === 3) return parts[2] + '/' + parts[1];
-  return d;
-}
-
-function fmtDefeito(codigo) {
-  if (!codigo) return '—';
-  const map = {
-    fermentacao: 'Fermentacao',
-    sem_folhas: 'Sem Folhas',
-    folhas_arrebentadas: 'Folhas Arrebentadas',
-    pedaco: 'Pedaco',
-    sujo: 'Sujo',
-    rasgado: 'Rasgado',
-    corte_irregular: 'Corte Irregular',
-    furado: 'Furado',
-    mau_cheiro: 'Mau Cheiro',
-    contaminacao: 'Contaminacao',
-    outro_defeito: 'Outro',
-  };
-  return map[codigo] || codigo;
-}
-
-function scoreColor(s) {
-  if (s == null) return 'var(--muted)';
-  if (s < 50) return 'var(--cb-red)';
-  if (s < 70) return 'var(--cb-orange)';
-  return 'var(--cb-blue)';
-}
-
-function scoreBarFill(s) {
-  if (s == null) return 'var(--muted2)';
-  if (s < 50) return 'var(--cb-red)';
-  if (s < 70) return 'var(--cb-orange)';
-  return 'var(--cb-teal)';
-}
-
-function tendIcon(t) {
-  if (t === 'melhorando') return '<span class="badge badge-up" title="Melhorando">&#9650;</span>';
-  if (t === 'piorando')   return '<span class="badge badge-down" title="Piorando">&#9660;</span>';
-  return '<span class="badge badge-flat" title="Estavel">&#9654;</span>';
-}
-
-function loteTooltip(l) {
-  if (!l.produtos || !Array.isArray(l.produtos)) return '';
-  return l.produtos.map(p =>
-    (p.produto || '?') + ': A=' + (p.class_a||0) + ' B=' + (p.class_b||0) + ' C=' + (p.class_c||0)
-  ).join(' | ');
+    </div>`);
 }
 
 </script>

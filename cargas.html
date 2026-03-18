@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#080808">
+<title>Cargas · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="cq_layout.css">
+<style>
+.status-dot {
+  width: 8px; height: 8px; border-radius: 50%; display: inline-block;
+  margin-right: 6px; vertical-align: middle;
+}
+.status-dot.pendente { background: var(--warn); }
+.status-dot.inspecao { background: var(--ok); }
+.status-dot.finalizada { background: var(--good); }
+
+/* Mobile: card de carga com botão grande */
+.carga-card-action {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-top: var(--sp-sm); padding-top: var(--sp-sm);
+  border-top: 1px solid var(--border);
+}
+</style>
+</head>
+<body>
+
+<!-- SHELL -->
+<header class="cq-header">
+  <img class="cq-header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <div>
+    <div class="cq-header-title">Cargas</div>
+    <div class="cq-header-sub">Recebimento e inspecao</div>
+  </div>
+  <div class="cq-header-right">
+    <div class="cq-header-user desktop-only" id="userInfo"></div>
+    <div class="cq-header-avatar" id="userAvatar"></div>
+  </div>
+</header>
+
+<nav class="cq-sidebar" id="sidebar"></nav>
+<nav class="cq-bottomnav" id="bottomnav"></nav>
+
+<main class="cq-main">
+
+  <!-- FILTROS (desktop: inline, mobile: stacked) -->
+  <div class="filter-bar desktop-only">
+    <span class="input-label">Status</span>
+    <select id="filtroStatus" class="input" style="width:auto" onchange="carregarCargas()">
+      <option value="">Todos</option>
+      <option value="pendente">Pendentes</option>
+      <option value="valido">Validadas</option>
+      <option value="invalido">Invalidas</option>
+    </select>
+    <span class="input-label">Fornecedor</span>
+    <input type="text" id="filtroForn" class="input" placeholder="Buscar..." style="width:160px" oninput="carregarCargas()">
+    <span class="input-label">Periodo</span>
+    <select id="filtroPeriodo" class="input" style="width:auto" onchange="carregarCargas()">
+      <option value="7">7 dias</option>
+      <option value="30">30 dias</option>
+      <option value="90">90 dias</option>
+    </select>
+    <button class="btn btn-ghost btn-sm" onclick="carregarCargas()">Atualizar</button>
+  </div>
+
+  <!-- Mobile: filtro simplificado -->
+  <div class="mobile-only" style="margin-bottom:var(--sp-md)">
+    <div class="flex gap-sm">
+      <select id="filtroStatusM" class="input" style="flex:1" onchange="carregarCargas()">
+        <option value="">Todas</option>
+        <option value="pendente">Pendentes</option>
+        <option value="valido">Validadas</option>
+      </select>
+      <button class="btn btn-ghost btn-sm" onclick="carregarCargas()">&#8635;</button>
+    </div>
+  </div>
+
+  <!-- KPIs rápidos -->
+  <div class="g-4 mb-lg" id="kpiCargas"></div>
+
+  <!-- Lista/Tabela -->
+  <div id="loadingCargas" class="loading-state"><span class="spin">&#9203;</span> Carregando...</div>
+  <div id="listaCargas"></div>
+
+</main>
+
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script src="cq_ui.js"></script>
+<script>
+// ══════════════════════════════════════════════════════════════
+// CARGAS — Lista híbrida (mobile: cards, desktop: tabela)
+// ══════════════════════════════════════════════════════════════
+
+let _cargas = [];
+
+(async function(){
+  const usuario = await CQAuth.init({
+    perfisPermitidos: ['administrador','qualidade','gestor','analisador','conferente'],
+    redirectLogin: true
+  });
+  if (!usuario) return;
+  CQ.shell({ activePage: 'cargas', usuario });
+  await carregarCargas();
+})();
+
+async function carregarCargas() {
+  document.getElementById('loadingCargas').classList.remove('hidden');
+  document.getElementById('listaCargas').innerHTML = '';
+
+  const statusD = document.getElementById('filtroStatus')?.value || '';
+  const statusM = document.getElementById('filtroStatusM')?.value || '';
+  const status = CQ.isMobile ? statusM : statusD;
+  const forn = document.getElementById('filtroForn')?.value?.trim() || '';
+  const periodo = document.getElementById('filtroPeriodo')?.value || '7';
+
+  let query = 'atak_cargas_raw?select=*&order=criado_em.desc&limit=100';
+  if (status) query += `&status_validacao=eq.${status}`;
+  if (forn) query += `&fornecedor_nome=ilike.*${encodeURIComponent(forn)}*`;
+
+  try {
+    _cargas = await CQ_API.get(query);
+  } catch(e) {
+    _cargas = [];
+  }
+
+  renderKPIs();
+  renderCargas();
+  document.getElementById('loadingCargas').classList.add('hidden');
+}
+
+function renderKPIs() {
+  const total = _cargas.length;
+  const pendentes = _cargas.filter(c => !c.processado && c.status_validacao === 'pendente').length;
+  const validas = _cargas.filter(c => c.status_validacao === 'valido').length;
+  const invalidas = _cargas.filter(c => c.status_validacao === 'invalido').length;
+
+  document.getElementById('kpiCargas').innerHTML = `
+    <div class="kpi" data-status="accent">
+      <div class="kpi-value">${total}</div><div class="kpi-label">Total</div>
+    </div>
+    <div class="kpi" data-status="warn">
+      <div class="kpi-value">${pendentes}</div><div class="kpi-label">Pendentes</div>
+    </div>
+    <div class="kpi" data-status="good">
+      <div class="kpi-value">${validas}</div><div class="kpi-label">Validadas</div>
+    </div>
+    <div class="kpi" data-status="danger">
+      <div class="kpi-value">${invalidas}</div><div class="kpi-label">Invalidas</div>
+    </div>`;
+}
+
+function statusLabel(s) {
+  if (s === 'pendente') return '<span class="status-dot pendente"></span>Pendente';
+  if (s === 'valido') return '<span class="status-dot finalizada"></span>Validada';
+  if (s === 'invalido') return '<span class="status-dot" style="background:var(--danger)"></span>Invalida';
+  if (s === 'divergente') return '<span class="status-dot" style="background:var(--info)"></span>Divergente';
+  return s || '—';
+}
+
+function renderCargas() {
+  const el = document.getElementById('listaCargas');
+
+  el.innerHTML = CQ.table(_cargas, [
+    { key:'numero_documento', label:'Documento', format:(v,d)=>`<span class="t-mono t-accent">${CQ.esc(v||d.numero_pcr||'—')}</span>`, mobileLabel:'Doc.' },
+    { key:'fornecedor_nome', label:'Fornecedor', format:v=>`<span style="font-weight:600">${CQ.esc(v||'—')}</span>`, mobileLabel:'Fornec.' },
+    { key:'produto', label:'Produto', format:v=>CQ.esc(v||'—'), mobile:false },
+    { key:'qtd_frigo', label:'Qtd.', align:'right', mono:true, format:v=>CQ.fmtNum(v), mobileLabel:'Qtd.' },
+    { key:'data_chegada', label:'Chegada', mono:true, format:v=>CQ.fmtDate(v), mobileLabel:'Data' },
+    { key:'motorista', label:'Motorista', format:v=>CQ.esc(v||'—'), mobile:false },
+    { key:'placa_veiculo', label:'Placa', mono:true, format:v=>CQ.esc(v||'—'), mobile:false },
+    { key:'status_validacao', label:'Status', format:v=>statusLabel(v), mobileLabel:'Status' },
+    { key:'processado', label:'Inspecao', align:'center',
+      format:(v,d)=>d.processado
+        ? '<span class="badge badge-ok">Feita</span>'
+        : `<a href="inspecao.html?doc=${encodeURIComponent(d.numero_documento||d.numero_pcr||'')}" class="btn btn-primary btn-sm" style="min-height:32px;padding:4px 12px;font-size:11px">Inspecionar</a>`,
+      mobileLabel:'Acao' },
+  ], {
+    emptyMsg: 'Nenhuma carga encontrada com estes filtros.',
+  });
+}
+</script>
+</body>
+</html>

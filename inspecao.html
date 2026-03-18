@@ -328,21 +328,26 @@ function renderDefeitos() {
   `).join('');
 
   grid.querySelectorAll('.defeito-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    let timer;
+    let longPressed = false;
+
+    btn.addEventListener('click', (e) => {
+      if (longPressed) { longPressed = false; return; }
       const key = btn.dataset.key;
       _defeitos[key]++;
       renderDefeitos();
     });
     // Long press para decrementar
-    let timer;
     btn.addEventListener('pointerdown', () => {
+      longPressed = false;
       timer = setTimeout(() => {
+        longPressed = true;
         const key = btn.dataset.key;
         if (_defeitos[key] > 0) _defeitos[key]--;
         renderDefeitos();
       }, 500);
     });
-    btn.addEventListener('pointerup', () => clearTimeout(timer));
+    btn.addEventListener('pointerup', () => { if (!longPressed) clearTimeout(timer); });
     btn.addEventListener('pointerleave', () => clearTimeout(timer));
   });
 }

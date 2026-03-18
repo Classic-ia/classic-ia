@@ -983,6 +983,7 @@ textarea.field-input {
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
 <script src="cq_regras.js"></script>
+<script src="cq_permissoes.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 const CQFornecedores = (function() {
@@ -1151,6 +1152,12 @@ function initFornecedores(){
   const saved = localStorage.getItem('classic_logo');
   if(saved) logo.src = saved;
   else logo.style.display = 'none';
+
+  // P2: Carregar permissões granulares do backend
+  if (typeof CQPermissoes !== 'undefined') {
+    await CQPermissoes.carregar();
+    CQPermissoes.aplicarNaPagina();
+  }
 
   // Preencher campos ocultos de auditoria
   if (usuario) {
@@ -1608,7 +1615,18 @@ function montarRegistro(){
 }
 
 // ══════════════════════════════════════════════════════════
-// SALVAR
+// SALVAR — Fluxo P1/P2: Frontend coleta → Backend decide
+//
+// 1. Validação leve de UX (campos obrigatórios na tela)
+// 2. Verificar permissão "submeter" via CQPermissoes
+// 3. Upload de fotos (se online)
+// 4. INSERT como rascunho (sem classificação/status do frontend)
+// 5. Chamar cq_submeter_inspecao() RPC → backend valida + classifica + transiciona
+// 6. Renderizar resultado oficial do backend
+//
+// Frontend NÃO decide classificação, status_final ou workflow.
+// Auditoria oficial é feita no backend atomicamente.
+// CQAuth.log() é mantido apenas como log complementar de sessão.
 // ══════════════════════════════════════════════════════════
 async function salvarInspecao(){
   if(!validarCampos()){
@@ -1616,21 +1634,31 @@ async function salvarInspecao(){
     return;
   }
 
+  // P2: Verificar permissão antes de prosseguir
+  if(typeof CQPermissoes !== 'undefined' && CQPermissoes.isCarregado()){
+    const perm = CQPermissoes.verificar('inspecao_qualidade', 'submeter');
+    if(!perm.permitido){
+      toast(perm.mensagem, 'err');
+      return;
+    }
+  }
+
   const registro = montarRegistro();
 
-  // Salva localStorage (offline-first)
+  // Salva localStorage (offline-first) — backup local
   const pendentes = JSON.parse(localStorage.getItem('cq_pendentes') || '[]');
   pendentes.push({...registro, foto_etiqueta: fotoEtiquetaData, foto_produto: fotoProdutoData});
   localStorage.setItem('cq_pendentes', JSON.stringify(pendentes));
 
-  // Tenta Supabase se online (usa JWT do CQAuth — não mais anon key)
   const SB_URL = CQAuth.getSbUrl();
   const SB_KEY = CQAuth.getSbKey();
   const JWT    = CQAuth.getAuthToken() || SB_KEY;
   let salvouOnline = false;
+  let resultadoBackend = null;
+
   if(isOnline){
     try{
-      // 1. Upload de fotos para Storage
+      // PASSO 1: Upload de fotos para Storage
       const fotoUrls = { etiqueta: null, produto: null, defeito: null };
       const fotosDados = [
         { data: fotoEtiquetaData, key: 'etiqueta' },
@@ -1640,7 +1668,6 @@ async function salvarInspecao(){
       for(const f of fotosDados){
         if(!f.data) continue;
         try{
-          // Converter base64 para blob
           const res  = await fetch(f.data);
           const blob = await res.blob();
           const path = `inspecao/${registro.id}/${f.key}_${Date.now()}.jpg`;
@@ -1653,8 +1680,8 @@ async function salvarInspecao(){
         } catch(e){ console.warn('Foto upload falhou:', f.key, e); }
       }
 
-      // 2. Montar payload completo
-      const geo = CQAuth.getGeo() || {};
+      // PASSO 2: INSERT como rascunho — SEM classificação/status do frontend
+      // O backend (cq_submeter_inspecao) calculará via cq_motor_decisao()
       const authData = CQAuth.dadosRegistro();
       const payload = {
         id_inspecao:             registro.id,
@@ -1673,7 +1700,7 @@ async function salvarInspecao(){
         placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
         motorista:               document.getElementById('f-motorista')?.value || null,
         transportadora:          document.getElementById('f-transportadora')?.value || null,
-        // Defeitos
+        // Defeitos (dados brutos — backend calcula total e %)
         fermentacao:             parseInt(document.getElementById('df-fermentacao')?.value)||0,
         sem_folhas:              parseInt(document.getElementById('df-sem_folhas')?.value)||0,
         folhas_arrebentadas:     parseInt(document.getElementById('df-folhas_arrebentadas')?.value)||0,
@@ -1686,57 +1713,90 @@ async function salvarInspecao(){
         contaminacao:            parseInt(document.getElementById('df-contaminacao')?.value)||0,
         outro_defeito:           parseInt(document.getElementById('df-outro_defeito')?.value)||0,
         outro_defeito_tipo:      document.getElementById('f-outro-defeito-tipo')?.value || null,
-        total_defeitos:          registro.total_defeitos,
-        percentual_defeitos:     registro.percentual_defeitos,
-        classificacao:           registro.classificacao,
-        status_final:            registro.status_final,
+        // NÃO enviar classificacao/status_final — backend decide
         responsavel_decisao:     registro.responsavel_decisao,
         observacoes:             registro.observacoes,
         obs_reprovado:           registro.obs_reprovado,
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
         foto_defeito_url:        fotoUrls.defeito,
-        // Auditoria / geo
         ...authData,
-        // Workflow (Fase 2)
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
         offline:                 false,
         criado_em:               registro.criado_em,
       };
 
-      // 3. Insert no Supabase (usando JWT autenticado)
-      const r = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
+      // Insert no Supabase como rascunho
+      const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'apikey': SB_KEY,
           'Authorization': `Bearer ${JWT}`,
-          'Prefer': 'return=minimal',
+          'Prefer': 'return=representation',
         },
         body: JSON.stringify(payload),
       });
 
-      if(r.ok) {
-        salvouOnline = true;
-        await CQAuth.log('create_inspecao', {
-          lote_atak:     registro.lote_atak,
-          fornecedor:    registro.fornecedor,
-          classificacao: registro.classificacao,
-          pct_defeito:   registro.percentual_defeitos,
-        });
-      } else {
-        const errTxt = await r.text();
-        console.warn('Supabase error:', errTxt);
+      if(!insertResp.ok){
+        const errTxt = await insertResp.text();
+        console.warn('Supabase insert error:', errTxt);
+        throw new Error('Falha ao salvar inspeção no servidor');
       }
+
+      const insertedRows = await insertResp.json();
+      const inspecaoId = insertedRows[0]?.id;
+
+      if(!inspecaoId){
+        throw new Error('ID da inspeção não retornado pelo servidor');
+      }
+
+      // PASSO 3: Submeter via RPC — backend valida, classifica, transiciona, audita
+      try {
+        resultadoBackend = await CQRegras.submeterInspecao(inspecaoId);
+
+        if(resultadoBackend && resultadoBackend.ok){
+          salvouOnline = true;
+          // Log complementar de sessão (não é a auditoria principal)
+          CQAuth.log('create_inspecao', {
+            inspecao_id:   inspecaoId,
+            lote_atak:     registro.lote_atak,
+            fornecedor:    registro.fornecedor,
+            backend_result: 'ok',
+          });
+        } else {
+          // Submissão falhou mas o rascunho foi salvo
+          console.warn('Submissão RPC falhou:', resultadoBackend?.erro || resultadoBackend?.validacao);
+          salvouOnline = true; // rascunho foi salvo
+          // Mostrar erros de validação do backend
+          if(resultadoBackend?.validacao?.erros){
+            const errosBackend = resultadoBackend.validacao.erros;
+            const msgs = errosBackend.map(function(e){ return e.mensagem || e.campo; });
+            toast('Validação: ' + msgs.join('; '), 'err');
+          }
+        }
+      } catch(rpcErr){
+        // RPC falhou mas rascunho foi salvo
+        console.warn('RPC submeter falhou (rascunho salvo):', rpcErr.message);
+        salvouOnline = true; // rascunho foi salvo com sucesso
+      }
+
     } catch(e){ console.warn('Supabase offline, salvo localmente:', e); }
   }
 
-  // Mostra modal
+  // Mostra modal com resultado do backend
   document.getElementById('modalInspId').textContent = registro.id;
-  document.getElementById('modalOfflineNote').textContent = salvouOnline
-    ? '✓ Sincronizado com o servidor'
-    : '📵 Salvo localmente — será sincronizado quando houver conexão';
+  let statusMsg;
+  if(!salvouOnline){
+    statusMsg = '📵 Salvo localmente — será sincronizado quando houver conexão';
+  } else if(resultadoBackend && resultadoBackend.ok){
+    const d = resultadoBackend.decisao || {};
+    statusMsg = '✓ Sincronizado — ' + (d.classificacao || '') + ' / ' + (d.status_final || '');
+  } else {
+    statusMsg = '✓ Rascunho salvo — submissão pendente de revisão dos dados';
+  }
+  document.getElementById('modalOfflineNote').textContent = statusMsg;
   document.getElementById('modalSucesso').classList.add('show');
 }
 
@@ -1949,7 +2009,7 @@ function gerarPDFInspecao() {
   // Ler campos diretamente se registro não disponível
   const fv = id => { const e = document.getElementById(id); return e ? e.value : ''; };
   const pct   = parseFloat(fv('resultPct') || '0');
-  const cls   = fv('resultClass') || (pct<=5?'A':pct<=15?'B':'C');
+  const cls   = fv('resultClass') || CQRegras.motorDecisaoLocal(pct).classificacao;
   const qtdA  = parseInt(fv('f-qtd-analisada')) || 0;
   const hoje  = new Date().toLocaleDateString('pt-BR');
   const hora  = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});

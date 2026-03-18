@@ -201,6 +201,47 @@ const CQRegras = (function () {
     });
   }
 
+  // ── 6. OVERRIDE CONTROLADO (P2) ─────────────────────────
+
+  /**
+   * Registrar override de decisão do sistema
+   * @param {string} inspecaoId - UUID
+   * @param {string} campo - 'status_final' ou 'classificacao'
+   * @param {string} valorOverride - novo valor
+   * @param {string} justificativa - obrigatória (mín 10 chars)
+   * @param {string} origem - 'web'|'mobile'
+   * @returns {Promise<{ok, campo, valor_sistema, valor_override, decisao_original, justificativa}>}
+   */
+  async function registrarOverride(inspecaoId, campo, valorOverride, justificativa, origem = 'web') {
+    return _rpc('cq_registrar_override', {
+      p_inspecao_id: inspecaoId,
+      p_campo: campo,
+      p_valor_override: valorOverride,
+      p_justificativa: justificativa,
+      p_origem: origem,
+    });
+  }
+
+  // ── 7. AUDITORIA (P2) ─────────────────────────────────────
+
+  /**
+   * Consultar trilha de auditoria
+   * @param {Object} filtros - { registro_id, modulo, acao, usuario_id, data_inicio, data_fim, limite, offset }
+   * @returns {Promise<{ok, registros, total}>}
+   */
+  async function consultarAuditoria(filtros = {}) {
+    return _rpc('cq_consultar_auditoria', {
+      p_registro_id: filtros.registro_id || null,
+      p_modulo: filtros.modulo || null,
+      p_acao: filtros.acao || null,
+      p_usuario_id: filtros.usuario_id || null,
+      p_data_inicio: filtros.data_inicio || null,
+      p_data_fim: filtros.data_fim || null,
+      p_limite: filtros.limite || 50,
+      p_offset: filtros.offset || 0,
+    });
+  }
+
   // ── CONSTANTES DE LIMITES (para UI — feedback instantâneo) ─
   // Estes valores devem ser iguais aos defaults de cq_parametros_inspecao.
   // A fonte da verdade é SEMPRE o backend.
@@ -228,6 +269,10 @@ const CQRegras = (function () {
     submeterInspecao,
     acoesPermitidas,
     criarRevisao,
+
+    // P2: Override + Auditoria
+    registrarOverride,
+    consultarAuditoria,
 
     // Local helpers (preview, sem autoridade)
     motorDecisaoLocal,

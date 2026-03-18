@@ -430,3 +430,4 @@
 -- 17. 08_migration_eventos_validacoes.sql — Eventos, validações de negócio
 -- 18. 09_migration_backup_recuperacao.sql — Backup, changelog, snapshots
 -- 19. 10_migration_merge_estrutura.sql   — Merge SQL novo: movimentações, staging, defeitos normalizados
+-- 20. 11_migration_dashboard_decisao.sql — Views decisional: alertas, ranking, produtos, defeitos, pipeline

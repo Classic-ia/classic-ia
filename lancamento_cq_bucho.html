@@ -163,9 +163,15 @@ select option { background:var(--surface); }
 }
 .cond-dot { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background .2s; }
 .cond-item.ativo .cond-dot { background:var(--accent); }
-.cond-qtd-wrap { display:flex; gap:0; }
+.cond-qtd-wrap { display:flex; gap:0; align-items:stretch; }
+.cond-reset {
+  background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.3); border-left:none;
+  border-radius:0 6px 6px 0; color:#e74c3c; font-size:14px; font-weight:700;
+  padding:0 8px; cursor:pointer; transition:all .2s; display:flex; align-items:center;
+}
+.cond-reset:hover { background:rgba(231,76,60,.3); }
 .cond-qtd {
-  background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); border:1px solid var(--border); border-radius:6px 0 0 6px;
   padding:6px 8px; color:var(--text); font-family:'DM Mono',monospace;
   font-size:14px; font-weight:500; text-align:center; width:100%;
 }
@@ -583,14 +589,14 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 const FRIGOS = ["3G","ABLG","ALEXANDRE","ALIANCA","ALIANÇA","ANGUS","ARABUTA","ASSOCIAÇÃO","ASSOCIAÇÃO CIANORTE","BECKER","BERRANTE","BO DOURADO","BOI DOURADO","BOI GORDO","BOI NOBRE","BOI SUL","BOM SUCESSO","BOSSONI","CALIBRE","CAMPO DO GADO","CAPRINI","CARNE NOBRE","CAVALCANTE","CENTER","CHAPARRAL","COLIDER","DA MATA","DASKO","DIA","DISTRIBUIDORA","D´MATTA","EJ","ENTREPOSTO","ENTREPOSTO SÃO JOSÉ","EP","ESPERANCA","ESTRELA","ESTRELA DO SUL","EURO","FRASSUL","FRIBAL","FRIBAZ","FRIGOBECKER","FRIGODIA","FRIGODINTER","FRIGOINTER","FRIGORAIS","FRIGORINI","FRIGOTERRA","FRIGOVEMA","FRIJACUIPE","FRILEM","FRIMATOS","FRINORA","FRISPAR","FRIZONTE","GOLD","GOLD CARNES","GRANDEBULL","GUSMÃO","HIPER","INTER","IPER","ITAJARA","J GUSMAO","JACOB","JAGUAR","JARAGUA","JEAN","JEAN CARLOS","JPS","JR","JS","KM","KLEIN","LEME","LUZ","LUZENSE","MAGIA","MAGISTRAL","MARCELO SANTOS","MARCIO","MARCIO CAVALCANTE","MATOS","MAX","MBS","MENDES","MG","MG COUROS","MODELO","MONTALFRIG","MORRO AGUDO","MOYA","MUQUEM","NESI","NOBRE","NOSSA SENHORA","NOVA ALIANÇA","NOVA PRATA","ORION","OTJ","OURO VERDE","PAI NOSSO","PARACATU","PRO BOI","PROBOI","RAES","RANK","REAL","RECRISUL","RODEIO","ROSO","ROSSATO","ROSSI","SALTO VELOSO","SCAPINI","SCHAEDLER","SERRA","SERRANO","SIVIERO","SOMA","SÃO FRANCISCO","SÃO GERALDO","SÃO JOSE","SÃO JOSÉ","TALISMA","TERRA","TJ","TMJ","TOTI","VADECAR","VALDEIR","VALE DA PRATA","VALE DO BOI","VELOSO","VEMA","VEREDA","VIANNA","VIDAURRE","VIEIRA","VIOLA","WOLPI","WS"];
 
 const CONDICOES = [
-  { key:'rasgados',  label:'Rasgados',    icon:'✂' },
-  { key:'furados',   label:'Furados',     icon:'🔵' },
-  { key:'pelando',   label:'Pelando',     icon:'⚠' },
-  { key:'sem_folha', label:'Sem Folha',   icon:'📄' },
-  { key:'sujos',     label:'Sujos',       icon:'🔶' },
-  { key:'pedacos',   label:'Pedaços',     icon:'🔩' },
-  { key:'corte_i',   label:'Corte Irr.', icon:'✂' },
-  { key:'folha_e',   label:'Folha Extra', icon:'📋' },
+  { key:'rasgados',  label:'Rasgados',    icon:'🔪' },
+  { key:'furados',   label:'Furados',     icon:'🕳️' },
+  { key:'pelando',   label:'Pelando',     icon:'🧴' },
+  { key:'sem_folha', label:'Sem Folha',   icon:'🍂' },
+  { key:'sujos',     label:'Sujos',       icon:'💩' },
+  { key:'pedacos',   label:'Pedaços',     icon:'🧩' },
+  { key:'corte_i',   label:'Corte Irr.',  icon:'✂️' },
+  { key:'folha_e',   label:'Folha Extra', icon:'🍃' },
 ];
 
 let lancamentos = []; // array de registros salvos
@@ -645,9 +651,12 @@ function renderCondicoes(){
         <span class="cond-dot" id="cd-${c.key}"></span>
         ${c.icon} ${c.label}
       </div>
-      <input class="cond-qtd" type="number" id="cq-${c.key}" placeholder="0"
-        min="0" onclick="event.stopPropagation()"
-        oninput="ativarCond('${c.key}');calcCondicoes()">
+      <div class="cond-qtd-wrap">
+        <input class="cond-qtd" type="number" id="cq-${c.key}" placeholder="0"
+          min="0" onclick="event.stopPropagation()"
+          oninput="ativarCond('${c.key}');calcCondicoes()">
+        <button class="cond-reset" onclick="event.stopPropagation();resetCond('${c.key}')" title="Zerar">×</button>
+      </div>
     </div>`).join('');
 }
 
@@ -728,14 +737,11 @@ function calcPeso(){
 
 function toggleCond(key){
   const item = document.getElementById(`ci-${key}`);
-  const wasAtivo = item.classList.contains('ativo');
-  if(wasAtivo){
-    item.classList.remove('ativo');
-    document.getElementById(`cq-${key}`).value='';
-  } else {
-    item.classList.add('ativo');
-    document.getElementById(`cq-${key}`).focus();
-  }
+  const input = document.getElementById(`cq-${key}`);
+  const atual = parseFloat(input.value) || 0;
+  // Cada clique soma +2
+  input.value = atual + 2;
+  item.classList.add('ativo');
   calcCondicoes();
 }
 
@@ -744,6 +750,12 @@ function ativarCond(key){
   const item = document.getElementById(`ci-${key}`);
   if(qtd>0) item.classList.add('ativo');
   else item.classList.remove('ativo');
+  calcCondicoes();
+}
+
+function resetCond(key){
+  document.getElementById(`cq-${key}`).value = '';
+  document.getElementById(`ci-${key}`).classList.remove('ativo');
   calcCondicoes();
 }
 

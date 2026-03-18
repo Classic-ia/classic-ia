@@ -1,17 +1,33 @@
 /**
- * CQ Fornecedores — Módulo de normalização DE-PARA
- * 
- * Unifica nomes de planilha → código ATAK + nome oficial + apelido.
- * Uso: CQFornecedores.normalizar('GOLD')
- *      → { codigo: '60084', nome_oficial: 'GOLD CARNES LTDA', apelido: 'GOLD CARNES' }
+ * CQ Fornecedores — Cadastro mestre unificado
+ *
+ * Contém:
+ * 1. DADOS: cadastro completo ATAK (381 fornecedores com codigo, nome, apelido, UF)
+ * 2. DEPARA: mapa de aliases (nomes de planilha → codigo ATAK)
+ * 3. Componente de busca renderizavel (autocomplete com tag)
+ * 4. Funcoes de normalizacao para importacao
+ *
+ * Uso:
+ *   CQFornecedores.normalizar('GOLD')        → { codigo, nome_oficial, apelido }
+ *   CQFornecedores.buscar('frigo')            → [{ c, n, a, u }]
+ *   CQFornecedores.porCodigo('60084')         → { c, n, a, u }
+ *   CQFornecedores.renderizar('container', fn) → monta input de busca com autocomplete
+ *   CQFornecedores.listarTodos()              → lista unica de fornecedores
+ *   CQFornecedores.apelidoOuOriginal('GOLD')  → 'GOLD CARNES'
  */
 
-const CQFornecedores = (() => {
+const CQFornecedores = (function() {
 
-  // ── MAPA DE-PARA ───────────────────────────────────────────────
-  // Chave: nome da planilha (uppercase, trimmed)
-  // Valor: { codigo, nome_oficial, apelido }
-  const DEPARA = {
+  // ══════════════════════════════════════════════════════════
+  // 1. CADASTRO COMPLETO ATAK (381 fornecedores)
+  //    c = codigo, n = nome oficial, a = apelido, u = UF
+  // ══════════════════════════════════════════════════════════
+  var DADOS = [{"c":"60242","n":"A L TRANSPORTES INDUSTRIA E COMERCIO LTDA","a":"A L TRANSPORTES INDUSTRIA E COMERCIO LTDA","u":"TO"},{"c":"60243","n":"A M A DA SILVA MOURA","a":"A M A DA SILVA MOURA","u":"PA"},{"c":"60244","n":"A M DA S COSTA","a":"A M DA S COSTA","u":"MA"},{"c":"60161","n":"A S SOUZA INDUSTRIA E COMERCIO","a":"A S SOUZA INDUSTRIA E COMERCIO","u":"TO"},{"c":"60032","n":"A ZAGO & CIA LTDA ME","a":"A ZAGO & CIA LTDA ME","u":"RS"},{"c":"60180","n":"ABATE E DISTRIBUICAO DE CARNES RODEIO LTDA","a":"ABATE E DISTRIBUICAO DE CARNES RODEIO LTDA","u":"RS"},{"c":"60241","n":"ABATEDOURO ALÍPIO ELOI LTDA ME","a":"ABATEDOURO ALÍPIO ELOI LTDA ME","u":"PB"},{"c":"60250","n":"P L DA SILVA LTDA","a":"ABATEDOURO CUIABANO","u":"MT"},{"c":"60015","n":"ABATEDOURO DE BOVINOS LAGOA GRANDE LTDA","a":"ABATEDOURO DE BOVINOS LAGOA GRANDE LTDA","u":"PR"},{"c":"60194","n":"ABATEDOURO DE BOVINOS SAMPAIO LTDA","a":"ABATEDOURO DE BOVINOS SAMPAIO LTDA","u":"PA"},{"c":"60267","n":"ABATEDOURO FRIGORIFICO SÃO JORGE LTDA","a":"ABATEDOURO FRIGORIFICO SÃO JORGE LTDA","u":"SC"},{"c":"60146","n":"ABATEDOURO SERRANO M A LTDA","a":"ABATEDOURO SERRANO M A LTDA","u":"MT"},{"c":"60030","n":"ABAT TIO HUGO LTDA ME","a":"ABATEDOURO TIO HUGO","u":"RS"},{"c":"60278","n":"ABATEDOURO WS LTDA ME","a":"ABATEDOURO WS LTDA ME","u":"MS"},{"c":"60360","n":"AGRO-X COMERCIO DE GALLSTONE LTDA","a":"AGRO-X COMERCIO DE GALLSTONE LTDA","u":"PR"},{"c":"60042","n":"AGROBRASIL FRIG LTDA","a":"AGROBRASIL","u":"RS"},{"c":"60236","n":"AGROPAMPA FRIGORIFICO LTDA","a":"AGROPAMPA FRIGORIFICO LTDA","u":"RS"},{"c":"60319","n":"AGROPECUARIA BARAUNA LTDA","a":"AGROPECUARIA BARAUNA LTDA","u":"PR"},{"c":"60197","n":"AIRTON KLEIN","a":"AIRTON KLEIN","u":"RS"},{"c":"60016","n":"ALACARNE ALIMENTOS EIRELI","a":"ALACARNE","u":"AL"},{"c":"60085","n":"FRIGORIFICO ALFA - INDUSTRIA E COMERCIO DE CARNES E DERIVADO","a":"ALFA","u":"SP"},{"c":"60285","n":"FRIGORIFICO ALIANÇA","a":"ALIANÇA","u":"PA"},{"c":"60290","n":"ALPHAMETAIS PRODUTOS LTDA","a":"ALPHAMETAIS PRODUTOS LTDA","u":"SP"},{"c":"60358","n":"AMERICAN FRIGO DO BRASIL LTDA","a":"AMERICAN FRIGO DO BRASIL LTDA","u":"SC"},{"c":"60013","n":"FRIG ANGUS LTDA","a":"ANGUS CARNES - WESTFALIA - RS","u":"RS"},{"c":"60024","n":"FRIGORIFICO ANICUNS LTDA","a":"ANICUNS","u":"GO"},{"c":"60233","n":"ANTONIO FERREIRA MENDONÇA","a":"ANTONIO FERREIRA MENDONÇA","u":"RS"},{"c":"60052","n":"FRIGORIFICO ARABUTA LTDA","a":"ARABUTA","u":"SC"},{"c":"60107","n":"FRIGORIFICO CARAJAS LTDA","a":"ASSIS","u":"PR"},{"c":"60014","n":"FRIGORIFICO ASTRA DO PARANA LTDA","a":"ASTRA - CRUZEIRO DO OESTE - PR","u":"PR"},{"c":"60079","n":"FRIGORIFICO AUREFRIG LTDA","a":"AUREFRIG","u":"SP"},{"c":"60261","n":"AVICOLA MOURAO CM LTDA","a":"AVICOLA MOURAO CM LTDA","u":"PR"},{"c":"60081","n":"FRIGORIFICO SANTA MARIA LTDA","a":"BADY BASSIT","u":"SP"},{"c":"60307","n":"BANCO VOLKSWAGEN S.A","a":"BANCO VOLKSWAGEN S.A","u":"SP"},{"c":"60365","n":"BARBOSA & CIA LTDA","a":"BARBOSA & CIA LTDA","u":"MG"},{"c":"60303","n":"BARRA ALIMENTOS LTDA","a":"BARRA","u":"MT"},{"c":"60324","n":"BERALDI COMERCIO DE CARNES LTDA","a":"BERALDI COMERCIO DE CARNES LTDA","u":"PR"},{"c":"60352","n":"BERRANTE ALIMENTOS LTDA","a":"BERRANTE ALIMENTOS LTDA","u":"GO"},{"c":"60301","n":"MERCADO E AÇOUGUE BETO LTDA EPP","a":"BETO","u":"SC"},{"c":"60330","n":"B.H.R COMERCIO DE CARNES LTDA","a":"BHR COMERCIO DE CARNES LTDA","u":"PR"},{"c":"60022","n":"BOA ESPERANÇA ALIMENTOS LTDA","a":"BOA ESPERANCA","u":"GO"},{"c":"60341","n":"FRIGORIFICO EJ LTDA","a":"BOI BARÃO","u":"PR"},{"c":"60318","n":"BOI DOURADO COMERCIO CARNES LTDA","a":"BOI DOURADO","u":"BA"},{"c":"60288","n":"PAULO PEDRO COSTA NETO LTDA","a":"BOI EM PÉ","u":"MG"},{"c":"60342","n":"BOI NOBRE ALIMENTOS LTDA","a":"BOI NOBRE ALIMENTOS LTDA","u":"GO"},{"c":"60262","n":"BOI SUL CARNES LTDA","a":"BOI SUL","u":"RS"},{"c":"60227","n":"BOMBEEF FRIGORIFICO E AGROPECUARIA LTDA","a":"BOMBEEF FRIGORIFICO E AGROPECUARIA LTDA","u":"SP"},{"c":"60083","n":"BON-MART FRIGORIFICO LTDA","a":"BON MART","u":"SP"},{"c":"60213","n":"FRIGONELORE","a":"BORGES DE CARVALHO E CIA LTDA","u":"MT"},{"c":"60322","n":"VALDEIR CESAR DE MORAIS- MATADOURO","a":"BORRAZOPOLIS","u":"PR"},{"c":"60113","n":"FRIGORIFICO COMERCIAL BOSSONI LT","a":"BOSSONI - LUPERCIO","u":"SP"},{"c":"60020","n":"MATADOURO E FRIGORIFICO REGIONAL DE BRUMADO LTDA","a":"BRUMADO","u":"BA"},{"c":"60218","n":"BURITI COMERCIO DE CARNES LTDA","a":"BURITI COMERCIO DE CARNES LTDA","u":"MS"},{"c":"60245","n":"C CARVALHO DE SOUZA","a":"C CARVALHO DE SOUZA","u":"AC"},{"c":"60077","n":"ENTREPOSTO DE CARNES E DERIVADOS SAO JOSE LTDA","a":"CAJOBI","u":"SP"},{"c":"60133","n":"CALIBRE DISTRIBUIDORA DE CARNES LTDA","a":"CALIBRE DISTRIBUIDORA - FLORAI","u":"PR"},{"c":"60067","n":"FRIG CAMPEIRO LTDA","a":"CAMPEIRO","u":"RS"},{"c":"60082","n":"FRIGORIFICO CAMPOS SALLES LTDA","a":"CAMPOS SALES","u":"SP"},{"c":"60188","n":"M C CANUTO CAVALCANTE","a":"CANUTO CAVALCANTE","u":"MA"},{"c":"60108","n":"ROBERTO CARLOS CAPRINI LTDA","a":"CAPRINI","u":"PR"},{"c":"60308","n":"FRIGORÍFICO CARNE NOBRE LTDA","a":"CARNE NOBRE","u":"GO"},{"c":"60184","n":"COMERCIO E DISTRIBUICAO DE CARNES POSTINHO LTDA","a":"CARNES POSTINHO","u":"SC"},{"c":"60069","n":"CASA NOSTRA FRIG LTDA","a":"CASA NOSTRA","u":"RS"},{"c":"60017","n":"GUSTAVO ANTONIO DE LIMA CAVALCANTE","a":"CAVALCANTE","u":"AL"},{"c":"60018","n":"JOAO OLIVEIRA CAVALCANTE NETO - ME","a":"CAVALCANTE","u":"AL"},{"c":"60214","n":"CAVALCANTE PRODUTOS DO ABATE LTDA","a":"CAVALCANTE PRODUTOS DO ABATE LTDA","u":"MA"},{"c":"60176","n":"CEARA COUROS EIRELI","a":"CEARA COUROS EIRELI","u":"CE"},{"c":"60050","n":"FRIGORIFICO CECHINEL LTDA","a":"CECHINEL","u":"SC"},{"c":"60147","n":"CEDRO FRIGOR ABATES E ALIMENTOS LTDA","a":"CEDRO FRIGOR ABATES E ALIMENTOS LTDA","u":"SC"},{"c":"60374","n":"CELIO M BATISTA","a":"CELIO M BATISTA","u":"PR"},{"c":"60119","n":"CENTROESTE ABATEDOURO DE CARNES LTDA","a":"CENTROESTE","u":"RJ"},{"c":"60282","n":"DICAVEL DISTRIBUIDORA DE CARNES LTDA","a":"CESAR TOLEDO","u":"PR"},{"c":"60092","n":"ASSOCIACAO DOS ACOUGUEIROS DE CIANORTE - ASAC","a":"CIANORTE","u":"PR"},{"c":"60337","n":"CINCO ESTRELAS ARTIGOS DE COURO LTDA","a":"CINCO ESTRELAS ARTIGOS DE COURO LTDA","u":"BA"},{"c":"60106","n":"MOYA GIMENES & CIA LTDA","a":"COLORADO","u":"PR"},{"c":"60210","n":"COMERCIAL A8 LTDA","a":"COMERCIAL A8 LTDA","u":"PE"},{"c":"60221","n":"COMERCIAL CAVALCANTE LTDA","a":"COMERCIAL CAVALCANTE LTDA","u":"MA"},{"c":"60207","n":"COMERCIO DE CARNES SANTA LAURA LTDA","a":"COMERCIO DE CARNES SANTA LAURA SAO JOAO DO IVAI","u":"PR"},{"c":"60356","n":"COMERCIO DE CARNES SIVIERO LTDA","a":"COMERCIO DE CARNES SIVIERO LTDA","u":"RS"},{"c":"60329","n":"COMERCIO DE CARNES THREE FRIENDS LTDA","a":"COMERCIO DE CARNES THREE FRIENDS LTDA","u":"PR"},{"c":"60323","n":"CONSTANTINO E SENTINELLO LTDA","a":"CONSTANTINO E SENTINELLO LTDA","u":"PR"},{"c":"60054","n":"FRIGORIFICO BOM SUCESSO LTDA","a":"COOPERATIVA AGROPECUARIA BONSUCESSO","u":"SC"},{"c":"60117","n":"COPEL DISTRIBUICAO S/A","a":"COPEL","u":"PR"},{"c":"60219","n":"CORREIA & MOURA LTDA","a":"CORREIA & MOURA LTDA","u":"AC"},{"c":"60298","n":"CRC COMERCIO DE SEBOS LTDA","a":"CRC COMERCIO DE SEBOS LTDA","u":"PR"},{"c":"60118","n":"CURTUME NOROESTE LTDA","a":"CURTUME NOROESTE","u":"PR"},{"c":"60373","n":"SERRANO AGROINDUSTRIAL LTDA","a":"CURTUME SERRANO IND COM DE COUROS E PELES","u":"PR"},{"c":"60346","n":"CURTUME TOURO LTDA","a":"CURTUME TOURO LTDA","u":"SP"},{"c":"60129","n":"DELINER E-COMMERCE LTDA","a":"DELINER E-COMMERCE LTDA","u":"SP"},{"c":"60005","n":"COMERCIAL DESTRO LTDA","a":"DESTRO","u":"PR"},{"c":"60168","n":"DISCA LUZ DITRIBUIDORA DE CARNES EIRELI","a":"DISCA LUZ DITRIBUIDORA DE CARNES EIRELI","u":"PR"},{"c":"60277","n":"DISTRIB CARNES DERIVADOS ALEXANDRE LTDA","a":"DISTRIB CARNES DERIVADOS ALEXANDRE LTDA","u":"MS"},{"c":"60387","n":"DISTRIBUIDORA DE CARNES L A LTDA","a":"DISTRIBUIDORA DE CARNES L A LTDA","u":"PR"},{"c":"60240","n":"DISTRIBUIDORA DE CARNES RANK LTDA","a":"DISTRIBUIDORA DE CARNES RANK LTDA","u":"SP"},{"c":"60225","n":"DOM DIOGO","a":"DOM DIOGO","u":"RS"},{"c":"60128","n":"EFICIENCIA AMBIENTAL COLETA DE RESIDUOS LTDA","a":"EFICIENCIA AMBIENTAL COLETA DE RESIDUOS","u":"PR"},{"c":"60276","n":"MATADOURA ESPERANÇA","a":"ESPERANCA","u":"MS"},{"c":"60090","n":"MATADOURO FRIGORIFICO ESTEVES","a":"ESTEVES","u":"RJ"},{"c":"60357","n":"EXCELLENCE COUROS LTDA","a":"EXCELLENCE COUROS LTDA","u":"RS"},{"c":"60246","n":"F H DE MEDEIROS","a":"F H DE MEDEIROS","u":"RN"},{"c":"60239","n":"COUROS 3G","a":"FAXINAL COUROS","u":"PR"},{"c":"60345","n":"FELBOI COMERCIO DE RESIDUOS BOVINOS LTDA","a":"FELBOI COMERCIO DE RESIDUOS BOVINOS LTDA","u":"PR"},{"c":"60252","n":"M DE L DE MORAES LUZARDO EIRELI","a":"FELLBRASIL","u":"RO"},{"c":"60071","n":"FRIG FENIX LTDA","a":"FENIX","u":"RS"},{"c":"60057","n":"FRIGORIFICO FERRARINI","a":"FERRARINI - LUCISSA","u":"SC"},{"c":"60139","n":"FMR ALIMENTOS LTDA","a":"FMR ALIMENTOS LTDA","u":"SE"},{"c":"60001","n":"FORNECEDOR REVENDA HOMOLOGAÇÃO","a":"FORNECEDOR REVENDA HOMOLOGAÇÃO","u":"PR"},{"c":"60216","n":"FORTE ALIANCA INDUSTRIA E COMERCIO DE ALIMENTOS LTDA","a":"FORTE ALIANCA INDUSTRIA E COMERCIO DE ALIMENTOS LT","u":"MS"},{"c":"60228","n":"FRAMAS CASA DE COUROS E RETALHOS LTDA - EPP","a":"FRAMAS CASA DE COUROS E RETALHOS LTDA - EPP","u":"SP"},{"c":"60222","n":"FRAN INTERMEDIACAO & TRANSPORTES LTDA","a":"FRAN INTERMEDIACAO & TRANSPORTES LTDA","u":"PA"},{"c":"60372","n":"FRASSUL COMERCIO DE ALIMENTOS LTDA","a":"FRASSUL COMERCIO DE ALIMENTOS LTDA","u":"MT"},{"c":"60292","n":"FRIAGRO","a":"FRIAGRO","u":"MA"},{"c":"60383","n":"FRIANA FRIGORIFICO ANA CAROLINA LTDA","a":"FRIANA FRIGORIFICO ANA CAROLINA LTDA","u":"SC"},{"c":"60114","n":"FRIBAL FRIGORIFICO BALANCIN LTDA","a":"FRIBAL - BALANCIN","u":"SP"},{"c":"60326","n":"FRIBARREIRAS AGRO INDUSTRIAL DE ALIMENTOS LTDA","a":"FRIBARREIRAS","u":"BA"},{"c":"60053","n":"FRIBAZ FRIGORIFICO BAZOTTI LTDA","a":"FRIBAZ","u":"SC"},{"c":"60076","n":"ASSISCARNES DISTRIBUIDORA DE CARNES LTDA","a":"FRIBOM","u":"SP"},{"c":"60182","n":"FRICARNES DISTRIBUIDORA LTDA","a":"FRICARNES DISTRIBUIDORA LTDA","u":"AC"},{"c":"60056","n":"NILTON DO NASCIMENTO LTDA","a":"FRICAT","u":"SC"},{"c":"60191","n":"FRIG DLEON LTDA","a":"FRIG DLEON LTDA","u":"RS"},{"c":"60196","n":"FRIG ESPINILHO LTDA","a":"FRIG ESPINILHO LTDA","u":"RS"},{"c":"60178","n":"FRIG ROSO & DALL AGNOL LTDA","a":"FRIG ROSO & DALL AGNOL LTDA","u":"RS"},{"c":"60087","n":"FRIGORIFICO ILHA SOLTEIRA LTDA","a":"FRIG. ILHA","u":"SP"},{"c":"60328","n":"PRO BOI CARNES LTDA.","a":"FRIGARI","u":"GO"},{"c":"60312","n":"FRIGORIFICO E COMERCIO DE CARNES MARTINS LTDA","a":"FRIGMARTINS","u":"AM"},{"c":"60361","n":"FRIGO HIPER CARNE LTDA","a":"FRIGO HIPER CARNE LTDA","u":"SE"},{"c":"60362","n":"FRIGO INTER ABATE E COMERCIO DE CARNES LTDA","a":"FRIGO INTER ABATE E COMERCIO DE CARNES LTDA","u":"RJ"},{"c":"60023","n":"FRIGO PRIME INDUSTRIAL E COMERCIO DE CARNES LTDA","a":"FRIGO PRIME","u":"GO"},{"c":"60355","n":"FRIGO VITORIA DISTRIBUIDORA CARNES LTDA","a":"FRIGO VITORIA DISTRIBUIDORA CARNES LTDA","u":"MT"},{"c":"60170","n":"FRIGOABAT FRIGORIFICO ABATEDOURO COSTA TAVARES LTDA","a":"FRIGOABAT FRIGORIFICO ABATEDOURO COSTA TAVARES LTDA","u":"MG"},{"c":"60021","n":"FRIGOBARRA LTDA","a":"FRIGOBARRA","u":"ES"},{"c":"60009","n":"FRIGOBECKER - COMERCIO DE CARNES LTDA","a":"FRIGOBECKER","u":"PR"},{"c":"60044","n":"FRIGOBENDO FRIGORIFICO BENDO LTDA","a":"FRIGOBENDO","u":"PR"},{"c":"60111","n":"FRIGOCENTER IND. E COM. DE CARNES LTDA","a":"FRIGOCENTER","u":"PR"},{"c":"60350","n":"FRIGORIFICO REGIONAL DO PIEMONTE DA CHAPADA LTDA","a":"FRIGOCESAR","u":"BA"},{"c":"60099","n":"A M FIRMINO & CIA LTDA","a":"FRIGOCRUZ","u":"PR"},{"c":"60004","n":"FRIGODASKO INDUSTRIA E COMERCIO DE CARNES LTDA","a":"FRIGODASKO","u":"PR"},{"c":"60310","n":"FRIGODIA ALIMENTOS LTDA","a":"FRIGODIA","u":"MG"},{"c":"60028","n":"FRIGORIFICO FRIGOEURO LTDA","a":"FRIGOEURO","u":"PR"},{"c":"60333","n":"FRIGOFORT LTDA","a":"FRIGOFORT LTDA","u":"PR"},{"c":"60091","n":"FRIGORIFICO FOX LTDA","a":"FRIGOFOX","u":"SC"},{"c":"60283","n":"FRIGOIAS INDUSTRIA & COMERCIO DE CARNE LTDA","a":"FRIGOIAS","u":"GO"},{"c":"60215","n":"FRIGOJAN ALIMENTOS LTDA","a":"FRIGOJAN ALIMENTOS LTDA","u":"MG"},{"c":"60012","n":"ABATEDOURO E FRIGORIFICO COLIDER LTDA - ME","a":"FRIGOLIDER - COLIDER - MT","u":"MT"},{"c":"60344","n":"JARAGUA ALIMENTOS LTDA","a":"FRIGOMAIS","u":"GO"},{"c":"60187","n":"FRIGOMATA LTDA - ME","a":"FRIGOMATA LTDA - ME","u":"MG"},{"c":"60212","n":"FRIGONE FRIGORIFICO LTDA","a":"FRIGONE FRIGORIFICO LTDA","u":"MT"},{"c":"60043","n":"M.M.M. COMINESI FRIGORIFICO LTDA","a":"FRIGONESI","u":"PR"},{"c":"60049","n":"MARCELO DOS SANTOS ME","a":"FRIGONI/FRIGODINO","u":"SC"},{"c":"60381","n":"FRIGONOR FRIGORIFICO & COMERCIO LTDA","a":"FRIGONOR FRIGORIFICO & COMERCIO LTDA","u":"MG"},{"c":"60384","n":"FRIGONOR FRIGORIFICO & LOGISTICA LTDA","a":"FRIGONOR FRIGORIFICO & LOGISTICA LTDA","u":"MG"},{"c":"60367","n":"FRIGOPAIVA LTDA","a":"FRIGOPAIVA LTDA","u":"MG"},{"c":"60093","n":"FRIGORAES DISTRIBUIDORA DE GENEROS ALIMENTICIOS, INDUSTRIA E","a":"FRIGORAES","u":"SP"},{"c":"60051","n":"ADILSON LUCKMANN","a":"FRIGORIFICO ADILSON LUCKMANN","u":"SC"},{"c":"60171","n":"FRIGORIFICO ANA ROSA LTDA","a":"FRIGORIFICO ANA ROSA LTDA","u":"SC"},{"c":"60008","n":"FRIGORIFICO ARGUS LTDA","a":"FRIGORIFICO ARGUS","u":"PR"},{"c":"60232","n":"FRIGORIFICO BERRANTE - LTDA","a":"FRIGORIFICO BERRANTE - LTDA","u":"GO"},{"c":"60031","n":"ELENIR INES ALTISSIMO BIEGER","a":"FRIGORIFICO BIEGER","u":"RS"},{"c":"60172","n":"FRIGORIFICO BOI BRAVO INDUSTRIA E COMERCIO LTDA","a":"FRIGORIFICO BOI BRAVO","u":"MG"},{"c":"60195","n":"FRIGORIFICO BOI CORO LTDA","a":"FRIGORIFICO BOI CORO LTDA","u":"MG"},{"c":"60220","n":"FRIGORIFICO BONNA CARNE LTDA","a":"FRIGORIFICO BONNA CARNE LTDA","u":"RS"},{"c":"60209","n":"FRIGORIFICO CACOAL LTDA","a":"FRIGORIFICO CACOAL LTDA","u":"RO"},{"c":"60163","n":"FRIGORIFICO CAMPO DO GADO AGROINDUSTRIA LTDA","a":"FRIGORIFICO CAMPO DO GADO AGROINDUSTRIA LTDA","u":"BA"},{"c":"60314","n":"FRIGORIFICO CARNE NOBRE","a":"FRIGORIFICO CARNE NOBRE","u":"DF"},{"c":"60265","n":"FRIGORIFICO CHAPARRAL LTDA","a":"FRIGORIFICO CHAPARRAL LTDA","u":"MG"},{"c":"60363","n":"FRIGORIFICO CONFIANCA LTDA","a":"FRIGORIFICO CONFIANCA LTDA","u":"MG"},{"c":"60011","n":"FRIGORIFICO CRISTAL S.A.","a":"FRIGORIFICO CRISTAL - CAXIAS DO SUL - RS","u":"RS"},{"c":"60270","n":"FRIGORIFICO D' MATTA COMERCIO E INDUSTRIA LTDA","a":"FRIGORIFICO D' MATTA COMERCIO E INDUSTRIA LTDA","u":"BA"},{"c":"60223","n":"FRIGORIFICO DERGI LTDA","a":"FRIGORIFICO DERGI LTDA","u":"PR"},{"c":"60033","n":"COM DE CARNES DIETER LTDA","a":"FRIGORIFICO DIETER","u":"RS"},{"c":"60169","n":"MATADOURO SAO GERALDO LTDA","a":"FRIGORIFICO DIMINAS","u":"MG"},{"c":"60192","n":"FRIGORIFICO EING LTDA","a":"FRIGORIFICO EING LTDA","u":"SC"},{"c":"60124","n":"FRIGORIFICO EP AGROPECUARIA LTDA","a":"FRIGORIFICO EP","u":"MT"},{"c":"60351","n":"FRIGORIFICO ESTRELA DO SUL LTDA","a":"FRIGORIFICO ESTRELA DO SUL LTDA","u":"ES"},{"c":"60134","n":"FRIGORIFICO FRANCA BOI LTDA","a":"FRIGORIFICO FRANCA BOI LTDA","u":"SP"},{"c":"60103","n":"FRIGORIFICO FRIGOANGUS LTDA","a":"FRIGORIFICO FRIGOANGUS LTDA","u":"PR"},{"c":"60275","n":"FRIGORIFICO FRIGOMENDES LTDA","a":"FRIGORIFICO FRIGOMENDES LTDA","u":"PR"},{"c":"60335","n":"SUELY DOMINGAS VAHL DOS SANTOS","a":"FRIGORIFICO FRIGOSUL","u":"RS"},{"c":"60179","n":"FRIGORIFICO IPER LTDA","a":"FRIGORIFICO IPER LTDA","u":"MG"},{"c":"60152","n":"FRIGORIFICO IRMAOS SCAPINI LTDA","a":"FRIGORIFICO IRMAOS SCAPINI LTDA","u":"PR"},{"c":"60315","n":"FRIGORIFICO J.A & FILHO LTDA","a":"FRIGORIFICO J.A & FILHO LTDA","u":"SP"},{"c":"60098","n":"FRIGORIFICO JR LTDA","a":"FRIGORIFICO JR LTDA","u":"PR"},{"c":"60211","n":"FRIGORIFICO KLEIN LTDA","a":"FRIGORIFICO KLEIN LTDA","u":"SC"},{"c":"60271","n":"FRIGORIFICO KLUG LTDA","a":"FRIGORIFICO KLUG LTDA","u":"RS"},{"c":"60368","n":"FRIGORIFICO LUCIANA LTDA","a":"FRIGORIFICO LUCIANA LTDA","u":"MG"},{"c":"60097","n":"FRIGORIFICO LUZENSE","a":"FRIGORIFICO LUZENCE","u":"MG"},{"c":"60007","n":"FRIGORIFICO MATADOURO GUAREI LTDA","a":"FRIGORIFICO MATADOURO GUAREI","u":"SP"},{"c":"60347","n":"FRIGORIFICO MK LTDA","a":"FRIGORIFICO MK LTDA","u":"RS"},{"c":"60175","n":"FRIGORIFICO MODELO LTDA","a":"FRIGORIFICO MODELO LTDA","u":"BA"},{"c":"60247","n":"FRIGORIFICO MONTANHA LTDA","a":"FRIGORIFICO MONTANHA LTDA","u":"ES"},{"c":"60136","n":"FRIGORIFICO MUQUEM DO SAO FRANCISCO LTDA","a":"FRIGORIFICO MUQUEM DO SAO FRANCISCO LTDA","u":"BA"},{"c":"60116","n":"FRIGORIFICO NOSSA SENHORA APARECIDA LTDA.","a":"FRIGORIFICO NOSSA SENHORA APARECIDA","u":"PR"},{"c":"60149","n":"FRIGORIFICO NOVA ALIANCA LTDA","a":"FRIGORIFICO NOVA ALIANCA LTDA","u":"RJ"},{"c":"60166","n":"FRIGOPOTI - FRIGORIFICO POTI LTDA","a":"FRIGORIFICO POTI LTDA","u":"SP"},{"c":"60269","n":"FRIGORIFICO PREMIUM INDUSTRIA E COMERCIO DE CARNES LTDA","a":"FRIGORIFICO PREMIUM INDUSTRIA E COMERCIO DE CARNES","u":"GO"},{"c":"60268","n":"FRIGORIFICO RE","a":"FRIGORIFICO RE","u":"SC"},{"c":"60138","n":"FRIGORIFICO REGIONAL DE ALAGOINHAS LTDA","a":"FRIGORIFICO REGIONAL DE ALAGOINHAS LTDA","u":"BA"},{"c":"60266","n":"FRIGORIFICO REGIONAL SUDOESTE LTDA","a":"FRIGORIFICO REGIONAL SUDOESTE LTDA","u":"BA"},{"c":"60145","n":"FRIGORIFICO RIO BONITO S/A","a":"FRIGORIFICO RIO BONITO S/A","u":"MT"},{"c":"60185","n":"FRIG RZ PRODOTTI LA DELIZIA LTDA","a":"FRIGORIFICO RZ PRODOTTI LA DELIZA LTDA","u":"RS"},{"c":"60369","n":"FRIGORIFICO SAO JOAO DEL REI LTDA","a":"FRIGORIFICO SAO JOAO DEL REI LTDA","u":"MG"},{"c":"60348","n":"FRIGO SERRANO AGROINDUSTRIAL LTDA","a":"FRIGORIFICO SERRANO","u":"SE"},{"c":"60155","n":"FRIGORIFICO TMJ LTDA","a":"FRIGORIFICO TMJ LTDA","u":"PR"},{"c":"60202","n":"FRIGORIFICO VALENCIO LTDA","a":"FRIGORIFICO VALENCIO LTDA","u":"PA"},{"c":"60143","n":"FRIGORIFICO VIDAURRE LTDA","a":"FRIGORIFICO VIDAURRE LTDA","u":"RJ"},{"c":"60237","n":"FRIGORIFICO ZART LTDA","a":"FRIGORIFICO ZART LTDA","u":"RS"},{"c":"60224","n":"FRIGORINI INDUSTRIA E COMERCIO DE CARNES LTDA","a":"FRIGORINI","u":"PR"},{"c":"60189","n":"FRIG BETANIN LTDA","a":"FRIGORÍFICO BETANIN","u":"RS"},{"c":"60359","n":"FRIGOSAJ FRIGORIFICO LTDA","a":"FRIGOSAJ FRIGORIFICO LTDA","u":"BA"},{"c":"60249","n":"SERCOL - SERVICO E COMERCIO DO VALE LTDA","a":"FRIGOSAL","u":"MG"},{"c":"60385","n":"SANDER E CIA LTDA","a":"FRIGOSANDER","u":"SC"},{"c":"60006","n":"FRIGOSCHAEDLER LTDA","a":"FRIGOSCHAEDLER","u":"PR"},{"c":"60349","n":"FRIGOSSERRA - FRIGORIFICO REGIONAL DE SERRINHA LTDA","a":"FRIGOSSERRA - FRIGORIFICO REGIONAL DE SERRINHA LTD","u":"BA"},{"c":"60026","n":"FRIGOSTEAK ALIMENTOS LTDA","a":"FRIGOSTEAK","u":"GO"},{"c":"60003","n":"FRIGOTERRA ALIMENTOS LTDA","a":"FRIGOTERRA","u":"SP"},{"c":"60062","n":"FRIGOTOTI ABATEDOURO LTDA","a":"FRIGOTOTI","u":"SC"},{"c":"60305","n":"FRIGOVALE DO GUAPORE COM. E IND. DE CARNES LTDA","a":"FRIGOVALE","u":"AL"},{"c":"60289","n":"FRIGOVILLE INDUSTRIA E COMERCIO DE CARNES LTDA","a":"FRIGOVILLE INDUSTRIA E COMERCIO DE CARNES LTDA","u":"PR"},{"c":"60291","n":"FRIGOVIP ALIMENTOS LTDA","a":"FRIGOVIP ALIMENTOS LTDA","u":"GO"},{"c":"60336","n":"FRIGORIFICO ANCHIETA EIRELI","a":"FRIGOVIX","u":"ES"},{"c":"60162","n":"FRIHELP FRIGORIFICO VALE DAS AGUAS LTDA","a":"FRIHELP FRIGORIFICO VALE DAS AGUAS LTDA","u":"SP"},{"c":"60137","n":"FRIJACUIPE MATADOURO E FRIGORIFICO LTDA","a":"FRIJACUIPE MATADOURO E FRIGORIFICO LTDA","u":"BA"},{"c":"60311","n":"FRIGORIFICO FRILEM LTDA","a":"FRILEM","u":"BA"},{"c":"60370","n":"FRIMATOS FRIGORIFICO IRMAOS MATOS LTDA","a":"FRIMATOS","u":"BA"},{"c":"60063","n":"FRINORA FRIGORIFICO LTDA","a":"FRINORA/FRIOURO","u":"SC"},{"c":"60142","n":"FRIQUALI ALIMENTOS LTDA","a":"FRIQUALI ALIMENTOS LTDA","u":"SC"},{"c":"60295","n":"FRIGORIFICO RONDONOPOLIS LTDA","a":"FRIRON","u":"MT"},{"c":"60130","n":"FRISAJO AGRO PECUARIA INDUSTRIAL LTDA","a":"FRISAJO","u":"SC"},{"c":"60353","n":"FRISPAR FRIGORIFICO SUDOESTE DO PARANA LTDA","a":"FRISPAR FRIGORIFICO SUDOESTE DO PARANA LTDA","u":"PR"},{"c":"60331","n":"FRIZONTE - INDUSTRIA DE ALIMENTOS LTDA","a":"FRIZONTE - INDUSTRIA DE ALIMENTOS LTDA","u":"PR"},{"c":"60327","n":"G S BERTONCELLI - FRIGORIFICO","a":"G S BERTONCELLI - FRIGORIFICO","u":"PR"},{"c":"60065","n":"FRIG GASSEN LTDA","a":"GASSEN","u":"RS"},{"c":"60084","n":"GOLD CARNES COMERCIO ATACADISTA DE CARNES E DERIVADOS LTDA","a":"GOLD CARNES","u":"SP"},{"c":"60238","n":"GONEXT MEAT FOOD LTDA","a":"GONEXT MEAT FOOD LTDA","u":"PR"},{"c":"60132","n":"GR TRANSPORTE E COMERCIO LTDA","a":"GR TRANSPORTE E COMERCIO LTDA","u":"RJ"},{"c":"60258","n":"J  P S COMERCIO DE CARNES LTDA","a":"GRAND BULL ERRADO","u":"RJ"},{"c":"60386","n":"GUSTAVO ANTONIO DE LIMA CAVALCANTE LTDA","a":"GUSTAVO ANTONIO DE LIMA CAVALCANTE LTDA","u":"PE"},{"c":"60154","n":"HS MEAT FOOD LTDA","a":"HS MEAT FOOD LTDA","u":"PR"},{"c":"60190","n":"I X DE SOUZA","a":"I X DE SOUZA","u":"RO"},{"c":"60248","n":"I. O. PEIXOTO IMPORTACAO EXPORTACAO","a":"I. O. PEIXOTO IMP EXP LTDA","u":"AC"},{"c":"60029","n":"INCOPROVER IND E COM DE PROTEINA LTDA","a":"INCOPROVER IND E COM DE PROTEINA LTDA","u":"RS"},{"c":"60156","n":"INTERCOUROS INTERMED. IMPORT. ,EXPOR E COMERCIO DE COURO","a":"INTERCOUROS","u":"BA"},{"c":"60284","n":"INTERCOUROS INTERMEDIACAO, IMPORTACAO, EXPORTACAO E COMERCIO","a":"INTERCOUROS INTERMEDIACAO, IMPORTACAO, EXPORTACAO","u":"BA"},{"c":"60036","n":"IRMAOS MERTEN LTDA","a":"IRMAOS MERTEN","u":"RS"},{"c":"60070","n":"FRIG IRMAOS ROSA LTDA","a":"IRMAOS ROSA","u":"RS"},{"c":"60274","n":"ITAJARA COMERCIO DE CARNES LTDA","a":"ITAJARA COMERCIO DE CARNES LTDA","u":"SP"},{"c":"60302","n":"ITHALO PRADO CUSTODIO","a":"ITHALO PRADO CUSTODIO","u":"MT"},{"c":"60235","n":"FRIGOVEMA","a":"IVINHEMA","u":"MS"},{"c":"60193","n":"J A DA SILVA BEZERROS EIRELI - ME","a":"J A DA SILVA BEZERROS EIRELI","u":"PE"},{"c":"60181","n":"J ALTEVI DO PRADO EPP","a":"J ALTEVI DO PRADO EPP","u":"PA"},{"c":"60317","n":"J G W COMERCIO DE CARNES E DERIVADOS LTDA","a":"J G W COMERCIO DE CARNES E DERIVADOS LTDA","u":"MS"},{"c":"60140","n":"J GUSMAO & CIA LTDA","a":"J GUSMAO & CIA LTDA","u":"AL"},{"c":"60260","n":"JPS COMERCIO DE CARNES LTDA","a":"J P S / GRAND BULL","u":"RJ"},{"c":"60089","n":"FRIGORIFICO JABURU LTDA","a":"JABURU","u":"RJ"},{"c":"60334","n":"JACOB & BATTISTI LTDA","a":"JACOB & BATTISTI LTDA","u":"PR"},{"c":"60300","n":"FRIGORIFICO JATOBA","a":"JATOBA","u":"TO"},{"c":"60148","n":"JEAN CARLOS DOS SANTOS - CARNES - ME","a":"JEAN CARLOS DOS SANTOS - CARNES - ME","u":"PR"},{"c":"60064","n":"LUCAS CARDOSO DA SILVA","a":"JLS - SOMBRIO","u":"SC"},{"c":"60201","n":"JLS FRIGORIFICO LTDA","a":"JLS FRIGORIFICO LTDA","u":"SC"},{"c":"60257","n":"MATADOURO JORGE DETTMANN","a":"JORGE DETTMANN","u":"RS"},{"c":"60102","n":"JOSE MARCIO FERREIRA  LTDA","a":"JOSE MARCIO FERREIRA  LTDA","u":"PR"},{"c":"60027","n":"FRIGORIFICO BOI GORDO LTDA","a":"JOSÉ FERMINO MAGALHÃES ME","u":"PR"},{"c":"60112","n":"J.R. LEME  - ME","a":"JOSÉ RONALDO","u":"SP"},{"c":"60293","n":"K. A. REPRESENTAÇÃO E DISTRIBUIDOR DE CARNES FRESCAS LTDA","a":"K. A. REPRESENTAÇÃO E DISTRIBUIDOR DE CARNES FRESC","u":"GO"},{"c":"60273","n":"KM DISTRIBUIDORA SE CARNES LTDA","a":"KM DISTRIBUIDORA SE CARNES LTDA","u":"RJ"},{"c":"60150","n":"KRM REPRESENTANTE, COMERCIO E TRANSPORTADORA","a":"KRM REPRESENTANTE, COMERCIO E TRANSPORTADORA","u":"RJ"},{"c":"60254","n":"L K J - FRIGORIFICO LTDA","a":"L K J - FRIGORIFICO LTDA","u":"TO"},{"c":"60253","n":"L. LOPES COMERCIO DE COUROS","a":"L. LOPES COMERCIO DE COUROS","u":"SP"},{"c":"60088","n":"J S FERREIRA  FRIGORIFICO LTDA","a":"LANDIM","u":"RJ"},{"c":"60316","n":"LFS REPRESENTANTE TRANSPORTE E COMERCIO","a":"LFS REPRESENTANTE TRANSPORTE E COMERCIO","u":"RJ"},{"c":"60127","n":"LOPES LUBRIFICANTES LTDA","a":"LUBRITAR DISTRIBUIDORA","u":"PR"},{"c":"60073","n":"DISTRIBUIDORA DE CARNES LUCIANETTI LTDA","a":"LUCIANETTI","u":"SP"},{"c":"60229","n":"LUCIANO ALVES TETE RECICLAGEM E TRANSPORTES LTDA","a":"LUCIANO ALVES TETE RECICLAGEM E TRANSPORTES LTDA","u":"PR"},{"c":"60165","n":"FRIGORIFICO BISMARK LTDA","a":"LUIZ HENRIQUE EXTERKOETTER","u":"SC"},{"c":"60186","n":"N Z LUZARDO COMERCIO ATACADISTA DE CARNES E DERIVADOS LTDA","a":"LUZARDO COMERCIO ATACADISTA DE CARNES","u":"RO"},{"c":"60375","n":"M A FOOD LTDA","a":"M A FOOD LTDA","u":"PR"},{"c":"60075","n":"M A LEME AGROPECUARIA LTDA","a":"M A LEME AGROPECUARIA LTDA","u":"SP"},{"c":"60041","n":"FRIG M.A. LTDA","a":"M.A - ARARICA","u":"RS"},{"c":"60256","n":"FRIGORIFICO MADU","a":"MADU","u":"RS"},{"c":"60055","n":"FRIGORIFICO E DISTRIBUIDORA DE CARNES MAGIA LTDA","a":"MAGIA - FRIOESTE","u":"SC"},{"c":"60109","n":"R B MAIOLI","a":"MAIOLI","u":"PR"},{"c":"60086","n":"FRIGORIFICO MARANA LTDA","a":"MARANA","u":"SP"},{"c":"60120","n":"MARCIO LOPES CAVALCANTE","a":"MARCIO LOPES CAVALCANTE","u":"AL"},{"c":"60174","n":"MARCOS DA C CAVALCANTE","a":"MARCOS DA C CAVALCANTE","u":"MA"},{"c":"60200","n":"MARINES B FERREIRA","a":"MARINES B FERREIRA","u":"RS"},{"c":"60177","n":"M RIBEIRO SUBPRODUTOS BOVINOS LTDA","a":"MAURECIR","u":"PR"},{"c":"60309","n":"FRIGOMAX LTDA","a":"MAX","u":"SC"},{"c":"60144","n":"MBS FRIGORIFICO LTDA","a":"MBS FRIGORIFICO LTDA","u":"MT"},{"c":"60204","n":"MCL IND E COM DE CARNES E DER EIRELI","a":"MCL IND E COM DE CARNES E DER EIRELI","u":"AC"},{"c":"60251","n":"METEORO ALIMENTOS LTDA","a":"METEORO ALIMENTOS LTDA","u":"RS"},{"c":"60121","n":"MG COUROS","a":"MG COUROS","u":"PE"},{"c":"60151","n":"MINNER COML LTDA","a":"MINNER COML LTDA","u":"RS"},{"c":"60080","n":"FRIGORIFICO MIRELLA LTDA","a":"MIRELLA - CORDEIRÓPOLIS","u":"SP"},{"c":"60078","n":"MONTALFRIG FRIGORIFICO INDUSTRIA E COMERCIO DE CARNES LTDA","a":"MONTALFRIG","u":"SP"},{"c":"60123","n":"MONTEBELO INDUSTRIA E COMÉRCIO DE CARNES S/A","a":"MONTEBELO INDUSTRIA E COMÉRCIO DE CARNES S/A","u":"SC"},{"c":"60272","n":"MATADOURO MORRO AGUDO","a":"MORRO AGUDO","u":"SP"},{"c":"60105","n":"FRIGORIFICO CRISTAL LTDA","a":"MOURAO","u":"PR"},{"c":"60126","n":"MULTILOG BRASIL S.A.","a":"MULTILOG BRASIL S.A.","u":"PR"},{"c":"60388","n":"N PEDRO GRANDO & CIA LTDA","a":"N PEDRO GRANDO & CIA LTDA","u":"PR"},{"c":"60339","n":"NILSON FERNANDO WOLPI DE OLIVEIRA LTDA","a":"NILSON FERNANDO WOLPI DE OLIVEIRA LTDA","u":"PR"},{"c":"60037","n":"CASA DAS CARNES NOVA PRATA LTDA","a":"NOVA PRATA","u":"RS"},{"c":"60122","n":"A J DE OLIVEIRA COMERCIO DE SAL MARINHO LTDA","a":"NUTRI-SUL","u":"RN"},{"c":"60294","n":"NUTRIAL AGROINDUSTRIAS REUNIDAS S/A","a":"NUTRIAL","u":"SE"},{"c":"60167","n":"ORFIMAR COMERCIO DE CARNES LTDA","a":"ORFIMAR COM. DE CARNES LTDA","u":"PR"},{"c":"60010","n":"ORION & MAGISTRAL LTDA.","a":"ORION & MAGISTRAL - CAMPO MOURÃO - PR","u":"PR"},{"c":"60025","n":"FRIGORIFICO OURO VERDE LTDA","a":"OURO VERDE","u":"GO"},{"c":"60304","n":"FRIG PAI NOSSO & MONTE SIAO LTDA","a":"PAI NOSSO","u":"RS"},{"c":"60059","n":"PAMPLONA ALIMENTOS S/A","a":"PAMPLONA","u":"SC"},{"c":"60320","n":"FRIGORIFICO PARACATU LTDA","a":"PARACATU","u":"MG"},{"c":"60046","n":"FRIGORIFICO PAULO VIOLA DE ITAPIRA LTDA","a":"PAULO VIOLA","u":"SP"},{"c":"60208","n":"VALTERLICE FERREIRA FORNEL & CIA LTDA","a":"PEDREGULHO","u":"SP"},{"c":"60131","n":"PEDRO CECONI","a":"PEDRO CECONI","u":"SC"},{"c":"60198","n":"PLANETA COUROS LTDA","a":"PLANETA COUROS LTDA","u":"PE"},{"c":"60039","n":"FRIGORIFICO POCA EIRELI","a":"POCA","u":"RS"},{"c":"60100","n":"DISTRIBUIDORA DE CARNES PORBOI LTDA","a":"PORBOI","u":"PR"},{"c":"60205","n":"PRLC SERVICOS LTDA","a":"PRLC SERVICOS LTDA","u":"MA"},{"c":"60377","n":"PRO BOI CARNES LTDA.","a":"PRO BOI CARNES","u":"SP"},{"c":"60338","n":"PROL PRODUTOS DO ABATE LTDA","a":"PROL PRODUTOS","u":"MA"},{"c":"60325","n":"R B SÓ CARNE DISTRIBUIDORA LTDA","a":"R B SÓ CARNE DISTRIBUIDORA LTDA","u":"GO"},{"c":"60159","n":"R.A.G COSTA CARNES LTDA","a":"R.A.G COSTA CARNES LTDA","u":"PR"},{"c":"60040","n":"RAHMEIER MERCADO E DISTRIB LTDA","a":"RAHMEIER","u":"RS"},{"c":"60101","n":"R S B COMERCIO DE MIUDOS LTDA","a":"RAIMUNDO","u":"PR"},{"c":"60343","n":"RAMAX CACHOEIRA ALTA LTDA","a":"RAMAX CACHOEIRA ALTA LTDA","u":"GO"},{"c":"60048","n":"FRIG RAMOS LTDA","a":"RAMOS","u":"RS"},{"c":"60371","n":"REAL SUBPRODUTOS LTDA","a":"REAL SUBPRODUTOS LTDA","u":"SE"},{"c":"60034","n":"RECRISUL COM DE CARNES LTDA","a":"RECRISUL","u":"RS"},{"c":"60259","n":"RIBEIRO INDUSTRIA E COMERCIO DE EMBOLOS DE VEDACAO LTDA","a":"RIBEIRO INDUSTRIA E COMERCIO DE EMBOLOS DE VEDACAO","u":"PR"},{"c":"60364","n":"RICARDO DE OLIVEIRA","a":"RICARDO DE OLIVEIRA","u":"PR"},{"c":"60096","n":"FRIGORIFICO VIEIRA E VENDRAME LTDA","a":"RIO DA PRATA","u":"PR"},{"c":"60332","n":"MATADOURO O T J LTDA EPP","a":"RIO DAS PEDRAS","u":"GO"},{"c":"60299","n":"RICARDO MARQUES DE AZEVEDO LTDA","a":"RIO GRANDE","u":"PR"},{"c":"60199","n":"C M FARIAS ROSSATO & CIA. LTDA","a":"ROSSATO","u":"PR"},{"c":"60135","n":"ROSSI FRIGORIFICO LTDA","a":"ROSSI FRIGORIFICO LTDA","u":"SC"},{"c":"60287","n":"FRIGORIFICO RV LTDA","a":"RV","u":"SP"},{"c":"60306","n":"SAGGIORATO COMERCIO DE COURO LTDA","a":"SAGGIORATO COMERCIO DE COURO LTDA","u":"SC"},{"c":"60379","n":"SAL POTIGUAR COMERCIO E INDUSTRIA LTDA","a":"SAL POTIGUAR COMERCIO E INDUSTRIA LTDA","u":"RN"},{"c":"60286","n":"SALINA DIAMANTE BRANCO LTDA","a":"SALINA DIAMANTE BRANCO","u":"RN"},{"c":"60058","n":"FRIGORIFICO SALTO VELOSO","a":"SALTO VELOSO","u":"SC"},{"c":"60366","n":"SANTA LUCIA INDUSTRIA & COMERCIO DE CARNES LTDA","a":"SANTA LUCIA INDUSTRIA & COMERCIO DE CARNES LTDA","u":"MG"},{"c":"60035","n":"ANDERSON B PEREIRA","a":"SANTA MARIA - RS","u":"RS"},{"c":"60104","n":"SANTA RITA COMERCIO DE CARNES LTDA ME","a":"SANTA RITA COMERCIO DE CARNES LTDA ME","u":"PR"},{"c":"60095","n":"FRIGORIFICO SAO FRANCISCO LTDA","a":"SAO FRANCISCO","u":"PR"},{"c":"60045","n":"FRIGORIFICO SCAPINI LTDA","a":"SCAPINI","u":"PR"},{"c":"60060","n":"SCHMITZ AGROPECUARIA INDUSTRIAL LTDA","a":"SCHMITZ","u":"SC"},{"c":"60279","n":"FRIGORIFICO SENTINELLA LTDA","a":"SENTINELLA","u":"SP"},{"c":"60378","n":"SERGIO COLOMBO NETO","a":"SERGIO COLOMBO NETO","u":"SP"},{"c":"60354","n":"SF INDUSTRIA E COMERCIO DE CARNES LTDA","a":"SF INDUSTRIA E COMERCIO DE CARNES LTDA","u":"MT"},{"c":"60110","n":"SOMA COMERCIO DE PRODUTOS ALIMENTICIOS LTDA","a":"SOMA - CANAA","u":"PR"},{"c":"60255","n":"SR- BOVINOS LTDA","a":"SR CARNES ALIMENTOS E TRANSPORTES","u":"MG"},{"c":"60226","n":"SUAVE ALIMENTOS LTDA","a":"SUAVE ALIMENTOS LTDA","u":"MG"},{"c":"60234","n":"SUBPRODUTOS INSUMOS AGROPECUARIO LTDA","a":"SUBPRODUTOS INSUMOS AGROPECUARIO LTDA","u":"PR"},{"c":"60164","n":"SUINOS MACHADO DISTRIBUIDORA DE CARNES LTDA","a":"SUINOS MACHADO DISTRIBUIDORA DE CARNES LTDA","u":"BA"},{"c":"60066","n":"FRIG SULNORTE IND E COM DE CARNES LTDA","a":"SULNORTE","u":"RS"},{"c":"60217","n":"SUPER LIDER DISTRIBUIDORA DE CARNES LTDA","a":"SUPER LIDER DISTRIBUIDORA DE CARNES LTDA","u":"MS"},{"c":"60153","n":"T R COUROS LTDA","a":"T R COUROS LTDA","u":"ES"},{"c":"60297","n":"TALISMA ALIMENTOS LTDA","a":"TALISMA","u":"GO"},{"c":"60019","n":"FRIGORÍFICO TAURO LTDA","a":"TAURO","u":"BA"},{"c":"60158","n":"TERESINA ABATE DE BOVINOS","a":"TERESINA CARNES","u":"PI"},{"c":"60296","n":"TOP BOI- COMERCIO DE CARNES E DERIVADOS LTDA","a":"TOP BOI","u":"RJ"},{"c":"60173","n":"TRADE FORTY-FOUR COMERCIO DE SUBPRODUTOS BOVINOS LTDA","a":"TRADE FORTY","u":"PR"},{"c":"60382","n":"UNIFRIGO FRIGORIFICO LTDA","a":"UNIFRIGO FRIGORIFICO LTDA","u":"MG"},{"c":"60380","n":"UNISAL-UNIAO SALINEIRA LTDA","a":"UNISAL-UNIAO SALINEIRA LTDA","u":"RN"},{"c":"60206","n":"V MARIO DE OLIVEIRA","a":"V MARIO DE OLIVEIRA","u":"RS"},{"c":"60141","n":"VADECAR MATADOURO LTDA","a":"VADECAR MATADOURO LTDA","u":"RJ"},{"c":"60125","n":"VALE DO BOI ALIMENTOS LTDA","a":"VALE DO BOI ALIMENTOS LTDA","u":"GO"},{"c":"60072","n":"FRIGORIFICO VALE DO PRATA LTDA","a":"VALE DO PRATA","u":"SP"},{"c":"60061","n":"FRIGORIFICO VARPI LTDA","a":"VARPI","u":"SC"},{"c":"60068","n":"MATADOURO VENZKE LTDA","a":"VENZKE","u":"RS"},{"c":"60094","n":"VEREDA ALIMENTOS LTDA","a":"VEREDA","u":"GO"},{"c":"60183","n":"VIA CARNES INDUSTRIA E COMERCIO LTDA","a":"VIA CARNES","u":"GO"},{"c":"60281","n":"FRIGORIFICO VIANNA","a":"VIANNA","u":"RS"},{"c":"60280","n":"VITAPELLI LTDA","a":"VITAPELLI","u":"SP"},{"c":"60264","n":"VOONKE DO BRASIL PRODUTOS QUIMICOS INDUSTRIAL LTDA","a":"VOONKE DO BRASIL PRODUTOS QUIMICOS INDUSTRIAL LTDA","u":"SC"},{"c":"60115","n":"FRIGORIFICO V R LTDA","a":"VR LEME","u":"SP"},{"c":"60376","n":"WASHINGTON EMILIO PINTON MORRO AGUDO LTDA","a":"WASHINGTON EMILIO PINTON MORRO AGUDO LTDA","u":"SP"},{"c":"60231","n":"WENDEL","a":"WENDEL","u":"BA"},{"c":"60203","n":"FERNANDO WOLPI DE OLIVEIRA SUPERMERCADO LTDA","a":"WOLFRIG","u":"PR"},{"c":"60263","n":"XANXERE RAFIA INDUSTRIA DE TECIDOS TECNICOS LTDA","a":"XANXERE RAFIA INDUSTRIA DE TECIDOS TECNICOS LTDA","u":"SC"},{"c":"60321","n":"YIPE AGROPECUARIA LTDA","a":"YIPE AGROPECUARIA LTDA","u":"PR"},{"c":"60038","n":"ZANIN COM DE PROD ALIMENTOS LTDA","a":"ZANIN","u":"RS"},{"c":"60047","n":"ABAT ZEBUA LTDA","a":"ZEBUA","u":"RS"}];
+
+  // ══════════════════════════════════════════════════════════
+  // 2. MAPA DE-PARA (aliases de planilha → codigo ATAK)
+  // ══════════════════════════════════════════════════════════
+  var DEPARA = {
     '3G':                     { codigo: '60239', nome_oficial: 'COUROS 3G - FAXINAL', apelido: 'COUROS FAXINAL' },
     'ABLG':                   { codigo: '81096', nome_oficial: 'ABATEDOURO DE BOVINOS LAGOA GRANDE LTDA', apelido: 'ABLG - ARAUCARIA - PR' },
     'ALEXANDRE':              { codigo: '50052', nome_oficial: 'DISTRIB CARNES DERIVADOS ALEXANDRE LTDA', apelido: 'DISTRIB CARNES DERIVADOS ALEXANDRE LTDA' },
@@ -175,128 +191,179 @@ const CQFornecedores = (() => {
     'WS':                     { codigo: '50051', nome_oficial: 'ABATEDOURO WS LTDA ME', apelido: 'ABATEDOURO WS' },
   };
 
-  // ── INDEX POR CÓDIGO ATAK ─────────────────────────────────────
-  const POR_CODIGO = {};
-  for (const [chave, val] of Object.entries(DEPARA)) {
-    if (!POR_CODIGO[val.codigo]) {
-      POR_CODIGO[val.codigo] = { ...val, aliases: [chave] };
-    } else {
-      POR_CODIGO[val.codigo].aliases.push(chave);
-    }
+  // ══════════════════════════════════════════════════════════
+  // 3. INDICE POR CODIGO
+  // ══════════════════════════════════════════════════════════
+  var POR_CODIGO = {};
+  DADOS.forEach(function(d) { POR_CODIGO[d.c] = d; });
+
+  // ══════════════════════════════════════════════════════════
+  // FUNCOES DE BUSCA
+  // ══════════════════════════════════════════════════════════
+
+  function buscar(termo, limite) {
+    limite = limite || 12;
+    if (!termo || termo.length < 2) return [];
+    var t = termo.toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+    return DADOS.filter(function(f) {
+      var n = (f.n + ' ' + f.a + ' ' + f.c).toLowerCase().normalize('NFD').replace(/\p{M}/gu, '');
+      return n.includes(t);
+    }).slice(0, limite);
   }
 
-  // ── FUNÇÕES PÚBLICAS ──────────────────────────────────────────
-
-  /**
-   * Normaliza um nome de fornecedor da planilha para o cadastro ATAK.
-   * @param {string} nome - Nome como vem da planilha
-   * @returns {{ codigo: string, nome_oficial: string, apelido: string } | null}
-   */
-  function normalizar(nome) {
-    if (!nome) return null;
-    const key = nome.toString().trim().toUpperCase()
-      .replace(/\s+/g, ' ')
-      .replace(/['']/g, "'");
-    return DEPARA[key] || null;
-  }
-
-  /**
-   * Busca por código ATAK.
-   * @param {string} codigo
-   * @returns {{ codigo: string, nome_oficial: string, apelido: string, aliases: string[] } | null}
-   */
   function porCodigo(codigo) {
     if (!codigo) return null;
-    return POR_CODIGO[codigo.toString().trim()] || null;
+    return POR_CODIGO[String(codigo)] || null;
   }
 
-  /**
-   * Busca aproximada (contém o texto em qualquer campo).
-   * @param {string} termo
-   * @returns {Array<{ chave: string, codigo: string, nome_oficial: string, apelido: string }>}
-   */
-  function buscar(termo) {
-    if (!termo) return [];
-    const t = termo.toString().trim().toUpperCase();
-    const results = [];
-    const seen = new Set();
+  // ══════════════════════════════════════════════════════════
+  // FUNCOES DE NORMALIZACAO (DE-PARA)
+  // ══════════════════════════════════════════════════════════
 
-    for (const [chave, val] of Object.entries(DEPARA)) {
-      if (seen.has(val.codigo)) continue;
-      if (
-        chave.includes(t) ||
-        val.codigo.includes(t) ||
-        val.nome_oficial.toUpperCase().includes(t) ||
-        val.apelido.toUpperCase().includes(t)
-      ) {
-        results.push({ chave, ...val });
-        seen.add(val.codigo);
+  function normalizar(nome) {
+    if (!nome) return null;
+    var key = nome.toString().trim().toUpperCase().replace(/\s+/g, ' ').replace(/[\u2018\u2019]/g, "'");
+    var dp = DEPARA[key];
+    if (dp) return dp;
+    // Fallback: buscar no cadastro por apelido
+    for (var i = 0; i < DADOS.length; i++) {
+      if (DADOS[i].a.toUpperCase() === key || DADOS[i].n.toUpperCase() === key) {
+        return { codigo: DADOS[i].c, nome_oficial: DADOS[i].n, apelido: DADOS[i].a };
       }
     }
-    return results;
+    return null;
   }
 
-  /**
-   * Retorna a lista única de fornecedores (sem duplicatas por código).
-   * @returns {Array<{ codigo: string, nome_oficial: string, apelido: string, aliases: string[] }>}
-   */
-  function listarTodos() {
-    return Object.values(POR_CODIGO).sort((a, b) => a.apelido.localeCompare(b.apelido));
-  }
-
-  /**
-   * Normaliza e retorna o apelido para exibição. Se não encontrar, retorna o nome original.
-   * @param {string} nome
-   * @returns {string}
-   */
   function apelidoOuOriginal(nome) {
-    const n = normalizar(nome);
+    var n = normalizar(nome);
     return n ? n.apelido : (nome || '').trim();
   }
 
-  /**
-   * Normaliza e retorna o código ATAK. Se não encontrar, retorna null.
-   * @param {string} nome
-   * @returns {string|null}
-   */
   function codigoOuNull(nome) {
-    const n = normalizar(nome);
+    var n = normalizar(nome);
     return n ? n.codigo : null;
   }
 
-  /**
-   * Gera array para INSERT no Supabase (tabela cq_fornecedores).
-   * @returns {Array<{ codigo_atak: string, nome_oficial: string, apelido: string, aliases: string[] }>}
-   */
-  function paraInsertSupabase() {
-    return Object.entries(POR_CODIGO).map(([codigo, val]) => ({
-      codigo_atak: codigo,
-      nome_oficial: val.nome_oficial,
-      apelido: val.apelido,
-      aliases: val.aliases
-    }));
+  // ══════════════════════════════════════════════════════════
+  // LISTA UNICA (sem duplicatas, ordenada por apelido)
+  // ══════════════════════════════════════════════════════════
+
+  function listarTodos() {
+    return DADOS.slice().sort(function(a, b) { return a.a.localeCompare(b.a); });
   }
 
-  // ── STATS ─────────────────────────────────────────────────────
-  const totalAliases = Object.keys(DEPARA).length;
-  const totalFornecedores = Object.keys(POR_CODIGO).length;
+  // ══════════════════════════════════════════════════════════
+  // COMPONENTE DE BUSCA RENDERIZAVEL (autocomplete + tag)
+  // ══════════════════════════════════════════════════════════
+
+  function renderizar(containerId, onChange) {
+    var container = document.getElementById(containerId);
+    if (!container) { console.error('CQFornecedores: #' + containerId + ' nao encontrado'); return; }
+
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'position:relative';
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.id = containerId + '_input';
+    input.placeholder = 'Digite nome ou codigo do frigorifico...';
+    input.autocomplete = 'off';
+    input.style.cssText = 'width:100%;padding:10px 14px;border:1.5px solid var(--border2,#2a2a2a);border-radius:8px;font-size:14px;background:var(--bg,#0a0a0a);color:var(--text,#e8e8e8);box-sizing:border-box;outline:none;font-family:inherit;';
+
+    var lista = document.createElement('div');
+    lista.id = containerId + '_lista';
+    lista.style.cssText = 'display:none;position:absolute;top:100%;left:0;right:0;z-index:999;background:var(--surface,#141414);border:1.5px solid var(--border2,#2a2a2a);border-radius:8px;margin-top:4px;max-height:260px;overflow-y:auto;box-shadow:0 8px 24px rgba(0,0,0,.4);';
+
+    var tag = document.createElement('div');
+    tag.id = containerId + '_tag';
+    tag.style.cssText = 'display:none;margin-top:6px;padding:6px 10px;background:var(--surface2,#1a1a1a);border:1px solid var(--border,#1e1e1e);border-radius:6px;font-size:13px;color:var(--accent,#c8a96e);align-items:center;justify-content:space-between;';
+
+    var tagTxt = document.createElement('span');
+    tagTxt.id = containerId + '_tag_texto';
+
+    var tagBtn = document.createElement('button');
+    tagBtn.textContent = 'X';
+    tagBtn.type = 'button';
+    tagBtn.style.cssText = 'background:none;border:none;color:var(--muted,#666);cursor:pointer;font-size:14px;padding:0 4px;';
+    tagBtn.onclick = function() { CQFornecedores.limpar(containerId); };
+
+    tag.appendChild(tagTxt);
+    tag.appendChild(tagBtn);
+    wrap.appendChild(input);
+    wrap.appendChild(lista);
+    wrap.appendChild(tag);
+    container.appendChild(wrap);
+
+    function selecionar(item) {
+      var hidden = document.getElementById(containerId + '_codigo');
+      if (hidden) hidden.value = item.c;
+      input.value = '';
+      input.style.display = 'none';
+      lista.style.display = 'none';
+      tag.style.display = 'flex';
+      tagTxt.textContent = '[' + item.c + '] ' + item.a + (item.u ? ' — ' + item.u : '');
+      if (onChange) onChange({ codigo: item.c, nome: item.n, apelido: item.a, uf: item.u });
+    }
+
+    function mostrarLista(resultados) {
+      lista.innerHTML = '';
+      if (!resultados.length) { lista.style.display = 'none'; return; }
+      resultados.forEach(function(f) {
+        var div = document.createElement('div');
+        div.style.cssText = 'padding:10px 14px;cursor:pointer;border-bottom:1px solid var(--border,#1e1e1e);font-size:13px;color:var(--text,#e8e8e8);';
+        div.innerHTML = '<span style="color:var(--accent,#c8a96e);font-weight:600;margin-right:6px;font-size:11px;">[' + f.c + ']</span>' + f.a + (f.u ? '<span style="color:var(--muted,#666);font-size:11px;margin-left:6px;">' + f.u + '</span>' : '');
+        div.addEventListener('mouseover', function() { this.style.background = 'var(--surface2,#1a1a1a)'; });
+        div.addEventListener('mouseout', function() { this.style.background = 'transparent'; });
+        div.addEventListener('click', function() { selecionar(f); });
+        lista.appendChild(div);
+      });
+      lista.style.display = 'block';
+    }
+
+    input.addEventListener('input', function() { mostrarLista(buscar(input.value)); });
+    input.addEventListener('blur', function() { setTimeout(function() { lista.style.display = 'none'; }, 200); });
+    input.addEventListener('focus', function() { if (input.value.length >= 2) mostrarLista(buscar(input.value)); });
+  }
+
+  function limpar(containerId) {
+    var input = document.getElementById(containerId + '_input');
+    var hidden = document.getElementById(containerId + '_codigo');
+    var tag = document.getElementById(containerId + '_tag');
+    if (input) { input.value = ''; input.style.display = 'block'; }
+    if (hidden) hidden.value = '';
+    if (tag) tag.style.display = 'none';
+  }
+
+  function getValue(containerId) {
+    var hidden = document.getElementById(containerId + '_codigo');
+    if (!hidden || !hidden.value) return null;
+    return porCodigo(hidden.value);
+  }
+
+  // ══════════════════════════════════════════════════════════
+  // STATS
+  // ══════════════════════════════════════════════════════════
+  var totalFornecedores = DADOS.length;
+  var totalAliases = Object.keys(DEPARA).length;
 
   return {
-    normalizar,
-    porCodigo,
-    buscar,
-    listarTodos,
-    apelidoOuOriginal,
-    codigoOuNull,
-    paraInsertSupabase,
-    DEPARA,
-    POR_CODIGO,
-    stats: { totalAliases, totalFornecedores }
+    DADOS: DADOS,
+    DEPARA: DEPARA,
+    POR_CODIGO: POR_CODIGO,
+    buscar: buscar,
+    porCodigo: porCodigo,
+    normalizar: normalizar,
+    apelidoOuOriginal: apelidoOuOriginal,
+    codigoOuNull: codigoOuNull,
+    listarTodos: listarTodos,
+    renderizar: renderizar,
+    limpar: limpar,
+    getValue: getValue,
+    stats: { totalFornecedores: totalFornecedores, totalAliases: totalAliases }
   };
 
 })();
 
-// Export for Node.js if needed
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = CQFornecedores;
 }

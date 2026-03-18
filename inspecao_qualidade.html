@@ -477,7 +477,16 @@ textarea.field-input {
   <div class="header-id" id="inspecaoId">CQ-——</div>
   <div id="cq-user-chip" style="display:flex;align-items:center;gap:8px;"></div>
   <div id="cq-geo-badge" style="font-size:10px;color:var(--muted);padding:0 8px;">...</div>
-  <a href="app.html" class="back-link">← Menu</a>
+  <div style="display:flex;align-items:center;gap:8px;">
+    <button onclick="abrirConfigN8n()" title="Configurar n8n"
+      style="background:none;border:none;color:var(--muted);cursor:pointer;padding:4px;opacity:.5;font-size:14px;"
+      onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='.5'">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+    </button>
+    <a href="app.html" class="back-link">← Menu</a>
+  </div>
 </header>
 
 <!-- Página -->
@@ -1680,6 +1689,32 @@ async function salvarInspecao(){
 
   const registro = montarRegistro();
 
+  // ── Verificação anti-duplicidade via n8n (se disponível) ──
+  if(isOnline){
+    try{
+      const n8nUrl = localStorage.getItem('cq_n8n_webhook_url') || '';
+      if(n8nUrl){
+        const dedupResp = await fetch(`${n8nUrl}/webhook/atak-cq/check-duplicidade`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            numero_documento: registro.lote_atak,
+            numero_pcr: registro.etiqueta,
+            fornecedor_codigo: document.getElementById('f-fornecedor')?.value || '',
+          }),
+        });
+        if(dedupResp.status === 409){
+          const dup = await dedupResp.json();
+          toast(`Duplicidade detectada: ${dup.mensagem || 'Lote/etiqueta ja cadastrado'}`, 'err');
+          return;
+        }
+      }
+    } catch(e){
+      // n8n indisponivel — segue sem verificacao
+      console.warn('n8n dedup check indisponivel:', e.message);
+    }
+  }
+
   // Salva localStorage (offline-first) — backup local
   const pendentes = JSON.parse(localStorage.getItem('cq_pendentes') || '[]');
   pendentes.push({...registro, foto_etiqueta: fotoEtiquetaData, foto_produto: fotoProdutoData, foto_defeito: fotoDifeitoData});
@@ -1923,6 +1958,72 @@ function toast(msg, type=''){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(()=>el.classList.remove('show'), 2800);
 }
+// ══════════════════════════════════════════════════════════
+// CONFIG n8n — URL do webhook
+// ══════════════════════════════════════════════════════════
+function abrirConfigN8n(){
+  const atual = localStorage.getItem('cq_n8n_webhook_url') || '';
+  const popup = document.createElement('div');
+  popup.className = 'foto-source-popup';
+  popup.onclick = e => { if(e.target === popup) popup.remove(); };
+  popup.innerHTML = `
+    <div class="popup-sheet" style="max-width:420px;">
+      <div class="popup-title">Configuracao n8n</div>
+      <div style="margin:8px 0 4px;font-size:12px;color:var(--muted);">
+        URL base do n8n (ex: http://localhost:5678)
+      </div>
+      <input type="url" id="_n8nUrlInput" value="${atual}"
+        placeholder="http://localhost:5678"
+        style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);
+               border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;
+               outline:none;box-sizing:border-box;">
+      <div style="margin:8px 0 4px;font-size:11px;color:var(--muted);">
+        Status: <span id="_n8nStatus" style="color:var(--muted);">—</span>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button class="popup-btn" style="flex:1;justify-content:center;" onclick="testarN8n()">
+          Testar conexao
+        </button>
+        <button class="popup-btn" style="flex:1;justify-content:center;background:var(--accent);color:#1a1200;" onclick="salvarConfigN8n()">
+          Salvar
+        </button>
+      </div>
+      <button class="popup-cancel" onclick="this.closest('.foto-source-popup').remove()">Cancelar</button>
+    </div>
+  `;
+  document.body.appendChild(popup);
+  setTimeout(() => document.getElementById('_n8nUrlInput').focus(), 100);
+}
+
+async function testarN8n(){
+  const url = document.getElementById('_n8nUrlInput').value.trim().replace(/\/+$/, '');
+  const status = document.getElementById('_n8nStatus');
+  if(!url){ status.textContent = 'Informe a URL'; status.style.color = 'var(--reprovado)'; return; }
+  status.textContent = 'Testando...'; status.style.color = 'var(--muted)';
+  try{
+    const r = await fetch(`${url}/healthz`, { signal: AbortSignal.timeout(5000) });
+    if(r.ok){
+      status.textContent = 'Conectado'; status.style.color = 'var(--aprovado,#4CAF50)';
+    } else {
+      status.textContent = `Resposta HTTP ${r.status}`; status.style.color = 'var(--ressalva)';
+    }
+  } catch(e){
+    status.textContent = 'Sem conexao — verifique se o n8n esta rodando'; status.style.color = 'var(--reprovado)';
+  }
+}
+
+function salvarConfigN8n(){
+  const url = document.getElementById('_n8nUrlInput').value.trim().replace(/\/+$/, '');
+  if(url){
+    localStorage.setItem('cq_n8n_webhook_url', url);
+    toast('n8n configurado: ' + url);
+  } else {
+    localStorage.removeItem('cq_n8n_webhook_url');
+    toast('n8n desconectado');
+  }
+  document.querySelector('.foto-source-popup')?.remove();
+}
+
 // ══════════════════════════════════════════════════════════
 // OCR / CÂMERA — Lote ATAK e Etiqueta
 // ══════════════════════════════════════════════════════════

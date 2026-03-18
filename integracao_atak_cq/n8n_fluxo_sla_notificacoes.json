@@ -1,0 +1,212 @@
+{
+  "name": "ATAK → CQ | SLA Monitor + Notificações",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 15 }]
+        }
+      },
+      "id": "trigger-15min",
+      "name": "Cron 15min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Verifica SLA de sync e envia notificações pendentes a cada 15 minutos"
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/fn_verificar_sla_sync",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "verificar-sla",
+      "name": "Verificar SLA de Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gerar notificações para cada endpoint com SLA violado\nconst violations = $input.all().filter(i => i.json.sla_status && i.json.mensagem);\n\nfor (const v of violations) {\n  const evento = v.json.sla_status === 'erro' ? 'sync_falhou' : 'sync_atrasado';\n  \n  // Enfileirar via RPC\n  await $http.request({\n    method: 'POST',\n    url: `${$env.SUPABASE_URL}/rest/v1/rpc/fn_enfileirar_notificacao`,\n    headers: {\n      'apikey': $env.SUPABASE_SERVICE_KEY,\n      'Authorization': `Bearer ${$env.SUPABASE_SERVICE_KEY}`,\n      'Content-Type': 'application/json'\n    },\n    body: {\n      p_evento: evento,\n      p_titulo: `SLA ${v.json.sla_status.toUpperCase()}: ${v.json.endpoint_nome}`,\n      p_mensagem: v.json.mensagem,\n      p_dados: JSON.stringify(v.json)\n    }\n  });\n}\n\nreturn [{ json: { sla_violacoes: violations.length } }];"
+      },
+      "id": "enfileirar-sla",
+      "name": "Enfileirar Alertas SLA",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_fila_notificacao?status=eq.pendente&agendado_para=lte.now()&select=*,canal:cq_canais_notificacao(*)&order=criado_em.asc&limit=50",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-pendentes",
+      "name": "Buscar Notificações Pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 250]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [{ "value1": "={{$input.all().length}}", "operation": "largerThan", "value2": 0 }]
+        }
+      },
+      "id": "filter-pendentes",
+      "name": "Tem Pendentes?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [440, 250]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Marcar como 'enviando' e preparar payload por tipo de canal\nconst items = $input.all();\nconst results = [];\n\nfor (const item of items) {\n  const notif = item.json;\n  const canal = notif.canal;\n  \n  if (!canal) continue;\n\n  // Marcar como enviando\n  await $http.request({\n    method: 'PATCH',\n    url: `${$env.SUPABASE_URL}/rest/v1/cq_fila_notificacao?id=eq.${notif.id}`,\n    headers: {\n      'apikey': $env.SUPABASE_SERVICE_KEY,\n      'Authorization': `Bearer ${$env.SUPABASE_SERVICE_KEY}`,\n      'Content-Type': 'application/json'\n    },\n    body: { status: 'enviando', tentativas: (notif.tentativas || 0) + 1 }\n  });\n\n  results.push({\n    json: {\n      fila_id: notif.id,\n      canal_tipo: canal.tipo,\n      canal_config: canal.config_json,\n      titulo: notif.titulo,\n      mensagem: notif.mensagem,\n      evento: notif.evento,\n      dados: notif.dados_json,\n      tentativas: (notif.tentativas || 0) + 1,\n      max_tentativas: notif.max_tentativas || 3\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "preparar-envio",
+      "name": "Preparar Envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 250]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "rules": [
+            { "outputKey": "slack", "conditions": { "conditions": [{ "leftValue": "={{$json.canal_tipo}}", "rightValue": "slack" }] } },
+            { "outputKey": "whatsapp", "conditions": { "conditions": [{ "leftValue": "={{$json.canal_tipo}}", "rightValue": "whatsapp" }] } },
+            { "outputKey": "email", "conditions": { "conditions": [{ "leftValue": "={{$json.canal_tipo}}", "rightValue": "email" }] } },
+            { "outputKey": "webhook", "conditions": { "conditions": [{ "leftValue": "={{$json.canal_tipo}}", "rightValue": "webhook" }] } }
+          ]
+        }
+      },
+      "id": "switch-canal",
+      "name": "Switch por Canal",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [880, 250]
+    },
+
+    {
+      "parameters": {
+        "url": "={{$json.canal_config.webhook_url}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"text\": \"{{$json.mensagem}}\", \"channel\": \"{{$json.canal_config.channel}}\"}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "enviar-slack",
+      "name": "Enviar Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 100]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.canal_config.api_url}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\"phone\": \"{{$json.canal_config.phone}}\", \"message\": \"{{$json.mensagem}}\"}",
+        "options": { "timeout": 15000 }
+      },
+      "id": "enviar-whatsapp",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 250]
+    },
+    {
+      "parameters": {
+        "fromEmail": "={{$json.canal_config.from}}",
+        "toEmail": "={{$json.canal_config.to}}",
+        "subject": "=[Classic CQ] {{$json.titulo}}",
+        "text": "={{$json.mensagem}}",
+        "options": {}
+      },
+      "id": "enviar-email",
+      "name": "Enviar Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [1100, 400]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.canal_config.url}}",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({evento: $json.evento, titulo: $json.titulo, mensagem: $json.mensagem, dados: $json.dados})}}",
+        "options": { "timeout": 10000 }
+      },
+      "id": "enviar-webhook",
+      "name": "Enviar Webhook",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 550]
+    },
+
+    {
+      "parameters": {
+        "jsCode": "// Registrar resultado do envio e atualizar fila\nconst items = $input.all();\n\nfor (const item of items) {\n  const filaId = item.json.fila_id || item.json._fila_id;\n  const sucesso = !item.json.error;\n  const statusHttp = item.json.statusCode || 200;\n\n  // Atualizar fila\n  const novoStatus = sucesso ? 'enviado' : \n    (item.json.tentativas >= item.json.max_tentativas ? 'erro' : 'pendente');\n\n  await $http.request({\n    method: 'PATCH',\n    url: `${$env.SUPABASE_URL}/rest/v1/cq_fila_notificacao?id=eq.${filaId}`,\n    headers: {\n      'apikey': $env.SUPABASE_SERVICE_KEY,\n      'Authorization': `Bearer ${$env.SUPABASE_SERVICE_KEY}`,\n      'Content-Type': 'application/json'\n    },\n    body: {\n      status: novoStatus,\n      enviado_em: sucesso ? new Date().toISOString() : null,\n      erro_msg: sucesso ? null : (item.json.error || 'Falha no envio')\n    }\n  });\n\n  // Registrar no log\n  await $http.request({\n    method: 'POST',\n    url: `${$env.SUPABASE_URL}/rest/v1/cq_notificacao_log`,\n    headers: {\n      'apikey': $env.SUPABASE_SERVICE_KEY,\n      'Authorization': `Bearer ${$env.SUPABASE_SERVICE_KEY}`,\n      'Content-Type': 'application/json'\n    },\n    body: {\n      fila_id: filaId,\n      canal_tipo: item.json.canal_tipo,\n      evento: item.json.evento,\n      titulo: item.json.titulo,\n      mensagem: item.json.mensagem,\n      status_http: statusHttp,\n      sucesso: sucesso\n    }\n  });\n}\n\nreturn [{ json: { processados: items.length } }];"
+      },
+      "id": "registrar-resultado",
+      "name": "Registrar Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, 300]
+    }
+  ],
+  "connections": {
+    "Cron 15min": { "main": [[
+      { "node": "Verificar SLA de Sync", "type": "main", "index": 0 },
+      { "node": "Buscar Notificações Pendentes", "type": "main", "index": 0 }
+    ]]},
+    "Verificar SLA de Sync": { "main": [[{ "node": "Enfileirar Alertas SLA", "type": "main", "index": 0 }]] },
+    "Buscar Notificações Pendentes": { "main": [[{ "node": "Tem Pendentes?", "type": "main", "index": 0 }]] },
+    "Tem Pendentes?": { "main": [[{ "node": "Preparar Envio", "type": "main", "index": 0 }]] },
+    "Preparar Envio": { "main": [[{ "node": "Switch por Canal", "type": "main", "index": 0 }]] },
+    "Switch por Canal": {
+      "main": [
+        [{ "node": "Enviar Slack", "type": "main", "index": 0 }],
+        [{ "node": "Enviar WhatsApp", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Email", "type": "main", "index": 0 }],
+        [{ "node": "Enviar Webhook", "type": "main", "index": 0 }]
+      ]
+    },
+    "Enviar Slack": { "main": [[{ "node": "Registrar Resultado", "type": "main", "index": 0 }]] },
+    "Enviar WhatsApp": { "main": [[{ "node": "Registrar Resultado", "type": "main", "index": 0 }]] },
+    "Enviar Email": { "main": [[{ "node": "Registrar Resultado", "type": "main", "index": 0 }]] },
+    "Enviar Webhook": { "main": [[{ "node": "Registrar Resultado", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    { "name": "atak-cq" },
+    { "name": "sla" },
+    { "name": "notificacoes" }
+  ]
+}

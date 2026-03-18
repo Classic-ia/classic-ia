@@ -284,7 +284,8 @@ A view `vw_cargas_vinculos_pendentes` lista todas as cargas com vínculos não r
 | Sync Embarques | 30 min | WRLOG510 | `atak_embarques_raw` |
 | Sync Produção | 60 min | WRPRD600 | `atak_producao_raw` |
 | Sync Expedição | 60 min | WREXP | `atak_expedicao_raw` |
-| Score Fornecedor | 6h | — (interno) | `cq_fornecedor_score` |
+| Score Fornecedor | 6h | — (interno) | `cq_fornecedor_score` + `_historico` |
+| **SLA Monitor + Notificações** | **15 min** | — (interno) | `cq_fila_notificacao` → Slack/WhatsApp/Email |
 
 ### Pipeline de Dados
 
@@ -331,16 +332,115 @@ ATAK_API_BASE_URL=https://api.atak.com.br/v1
 
 ---
 
+## Módulo 3: Dashboard SLA de Sync
+
+Monitora se todos os fluxos n8n estão rodando dentro do intervalo configurado.
+
+### Views de SLA
+
+| View | Descrição |
+|------|-----------|
+| `vw_sync_sla_status` | Status em tempo real: ok, atrasado, crítico, erro, nunca_executado |
+| `vw_sync_sla_historico_24h` | Histórico das últimas 24h com intervalo real entre execuções |
+| `vw_sync_sla_metricas_7d` | Métricas agregadas: taxa de sucesso, duração média, cobertura SLA |
+
+### Classificação de SLA
+
+| Status | Condição |
+|--------|----------|
+| `ok` | Última execução dentro do intervalo configurado |
+| `atrasado` | Tempo desde último sync > 1.5x intervalo |
+| `critico` | Tempo desde último sync > 2x intervalo |
+| `erro` | Última execução terminou com erro |
+| `nunca_executado` | Sem histórico de execução |
+
+### Function
+
+- `fn_verificar_sla_sync()` — Retorna endpoints com SLA violado (para o fluxo n8n)
+
+---
+
+## Módulo 4: Notificações (Slack / WhatsApp / Email)
+
+Sistema de notificações multi-canal com fila, retry e audit trail.
+
+### Tabelas
+
+| Tabela | Propósito |
+|--------|-----------|
+| `cq_canais_notificacao` | Canais configurados (Slack, WhatsApp, Email, Webhook) |
+| `cq_regras_notificacao` | Regras: quando notificar e em qual canal |
+| `cq_fila_notificacao` | Fila de envio com status e retry automático |
+| `cq_notificacao_log` | Log de cada tentativa de envio (audit) |
+
+### Eventos Monitorados
+
+| Evento | Quando dispara | Canal padrão |
+|--------|---------------|--------------|
+| `divergencia_critica` | Nova divergência gravidade=crítica | Slack |
+| `fornecedor_bloqueado` | Status mudou para bloqueado | Slack + WhatsApp |
+| `fornecedor_critico` | Status mudou para crítico | Slack |
+| `sync_falhou` | Sync com status=erro | Slack |
+| `sync_atrasado` | SLA violado (>1.5x intervalo) | Slack |
+| `score_queda_brusca` | Score caiu >20 pontos em 24h | WhatsApp |
+| `cadastro_nao_encontrado` | Vínculo cadastral não resolvido | Slack |
+
+### Fluxo de Notificação
+
+```
+Evento → Trigger PG → fn_enfileirar_notificacao()
+    → cq_fila_notificacao (status=pendente)
+    → n8n (a cada 15min) busca pendentes
+    → Switch por canal → Enviar (Slack/WhatsApp/Email/Webhook)
+    → Registrar resultado → cq_notificacao_log
+    → Se erro e tentativas < max → volta para pendente (retry)
+```
+
+---
+
+## Módulo 5: Histórico de Score do Fornecedor
+
+Registra snapshot do score a cada recálculo para gráfico de evolução temporal.
+
+### Tabela
+
+| Tabela | Propósito |
+|--------|-----------|
+| `cq_fornecedor_score_historico` | Snapshot completo: score, %A/%B/%C, status, variação |
+
+### Trigger Automático
+
+- `trg_historico_score` — A cada INSERT/UPDATE em `cq_fornecedor_score`, salva snapshot
+- Calcula `variacao_score` (positivo=melhorou, negativo=piorou)
+- Detecta `mudou_status` (ex: normal → crítico)
+- Se queda > 20 pontos → dispara notificação `score_queda_brusca`
+
+### Views
+
+| View | Descrição |
+|------|-----------|
+| `vw_fornecedor_score_evolucao` | Série temporal por fornecedor (para gráfico) |
+| `vw_fornecedor_ranking` | Ranking atual com tendência (melhorando/estável/piorando) e métricas 30d |
+
+### Manutenção
+
+- `fn_limpar_historico_score(365)` — Remove snapshots com mais de 365 dias
+
+---
+
 ## Arquivos Entregues
 
 ```
 integracao_atak_cq/
-├── 00_migration_integracao.sql        # Tabelas raw, triggers ABC/frigo, functions, views, RLS
-├── 01_migration_cadastros.sql         # Expand cadastros (5 tipos), vínculos FK, staging, promoção
-├── n8n_fluxo_sync_cadastros.json      # Sync diário: 5 cadastros mestres + re-vínculo
-├── n8n_fluxo_sync_cargas.json         # Sync 30min: cargas ATAK → CQ + validação
-├── n8n_fluxo_score_fornecedor.json    # Score 6h: recalcula + alertas críticos
-├── n8n_fluxo_dedup_documentos.json    # Webhook: anti-duplicidade síncrono
-├── regras_validacao.js                # 7 regras JS (frontend + n8n)
-└── ARQUITETURA_INTEGRACAO.md          # Este documento
+├── 00_migration_integracao.sql          # Tabelas raw, triggers ABC/frigo, functions, views, RLS
+├── 01_migration_cadastros.sql           # Expand cadastros (5 tipos), vínculos FK, staging, promoção
+├── 02_migration_guards.sql              # Constraints, auto-cálculo, imutabilidade, audit
+├── 03_migration_sla_notif_historico.sql # SLA sync, notificações multi-canal, histórico score
+├── n8n_fluxo_sync_cadastros.json        # Sync diário: 5 cadastros mestres + re-vínculo
+├── n8n_fluxo_sync_cargas.json           # Sync 30min: cargas ATAK → CQ + validação
+├── n8n_fluxo_score_fornecedor.json      # Score 6h: recalcula + alertas críticos
+├── n8n_fluxo_sla_notificacoes.json      # SLA 15min + envio notificações (Slack/WhatsApp/Email)
+├── n8n_fluxo_dedup_documentos.json      # Webhook: anti-duplicidade síncrono
+├── regras_validacao.js                  # 7 regras JS (frontend + n8n)
+└── ARQUITETURA_INTEGRACAO.md            # Este documento
 ```

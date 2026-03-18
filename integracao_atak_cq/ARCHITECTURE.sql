@@ -432,3 +432,4 @@
 -- 19. 10_migration_merge_estrutura.sql   — Merge SQL novo: movimentações, staging, defeitos normalizados
 -- 20. 11_migration_dashboard_decisao.sql — Views decisional: alertas, ranking, produtos, defeitos, pipeline
 -- 21. 12_migration_qualidade_4_dimensoes.sql — Views: qualidade por fornecedor/produto/lote/setor
+-- 22. 13_migration_motor_decisao_iqf.sql    — Motor decisão automática, IQF, reamostragem, NCs

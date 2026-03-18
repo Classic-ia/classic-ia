@@ -1,59 +1,128 @@
-# Arquitetura de Integrao ATAK  CQ
+# Arquitetura de Integração ATAK ↔ CQ
 
-## Viso Geral
+## Visão Geral
 
 ```
-                    API ATAK
-           (WRCAD009, WRMVE500,
-            WRPRD600, WRLOG510)
-                     |
-                     v
-        +========================+
-        |       n8n (Orquestrador)       |
-        |                                |
-        |  [Cron 30min] Sync Cargas      |
-        |  [Cron 60min] Sync Produo   |
-        |  [Cron 30min] Sync Embarques   |
-        |  [Cron 6h]    Score Fornecedor |
-        |  [Webhook]    Anti-Duplicidade |
-        +========================+
-             |           |          |
-             v           v          v
-    +--------+---+  +----+----+  +--+--------+
-    | Raw Tables |  | Validao|  | Alertas   |
-    | (staging)  |  | Engine  |  | Qualidade |
-    +--------+---+  +----+----+  +--+--------+
-             |           |          |
-             +-----+-----+----------+
-                   |
-                   v
-        +========================+
-        |    Supabase PostgreSQL          |
-        |                                |
-        |  atak_cargas_raw               |
-        |  atak_embarques_raw            |
-        |  atak_producao_raw             |
-        |  atak_expedicao_raw            |
-        |  cq_validacao_divergencias     |
-        |  cq_fornecedor_score           |
-        |  cq_alertas_qualidade          |
-        |  atak_sync_config / _log       |
-        +========================+
-                   |
-                   v
-        +========================+
-        |    Classic CQ (Frontend)        |
-        |                                |
-        |  Dashboard Divergncias       |
-        |  Dashboard Fornecedores        |
-        |  Fila de Inspees            |
-        |  Alertas de Qualidade          |
-        +========================+
+                       API ATAK
+              (WRCAD009, WRMVE500,
+               WRPRD600, WRLOG510, WREXP)
+                        |
+                        v
+  +==========================================+
+  |            n8n (Orquestrador)             |
+  |                                          |
+  |  [Cron 24h]   Sync Cadastros Mestres     |
+  |                ├─ Fornecedores (381+)     |
+  |                ├─ Motoristas (78+)        |
+  |                ├─ Funcionários            |
+  |                ├─ Veículos (64+)          |
+  |                └─ Produtos (8+)           |
+  |                                          |
+  |  [Cron 30min] Sync Cargas                |
+  |  [Cron 30min] Sync Embarques             |
+  |  [Cron 60min] Sync Produção              |
+  |  [Cron 60min] Sync Expedição             |
+  |  [Cron 6h]    Score Fornecedor           |
+  |  [Webhook]    Anti-Duplicidade           |
+  +==========================================+
+        |              |              |
+        v              v              v
+  +-----------+  +------------+  +----------+
+  | Cadastros |  | Movimentos |  | Alertas  |
+  | Mestres   |  | (Raw)      |  | & Score  |
+  +-----------+  +------------+  +----------+
+        |              |              |
+        +------+-------+--------------+
+               |
+               v
+  +==========================================+
+  |         Supabase PostgreSQL              |
+  |                                          |
+  |  CADASTROS MESTRES                       |
+  |    cadastros_atak (forn+mot+func)        |
+  |    cq_veiculos (64 veículos)             |
+  |    cq_produtos (8+ produtos)             |
+  |    atak_cadastros_staging                |
+  |                                          |
+  |  MOVIMENTOS                              |
+  |    atak_cargas_raw (com 7 vínculos FK)   |
+  |    atak_embarques_raw                    |
+  |    atak_producao_raw                     |
+  |    atak_expedicao_raw                    |
+  |                                          |
+  |  CONTROLE                                |
+  |    cq_validacao_divergencias             |
+  |    cq_fornecedor_score                   |
+  |    cq_alertas_qualidade                  |
+  |    atak_sync_config / _log               |
+  |                                          |
+  |  TRIGGERS AUTOMÁTICOS                    |
+  |    trg_validar_abc_total                 |
+  |    trg_validar_contagem_frigo            |
+  |    trg_resolver_vinculos_carga           |
+  +==========================================+
+               |
+               v
+  +==========================================+
+  |         Classic CQ (Frontend)            |
+  |                                          |
+  |  Dashboard Divergências                  |
+  |  Dashboard Fornecedores                  |
+  |  Cargas com Vínculos Pendentes           |
+  |  Fila de Inspeções                       |
+  |  Alertas de Qualidade                    |
+  +==========================================+
 ```
 
 ---
 
+## Ordem de Execução (Dependência)
+
+```
+1° CADASTROS MESTRES (24h, 00:00)
+   └─ Fornecedores → Motoristas → Funcionários → Veículos → Produtos
+
+2° MOVIMENTOS (30-60 min, contínuo)
+   └─ Cargas → Embarques → Produção → Expedição
+   └─ Trigger: resolver vínculos com cadastros
+
+3° SCORE & ALERTAS (6h)
+   └─ Recalcula score de fornecedores
+   └─ Gera alertas para críticos/bloqueados
+```
+
+Cadastros DEVEM ser importados ANTES dos movimentos para que os vínculos sejam resolvidos automaticamente.
+
+---
+
 ## Fluxos n8n
+
+### Fluxo 0: Sync Cadastros Mestres (diário, 00h)
+
+```
+Cron Diário 00h
+    |
+    +-> Buscar Configs de Cadastro (5 endpoints WRCAD*)
+    +-> Criar Log de Sync
+    |
+    +-> Para cada tipo (fornecedor, motorista, funcionário, veículo, produto):
+    |     +-> API ATAK - Buscar cadastros
+    |     +-> Transformar → Staging (hash SHA256, normalizar campos)
+    |     +-> Inserir em atak_cadastros_staging (dedup via hash)
+    |
+    +-> fn_promover_cadastros() → Upsert em tabelas finais
+    |     ├─ cadastros_atak (fornecedor/motorista/funcionário)
+    |     ├─ cq_veiculos (veículo)
+    |     └─ cq_produtos (produto)
+    |
+    +-> Re-vincular cargas pendentes
+    |     +-> Buscar vw_cargas_vinculos_pendentes
+    |     +-> UPDATE para re-disparar trg_resolver_vinculos_carga
+    |
+    +-> Atualizar Log Final
+```
+
+**Arquivo:** `n8n_fluxo_sync_cadastros.json`
 
 ### Fluxo 1: Sync Cargas (a cada 30 min)
 
@@ -61,7 +130,6 @@
 Cron 30min
     |
     +-> Buscar Config Sync (Supabase)
-    |
     +-> Criar Log de Sync
     |
     +-> API ATAK - Buscar Cargas (WRMVE500)
@@ -70,12 +138,16 @@ Cron 30min
     |
     +-> Upsert no Supabase (atak_cargas_raw)
     |       dedup via hash_registro UNIQUE
+    |       trigger: trg_resolver_vinculos_carga (resolve FK automaticamente)
+    |       trigger: trg_validar_abc_total (verifica A+B+C)
+    |       trigger: trg_validar_contagem_frigo (cruza com cq_cargas)
     |
-    +-> Validar Regras CQ
+    +-> Validar Regras CQ (n8n Code)
     |       Regra 1: A+B+C = Total
-    |       Regra 4: %C > limite = fornecedor crtico
+    |       Regra 4: %C > limite = fornecedor crítico
+    |       Regra 6: Vínculos cadastrais pendentes
     |
-    +-> [Se divergncia] -> Gravar em cq_validacao_divergencias
+    +-> [Se divergência] -> Gravar em cq_validacao_divergencias
     |                    -> Gerar Alerta em cq_alertas_qualidade
     |
     +-> Atualizar Log de Sync (status final)
@@ -88,146 +160,157 @@ Cron 30min
 ```
 Cron 6h
     |
-    +-> Listar Fornecedores Ativos (ltimos 90 dias)
-    |
-    +-> Para cada fornecedor:
-    |       fn_atualizar_score_fornecedor()
-    |       - Agregar cargas dos ltimos 90 dias
-    |       - Calcular %A, %B, %C
-    |       - Contar divergncias abertas
-    |       - Score = 100 - (%C * 2) - (divergncias * 5)
-    |       - Status: normal | ateno | crtico | bloqueado
-    |
-    +-> Buscar Fornecedores Crticos
-    |
-    +-> [Se crtico] -> Gerar Alerta em cq_alertas_qualidade
+    +-> Listar Fornecedores Ativos (últimos 90 dias)
+    +-> fn_atualizar_score_fornecedor() para cada um
+    +-> Buscar Fornecedores Críticos
+    +-> [Se crítico] -> Gerar Alerta
 ```
 
 **Arquivo:** `n8n_fluxo_score_fornecedor.json`
 
-### Fluxo 3: Anti-Duplicidade (webhook sncrono)
+### Fluxo 3: Anti-Duplicidade (webhook síncrono)
 
 ```
 POST /webhook/atak-cq/check-duplicidade
-    Body: { numero_documento, numero_pcr, fornecedor_codigo }
-    |
-    +-> Buscar em atak_cargas_raw por documento/PCR
-    |
-    +-> [Duplicado]     -> Registrar divergncia
-    |                   -> Retornar 409 { duplicado: true }
-    |
-    +-> [No duplicado] -> Retornar 200 { duplicado: false }
+    +-> Buscar por documento/PCR
+    +-> [Duplicado]     -> 409 + registrar divergência
+    +-> [Não duplicado] -> 200 ok
 ```
 
 **Arquivo:** `n8n_fluxo_dedup_documentos.json`
 
 ---
 
+## Vínculos Cadastrais na Carga
+
+Cada registro em `atak_cargas_raw` possui 7 vínculos cadastrais resolvidos automaticamente:
+
+| Campo Código | Campo ID | Tabela Destino | Tipo |
+|-------------|----------|----------------|------|
+| `fornecedor_codigo` | — | `cadastros_atak` (fornecedor) | Obrigatório |
+| `motorista_codigo` | `motorista_id` | `cadastros_atak` (motorista) | Obrigatório |
+| `cavalo_placa` | `cavalo_id` | `cq_veiculos` | Obrigatório |
+| `carreta1_placa` | `carreta1_id` | `cq_veiculos` | Obrigatório |
+| `carreta2_placa` | `carreta2_id` | `cq_veiculos` | Opcional |
+| `recebedor_codigo` | `recebedor_id` | `cadastros_atak` (funcionário) | Obrigatório |
+| `classificador_codigo` | `classificador_id` | `cadastros_atak` (funcionário) | Obrigatório |
+| `produto_codigo` | `produto_id` | `cq_produtos` | Obrigatório |
+
+O trigger `trg_resolver_vinculos_carga` resolve os IDs automaticamente no INSERT/UPDATE. Se o cadastro não existir, gera uma divergência do tipo `documento_ausente` em `cq_validacao_divergencias`.
+
+A view `vw_cargas_vinculos_pendentes` lista todas as cargas com vínculos não resolvidos.
+
+---
+
 ## Estrutura de Tabelas
 
-### Tabelas de Integrao (novas)
+### Cadastros Mestres (expandidos)
 
-| Tabela | Propsito | Chave nica |
-|--------|-----------|--------------|
-| `atak_sync_config` | Configurao dos endpoints ATAK | `endpoint_nome` |
-| `atak_sync_log` | Log de cada execuo de sync | - |
-| `atak_cargas_raw` | Dados brutos de cargas da API | `hash_registro` |
+| Tabela | Registros | Campos Novos (sync) |
+|--------|-----------|---------------------|
+| `cadastros_atak` | 381 forn + 78 mot + func | cargo, setor, telefone, email, cnh, data_admissao, atak_id, sync_origem |
+| `cq_veiculos` | 64 veículos | atak_id, codigo_atak, renavam, ano_fabricacao, capacidade_kg, funcao_veiculo, sync_origem |
+| `cq_produtos` | 8+ produtos | atak_id, codigo_atak, unidade, peso_medio_kg, sync_origem |
+
+### Tabelas de Integração
+
+| Tabela | Propósito | Chave Única |
+|--------|-----------|-------------|
+| `atak_sync_config` | Configuração dos endpoints ATAK | `endpoint_nome` |
+| `atak_sync_log` | Log de cada execução de sync | — |
+| `atak_cadastros_staging` | Staging para cadastros antes de promoção | `hash_registro` |
+| `atak_cargas_raw` | Dados brutos de cargas (7 vínculos FK) | `hash_registro` |
 | `atak_embarques_raw` | Dados brutos de embarques | `hash_registro` |
-| `atak_producao_raw` | Dados brutos de produo | `hash_registro` |
-| `atak_expedicao_raw` | Dados brutos de expedio | `hash_registro` |
-| `cq_validacao_divergencias` | Divergncias detectadas | - |
-| `cq_fornecedor_score` | Score contnuo do fornecedor | `fornecedor_codigo` |
-| `n8n_webhook_tokens` | Tokens de autenticao n8n | `token` |
-
-### Tabelas Existentes (integradas)
-
-| Tabela | Papel na Integrao |
-|--------|---------------------|
-| `cq_cargas` | Contagem interna (Classic) para cruzar com ATAK |
-| `cq_alertas_qualidade` | Destino dos alertas gerados |
-| `cadastros_atak` | Catlogo de fornecedores (381) para lookup |
-| `registros_cq_inspecao` | Inspees que podem ser abertas automaticamente |
+| `atak_producao_raw` | Dados brutos de produção | `hash_registro` |
+| `atak_expedicao_raw` | Dados brutos de expedição | `hash_registro` |
+| `cq_validacao_divergencias` | Divergências detectadas | — |
+| `cq_fornecedor_score` | Score contínuo do fornecedor | `fornecedor_codigo` |
+| `n8n_webhook_tokens` | Tokens de autenticação n8n | `token` |
 
 ### Views
 
-| View | Descrio |
+| View | Descrição |
 |------|-----------|
-| `vw_divergencias_ativas` | Divergncias abertas com dados do fornecedor e score |
-| `vw_fornecedores_criticos` | Fornecedores crticos/bloqueados com mtricas |
+| `vw_divergencias_ativas` | Divergências abertas com dados do fornecedor e score |
+| `vw_fornecedores_criticos` | Fornecedores críticos/bloqueados com métricas |
+| `vw_cadastros_resumo` | Totais por tipo (fornecedor, motorista, funcionário, veículo, produto) |
+| `vw_motoristas_ativos` | Motoristas com CNH e placa padrão |
+| `vw_funcionarios_ativos` | Funcionários por setor e cargo |
+| `vw_cargas_vinculos_pendentes` | Cargas com vínculos cadastrais não resolvidos |
 
 ---
 
-## Regras de Validao
+## Regras de Validação
 
 ### Regra 1: A + B + C = Total Classificado
 - **Trigger:** INSERT/UPDATE em `atak_cargas_raw`
-- **Condio:** `class_a + class_b + class_c != total_classificado`
-- **Gravidade:** Crtica
-- **Ao:** Marca `status_validacao = 'divergente'` + insere em `cq_validacao_divergencias`
+- **Gravidade:** Crítica
+- **Ação:** `status_validacao = 'divergente'` + divergência
 
-### Regra 2: Divergncia Frigorfico vs Contagem Interna
+### Regra 2: Divergência Frigorífico vs Contagem Interna
 - **Trigger:** INSERT em `atak_cargas_raw`
-- **Condio:** `qtd_frigo` (ATAK) != `qtd_classic` (cq_cargas, por PCR)
-- **Gravidade:** Crtica se diferena > 10, Ateno se > 5
-- **Ao:** Insere em `cq_validacao_divergencias`
+- **Condição:** `qtd_frigo` (ATAK) ≠ `qtd_classic` (cq_cargas, por PCR)
+- **Gravidade:** Crítica se diferença > 10, Atenção se > 5
 
 ### Regra 3: Anti-Duplicidade de Carga/Documento
-- **Mecanismo:** Hash SHA256 de (documento + PCR + fornecedor + data)
-- **Constraint:** `UNIQUE INDEX` em `hash_registro`
-- **Webhook:** Verificao sncrona antes de inserir
-- **Ao:** Rejeita insero + registra divergncia
+- **Mecanismo:** Hash SHA256 + UNIQUE INDEX + webhook síncrono
+- **Ação:** Rejeita inserção + registra divergência
 
-### Regra 4: Fornecedor Crtico (%C > Limite)
-- **Clculo:** Agregao dos ltimos 90 dias por fornecedor
-- **Limites configurveis por fornecedor:**
-  - Ateno: %C > 10%
-  - Crtico: %C > 15% (padro `limite_pct_c`)
-  - Bloqueio: %C > 22.5% (1.5x o limite)
-- **Score:** 100 - (%C * 2) - (divergncias_abertas * 5)
-- **Ao:** Atualiza `cq_fornecedor_score`, gera alerta em `cq_alertas_qualidade`
+### Regra 4: Fornecedor Crítico (%C > Limite)
+- **Limites configuráveis:** Atenção >10%, Crítico >15%, Bloqueio >22.5%
+- **Score:** 100 - (%C × 2) - (divergências × 5)
 
-### Regra 5: Validao de Dados Bsicos
-- Fornecedor obrigatrio
-- Data no pode ser futura
-- Valores numricos no podem ser negativos
-- Documento de referncia obrigatrio
+### Regra 5: Validação de Dados Básicos
+- Fornecedor obrigatório, data não futura, sem valores negativos
+
+### Regra 6: Vínculos Cadastrais
+- **Trigger:** `trg_resolver_vinculos_carga` em INSERT/UPDATE
+- **Valida:** motorista, cavalo, carreta 1/2, recebedor, classificador, produto
+- **Ação:** Resolve ID automaticamente ou gera divergência `documento_ausente`
+
+### Regra 7: Validação de Cadastro
+- Campos obrigatórios por tipo (CNPJ para fornecedor, CNH para motorista, setor para funcionário, placa para veículo, grupo para produto)
 
 ---
 
-## Modelo de Sincronizao Automtica
+## Modelo de Sincronização Automática
 
 ### Schedule
 
 | Fluxo | Intervalo | Endpoint ATAK | Destino |
 |-------|-----------|---------------|---------|
+| **Sync Cadastros** | **24h (00h)** | WRCAD009 + WRCAD* | `cadastros_atak`, `cq_veiculos`, `cq_produtos` |
 | Sync Cargas | 30 min | WRMVE500 | `atak_cargas_raw` |
 | Sync Embarques | 30 min | WRLOG510 | `atak_embarques_raw` |
-| Sync Produo | 60 min | WRPRD600 | `atak_producao_raw` |
-| Sync Fornecedores | 24h | WRCAD009 | `cadastros_atak` |
-| Sync Expedio | 60 min | WREXP | `atak_expedicao_raw` |
-| Score Fornecedor | 6h | - (interno) | `cq_fornecedor_score` |
+| Sync Produção | 60 min | WRPRD600 | `atak_producao_raw` |
+| Sync Expedição | 60 min | WREXP | `atak_expedicao_raw` |
+| Score Fornecedor | 6h | — (interno) | `cq_fornecedor_score` |
 
 ### Pipeline de Dados
 
 ```
-1. FETCH   API ATAK retorna JSON com dados do perodo
-2. HASH    SHA256(documento|pcr|fornecedor|data) para dedup
-3. UPSERT  Insert com ON CONFLICT (hash_registro) = merge
-4. VALIDATE  Triggers PostgreSQL executam regras 1-2
-              n8n Code nodes executam regras 3-5
-5. ALERT   Divergncias crticas  cq_alertas_qualidade
-6. SCORE   A cada 6h recalcula score de todos fornecedores
-7. NOTIFY  Dashboard exibe alertas em tempo real
+1. CADASTROS  Sync diário dos 5 cadastros mestres (staging → promoção)
+2. FETCH      API ATAK retorna JSON com movimentos do período
+3. HASH       SHA256(documento|pcr|fornecedor|data) para dedup
+4. UPSERT     Insert com ON CONFLICT (hash_registro) = merge
+5. LINK       Trigger resolve vínculos FK (motorista, veículo, funcionário, produto)
+6. VALIDATE   Triggers executam regras 1-2, n8n executa regras 3-7
+7. ALERT      Divergências críticas → cq_alertas_qualidade
+8. SCORE      A cada 6h recalcula score de todos fornecedores
+9. RE-LINK    Após sync de cadastros, re-resolve cargas pendentes
+10. NOTIFY    Dashboard exibe alertas em tempo real
 ```
 
-### Controle de Erros
+### Rastreabilidade
 
-- Cada sync gera um registro em `atak_sync_log`
-- Status: `em_execucao  sucesso | erro | parcial`
-- Retry automtico no n8n (configurao nativa)
-- `n8n_execution_id` vincula execuo do n8n ao log
+- `atak_sync_log` registra cada execução (início, fim, status, contagens)
+- `n8n_execution_id` vincula execução do n8n ao log
+- `atak_cadastros_staging` mantém histórico de ação (inserir/atualizar/ignorar/erro)
+- `sync_origem` em cada cadastro indica se veio por n8n, ETL ou manual
+- `atualizado_em` rastreia última modificação
+- `cq_validacao_divergencias.detectado_por` identifica a origem da detecção
 
-### Variveis de Ambiente (n8n)
+### Variáveis de Ambiente (n8n)
 
 ```
 SUPABASE_URL=https://nvqxsulntpftcwtkjedu.supabase.co
@@ -238,9 +321,9 @@ ATAK_API_BASE_URL=https://api.atak.com.br/v1
 
 ---
 
-## Segurana
+## Segurança
 
-- **RLS ativo** em todas as tabelas de integrao
+- **RLS ativo** em todas as tabelas de integração
 - **service_role** usado apenas pelo n8n (nunca exposto no frontend)
 - **anon key** no frontend com RLS restritivo
 - **Webhook tokens** em tabela separada (`n8n_webhook_tokens`)
@@ -252,10 +335,12 @@ ATAK_API_BASE_URL=https://api.atak.com.br/v1
 
 ```
 integracao_atak_cq/
-  00_migration_integracao.sql          # Tabelas, triggers, functions, views, RLS
-  n8n_fluxo_sync_cargas.json           # Fluxo principal: sync cargas ATAK  CQ
-  n8n_fluxo_score_fornecedor.json      # Fluxo: recalcula score + alertas
-  n8n_fluxo_dedup_documentos.json      # Fluxo: webhook anti-duplicidade
-  regras_validacao.js                  # Mdulo JS com todas as regras
-  ARQUITETURA_INTEGRACAO.md            # Este documento
+├── 00_migration_integracao.sql        # Tabelas raw, triggers ABC/frigo, functions, views, RLS
+├── 01_migration_cadastros.sql         # Expand cadastros (5 tipos), vínculos FK, staging, promoção
+├── n8n_fluxo_sync_cadastros.json      # Sync diário: 5 cadastros mestres + re-vínculo
+├── n8n_fluxo_sync_cargas.json         # Sync 30min: cargas ATAK → CQ + validação
+├── n8n_fluxo_score_fornecedor.json    # Score 6h: recalcula + alertas críticos
+├── n8n_fluxo_dedup_documentos.json    # Webhook: anti-duplicidade síncrono
+├── regras_validacao.js                # 7 regras JS (frontend + n8n)
+└── ARQUITETURA_INTEGRACAO.md          # Este documento
 ```

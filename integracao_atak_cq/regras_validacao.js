@@ -209,6 +209,76 @@ const REGRAS_VALIDACAO = {
       : { valido: true };
   },
 
+  // ─── REGRA 6: Validar vínculos cadastrais da carga ──────────────────
+  validarVinculosCadastrais(carga) {
+    const erros = [];
+    const campos = [
+      { codigo: 'motorista_codigo', id: 'motorista_id', label: 'Motorista' },
+      { codigo: 'cavalo_placa',     id: 'cavalo_id',     label: 'Cavalo' },
+      { codigo: 'carreta1_placa',   id: 'carreta1_id',   label: 'Carreta 1' },
+      { codigo: 'recebedor_codigo', id: 'recebedor_id',  label: 'Funcionário recebedor' },
+      { codigo: 'classificador_codigo', id: 'classificador_id', label: 'Funcionário classificador' },
+      { codigo: 'produto_codigo',   id: 'produto_id',    label: 'Produto' },
+    ];
+
+    for (const c of campos) {
+      if (carga[c.codigo] && !carga[c.id]) {
+        erros.push({
+          tipo: 'documento_ausente',
+          gravidade: 'atencao',
+          campo: c.codigo,
+          mensagem: `${c.label} "${carga[c.codigo]}" não encontrado no cadastro`
+        });
+      }
+    }
+
+    // Carreta 2 (opcional, só valida se informada)
+    if (carga.carreta2_placa && !carga.carreta2_id) {
+      erros.push({
+        tipo: 'documento_ausente',
+        gravidade: 'informativa',
+        campo: 'carreta2_placa',
+        mensagem: `Carreta 2 "${carga.carreta2_placa}" não encontrada no cadastro`
+      });
+    }
+
+    return erros.length > 0
+      ? { valido: false, erros, pendentes: erros.length }
+      : { valido: true, pendentes: 0 };
+  },
+
+  // ─── REGRA 7: Validar cadastro antes de inserir ───────────────────────
+  validarCadastro(registro, tipo) {
+    const erros = [];
+
+    if (!registro.codigo && !registro.placa) {
+      erros.push({ campo: 'codigo', mensagem: 'Código/placa obrigatório' });
+    }
+    if (!registro.nome) {
+      erros.push({ campo: 'nome', mensagem: 'Nome obrigatório' });
+    }
+
+    if (tipo === 'fornecedor' && !registro.cnpj) {
+      erros.push({ campo: 'cnpj', mensagem: 'CNPJ obrigatório para fornecedor' });
+    }
+    if (tipo === 'motorista' && !registro.cnh) {
+      erros.push({ campo: 'cnh', mensagem: 'CNH obrigatória para motorista' });
+    }
+    if (tipo === 'funcionario' && !registro.setor) {
+      erros.push({ campo: 'setor', mensagem: 'Setor obrigatório para funcionário' });
+    }
+    if (tipo === 'veiculo' && !registro.placa) {
+      erros.push({ campo: 'placa', mensagem: 'Placa obrigatória para veículo' });
+    }
+    if (tipo === 'produto' && !registro.grupo) {
+      erros.push({ campo: 'grupo', mensagem: 'Grupo obrigatório para produto' });
+    }
+
+    return erros.length > 0
+      ? { valido: false, erros }
+      : { valido: true };
+  },
+
   // ─── Executar todas as regras em uma carga ─────────────────────────────
   validarCargaCompleta(carga, scoresFornecedor = null) {
     const resultados = [];
@@ -230,6 +300,10 @@ const REGRAS_VALIDACAO = {
     // Regra 5
     const r5 = this.validarDadosBasicos(carga);
     if (!r5.valido) resultados.push(...r5.erros);
+
+    // Regra 6
+    const r6 = this.validarVinculosCadastrais(carga);
+    if (!r6.valido) resultados.push(...r6.erros);
 
     return {
       valido: resultados.length === 0,

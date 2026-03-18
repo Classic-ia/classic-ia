@@ -14,7 +14,8 @@
 
 <!-- ═══ SHELL ═══ -->
 <header class="cq-header">
-  <img id="logoImg" class="cq-header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
+  <a href="app.html" class="cq-back-btn" title="Voltar ao menu" aria-label="Voltar ao menu">&#9664;</a>
+  <img id="logoImg" class="cq-header-logo" src="assets/logo-classic-icon.png" alt="Logo Classic CQ">
   <div>
     <div class="cq-header-title">Qualidade</div>
     <div class="cq-header-sub">Onde agir agora</div>
@@ -93,7 +94,7 @@ async function carregarTudo() {
   document.getElementById('dashContent').classList.add('hidden');
 
   try {
-    const [alertas, fornecedores, produtos, lotes, setores, defRanking, defForn, pipeline] = await Promise.all([
+    const results = await Promise.allSettled([
       api('vw_dash_alertas?select=*&limit=20'),
       api('vw_qualidade_fornecedor?select=*&limit=30'),
       api('vw_qualidade_produto?select=*&limit=20'),
@@ -104,13 +105,14 @@ async function carregarTudo() {
       api('vw_dash_pipeline?select=*&order=ordem'),
     ]);
 
-    renderAlertas(alertas);
-    renderFornecedores(fornecedores);
-    renderProdutos(produtos);
-    renderLotes(lotes);
-    renderSetores(setores);
-    renderDefeitos(defRanking, defForn);
-    renderPipeline(pipeline);
+    const val = (i) => results[i].status === 'fulfilled' ? results[i].value : [];
+    renderAlertas(val(0));
+    renderFornecedores(val(1));
+    renderProdutos(val(2));
+    renderLotes(val(3));
+    renderSetores(val(4));
+    renderDefeitos(val(5), val(6));
+    renderPipeline(val(7));
 
     document.getElementById('lastUpdate').textContent =
       'Atualizado ' + new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'});

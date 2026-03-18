@@ -33,6 +33,7 @@ const CQScan = (function () {
   let _videoEl = null;
   let _overlayEl = null;
   let _scanning = false;
+  let _keydownHandler = null;
 
   // ══════════════════════════════════════════════════════════════
   // INIT
@@ -63,7 +64,9 @@ const CQScan = (function () {
   // Scanners USB emulam teclado: enviam caracteres + Enter em <50ms
   // ══════════════════════════════════════════════════════════════
   function _initScannerListener() {
-    document.addEventListener('keydown', (e) => {
+    // Remove previous listener to prevent accumulation
+    if (_keydownHandler) document.removeEventListener('keydown', _keydownHandler);
+    _keydownHandler = (e) => {
       // Ignorar se usuário está digitando em um campo
       const active = document.activeElement;
       const isInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
@@ -94,7 +97,8 @@ const CQScan = (function () {
           _scannerBuffer = '';
         }, 100);
       }
-    });
+    };
+    document.addEventListener('keydown', _keydownHandler);
   }
 
 
@@ -334,6 +338,11 @@ const CQScan = (function () {
       _overlayEl = null;
     }
     _videoEl = null;
+    if (_keydownHandler) {
+      document.removeEventListener('keydown', _keydownHandler);
+      _keydownHandler = null;
+    }
+    clearTimeout(_scannerTimer);
   }
 
 

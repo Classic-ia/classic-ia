@@ -309,7 +309,8 @@ const CQAuth = (function () {
   function _renderChip() {
     const el = document.getElementById('cq-user-chip');
     if (!el || !_user) return;
-    const ini = (_user.nome || _user.email)[0].toUpperCase();
+    const nameOrEmail = _user.nome || _user.email || '?';
+    const ini = nameOrEmail.charAt(0).toUpperCase();
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="
@@ -453,9 +454,13 @@ const CQAuth = (function () {
       _user.email = perfilDB.email;
 
       // Atualizar localStorage com perfil correto
-      const stored = JSON.parse(localStorage.getItem(STORE_KEY));
-      stored.user = _user;
-      localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORE_KEY));
+        if (stored) {
+          stored.user = _user;
+          localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+        }
+      } catch { /* localStorage corrompido — será recriado no próximo login */ }
     } else {
       // Sessão legada (sem JWT) — verificar sessão antiga e forçar re-login
       const ok = await _validarSessao();

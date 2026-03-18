@@ -204,6 +204,8 @@ const CQ = (function () {
     let val = opts.initial ?? 0;
     const onChange = opts.onChange || (() => {});
 
+    // Event delegation: single listener, no leaks on re-render
+    let _bound = false;
     const render = () => {
       el.innerHTML = `
         <div class="counter">
@@ -211,14 +213,17 @@ const CQ = (function () {
           <div class="counter-value">${val}</div>
           <button class="counter-btn plus" data-dir="1">&plus;</button>
         </div>`;
-      el.querySelectorAll('.counter-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
+      if (!_bound) {
+        _bound = true;
+        el.addEventListener('click', (e) => {
+          const btn = e.target.closest('.counter-btn');
+          if (!btn) return;
           const dir = parseInt(btn.dataset.dir);
           val = Math.max(min, Math.min(max, val + dir));
           render();
           onChange(val);
         });
-      });
+      }
     };
     render();
 
@@ -331,7 +336,7 @@ const CQ = (function () {
   }
 
   function fmtDate(d) {
-    if (!d) return '—';
+    if (!d || typeof d !== 'string') return '—';
     const parts = d.split('-');
     if (parts.length === 3) return parts[2] + '/' + parts[1];
     return d;

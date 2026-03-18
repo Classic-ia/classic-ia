@@ -11,7 +11,7 @@
  *   }
  */
 
-const CACHE_VERSION = 'cq-v2026.03';
+const CACHE_VERSION = 'cq-v2026.03.18';
 const CACHE_STATIC = `${CACHE_VERSION}-static`;
 const CACHE_DATA = `${CACHE_VERSION}-data`;
 
@@ -28,8 +28,8 @@ const STATIC_ASSETS = [
   '/cq_fornecedores.js',
   '/cq_toast.js',
   '/cq_cache.js',
-  '/assets/logo-classic-icon.png.jpg',
-  '/assets/logo-classic-text.png.png',
+  '/assets/logo-classic-icon.png',
+  '/assets/logo-classic-text.png',
 ];
 
 // Dados cacheáveis (cadastros que mudam pouco)

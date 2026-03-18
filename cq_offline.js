@@ -112,7 +112,9 @@ const CQOffline = (function () {
     // Registrar para background sync
     if ('serviceWorker' in navigator && 'SyncManager' in window) {
       const reg = await navigator.serviceWorker.ready;
-      await reg.sync.register('sync-inspecoes').catch(() => {});
+      await reg.sync.register('sync-inspecoes').catch(e => {
+        console.warn('[CQOffline] Background sync registration failed:', e.message);
+      });
     }
 
     return { sucesso: true, offline: true };
@@ -132,7 +134,7 @@ const CQOffline = (function () {
 
     const pendentes = await new Promise((resolve, reject) => {
       const req = store.getAll();
-      req.onsuccess = () => resolve(req.result.filter(r => r.status === 'pendente'));
+      req.onsuccess = () => resolve(req.result.filter(r => r.status === 'pendente' || r.status === 'erro'));
       req.onerror = () => reject(req.error);
     });
 
@@ -143,12 +145,12 @@ const CQOffline = (function () {
 
     for (const registro of pendentes) {
       try {
+        // Mark as syncing to prevent duplicate sends
+        const markTx = db.transaction(STORE_INSPECOES, 'readwrite');
+        markTx.objectStore(STORE_INSPECOES).put({ ...registro, status: 'sincronizando' });
+
         // Remover campos internos
-        const payload = { ...registro };
-        delete payload.id;
-        delete payload._offline;
-        delete payload._criado_offline_em;
-        delete payload.status;
+        const { id, _offline, _criado_offline_em, status, _erro, ...payload } = registro;
 
         const r = await fetch(`${CQ_CONFIG.SB_URL}/rest/v1/registros_cq_inspecao`, {
           method: 'POST',

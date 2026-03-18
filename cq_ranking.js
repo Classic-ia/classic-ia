@@ -282,7 +282,7 @@ const CQRanking = (function () {
         padding:3px 6px;border-radius:4px;font-size:10px;
         background:${cor};opacity:${opacity};color:#fff;cursor:help;
         font-family:'DM Mono',monospace;
-      ">${d.defeito_nome.split(' ')[0]} ${pct}%</div>`;
+      ">${(d.defeito_nome||'').split(' ')[0]||'—'} ${pct}%</div>`;
     }
     html += '</div>';
     return html;

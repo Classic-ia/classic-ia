@@ -559,6 +559,7 @@ canvas.tall{max-height:320px;}
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_regras.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 // === CHART REGISTRY ===
@@ -707,10 +708,10 @@ async function carregar() {
 }
 
 function normalizarClasse(pct, cls) {
-  const p = parseFloat(pct) || 0;
-  // Sempre recalcular — classificação do banco pode estar inconsistente
-  // Regra: A ≤ 5%, B ≤ 12%, C > 12%
-  return p <= 5 ? 'A' : p <= 12 ? 'B' : 'C';
+  // Usa motor de decisão local (CQRegras) — fonte única da verdade
+  // Limites reais vêm de cq_parametros_inspecao via backend
+  const d = CQRegras.motorDecisaoLocal(parseFloat(pct) || 0);
+  return d.classificacao;
 }
 
 function maiorDefeito(r, pos) {
@@ -1279,8 +1280,10 @@ function renderFornecedores() {
     const avg = v.pcts.length ? v.pcts.reduce((a,b)=>a+b,0)/v.pcts.length : 0;
     // Score CQ: 100 - (pct_C*3 + pct_B*1) + bônus A
     const tot = v.n||1;
-    const score = Math.max(0, Math.min(100, 100 - (v.C/tot*50) - (v.B/tot*20) + (v.A/tot*20))).toFixed(0);
-    return {nome:k,...v,avg,score:+score};
+    // Score via CQRegras — fórmula centralizada
+    const _sl = CQRegras.scoreLoteLocal(v.A, v.B, v.C);
+    const score = Math.round(_sl.score);
+    return {nome:k,...v,avg,score};
   }).sort((a,b)=>b.score-a.score);
 
   const tbody = document.getElementById('tbodyForn');

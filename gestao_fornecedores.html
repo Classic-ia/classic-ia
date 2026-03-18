@@ -8,6 +8,7 @@
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_regras.js"></script>
 <style>
 :root{
   --bg:#07111c;--bg2:#0d1b2a;--bg3:#162535;--border:#1e3a52;
@@ -422,10 +423,9 @@ async function carregarDados() {
   todosForns = Object.values(fornBase).map(function(v) {
     const avg = v.pcts.length ? v.pcts.reduce(function(a,b){return a+b},0)/v.pcts.length : 0;
     const tot = v.lotes || 1;
-    const score = Math.max(0, Math.min(100, Math.round(
-      100 - (v.C/tot*50) - (v.B/tot*20) + (v.A/tot*20)
-    )));
-    return Object.assign({}, v, { avg: avg, score: score });
+    // Score via CQRegras — fórmula centralizada
+    const _sl = CQRegras.scoreLoteLocal(v.A, v.B, v.C);
+    return Object.assign({}, v, { avg: avg, score: Math.round(_sl.score) });
   }).sort(function(a,b){ return b.score - a.score; });
 
   renderSidebar(todosForns);

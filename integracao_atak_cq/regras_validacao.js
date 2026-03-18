@@ -1,6 +1,14 @@
 // ══════════════════════════════════════════════════════════════════════════════
 // regras_validacao.js — Regras de validação CQ para integração ATAK
 // Usado tanto no frontend (formulários) quanto no n8n (Code nodes)
+//
+// ⚠️  ATENÇÃO: As regras de validação foram CENTRALIZADAS no backend SQL.
+//    Fonte da verdade: cq_validar_carga() e cq_validar_inspecao() em
+//    p1_centralizar_regras_negocio.sql
+//
+//    Este arquivo é mantido para compatibilidade com n8n Code nodes.
+//    Para novas implementações frontend, use CQRegras.validarCarga() e
+//    CQRegras.validarInspecao() (cq_regras.js).
 // ══════════════════════════════════════════════════════════════════════════════
 
 const REGRAS_VALIDACAO = {

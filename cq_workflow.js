@@ -182,38 +182,29 @@ const CQWorkflow = (function () {
 
   /**
    * Criar revisão + transicionar status
+   * DELEGADO AO BACKEND: usa cq_criar_revisao() RPC para operação atômica.
+   * A lógica de mapeamento decisão→status e validação de permissões
+   * está centralizada no banco (p1_centralizar_regras_negocio.sql).
+   *
    * @param {string} inspecaoId
    * @param {Object} dados - { decisao: 'aprovada'|'reprovada'|'devolvida', comentario }
    */
   async function criarRevisao(inspecaoId, dados) {
-    const user = CQAuth.getUser();
-
-    // 1. Inserir revisão
-    await _fetch('/rest/v1/cq_revisoes', {
-      method: 'POST',
-      body: {
-        inspecao_id:   inspecaoId,
-        revisor_id:    user.id,
-        revisor_email: user.email,
-        revisor_nome:  user.nome,
-        decisao:       dados.decisao,
-        comentario:    dados.comentario || null,
-      },
-      extraHeaders: { 'Prefer': 'return=minimal' },
-      noBody: true,
-    });
-
-    // 2. Transicionar status conforme decisão
-    let novoStatus;
-    switch (dados.decisao) {
-      case 'aprovada':  novoStatus = 'revisada';  break;
-      case 'reprovada': novoStatus = 'reprovada'; break;
-      case 'devolvida': novoStatus = 'rascunho';  break;
-      default: throw new Error('Decisão inválida: ' + dados.decisao);
+    // Usar CQRegras se disponível (operação atômica no backend)
+    if (typeof CQRegras !== 'undefined') {
+      return CQRegras.criarRevisao(inspecaoId, dados.decisao, dados.comentario || null);
     }
 
-    const resultado = await transicionarStatus(inspecaoId, novoStatus);
-    return resultado;
+    // Fallback legado (para páginas que ainda não carregam cq_regras.js)
+    const result = await _fetch('/rest/v1/rpc/cq_criar_revisao', {
+      method: 'POST',
+      body: {
+        p_inspecao_id: inspecaoId,
+        p_decisao: dados.decisao,
+        p_comentario: dados.comentario || null,
+      },
+    });
+    return result;
   }
 
   // ── API: NÃO CONFORMIDADES ─────────────────────────────────
@@ -414,7 +405,11 @@ const CQWorkflow = (function () {
   // ── UI: AÇÕES PERMITIDAS ────────────────────────────────────
 
   /**
-   * Retorna lista de ações que o usuário atual pode executar na inspeção
+   * Retorna lista de ações que o usuário atual pode executar na inspeção.
+   * NOTA: Quando CQRegras está disponível, use CQRegras.acoesPermitidas(id)
+   * para obter as ações do backend (fonte da verdade com RBAC real).
+   * Esta versão local é mantida como fallback para UI instantânea.
+   *
    * @param {Object} inspecao - { status_workflow, criador_id }
    * @returns {Array<{ acao, label, cor, icon, confirm }>}
    */

@@ -982,6 +982,7 @@ textarea.field-input {
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_regras.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 const CQFornecedores = (function() {
@@ -1407,16 +1408,18 @@ function calcResultado(){
   pctEl.textContent = pctStr;
   rPct.textContent  = pctStr;
 
-  // Classificação
+  // Classificação — usa motor de decisão local para preview instantâneo
+  // A decisão REAL é feita pelo backend via CQRegras.submeterInspecao()
+  const _decisaoPreview = CQRegras.motorDecisaoLocal(pct);
   let cls, label, cor;
-  if(pct <= 5){
+  if(_decisaoPreview.status_final === 'aprovado'){
     cls='aprovado';   label='Aprovado';              cor='var(--aprovado)';
-  } else if(pct <= 15){
+  } else if(_decisaoPreview.status_final === 'ressalva'){
     cls='ressalva';   label='Aprovado com Ressalva'; cor='var(--ressalva)';
-  } else if(pct <= 30){
-    cls='bloqueado'; label='Bloqueado';          cor='var(--reprovado)';
-  } else {
+  } else if(pct > 30){
     cls='reprovado';  label='Reprovado — Negociar';  cor='var(--reprovado)';
+  } else {
+    cls='bloqueado'; label='Bloqueado';          cor='var(--reprovado)';
   }
 
   block.className = 'result-block ' + cls;
@@ -1430,10 +1433,9 @@ function calcResultado(){
   // Regra 3: crítico > 30%
   alerta.classList.toggle('show', pct > 30);
 
-  // Sugestão automática de status
+  // Sugestão automática de status — usa preview local (decisão real é no backend)
   if(!statusSelecionado){
-    const suggested = pct<=5?'aprovado':pct<=15?'ressalva':'bloqueado';
-    autoSelectStatus(suggested);
+    autoSelectStatus(_decisaoPreview.status_final);
   }
 
   updateSaveStatus();
@@ -1564,7 +1566,9 @@ function montarRegistro(){
 
   const analisada = parseFloat(document.getElementById('f-qtd-analisada').value)||0;
   const pct = analisada > 0 ? +(totalDef / analisada * 100).toFixed(2) : 0;
-  const cls = pct<=5?'Aprovado':pct<=15?'Aprovado com Ressalva':'Bloqueado';
+  // Classificação local para preview — a decisão real vem do backend via CQRegras.submeterInspecao()
+  const _d = CQRegras.motorDecisaoLocal(pct);
+  const cls = _d.classificacao === 'A' ? 'Aprovado' : _d.classificacao === 'B' ? 'Aprovado com Ressalva' : 'Bloqueado';
 
   return {
     id:                   getId(),

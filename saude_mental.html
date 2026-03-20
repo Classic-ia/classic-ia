@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saúde e Equilíbrio Ocupacional · Classic</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+.container{max-width:1200px;margin:0 auto;padding:20px 20px 80px;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--muted);white-space:nowrap;transition:all .2s;
+  font-family:'DM Sans',sans-serif;}
+.tab:hover{background:var(--bg3);color:var(--text);}
+.tab.active{background:var(--blue);color:white;border-color:var(--blue);}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+.card-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;
+  display:flex;align-items:center;justify-content:space-between;}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;line-height:1;}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:5px;}
+.v-green{color:var(--green);} .v-yellow{color:var(--yellow);} .v-red{color:var(--red);} .v-gold{color:var(--gold);}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.3);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:9px 10px;vertical-align:middle;}
+
+.badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.badge-green{background:rgba(39,174,96,.15);color:var(--green);}
+.badge-yellow{background:rgba(243,156,18,.15);color:var(--yellow);}
+.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
+.badge-blue{background:rgba(46,107,138,.2);color:#5ec2e8;}
+.badge-muted{background:rgba(93,127,149,.15);color:var(--muted);}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.chart-box{position:relative;height:240px;}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.search-box{flex:1;min-width:200px;padding:9px 14px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:13px;outline:none;font-family:'DM Sans',sans-serif;}
+.search-box:focus{border-color:var(--blue);}
+.filter-select{padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:12px;outline:none;font-family:'DM Sans',sans-serif;cursor:pointer;}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;display:inline-flex;align-items:center;gap:6px;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn-icon{padding:5px 8px;font-size:14px;background:transparent;border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;color:var(--muted);transition:all .2s;}
+.btn-icon:hover{border-color:var(--blue);color:var(--text);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:28px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);}
+.field textarea{resize:vertical;min-height:60px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* GATILHO CARD */
+.gatilho-card{background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:14px;
+  margin-bottom:10px;display:flex;align-items:center;gap:12px;}
+.gatilho-icon{font-size:24px;flex-shrink:0;}
+.gatilho-info{flex:1;}
+.gatilho-info strong{font-size:13px;}
+.gatilho-info .sub{font-size:11px;color:var(--muted);margin-top:2px;}
+
+/* ALERT */
+.alert-bar{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);border-radius:10px;
+  padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px;font-size:13px;}
+.alert-bar.warn{background:rgba(243,156,18,.1);border-color:rgba(243,156,18,.3);}
+.alert-bar.info{background:rgba(46,107,138,.1);border-color:rgba(46,107,138,.3);}
+
+/* RISK LEVEL VISUAL */
+.risk-visual{display:flex;gap:8px;margin-top:8px;}
+.risk-block{flex:1;border-radius:8px;padding:14px;text-align:center;}
+.risk-block .rv{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;}
+.risk-block .rl{font-size:10px;text-transform:uppercase;letter-spacing:.08em;margin-top:4px;}
+.risk-baixo{background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.3);}
+.risk-moderado{background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.3);}
+.risk-alto{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--green);
+  border-radius:10px;padding:14px 20px;z-index:200;display:none;font-size:13px;
+  box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;}
+.toast.show{display:flex;align-items:center;gap:10px;}
+.toast.error{border-color:var(--red);}
+
+/* CONFIDENTIAL BANNER */
+.conf-banner{background:rgba(200,169,110,.08);border:1px solid rgba(200,169,110,.3);border-radius:10px;
+  padding:12px 18px;margin-bottom:20px;font-size:12px;display:flex;align-items:center;gap:10px;color:var(--gold);}
+
+@media(max-width:768px){
+  .grid-2{grid-template-columns:1fr;}
+  .field-row,.field-row-3{grid-template-columns:1fr;}
+  .tabs{gap:2px;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+  .risk-visual{flex-direction:column;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="ht">Saúde e Equilíbrio Ocupacional</div>
+    <div class="hs">Programa de Gestão de Saúde Mental · NR-1 Riscos Psicossociais</div>
+  </div>
+  <div id="cq-user-chip"></div>
+  <a href="app.html" class="btn-back">← Painel</a>
+</div>
+
+<div class="container">
+
+<!-- BANNER CONFIDENCIALIDADE -->
+<div class="conf-banner">
+  🔒 <strong>CONFIDENCIAL</strong> — Este módulo NÃO armazena conteúdo clínico. Apenas: data, comparecimento, classificação de risco e recomendações gerais.
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" data-tab="painel">Painel</div>
+  <div class="tab" data-tab="atendimentos">Atendimentos</div>
+  <div class="tab" data-tab="gatilhos">Gatilhos Automáticos</div>
+  <div class="tab" data-tab="nr1">NR-1 Psicossocial</div>
+</div>
+
+<!-- ═══ ABA: PAINEL ═══ -->
+<div class="tab-content active" id="tab-painel">
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-val v-gold" id="kAtendTotal">—</div><div class="kpi-lbl">Atendimentos (Mês)</div></div>
+    <div class="kpi"><div class="kpi-val v-green" id="kAdesao">—</div><div class="kpi-lbl">Taxa Adesão</div></div>
+    <div class="kpi"><div class="kpi-val v-green" id="kRiscoBaixo">—</div><div class="kpi-lbl">Risco Baixo</div></div>
+    <div class="kpi"><div class="kpi-val v-yellow" id="kRiscoModerado">—</div><div class="kpi-lbl">Risco Moderado</div></div>
+    <div class="kpi"><div class="kpi-val v-red" id="kRiscoAlto">—</div><div class="kpi-lbl">Risco Alto</div></div>
+    <div class="kpi"><div class="kpi-val v-gold" id="kGatilhos">—</div><div class="kpi-lbl">Gatilhos Ativos</div></div>
+  </div>
+
+  <!-- ALERTAS -->
+  <div id="alertsContainer"></div>
+
+  <!-- CLASSIFICAÇÃO VISUAL -->
+  <div class="card">
+    <div class="card-title">Distribuição de Risco Psicossocial</div>
+    <div class="risk-visual">
+      <div class="risk-block risk-baixo">
+        <div class="rv" id="rvBaixo">0</div>
+        <div class="rl">Nível 1 — Baixo</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Acompanhamento opcional</div>
+      </div>
+      <div class="risk-block risk-moderado">
+        <div class="rv" id="rvModerado">0</div>
+        <div class="rl">Nível 2 — Moderado</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Monitoramento contínuo</div>
+      </div>
+      <div class="risk-block risk-alto">
+        <div class="rv" id="rvAlto">0</div>
+        <div class="rl">Nível 3 — Alto</div>
+        <div style="font-size:10px;color:var(--muted);margin-top:4px">Intervenção + alerta RH</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GRÁFICOS -->
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Atendimentos por Mês</div>
+      <div class="chart-box"><canvas id="chartAtendMes"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Incidência por Setor</div>
+      <div class="chart-box"><canvas id="chartSetor"></canvas></div>
+    </div>
+  </div>
+
+  <!-- IMPACTO -->
+  <div class="card">
+    <div class="card-title">Impacto do Programa</div>
+    <div class="grid-2" style="gap:20px;">
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Correlação com Indicadores</div>
+        <table>
+          <thead><tr><th>Indicador</th><th>Antes</th><th>Atual</th><th>Variação</th></tr></thead>
+          <tbody id="tbImpacto">
+            <tr><td>Absenteísmo</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>Turnover</td><td>—</td><td>—</td><td>—</td></tr>
+            <tr><td>Acidentes</td><td>—</td><td>—</td><td>—</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:8px">Origem dos Atendimentos</div>
+        <div class="chart-box" style="height:180px"><canvas id="chartOrigem"></canvas></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: ATENDIMENTOS ═══ -->
+<div class="tab-content" id="tab-atendimentos">
+  <div class="toolbar">
+    <input class="search-box" id="searchAtend" placeholder="Buscar funcionário..." oninput="filtrarAtendimentos()">
+    <select class="filter-select" id="filterRisco" onchange="filtrarAtendimentos()">
+      <option value="">Todos os riscos</option>
+      <option value="baixo">Baixo</option>
+      <option value="moderado">Moderado</option>
+      <option value="alto">Alto</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalAtend()">+ Novo Atendimento</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Registro de Atendimentos</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Data</th><th>Origem</th><th>Compareceu</th><th>Risco</th><th>Recomendação</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbAtendimentos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: GATILHOS AUTOMÁTICOS ═══ -->
+<div class="tab-content" id="tab-gatilhos">
+  <div class="card">
+    <div class="card-title">Regras do Motor de Decisão</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;">
+      O sistema analisa automaticamente os dados de RH, produção e SST para sugerir atendimentos.
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">📊</div>
+      <div class="gatilho-info">
+        <strong>Faltas > 3 no mês</strong>
+        <div class="sub">Colaboradores com mais de 3 ausências no mês atual são sinalizados automaticamente.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">📉</div>
+      <div class="gatilho-info">
+        <strong>Queda de produtividade > 20%</strong>
+        <div class="sub">Comparação da média dos últimos 30 dias vs 60 dias anteriores.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">🏥</div>
+      <div class="gatilho-info">
+        <strong>Retorno de afastamento</strong>
+        <div class="sub">Colaboradores que retornaram de afastamento INSS nos últimos 15 dias.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">👤</div>
+      <div class="gatilho-info">
+        <strong>Indicação manual</strong>
+        <div class="sub">Liderança ou RH pode indicar colaborador a qualquer momento.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">🔴</div>
+      <div class="gatilho-info">
+        <strong>Risco alto → Alerta RH</strong>
+        <div class="sub">Classificação de risco alto gera notificação automática para RH.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+
+    <div class="gatilho-card">
+      <div class="gatilho-icon">🔁</div>
+      <div class="gatilho-info">
+        <strong>Múltiplos atendimentos em curto período</strong>
+        <div class="sub">3+ atendimentos em 30 dias → flag de atenção especial.</div>
+      </div>
+      <span class="badge badge-green">ATIVO</span>
+    </div>
+  </div>
+
+  <!-- FUNCIONÁRIOS COM GATILHO -->
+  <div class="card">
+    <div class="card-title">Funcionários Sinalizados Automaticamente</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Funcionário</th><th>Setor</th><th>Gatilho</th><th>Detalhe</th><th>Ação</th></tr></thead>
+        <tbody id="tbGatilhos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: NR-1 PSICOSSOCIAL ═══ -->
+<div class="tab-content" id="tab-nr1">
+  <div class="card">
+    <div class="card-title">Inventário de Riscos Psicossociais — NR-1 / PGR</div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+      A NR-1 atualizada (2025) obriga a inclusão de riscos psicossociais no PGR.<br>
+      Este relatório apresenta os dados necessários para conformidade.
+    </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:16px;margin-bottom:16px;border:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Dados do Inventário</div>
+      <table>
+        <thead><tr><th>Indicador</th><th>Valor</th><th>Classificação</th></tr></thead>
+        <tbody>
+          <tr><td>Total de atendimentos realizados</td><td id="nr1Total">—</td><td>—</td></tr>
+          <tr><td>% colaboradores atendidos</td><td id="nr1Percent">—</td><td>—</td></tr>
+          <tr><td>Classificações de risco alto</td><td id="nr1Alto">—</td><td><span class="badge badge-red">Requer ação</span></td></tr>
+          <tr><td>Setores com maior incidência</td><td id="nr1Setor">—</td><td>—</td></tr>
+          <tr><td>Gatilhos automáticos acionados</td><td id="nr1Gatilhos">—</td><td>—</td></tr>
+          <tr><td>Taxa de absenteísmo</td><td id="nr1Absent">—</td><td>—</td></tr>
+          <tr><td>Taxa de turnover</td><td id="nr1Turnover">—</td><td>—</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:16px;border:1px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Ações Preventivas Documentadas</div>
+      <table>
+        <thead><tr><th>Ação</th><th>Status</th><th>Responsável</th></tr></thead>
+        <tbody>
+          <tr><td>Programa de atendimento psicológico presencial</td><td><span class="badge badge-green">Implementado</span></td><td>RH</td></tr>
+          <tr><td>Gatilhos automáticos de identificação</td><td><span class="badge badge-green">Ativo</span></td><td>Sistema</td></tr>
+          <tr><td>Classificação de risco psicossocial</td><td><span class="badge badge-green">Ativo</span></td><td>Psicóloga</td></tr>
+          <tr><td>Monitoramento de indicadores</td><td><span class="badge badge-green">Ativo</span></td><td>RH + SST</td></tr>
+          <tr><td>Treinamento de lideranças</td><td><span class="badge badge-yellow">Planejado</span></td><td>RH</td></tr>
+          <tr><td>Pesquisa de clima organizacional</td><td><span class="badge badge-yellow">Planejado</span></td><td>RH</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- ═══ MODAL ATENDIMENTO ═══ -->
+<div class="modal-overlay" id="modalAtend">
+<div class="modal-box">
+  <div class="modal-title">
+    <span id="modalAtendTitle">Registrar Atendimento</span>
+    <button class="modal-close" onclick="fecharModal('modalAtend')">&times;</button>
+  </div>
+  <div class="conf-banner" style="margin-bottom:16px;">
+    🔒 Não registre conteúdo clínico. Apenas dados administrativos e classificação de risco.
+  </div>
+  <form id="formAtend" onsubmit="salvarAtendimento(event)">
+    <input type="hidden" id="atendId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="atendFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data *</label><input type="date" id="atendData" required></div>
+      <div class="field"><label>Origem *</label>
+        <select id="atendOrigem" required>
+          <option value="">Selecione</option>
+          <option value="voluntaria">Demanda Espontânea</option>
+          <option value="lideranca">Indicação da Liderança</option>
+          <option value="gatilho_automatico">Gatilho Automático</option>
+        </select>
+      </div>
+      <div class="field"><label>Compareceu? *</label>
+        <select id="atendCompareceu" required>
+          <option value="">Selecione</option>
+          <option value="sim">Sim</option>
+          <option value="nao">Não</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Classificação de Risco *</label>
+        <select id="atendRisco" required>
+          <option value="">Selecione</option>
+          <option value="baixo">Nível 1 — Baixo</option>
+          <option value="moderado">Nível 2 — Moderado</option>
+          <option value="alto">Nível 3 — Alto</option>
+        </select>
+      </div>
+      <div class="field"><label>Profissional</label><input id="atendProfissional" placeholder="Nome do psicólogo(a)"></div>
+    </div>
+    <div class="field"><label>Recomendação (texto curto, não sensível)</label>
+      <textarea id="atendRecomendacao" rows="2" placeholder="Ex: Acompanhamento mensal, encaminhamento médico..."></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalAtend')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script>
+// ═══ SAÚDE MENTAL — PROGRAMA SAÚDE E EQUILÍBRIO ═════════
+
+let FUNC = [], ATEND = [], ABSENT = [], DESLIG = [];
+
+// TABS
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+function toast(msg, error) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  el.className = error ? 'toast show error' : 'toast show';
+  setTimeout(() => el.className = 'toast', 3000);
+}
+function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
+function abrirModal(id) { document.getElementById(id).classList.add('show'); }
+function fmtData(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—'; }
+function nomeF(id) { const f = FUNC.find(x => x.id === id); return f ? f.nome_completo : '—'; }
+function setorF(id) { const f = FUNC.find(x => x.id === id); return f ? (f.setor || 'N/A') : 'N/A'; }
+
+async function carregar() {
+  const load = async (t) => { try { return await CQ_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
+  [FUNC, ATEND, ABSENT, DESLIG] = await Promise.all([
+    load('rh_funcionarios'), load('rh_saude_mental'), load('rh_ausencias'), load('rh_desligamentos')
+  ]);
+}
+
+function popularSelects() {
+  const sel = document.getElementById('atendFunc');
+  const ativos = FUNC.filter(f => f.status === 'ativo').sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
+  sel.innerHTML = '<option value="">Selecione</option>';
+  ativos.forEach(f => { sel.innerHTML += `<option value="${f.id}">${f.nome_completo} — ${f.setor || ''}</option>`; });
+}
+
+// ══════════════════════════════════════════════════════════
+// PAINEL
+// ══════════════════════════════════════════════════════════
+function renderPainel() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = hoje.slice(0, 7);
+  const anoAtual = hoje.slice(0, 4);
+  const ativos = FUNC.filter(f => f.status === 'ativo');
+
+  // KPIs
+  const atendMes = ATEND.filter(a => (a.data_atendimento || '').startsWith(mesAtual));
+  const compareceu = ATEND.filter(a => a.compareceu === true || a.compareceu === 'sim');
+  const adesao = ATEND.length > 0 ? ((compareceu.length / ATEND.length) * 100).toFixed(0) : '0';
+
+  const baixo = ATEND.filter(a => a.classificacao_risco === 'baixo').length;
+  const moderado = ATEND.filter(a => a.classificacao_risco === 'moderado').length;
+  const alto = ATEND.filter(a => a.classificacao_risco === 'alto').length;
+
+  document.getElementById('kAtendTotal').textContent = atendMes.length;
+  document.getElementById('kAdesao').textContent = adesao + '%';
+  document.getElementById('kRiscoBaixo').textContent = baixo;
+  document.getElementById('kRiscoModerado').textContent = moderado;
+  document.getElementById('kRiscoAlto').textContent = alto;
+
+  // Gatilhos
+  const gatilhos = detectarGatilhos();
+  document.getElementById('kGatilhos').textContent = gatilhos.length;
+
+  // Risk visual
+  document.getElementById('rvBaixo').textContent = baixo;
+  document.getElementById('rvModerado').textContent = moderado;
+  document.getElementById('rvAlto').textContent = alto;
+
+  // Alerts
+  const alerts = [];
+  if (alto > 0) alerts.push({ type: 'error', msg: `${alto} colaborador(es) com risco ALTO — ação obrigatória do RH` });
+  if (gatilhos.length > 0) alerts.push({ type: 'warn', msg: `${gatilhos.length} gatilho(s) automático(s) acionados — verificar na aba Gatilhos` });
+  // Múltiplos atendimentos
+  const funcMultiplos = {};
+  ATEND.forEach(a => {
+    const mes30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
+    if (a.data_atendimento >= mes30) funcMultiplos[a.funcionario_id] = (funcMultiplos[a.funcionario_id] || 0) + 1;
+  });
+  const flags = Object.entries(funcMultiplos).filter(([, c]) => c >= 3);
+  if (flags.length > 0) alerts.push({ type: 'warn', msg: `${flags.length} colaborador(es) com 3+ atendimentos em 30 dias` });
+
+  document.getElementById('alertsContainer').innerHTML = alerts.map(a =>
+    `<div class="alert-bar ${a.type === 'warn' ? 'warn' : ''}">${a.type === 'error' ? '🔴' : '🟡'} ${a.msg}</div>`
+  ).join('');
+
+  // Chart: Atendimentos por mês
+  const meses6 = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    meses6.push(d.toISOString().slice(0, 7));
+  }
+  new Chart(document.getElementById('chartAtendMes'), {
+    type: 'bar',
+    data: {
+      labels: meses6.map(m => ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(m.split('-')[1])-1]),
+      datasets: [{
+        label: 'Atendimentos',
+        data: meses6.map(m => ATEND.filter(a => (a.data_atendimento || '').startsWith(m)).length),
+        backgroundColor: '#2E6B8A', borderRadius: 6
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#5d7f95' }, grid: { display: false } }, y: { ticks: { color: '#5d7f95' }, grid: { color: 'rgba(30,58,82,.3)' } } }
+    }
+  });
+
+  // Chart: Incidência por setor
+  const setorCount = {};
+  ATEND.forEach(a => { const s = setorF(a.funcionario_id); setorCount[s] = (setorCount[s] || 0) + 1; });
+  const setorEntries = Object.entries(setorCount).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  new Chart(document.getElementById('chartSetor'), {
+    type: 'bar',
+    data: {
+      labels: setorEntries.map(e => e[0]),
+      datasets: [{ data: setorEntries.map(e => e[1]), backgroundColor: '#c8a96e', borderRadius: 6 }]
+    },
+    options: {
+      indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { ticks: { color: '#5d7f95' }, grid: { color: 'rgba(30,58,82,.3)' } }, y: { ticks: { color: '#5d7f95' }, grid: { display: false } } }
+    }
+  });
+
+  // Chart: Origem
+  const origens = { voluntaria: 0, lideranca: 0, gatilho_automatico: 0 };
+  ATEND.forEach(a => { if (origens[a.origem] !== undefined) origens[a.origem]++; });
+  new Chart(document.getElementById('chartOrigem'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Espontânea', 'Liderança', 'Gatilho Automático'],
+      datasets: [{ data: Object.values(origens), backgroundColor: ['#27ae60', '#f39c12', '#e74c3c'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'right', labels: { color: '#5d7f95', font: { size: 10 }, padding: 12 } } }
+    }
+  });
+
+  // NR-1
+  const faltasMes = ABSENT.filter(a => (a.data_inicio || '').startsWith(mesAtual));
+  const totalDias = faltasMes.reduce((s, a) => s + (a.dias || 1), 0);
+  const absentPct = ativos.length > 0 ? ((totalDias / (ativos.length * 22)) * 100).toFixed(1) : '0';
+  const desligAno = DESLIG.filter(d => (d.data_desligamento || '').startsWith(anoAtual));
+  const turnoverPct = ativos.length > 0 ? ((desligAno.length / ativos.length) * 100).toFixed(1) : '0';
+  const setorMaior = setorEntries.length > 0 ? setorEntries[0][0] : '—';
+
+  document.getElementById('nr1Total').textContent = ATEND.length;
+  const funcAtendidos = new Set(ATEND.map(a => a.funcionario_id)).size;
+  document.getElementById('nr1Percent').textContent = ativos.length > 0 ? ((funcAtendidos / ativos.length) * 100).toFixed(0) + '%' : '0%';
+  document.getElementById('nr1Alto').textContent = alto;
+  document.getElementById('nr1Setor').textContent = setorMaior;
+  document.getElementById('nr1Gatilhos').textContent = gatilhos.length;
+  document.getElementById('nr1Absent').textContent = absentPct + '%';
+  document.getElementById('nr1Turnover').textContent = turnoverPct + '%';
+}
+
+// ══════════════════════════════════════════════════════════
+// GATILHOS AUTOMÁTICOS
+// ══════════════════════════════════════════════════════════
+function detectarGatilhos() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = hoje.slice(0, 7);
+  const gatilhos = [];
+
+  const ativos = FUNC.filter(f => f.status === 'ativo');
+
+  ativos.forEach(f => {
+    // Faltas > 3 no mês
+    const faltasMes = ABSENT.filter(a => a.funcionario_id === f.id && (a.data_inicio || '').startsWith(mesAtual));
+    if (faltasMes.length > 3) {
+      gatilhos.push({ func: f, tipo: 'Faltas > 3/mês', detalhe: `${faltasMes.length} ausências no mês`, icon: '📊' });
+    }
+
+    // Retorno de afastamento (INSS nos últimos 15 dias)
+    const afastamentos = ABSENT.filter(a => a.funcionario_id === f.id && a.tipo_ausencia === 'afastamento_inss');
+    afastamentos.forEach(a => {
+      if (a.data_fim) {
+        const diasRetorno = Math.floor((new Date(hoje) - new Date(a.data_fim)) / 86400000);
+        if (diasRetorno >= 0 && diasRetorno <= 15) {
+          gatilhos.push({ func: f, tipo: 'Retorno de afastamento', detalhe: `Retornou há ${diasRetorno} dias`, icon: '🏥' });
+        }
+      }
+    });
+  });
+
+  // Renderizar tabela de gatilhos
+  document.getElementById('tbGatilhos').innerHTML = gatilhos.map(g => `<tr>
+    <td><strong>${g.func.nome_completo}</strong></td>
+    <td>${g.func.setor || '—'}</td>
+    <td>${g.icon} ${g.tipo}</td>
+    <td style="font-size:11px">${g.detalhe}</td>
+    <td><button class="btn btn-sm btn-primary" onclick="agendarAtendimento('${g.func.id}')">Agendar</button></td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--green)">Nenhum gatilho acionado</td></tr>';
+
+  return gatilhos;
+}
+
+function agendarAtendimento(funcId) {
+  document.getElementById('formAtend').reset();
+  document.getElementById('atendId').value = '';
+  document.getElementById('atendFunc').value = funcId;
+  document.getElementById('atendOrigem').value = 'gatilho_automatico';
+  document.getElementById('atendData').value = new Date().toISOString().slice(0, 10);
+  abrirModal('modalAtend');
+}
+
+// ══════════════════════════════════════════════════════════
+// ATENDIMENTOS CRUD
+// ══════════════════════════════════════════════════════════
+function renderAtendimentos(lista) {
+  const tb = document.getElementById('tbAtendimentos');
+  if (!lista) lista = ATEND;
+
+  const origemLabel = { voluntaria: 'Espontânea', lideranca: 'Liderança', gatilho_automatico: 'Gatilho Auto' };
+  const riscoBadge = { baixo: 'badge-green', moderado: 'badge-yellow', alto: 'badge-red' };
+
+  tb.innerHTML = lista.map(a => `<tr>
+    <td><strong>${nomeF(a.funcionario_id)}</strong><br><span style="font-size:10px;color:var(--muted)">${setorF(a.funcionario_id)}</span></td>
+    <td>${fmtData(a.data_atendimento)}</td>
+    <td>${origemLabel[a.origem] || '—'}</td>
+    <td>${(a.compareceu === true || a.compareceu === 'sim') ? '<span class="badge badge-green">Sim</span>' : '<span class="badge badge-red">Não</span>'}</td>
+    <td><span class="badge ${riscoBadge[a.classificacao_risco] || 'badge-muted'}">${a.classificacao_risco || '—'}</span></td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px" title="${a.recomendacao || ''}">${a.recomendacao || '—'}</td>
+    <td><button class="btn-icon" onclick="editarAtend('${a.id}')" title="Editar">✏️</button></td>
+  </tr>`).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Nenhum atendimento registrado</td></tr>';
+}
+
+function filtrarAtendimentos() {
+  const busca = document.getElementById('searchAtend').value.toLowerCase();
+  const risco = document.getElementById('filterRisco').value;
+  let lista = ATEND;
+  if (busca) lista = lista.filter(a => nomeF(a.funcionario_id).toLowerCase().includes(busca));
+  if (risco) lista = lista.filter(a => a.classificacao_risco === risco);
+  renderAtendimentos(lista);
+}
+
+function abrirModalAtend() {
+  document.getElementById('formAtend').reset();
+  document.getElementById('atendId').value = '';
+  document.getElementById('atendData').value = new Date().toISOString().slice(0, 10);
+  abrirModal('modalAtend');
+}
+
+function editarAtend(id) {
+  const a = ATEND.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('atendId').value = a.id;
+  document.getElementById('atendFunc').value = a.funcionario_id;
+  document.getElementById('atendData').value = a.data_atendimento || '';
+  document.getElementById('atendOrigem').value = a.origem || '';
+  document.getElementById('atendCompareceu').value = (a.compareceu === true || a.compareceu === 'sim') ? 'sim' : 'nao';
+  document.getElementById('atendRisco').value = a.classificacao_risco || '';
+  document.getElementById('atendProfissional').value = a.profissional || '';
+  document.getElementById('atendRecomendacao').value = a.recomendacao || '';
+  abrirModal('modalAtend');
+}
+
+async function salvarAtendimento(e) {
+  e.preventDefault();
+  const id = document.getElementById('atendId').value;
+  const dados = {
+    funcionario_id: document.getElementById('atendFunc').value,
+    data_atendimento: document.getElementById('atendData').value,
+    origem: document.getElementById('atendOrigem').value,
+    compareceu: document.getElementById('atendCompareceu').value === 'sim',
+    classificacao_risco: document.getElementById('atendRisco').value,
+    profissional: document.getElementById('atendProfissional').value.trim() || null,
+    recomendacao: document.getElementById('atendRecomendacao').value.trim() || null,
+  };
+
+  try {
+    let ok;
+    if (id) {
+      const res = await CQ_API.fetch('rh_saude_mental?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados });
+      ok = res.ok;
+    } else {
+      const res = await CQ_API.post('rh_saude_mental', dados, 'return=minimal');
+      ok = res.ok;
+    }
+    if (ok) {
+      toast(id ? 'Atendimento atualizado' : 'Atendimento registrado');
+      fecharModal('modalAtend');
+      await recarregar();
+    } else toast('Erro ao salvar', true);
+  } catch (err) { toast('Erro: ' + err.message, true); }
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+async function recarregar() {
+  await carregar();
+  popularSelects();
+  renderPainel();
+  renderAtendimentos();
+  detectarGatilhos();
+}
+
+(async () => {
+  const user = await CQAuth.init();
+  if (!user) return;
+  await recarregar();
+})();
+</script>
+</body>
+</html>

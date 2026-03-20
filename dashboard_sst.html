@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard SST · Classic</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+.container{max-width:1200px;margin:0 auto;padding:20px 20px 80px;}
+
+/* KPI STRIP */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:24px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:18px;text-align:center;transition:border-color .2s;}
+.kpi:hover{border-color:var(--blue);}
+.kpi-val{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;line-height:1;}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:6px;}
+.kpi-sub{font-size:11px;margin-top:4px;}
+.v-green{color:var(--green);} .v-yellow{color:var(--yellow);} .v-red{color:var(--red);} .v-gold{color:var(--gold);}
+
+/* SECTION */
+.section{margin-bottom:28px;}
+.section-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.15em;margin-bottom:14px;padding-bottom:8px;
+  border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;}
+.section-title::before{content:'';width:3px;height:14px;background:var(--gold);border-radius:1px;}
+
+/* CARDS */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px;}
+.card-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;}
+
+/* GRID */
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;}
+
+/* TABLE */
+table{width:100%;border-collapse:collapse;font-size:12px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.3);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:8px 10px;vertical-align:middle;}
+
+.badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.badge-green{background:rgba(39,174,96,.15);color:var(--green);}
+.badge-yellow{background:rgba(243,156,18,.15);color:var(--yellow);}
+.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
+.badge-blue{background:rgba(46,107,138,.2);color:#5ec2e8;}
+.badge-muted{background:rgba(93,127,149,.15);color:var(--muted);}
+
+/* CHART CONTAINER */
+.chart-box{position:relative;height:260px;}
+
+/* ALERT BAR */
+.alert-bar{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);border-radius:10px;
+  padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;gap:12px;font-size:13px;}
+.alert-bar.warn{background:rgba(243,156,18,.1);border-color:rgba(243,156,18,.3);}
+
+/* RISK MATRIX */
+.risk-matrix{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;}
+.risk-cell{border-radius:8px;padding:12px;text-align:center;font-size:11px;}
+.risk-cell .risk-val{font-family:'Syne',sans-serif;font-size:22px;font-weight:800;}
+.risk-low{background:rgba(39,174,96,.1);border:1px solid rgba(39,174,96,.3);}
+.risk-mid{background:rgba(243,156,18,.1);border:1px solid rgba(243,156,18,.3);}
+.risk-high{background:rgba(231,76,60,.1);border:1px solid rgba(231,76,60,.3);}
+
+@media(max-width:768px){
+  .grid-2,.grid-3{grid-template-columns:1fr;}
+  .kpi-strip{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="ht">Dashboard SST</div>
+    <div class="hs">Indicadores · Turnover · Risco por Setor · Conformidade</div>
+  </div>
+  <div id="cq-user-chip"></div>
+  <a href="app.html" class="btn-back">← Painel</a>
+</div>
+
+<div class="container">
+
+<!-- ALERTS -->
+<div id="alertsContainer"></div>
+
+<!-- KPIs PRINCIPAIS -->
+<div class="kpi-strip">
+  <div class="kpi"><div class="kpi-val v-gold" id="kTotalAtivos">—</div><div class="kpi-lbl">Funcionários Ativos</div></div>
+  <div class="kpi"><div class="kpi-val v-green" id="kAptos">—</div><div class="kpi-lbl">Aptos (Motor)</div></div>
+  <div class="kpi"><div class="kpi-val v-red" id="kBloqueados">—</div><div class="kpi-lbl">Bloqueados</div></div>
+  <div class="kpi"><div class="kpi-val v-yellow" id="kAsoVencidos">—</div><div class="kpi-lbl">ASO Vencidos</div></div>
+  <div class="kpi"><div class="kpi-val v-yellow" id="kTreinVencidos">—</div><div class="kpi-lbl">NR Vencidas</div></div>
+  <div class="kpi"><div class="kpi-val v-red" id="kTurnover">—</div><div class="kpi-lbl">Turnover Mês</div></div>
+  <div class="kpi"><div class="kpi-val v-green" id="kDiasSemAcid">—</div><div class="kpi-lbl">Dias Sem Acidente</div></div>
+  <div class="kpi"><div class="kpi-val v-gold" id="kAbsent">—</div><div class="kpi-lbl">% Absenteísmo</div></div>
+</div>
+
+<!-- GRÁFICOS ROW 1 -->
+<div class="section">
+  <div class="section-title">Análise de Conformidade</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Conformidade SST por Categoria</div>
+      <div class="chart-box"><canvas id="chartConformidade"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Turnover Mensal (últimos 6 meses)</div>
+      <div class="chart-box"><canvas id="chartTurnover"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- GRÁFICOS ROW 2 -->
+<div class="section">
+  <div class="section-title">Distribuição e Risco</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Causas de Desligamento (Ano)</div>
+      <div class="chart-box"><canvas id="chartCausas"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Risco por Setor</div>
+      <div id="riskMatrix" class="risk-matrix"></div>
+    </div>
+  </div>
+</div>
+
+<!-- TABELA TURNOVER CURTO PRAZO -->
+<div class="section">
+  <div class="section-title">Análise de Turnover</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">Desligamentos &lt;90 dias (Erro na Admissão?)</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Funcionário</th><th>Setor</th><th>Dias</th><th>Tipo</th><th>Causa</th></tr></thead>
+          <tbody id="tbDeslig90"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Turnover por Setor</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Setor</th><th>Ativos</th><th>Desligados (Ano)</th><th>Turnover</th><th>Risco</th></tr></thead>
+          <tbody id="tbTurnoverSetor"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FUNCIONÁRIOS BLOQUEADOS -->
+<div class="section">
+  <div class="section-title">Funcionários Bloqueados por Irregularidade</div>
+  <div class="card">
+    <div style="overflow-x:auto;">
+      <table>
+        <thead><tr><th>Funcionário</th><th>Setor</th><th>Cargo</th><th>Problemas</th><th>Ação</th></tr></thead>
+        <tbody id="tbBloqueados"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ASOs e TREINAMENTOS VENCIDOS -->
+<div class="section">
+  <div class="section-title">Pendências Críticas</div>
+  <div class="grid-2">
+    <div class="card">
+      <div class="card-title">ASOs Vencidos / Vencendo</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Funcionário</th><th>Tipo</th><th>Validade</th><th>Status</th></tr></thead>
+          <tbody id="tbAsosPend"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Treinamentos NR Vencidos</div>
+      <div style="overflow-x:auto;">
+        <table>
+          <thead><tr><th>Funcionário</th><th>NR</th><th>Validade</th><th>Status</th></tr></thead>
+          <tbody id="tbTreinPend"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<script>
+// ═══ DASHBOARD SST ═══════════════════════════════════════
+
+let FUNC = [], ASOS = [], TREIN = [], EPIS = [], ACID = [], ABSENT = [], REST = [], DESLIG = [];
+
+function nomeF(id) { const f = FUNC.find(x => x.id === id); return f ? f.nome_completo : '—'; }
+function setorF(id) { const f = FUNC.find(x => x.id === id); return f ? (f.setor || 'N/A') : 'N/A'; }
+function diasEntre(d1, d2) { return Math.floor((new Date(d2) - new Date(d1)) / 86400000); }
+function fmtData(d) { return d ? new Date(d + 'T00:00:00').toLocaleDateString('pt-BR') : '—'; }
+
+// Motor lógico
+function motorLogico(func) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const problemas = [];
+  const asos = ASOS.filter(a => a.funcionario_id === func.id);
+  const asoAtual = asos.sort((a, b) => b.data_exame > a.data_exame ? 1 : -1)[0];
+  if (!asoAtual) problemas.push('Sem ASO');
+  else if (asoAtual.data_validade < hoje) problemas.push('ASO vencido');
+  else if (asoAtual.resultado === 'inapto') problemas.push('Inapto');
+
+  const treinVenc = TREIN.filter(t => t.funcionario_id === func.id && t.data_validade && t.data_validade < hoje);
+  if (treinVenc.length) problemas.push(treinVenc.length + ' NR vencida(s)');
+
+  const restAtivas = REST.filter(r => r.funcionario_id === func.id && r.status === 'ativa');
+  if (restAtivas.length) problemas.push(restAtivas.length + ' restrição');
+
+  if (func.status !== 'ativo') problemas.push(func.status);
+  return { apto: problemas.length === 0, problemas };
+}
+
+async function carregar() {
+  const load = async (t) => { try { return await CQ_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
+  [FUNC, ASOS, TREIN, EPIS, ACID, ABSENT, REST, DESLIG] = await Promise.all([
+    load('rh_funcionarios'), load('rh_aso'), load('rh_treinamentos'), load('rh_epi_entregas'),
+    load('rh_acidentes'), load('rh_ausencias'), load('rh_restricoes'), load('rh_desligamentos')
+  ]);
+}
+
+function renderDashboard() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = hoje.slice(0, 7);
+  const anoAtual = hoje.slice(0, 4);
+  const ativos = FUNC.filter(f => f.status === 'ativo');
+
+  // Motor
+  let aptos = 0, bloqueados = 0, bloqList = [];
+  ativos.forEach(f => {
+    const m = motorLogico(f);
+    if (m.apto) aptos++;
+    else { bloqueados++; bloqList.push({ ...f, problemas: m.problemas }); }
+  });
+
+  // ASOs
+  const asoVencidos = ASOS.filter(a => a.data_validade < hoje);
+  const asoVencer30 = ASOS.filter(a => { const d = diasEntre(hoje, a.data_validade); return d >= 0 && d <= 30; });
+  const treinVencidos = TREIN.filter(t => t.data_validade && t.data_validade < hoje);
+
+  // Turnover
+  const desligMes = DESLIG.filter(d => (d.data_desligamento || '').startsWith(mesAtual));
+  const turnover = ativos.length > 0 ? ((desligMes.length / ativos.length) * 100).toFixed(1) : '0';
+
+  // Acidentes
+  const ultimoAcid = ACID.sort((a, b) => b.data_ocorrencia > a.data_ocorrencia ? 1 : -1)[0];
+  const diasSem = ultimoAcid ? diasEntre(ultimoAcid.data_ocorrencia, hoje) : '∞';
+
+  // Absenteísmo
+  const faltasMes = ABSENT.filter(a => (a.data_inicio || '').startsWith(mesAtual));
+  const totalDias = faltasMes.reduce((s, a) => s + (a.dias || 1), 0);
+  const absentPct = ativos.length > 0 ? ((totalDias / (ativos.length * 22)) * 100).toFixed(1) : '0';
+
+  // KPIs
+  document.getElementById('kTotalAtivos').textContent = ativos.length;
+  document.getElementById('kAptos').textContent = aptos;
+  document.getElementById('kBloqueados').textContent = bloqueados;
+  document.getElementById('kAsoVencidos').textContent = asoVencidos.length;
+  document.getElementById('kTreinVencidos').textContent = treinVencidos.length;
+  document.getElementById('kTurnover').textContent = turnover + '%';
+  document.getElementById('kDiasSemAcid').textContent = diasSem;
+  document.getElementById('kAbsent').textContent = absentPct + '%';
+
+  // ALERTS
+  const alerts = [];
+  if (asoVencidos.length > 0) alerts.push({ type: 'error', msg: `${asoVencidos.length} ASO(s) vencido(s) — risco trabalhista direto` });
+  if (treinVencidos.length > 0) alerts.push({ type: 'warn', msg: `${treinVencidos.length} treinamento(s) NR vencido(s) — risco de multa MTE` });
+  if (bloqueados > 0) alerts.push({ type: 'error', msg: `${bloqueados} funcionário(s) bloqueado(s) pelo Motor Lógico` });
+  if (parseFloat(turnover) > 5) alerts.push({ type: 'warn', msg: `Turnover mensal de ${turnover}% — acima do esperado` });
+
+  document.getElementById('alertsContainer').innerHTML = alerts.map(a =>
+    `<div class="alert-bar ${a.type === 'warn' ? 'warn' : ''}">${a.type === 'error' ? '🔴' : '🟡'} ${a.msg}</div>`
+  ).join('');
+
+  // CHART: Conformidade
+  const asoTotal = ASOS.length || 1;
+  const treinTotal = TREIN.length || 1;
+  const epiAtivos = EPIS.filter(e => !e.data_devolucao);
+  const epiTotal = epiAtivos.length || 1;
+  const epiOk = epiAtivos.filter(e => !e.data_validade || e.data_validade >= hoje).length;
+
+  new Chart(document.getElementById('chartConformidade'), {
+    type: 'bar',
+    data: {
+      labels: ['ASO', 'Treinamentos NR', 'EPIs'],
+      datasets: [
+        { label: 'Em dia %', data: [
+          ((ASOS.filter(a => a.data_validade >= hoje).length / asoTotal) * 100).toFixed(0),
+          ((TREIN.filter(t => !t.data_validade || t.data_validade >= hoje).length / treinTotal) * 100).toFixed(0),
+          ((epiOk / epiTotal) * 100).toFixed(0)
+        ], backgroundColor: ['#27ae60', '#27ae60', '#27ae60'], borderRadius: 6 },
+        { label: 'Vencido %', data: [
+          ((asoVencidos.length / asoTotal) * 100).toFixed(0),
+          ((treinVencidos.length / treinTotal) * 100).toFixed(0),
+          ((epiAtivos.filter(e => e.data_validade && e.data_validade < hoje).length / epiTotal) * 100).toFixed(0)
+        ], backgroundColor: ['#e74c3c', '#e74c3c', '#e74c3c'], borderRadius: 6 }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#5d7f95', font: { size: 10 } } } },
+      scales: { x: { ticks: { color: '#5d7f95' }, grid: { display: false } }, y: { max: 100, ticks: { color: '#5d7f95', callback: v => v + '%' }, grid: { color: 'rgba(30,58,82,.3)' } } }
+    }
+  });
+
+  // CHART: Turnover 6 meses
+  const meses6 = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(); d.setMonth(d.getMonth() - i);
+    meses6.push(d.toISOString().slice(0, 7));
+  }
+  const turnoverData = meses6.map(m => {
+    const deslig = DESLIG.filter(d => (d.data_desligamento || '').startsWith(m)).length;
+    return ativos.length > 0 ? ((deslig / ativos.length) * 100).toFixed(1) : 0;
+  });
+
+  new Chart(document.getElementById('chartTurnover'), {
+    type: 'line',
+    data: {
+      labels: meses6.map(m => { const [a, me] = m.split('-'); return ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'][parseInt(me)-1]; }),
+      datasets: [{ label: 'Turnover %', data: turnoverData, borderColor: '#e74c3c', backgroundColor: 'rgba(231,76,60,.1)', fill: true, tension: 0.3, pointRadius: 4 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { labels: { color: '#5d7f95', font: { size: 10 } } } },
+      scales: { x: { ticks: { color: '#5d7f95' }, grid: { display: false } }, y: { ticks: { color: '#5d7f95', callback: v => v + '%' }, grid: { color: 'rgba(30,58,82,.3)' } } }
+    }
+  });
+
+  // CHART: Causas desligamento
+  const desligAno = DESLIG.filter(d => (d.data_desligamento || '').startsWith(anoAtual));
+  const causas = { admissao: 0, operacional: 0, financeiro: 0, pessoal: 0 };
+  desligAno.forEach(d => { if (causas[d.categoria_causa] !== undefined) causas[d.categoria_causa]++; });
+
+  new Chart(document.getElementById('chartCausas'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Admissão', 'Operacional', 'Financeiro', 'Pessoal'],
+      datasets: [{ data: Object.values(causas), backgroundColor: ['#3d8aad', '#e74c3c', '#f39c12', '#5d7f95'], borderWidth: 0 }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: 'bottom', labels: { color: '#5d7f95', font: { size: 11 }, padding: 16 } } }
+    }
+  });
+
+  // RISK MATRIX por setor
+  const setores = [...new Set(ativos.map(f => f.setor).filter(Boolean))].sort();
+  const riskMatrix = document.getElementById('riskMatrix');
+  riskMatrix.innerHTML = setores.slice(0, 9).map(s => {
+    const funcSetor = ativos.filter(f => f.setor === s);
+    const bloq = funcSetor.filter(f => !motorLogico(f).apto).length;
+    const pct = funcSetor.length > 0 ? ((bloq / funcSetor.length) * 100).toFixed(0) : 0;
+    const cls = pct > 30 ? 'risk-high' : pct > 10 ? 'risk-mid' : 'risk-low';
+    return `<div class="risk-cell ${cls}">
+      <div class="risk-val">${pct}%</div>
+      <div style="font-weight:600;margin-top:2px">${s}</div>
+      <div style="color:var(--muted);font-size:10px">${bloq}/${funcSetor.length} irregular</div>
+    </div>`;
+  }).join('');
+
+  // TABLE: Deslig <90d
+  const deslig90 = desligAno.filter(d => {
+    const func = FUNC.find(f => f.id === d.funcionario_id);
+    return func && func.data_admissao && diasEntre(func.data_admissao, d.data_desligamento) < 90;
+  });
+  document.getElementById('tbDeslig90').innerHTML = deslig90.map(d => {
+    const func = FUNC.find(f => f.id === d.funcionario_id);
+    const dias = func ? diasEntre(func.data_admissao, d.data_desligamento) : '?';
+    const tipoLabel = { pedido_demissao: 'Pedido', demissao_empresa: 'Demissão', termino_contrato: 'Término', justa_causa: 'J. Causa', acordo_mutuo: 'Acordo' };
+    const catLabel = { admissao: 'Admissão', operacional: 'Operacional', financeiro: 'Financeiro', pessoal: 'Pessoal' };
+    return `<tr>
+      <td><strong>${nomeF(d.funcionario_id)}</strong></td>
+      <td>${func ? func.setor : '—'}</td>
+      <td><span class="badge badge-red">${dias}d</span></td>
+      <td>${tipoLabel[d.tipo_desligamento] || '—'}</td>
+      <td><span class="badge badge-blue">${catLabel[d.categoria_causa] || '—'}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Nenhum desligamento &lt;90 dias</td></tr>';
+
+  // TABLE: Turnover por setor
+  document.getElementById('tbTurnoverSetor').innerHTML = setores.map(s => {
+    const total = ativos.filter(f => f.setor === s).length;
+    const deslig = desligAno.filter(d => {
+      const func = FUNC.find(f => f.id === d.funcionario_id);
+      return func && func.setor === s;
+    }).length;
+    const pct = total > 0 ? ((deslig / total) * 100).toFixed(1) : '0';
+    const cls = pct > 20 ? 'badge-red' : pct > 10 ? 'badge-yellow' : 'badge-green';
+    return `<tr>
+      <td><strong>${s}</strong></td>
+      <td>${total}</td>
+      <td>${deslig}</td>
+      <td>${pct}%</td>
+      <td><span class="badge ${cls}">${pct > 20 ? 'ALTO' : pct > 10 ? 'MÉDIO' : 'BAIXO'}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--muted)">Sem dados</td></tr>';
+
+  // TABLE: Bloqueados
+  document.getElementById('tbBloqueados').innerHTML = bloqList.map(f => `<tr>
+    <td><strong>${f.nome_completo}</strong></td>
+    <td>${f.setor || '—'}</td>
+    <td>${f.cargo || '—'}</td>
+    <td>${f.problemas.map(p => `<span class="badge badge-red" style="margin:2px">${p}</span>`).join(' ')}</td>
+    <td><a href="gestao_rh_sst.html" style="color:var(--blue);font-size:11px">Resolver →</a></td>
+  </tr>`).join('') || '<tr><td colspan="5" style="text-align:center;color:var(--green)">Todos aptos</td></tr>';
+
+  // TABLE: ASOs pendentes
+  const asoPend = [...asoVencidos, ...asoVencer30].sort((a, b) => a.data_validade > b.data_validade ? 1 : -1);
+  document.getElementById('tbAsosPend').innerHTML = asoPend.slice(0, 15).map(a => {
+    const dias = diasEntre(hoje, a.data_validade);
+    const cls = dias < 0 ? 'badge-red' : 'badge-yellow';
+    const label = dias < 0 ? 'Vencido ' + Math.abs(dias) + 'd' : 'Vence em ' + dias + 'd';
+    return `<tr>
+      <td>${nomeF(a.funcionario_id)}</td>
+      <td>${(a.tipo_exame || '').replace(/_/g, ' ')}</td>
+      <td>${fmtData(a.data_validade)}</td>
+      <td><span class="badge ${cls}">${label}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--green)">Todos em dia</td></tr>';
+
+  // TABLE: Treinamentos vencidos
+  document.getElementById('tbTreinPend').innerHTML = treinVencidos.slice(0, 15).map(t => {
+    const dias = Math.abs(diasEntre(hoje, t.data_validade));
+    return `<tr>
+      <td>${nomeF(t.funcionario_id)}</td>
+      <td>${t.tipo_treinamento || '—'}</td>
+      <td>${fmtData(t.data_validade)}</td>
+      <td><span class="badge badge-red">Vencido ${dias}d</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="text-align:center;color:var(--green)">Todos em dia</td></tr>';
+}
+
+(async () => {
+  const user = await CQAuth.init();
+  if (!user) return;
+  await carregar();
+  renderDashboard();
+})();
+</script>
+</body>
+</html>

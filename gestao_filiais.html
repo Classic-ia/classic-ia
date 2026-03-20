@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão de Empresas e Filiais · Classic</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+.container{max-width:1100px;margin:0 auto;padding:24px 20px 80px;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--muted);transition:all .2s;font-family:'DM Sans',sans-serif;}
+.tab:hover{background:var(--bg3);color:var(--text);}
+.tab.active{background:var(--blue);color:white;border-color:var(--blue);}
+
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.search-box{flex:1;min-width:200px;padding:9px 14px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:13px;outline:none;font-family:'DM Sans',sans-serif;}
+.search-box:focus{border-color:var(--blue);}
+
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;display:inline-flex;align-items:center;gap:6px;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn-icon{padding:5px 8px;font-size:14px;background:transparent;border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;color:var(--muted);transition:all .2s;}
+.btn-icon:hover{border-color:var(--blue);color:var(--text);}
+
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.4);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:10px;vertical-align:middle;}
+
+.badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.badge-green{background:rgba(39,174,96,.15);color:var(--green);}
+.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
+.badge-muted{background:rgba(93,127,149,.15);color:var(--muted);}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:28px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.field input:focus,.field select:focus{border-color:var(--blue);}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--green);
+  border-radius:10px;padding:14px 20px;z-index:200;display:none;font-size:13px;
+  box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;}
+.toast.show{display:flex;align-items:center;gap:10px;}
+.toast.error{border-color:var(--red);}
+
+/* HIERARCHY */
+.hierarchy{display:flex;align-items:center;gap:8px;margin-bottom:20px;font-size:12px;color:var(--muted);}
+.hierarchy span{color:var(--gold);font-weight:700;}
+
+/* KPI ROW */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.kpi{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--gold);}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
+
+@media(max-width:768px){
+  .field-row,.field-row-3{grid-template-columns:1fr;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="ht">Gestão de Empresas e Filiais</div>
+    <div class="hs">Estrutura Organizacional · Empresas · Filiais · Setores</div>
+  </div>
+  <div id="cq-user-chip"></div>
+  <a href="app.html" class="btn-back">← Painel</a>
+</div>
+
+<div class="container">
+
+<div class="hierarchy">
+  Estrutura: <span>Empresa</span> → <span>Filial</span> → <span>Setor</span> → <span>Funcionário</span>
+</div>
+
+<div class="kpi-row">
+  <div class="kpi"><div class="kpi-val" id="kEmpresas">—</div><div class="kpi-lbl">Empresas</div></div>
+  <div class="kpi"><div class="kpi-val" id="kFiliais">—</div><div class="kpi-lbl">Filiais Ativas</div></div>
+  <div class="kpi"><div class="kpi-val" id="kSetores">—</div><div class="kpi-lbl">Setores</div></div>
+  <div class="kpi"><div class="kpi-val" id="kFuncionarios">—</div><div class="kpi-lbl">Funcionários</div></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" data-tab="empresas">Empresas</div>
+  <div class="tab" data-tab="filiais">Filiais</div>
+  <div class="tab" data-tab="setores">Setores</div>
+</div>
+
+<!-- ABA EMPRESAS -->
+<div class="tab-content active" id="tab-empresas">
+  <div class="toolbar">
+    <input class="search-box" id="searchEmp" placeholder="Buscar empresa..." oninput="filtrar('emp')">
+    <button class="btn btn-primary" onclick="abrirModalEmpresa()">+ Nova Empresa</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Empresas Cadastradas</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Razão Social</th><th>Nome Fantasia</th><th>CNPJ</th><th>Filiais</th><th>Funcionários</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbEmpresas"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ABA FILIAIS -->
+<div class="tab-content" id="tab-filiais">
+  <div class="toolbar">
+    <input class="search-box" id="searchFil" placeholder="Buscar filial..." oninput="filtrar('fil')">
+    <button class="btn btn-primary" onclick="abrirModalFilial()">+ Nova Filial</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Filiais</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Empresa</th><th>Razão Social</th><th>CNPJ</th><th>Cidade/UF</th><th>Responsável</th><th>Funcionários</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbFiliais"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ABA SETORES -->
+<div class="tab-content" id="tab-setores">
+  <div class="toolbar">
+    <input class="search-box" id="searchSet" placeholder="Buscar setor..." oninput="filtrar('set')">
+    <button class="btn btn-primary" onclick="abrirModalSetor()">+ Novo Setor</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Setores / Centros de Custo</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Setor</th><th>Filial</th><th>Responsável</th><th>Funcionários</th><th>Risco</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody id="tbSetores"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div>
+
+<!-- MODAL EMPRESA -->
+<div class="modal-overlay" id="modalEmpresa">
+<div class="modal-box">
+  <div class="modal-title"><span id="modalEmpTitle">Nova Empresa</span><button class="modal-close" onclick="fecharModal('modalEmpresa')">&times;</button></div>
+  <form id="formEmpresa" onsubmit="salvarEmpresa(event)">
+    <input type="hidden" id="empId">
+    <div class="field-row">
+      <div class="field"><label>Razão Social *</label><input id="empRazao" required></div>
+      <div class="field"><label>Nome Fantasia</label><input id="empFantasia"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>CNPJ *</label><input id="empCnpj" required maxlength="18" oninput="mascaraCNPJ(this)"></div>
+      <div class="field"><label>IE</label><input id="empIe"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Telefone</label><input id="empTel"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="empEmail"></div>
+    </div>
+    <div class="field"><label>Endereço</label><input id="empEndereco"></div>
+    <div class="field-row-3">
+      <div class="field"><label>Cidade</label><input id="empCidade"></div>
+      <div class="field"><label>UF</label><input id="empUf" maxlength="2"></div>
+      <div class="field"><label>CEP</label><input id="empCep"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Responsável</label><input id="empResponsavel"></div>
+      <div class="field"><label>Status</label>
+        <select id="empStatus"><option value="ativa">Ativa</option><option value="inativa">Inativa</option></select>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalEmpresa')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- MODAL FILIAL -->
+<div class="modal-overlay" id="modalFilial">
+<div class="modal-box">
+  <div class="modal-title"><span>Nova Filial</span><button class="modal-close" onclick="fecharModal('modalFilial')">&times;</button></div>
+  <form id="formFilial" onsubmit="salvarFilial(event)">
+    <input type="hidden" id="filId">
+    <div class="field"><label>Empresa *</label>
+      <select id="filEmpresa" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Razão Social *</label><input id="filRazao" required></div>
+      <div class="field"><label>Nome Fantasia</label><input id="filFantasia"></div>
+    </div>
+    <div class="field"><label>CNPJ *</label><input id="filCnpj" required maxlength="18" oninput="mascaraCNPJ(this)"></div>
+    <div class="field"><label>Endereço</label><input id="filEndereco"></div>
+    <div class="field-row-3">
+      <div class="field"><label>Cidade</label><input id="filCidade"></div>
+      <div class="field"><label>UF</label><input id="filUf" maxlength="2"></div>
+      <div class="field"><label>CEP</label><input id="filCep"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Responsável</label><input id="filResponsavel"></div>
+      <div class="field"><label>Telefone</label><input id="filTel"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>E-mail</label><input type="email" id="filEmail"></div>
+      <div class="field"><label>Banco Padrão</label><input id="filBanco" placeholder="Ex: Itaú, Sicredi"></div>
+    </div>
+    <div class="field"><label>Status</label>
+      <select id="filStatus"><option value="ativa">Ativa</option><option value="inativa">Inativa</option></select>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalFilial')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- MODAL SETOR -->
+<div class="modal-overlay" id="modalSetor">
+<div class="modal-box">
+  <div class="modal-title"><span>Novo Setor</span><button class="modal-close" onclick="fecharModal('modalSetor')">&times;</button></div>
+  <form id="formSetor" onsubmit="salvarSetor(event)">
+    <input type="hidden" id="setId">
+    <div class="field"><label>Filial *</label>
+      <select id="setFilial" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Nome do Setor *</label><input id="setNome" required></div>
+      <div class="field"><label>Código / Centro de Custo</label><input id="setCodigo"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Responsável</label><input id="setResponsavel"></div>
+      <div class="field"><label>Grau de Risco</label>
+        <select id="setRisco"><option value="baixo">Baixo</option><option value="medio">Médio</option><option value="alto">Alto</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Status</label>
+      <select id="setStatus"><option value="ativo">Ativo</option><option value="inativo">Inativo</option></select>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalSetor')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script>
+let EMPRESAS = [], FILIAIS = [], SETORES = [], FUNC = [];
+
+// TABS
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+function toast(msg, err) {
+  const el = document.getElementById('toast');
+  document.getElementById('toastMsg').textContent = msg;
+  el.className = err ? 'toast show error' : 'toast show';
+  setTimeout(() => el.className = 'toast', 3000);
+}
+function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
+function abrirModal(id) { document.getElementById(id).classList.add('show'); }
+
+function mascaraCNPJ(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 14);
+  if (v.length > 12) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{1,2})/, '$1.$2.$3/$4-$5');
+  else if (v.length > 8) v = v.replace(/(\d{2})(\d{3})(\d{3})(\d{1,4})/, '$1.$2.$3/$4');
+  else if (v.length > 5) v = v.replace(/(\d{2})(\d{3})(\d{1,3})/, '$1.$2.$3');
+  else if (v.length > 2) v = v.replace(/(\d{2})(\d{1,3})/, '$1.$2');
+  el.value = v;
+}
+
+function fmtCNPJ(v) {
+  if (!v) return '—';
+  v = v.replace(/\D/g, '');
+  if (v.length === 14) return v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  return v;
+}
+
+function nomeEmpresa(id) { const e = EMPRESAS.find(x => x.id === id); return e ? (e.nome_fantasia || e.razao_social) : '—'; }
+function nomeFilial(id) { const f = FILIAIS.find(x => x.id === id); return f ? (f.nome_fantasia || f.razao_social) : '—'; }
+
+async function carregar() {
+  const load = async (t) => { try { return await CQ_API.get(t + '?order=created_at.desc&limit=500') || []; } catch { return []; } };
+  [EMPRESAS, FILIAIS, SETORES, FUNC] = await Promise.all([
+    load('rh_empresas'), load('rh_filiais'), load('rh_setores'), load('rh_funcionarios')
+  ]);
+}
+
+function popularSelects() {
+  const selEmp = document.getElementById('filEmpresa');
+  selEmp.innerHTML = '<option value="">Selecione</option>';
+  EMPRESAS.filter(e => e.status === 'ativa').forEach(e => {
+    selEmp.innerHTML += `<option value="${e.id}">${e.nome_fantasia || e.razao_social}</option>`;
+  });
+
+  const selFil = document.getElementById('setFilial');
+  selFil.innerHTML = '<option value="">Selecione</option>';
+  FILIAIS.filter(f => f.status === 'ativa').forEach(f => {
+    selFil.innerHTML += `<option value="${f.id}">${nomeEmpresa(f.empresa_id)} → ${f.nome_fantasia || f.razao_social}</option>`;
+  });
+}
+
+function renderKPIs() {
+  document.getElementById('kEmpresas').textContent = EMPRESAS.filter(e => e.status === 'ativa').length;
+  document.getElementById('kFiliais').textContent = FILIAIS.filter(f => f.status === 'ativa').length;
+  document.getElementById('kSetores').textContent = SETORES.filter(s => s.status === 'ativo').length;
+  document.getElementById('kFuncionarios').textContent = FUNC.filter(f => f.status === 'ativo').length;
+}
+
+// RENDER
+function renderEmpresas(lista) {
+  if (!lista) lista = EMPRESAS;
+  document.getElementById('tbEmpresas').innerHTML = lista.map(e => {
+    const filiais = FILIAIS.filter(f => f.empresa_id === e.id).length;
+    const funcs = FUNC.filter(f => f.empresa_id === e.id && f.status === 'ativo').length;
+    const statusBadge = e.status === 'ativa' ? '<span class="badge badge-green">Ativa</span>' : '<span class="badge badge-red">Inativa</span>';
+    return `<tr>
+      <td><strong>${e.razao_social || '—'}</strong></td>
+      <td>${e.nome_fantasia || '—'}</td>
+      <td style="font-family:monospace;font-size:11px">${fmtCNPJ(e.cnpj)}</td>
+      <td>${filiais}</td>
+      <td>${funcs}</td>
+      <td>${statusBadge}</td>
+      <td><button class="btn-icon" onclick="editarEmpresa('${e.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Nenhuma empresa cadastrada</td></tr>';
+}
+
+function renderFiliais(lista) {
+  if (!lista) lista = FILIAIS;
+  document.getElementById('tbFiliais').innerHTML = lista.map(f => {
+    const funcs = FUNC.filter(x => x.filial_id === f.id && x.status === 'ativo').length;
+    const statusBadge = f.status === 'ativa' ? '<span class="badge badge-green">Ativa</span>' : '<span class="badge badge-red">Inativa</span>';
+    return `<tr>
+      <td>${nomeEmpresa(f.empresa_id)}</td>
+      <td><strong>${f.razao_social || '—'}</strong></td>
+      <td style="font-family:monospace;font-size:11px">${fmtCNPJ(f.cnpj)}</td>
+      <td>${f.cidade || '—'}/${f.uf || '—'}</td>
+      <td>${f.responsavel || '—'}</td>
+      <td>${funcs}</td>
+      <td>${statusBadge}</td>
+      <td><button class="btn-icon" onclick="editarFilial('${f.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="8" style="text-align:center;color:var(--muted)">Nenhuma filial cadastrada</td></tr>';
+}
+
+function renderSetores(lista) {
+  if (!lista) lista = SETORES;
+  const riscoBadge = { baixo: 'badge-green', medio: 'badge-yellow', alto: 'badge-red' };
+  document.getElementById('tbSetores').innerHTML = lista.map(s => {
+    const funcs = FUNC.filter(f => f.setor === s.nome && f.status === 'ativo').length;
+    return `<tr>
+      <td><strong>${s.nome || '—'}</strong></td>
+      <td>${nomeFilial(s.filial_id)}</td>
+      <td>${s.responsavel || '—'}</td>
+      <td>${funcs}</td>
+      <td><span class="badge ${riscoBadge[s.grau_risco] || 'badge-muted'}">${s.grau_risco || '—'}</span></td>
+      <td>${s.status === 'ativo' ? '<span class="badge badge-green">Ativo</span>' : '<span class="badge badge-red">Inativo</span>'}</td>
+      <td><button class="btn-icon" onclick="editarSetor('${s.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="7" style="text-align:center;color:var(--muted)">Nenhum setor cadastrado</td></tr>';
+}
+
+function filtrar(tipo) {
+  const busca = document.getElementById('search' + tipo.charAt(0).toUpperCase() + tipo.slice(1)).value.toLowerCase();
+  if (tipo === 'emp') renderEmpresas(EMPRESAS.filter(e => (e.razao_social || '').toLowerCase().includes(busca) || (e.nome_fantasia || '').toLowerCase().includes(busca)));
+  if (tipo === 'fil') renderFiliais(FILIAIS.filter(f => (f.razao_social || '').toLowerCase().includes(busca) || (f.nome_fantasia || '').toLowerCase().includes(busca)));
+  if (tipo === 'set') renderSetores(SETORES.filter(s => (s.nome || '').toLowerCase().includes(busca)));
+}
+
+// MODAIS
+function abrirModalEmpresa() { document.getElementById('formEmpresa').reset(); document.getElementById('empId').value = ''; abrirModal('modalEmpresa'); }
+function abrirModalFilial() { document.getElementById('formFilial').reset(); document.getElementById('filId').value = ''; abrirModal('modalFilial'); }
+function abrirModalSetor() { document.getElementById('formSetor').reset(); document.getElementById('setId').value = ''; abrirModal('modalSetor'); }
+
+function editarEmpresa(id) {
+  const e = EMPRESAS.find(x => x.id === id); if (!e) return;
+  document.getElementById('empId').value = e.id;
+  document.getElementById('empRazao').value = e.razao_social || '';
+  document.getElementById('empFantasia').value = e.nome_fantasia || '';
+  document.getElementById('empCnpj').value = e.cnpj || '';
+  document.getElementById('empIe').value = e.inscricao_estadual || '';
+  document.getElementById('empTel').value = e.telefone || '';
+  document.getElementById('empEmail').value = e.email || '';
+  document.getElementById('empEndereco').value = e.endereco || '';
+  document.getElementById('empCidade').value = e.cidade || '';
+  document.getElementById('empUf').value = e.uf || '';
+  document.getElementById('empCep').value = e.cep || '';
+  document.getElementById('empResponsavel').value = e.responsavel || '';
+  document.getElementById('empStatus').value = e.status || 'ativa';
+  abrirModal('modalEmpresa');
+}
+
+function editarFilial(id) {
+  const f = FILIAIS.find(x => x.id === id); if (!f) return;
+  document.getElementById('filId').value = f.id;
+  document.getElementById('filEmpresa').value = f.empresa_id || '';
+  document.getElementById('filRazao').value = f.razao_social || '';
+  document.getElementById('filFantasia').value = f.nome_fantasia || '';
+  document.getElementById('filCnpj').value = f.cnpj || '';
+  document.getElementById('filEndereco').value = f.endereco || '';
+  document.getElementById('filCidade').value = f.cidade || '';
+  document.getElementById('filUf').value = f.uf || '';
+  document.getElementById('filCep').value = f.cep || '';
+  document.getElementById('filResponsavel').value = f.responsavel || '';
+  document.getElementById('filTel').value = f.telefone || '';
+  document.getElementById('filEmail').value = f.email || '';
+  document.getElementById('filBanco').value = f.banco_padrao || '';
+  document.getElementById('filStatus').value = f.status || 'ativa';
+  abrirModal('modalFilial');
+}
+
+function editarSetor(id) {
+  const s = SETORES.find(x => x.id === id); if (!s) return;
+  document.getElementById('setId').value = s.id;
+  document.getElementById('setFilial').value = s.filial_id || '';
+  document.getElementById('setNome').value = s.nome || '';
+  document.getElementById('setCodigo').value = s.codigo || '';
+  document.getElementById('setResponsavel').value = s.responsavel || '';
+  document.getElementById('setRisco').value = s.grau_risco || 'baixo';
+  document.getElementById('setStatus').value = s.status || 'ativo';
+  abrirModal('modalSetor');
+}
+
+// SALVAR
+async function salvarEmpresa(e) {
+  e.preventDefault();
+  const id = document.getElementById('empId').value;
+  const dados = {
+    razao_social: document.getElementById('empRazao').value.trim(),
+    nome_fantasia: document.getElementById('empFantasia').value.trim() || null,
+    cnpj: document.getElementById('empCnpj').value.replace(/\D/g, ''),
+    inscricao_estadual: document.getElementById('empIe').value.trim() || null,
+    telefone: document.getElementById('empTel').value.trim() || null,
+    email: document.getElementById('empEmail').value.trim() || null,
+    endereco: document.getElementById('empEndereco').value.trim() || null,
+    cidade: document.getElementById('empCidade').value.trim() || null,
+    uf: document.getElementById('empUf').value.trim().toUpperCase() || null,
+    cep: document.getElementById('empCep').value.trim() || null,
+    responsavel: document.getElementById('empResponsavel').value.trim() || null,
+    status: document.getElementById('empStatus').value,
+  };
+  try {
+    let ok;
+    if (id) { ok = (await CQ_API.fetch('rh_empresas?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
+    else { ok = (await CQ_API.post('rh_empresas', dados, 'return=minimal')).ok; }
+    if (ok) { toast(id ? 'Empresa atualizada' : 'Empresa cadastrada'); fecharModal('modalEmpresa'); await recarregar(); }
+    else toast('Erro ao salvar', true);
+  } catch (err) { toast('Erro: ' + err.message, true); }
+}
+
+async function salvarFilial(e) {
+  e.preventDefault();
+  const id = document.getElementById('filId').value;
+  const dados = {
+    empresa_id: document.getElementById('filEmpresa').value,
+    razao_social: document.getElementById('filRazao').value.trim(),
+    nome_fantasia: document.getElementById('filFantasia').value.trim() || null,
+    cnpj: document.getElementById('filCnpj').value.replace(/\D/g, ''),
+    endereco: document.getElementById('filEndereco').value.trim() || null,
+    cidade: document.getElementById('filCidade').value.trim() || null,
+    uf: document.getElementById('filUf').value.trim().toUpperCase() || null,
+    cep: document.getElementById('filCep').value.trim() || null,
+    responsavel: document.getElementById('filResponsavel').value.trim() || null,
+    telefone: document.getElementById('filTel').value.trim() || null,
+    email: document.getElementById('filEmail').value.trim() || null,
+    banco_padrao: document.getElementById('filBanco').value.trim() || null,
+    status: document.getElementById('filStatus').value,
+  };
+  try {
+    let ok;
+    if (id) { ok = (await CQ_API.fetch('rh_filiais?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
+    else { ok = (await CQ_API.post('rh_filiais', dados, 'return=minimal')).ok; }
+    if (ok) { toast(id ? 'Filial atualizada' : 'Filial cadastrada'); fecharModal('modalFilial'); await recarregar(); }
+    else toast('Erro ao salvar', true);
+  } catch (err) { toast('Erro: ' + err.message, true); }
+}
+
+async function salvarSetor(e) {
+  e.preventDefault();
+  const id = document.getElementById('setId').value;
+  const dados = {
+    filial_id: document.getElementById('setFilial').value || null,
+    nome: document.getElementById('setNome').value.trim(),
+    codigo: document.getElementById('setCodigo').value.trim() || null,
+    responsavel: document.getElementById('setResponsavel').value.trim() || null,
+    grau_risco: document.getElementById('setRisco').value,
+    status: document.getElementById('setStatus').value,
+  };
+  try {
+    let ok;
+    if (id) { ok = (await CQ_API.fetch('rh_setores?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
+    else { ok = (await CQ_API.post('rh_setores', dados, 'return=minimal')).ok; }
+    if (ok) { toast(id ? 'Setor atualizado' : 'Setor cadastrado'); fecharModal('modalSetor'); await recarregar(); }
+    else toast('Erro ao salvar', true);
+  } catch (err) { toast('Erro: ' + err.message, true); }
+}
+
+async function recarregar() {
+  await carregar();
+  popularSelects();
+  renderKPIs();
+  renderEmpresas();
+  renderFiliais();
+  renderSetores();
+}
+
+(async () => {
+  const user = await CQAuth.init();
+  if (!user) return;
+  await recarregar();
+})();
+</script>
+</body>
+</html>

@@ -13,8 +13,9 @@
 const CQAuth = (function () {
 
   // ── CONFIGURAÇÃO ──────────────────────────────────────────
-  const SB_URL = 'https://nvqxsulntpftcwtkjedu.supabase.co';
-  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw';
+  // Usa config.js centralizado (deve ser carregado antes deste script)
+  const SB_URL = CQ_CONFIG.SB_URL;
+  const SB_KEY = CQ_CONFIG.SB_KEY;
 
   const TIMEOUT_MS = 60 * 60 * 1000;    // 1 hora de inatividade → expira
   const WARN_MS    = 5  * 60 * 1000;    // aviso 5 min antes
@@ -308,7 +309,8 @@ const CQAuth = (function () {
   function _renderChip() {
     const el = document.getElementById('cq-user-chip');
     if (!el || !_user) return;
-    const ini = (_user.nome || _user.email)[0].toUpperCase();
+    const nameOrEmail = _user.nome || _user.email || '?';
+    const ini = nameOrEmail.charAt(0).toUpperCase();
     el.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;">
         <div style="
@@ -452,9 +454,13 @@ const CQAuth = (function () {
       _user.email = perfilDB.email;
 
       // Atualizar localStorage com perfil correto
-      const stored = JSON.parse(localStorage.getItem(STORE_KEY));
-      stored.user = _user;
-      localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+      try {
+        const stored = JSON.parse(localStorage.getItem(STORE_KEY));
+        if (stored) {
+          stored.user = _user;
+          localStorage.setItem(STORE_KEY, JSON.stringify(stored));
+        }
+      } catch { /* localStorage corrompido — será recriado no próximo login */ }
     } else {
       // Sessão legada (sem JWT) — verificar sessão antiga e forçar re-login
       const ok = await _validarSessao();

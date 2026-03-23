@@ -261,6 +261,11 @@ canvas.tall{max-height:320px;}
     <select class="fil" id="filtAnalista">
       <option value="">Todos</option>
     </select>
+    <div class="filter-sep"></div>
+    <label>Defeito</label>
+    <select class="fil" id="filtDefeito">
+      <option value="">Todos</option>
+    </select>
     <button class="btn-hd primary" style="margin-left:4px;" onclick="aplicarFiltro()">Filtrar</button>
     <button class="btn-hd" onclick="limparFiltro()">Limpar</button>
     <span id="filtroStatus"></span>
@@ -270,12 +275,12 @@ canvas.tall{max-height:320px;}
   <div class="kpi-row" id="kpiRow">
     <div class="kpi k-total"><div class="kpi-label">Total de Lotes</div><div class="kpi-val" id="kTotal">—</div><div class="kpi-sub" id="kTotalSub"></div></div>
     <div class="kpi k-a"><div class="kpi-label">Classe A</div><div class="kpi-val" id="kA">—</div><div class="kpi-sub" id="kASub">≤ 5% defeito</div></div>
-    <div class="kpi k-b"><div class="kpi-label">Classe B</div><div class="kpi-val" id="kB">—</div><div class="kpi-sub">5–12% defeito</div></div>
+    <div class="kpi k-b"><div class="kpi-label">Classe B</div><div class="kpi-val" id="kB">—</div><div class="kpi-sub">5–15% defeito</div></div>
     <div class="kpi k-c"><div class="kpi-label">Classe C</div><div class="kpi-val" id="kC">—</div><div class="kpi-sub">Reprovado / Atenção</div></div>
     <div class="kpi k-pct"><div class="kpi-label">% Médio Defeito</div><div class="kpi-val" id="kPct">—</div><div class="kpi-sub" id="kPctSub"></div></div>
     <div class="kpi k-lib"><div class="kpi-label">Liberados</div><div class="kpi-val" id="kLib">—</div><div class="kpi-sub">prod. liberada</div></div>
     <div class="kpi k-forn"><div class="kpi-label">Fornecedores</div><div class="kpi-val" id="kForn">—</div><div class="kpi-sub">distintos</div></div>
-    <div class="kpi k-def"><div class="kpi-label">Tipo Defeito + Freq.</div><div class="kpi-val" id="kDefTipo">—</div><div class="kpi-sub" id="kDefSub"></div></div>
+    <div class="kpi k-def"><div class="kpi-label">Top 3 Defeitos</div><div class="kpi-val" id="kDefTipo" style="font-size:16px;line-height:1.4;">—</div><div class="kpi-sub" id="kDefSub"></div></div>
   </div>
 
   <!-- ALERTAS CLASSE C -->
@@ -311,12 +316,24 @@ canvas.tall{max-height:320px;}
     </div>
     <div class="charts-grid">
       <div class="card">
-        <div class="card-title">% Defeito por Fornecedor <span class="card-sub">top 8</span></div>
+        <div class="card-title">Composição de Defeitos <span class="card-sub">peças por tipo</span></div>
+        <canvas id="chartDefComposicao"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Tipos de Defeito — Frequência <span class="card-sub">ocorrências em lotes</span></div>
+        <canvas id="chartDefBar" class="tall"></canvas>
+      </div>
+    </div>
+    <!-- Resumo de defeitos em cards -->
+    <div id="defeitoResumoCards" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px;margin-bottom:16px;"></div>
+    <div class="charts-grid">
+      <div class="card">
+        <div class="card-title">% Defeito por Fornecedor <span class="card-sub">top 8 · com tipo principal</span></div>
         <canvas id="chartFornBar" class="tall"></canvas>
       </div>
       <div class="card">
-        <div class="card-title">Tipos de Defeito — Frequência <span class="card-sub">ocorrências</span></div>
-        <canvas id="chartDefBar" class="tall"></canvas>
+        <div class="card-title">Top Defeitos por Fornecedor <span class="card-sub">stacked · top 6</span></div>
+        <canvas id="chartFornDefStack" class="tall"></canvas>
       </div>
     </div>
     <div class="card">
@@ -529,10 +546,10 @@ canvas.tall{max-height:320px;}
           <thead><tr>
             <th>Data</th><th>Lote Atak</th><th>Requisição</th><th>Fornecedor</th>
             <th>Amostra</th><th>Total Def.</th><th>% Defeito</th>
-            <th>Def.1 Tipo</th><th>Def.2 Tipo</th><th>Def.3 Tipo</th>
+            <th style="min-width:180px;">Defeitos (tipo · qtd)</th>
             <th>Classe</th><th>Liberado</th><th>Analisador</th>
           </tr></thead>
-          <tbody id="tbodyRegistros"><tr><td colspan="13" class="loading-pulse"><span class="dot"></span><span class="dot"></span><span class="dot"></span></td></tr></tbody>
+          <tbody id="tbodyRegistros"><tr><td colspan="11" class="loading-pulse"><span class="dot"></span><span class="dot"></span><span class="dot"></span></td></tr></tbody>
         </table>
       </div>
     </div>
@@ -559,6 +576,7 @@ canvas.tall{max-height:320px;}
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_regras.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 // === CHART REGISTRY ===
@@ -643,6 +661,13 @@ async function carregar() {
       numero_requisicao: r.lote_atak                || r.numero_requisicao,
       liberado_producao: r.status_final === 'aprovado' || r.liberado_producao,
       classificacao: normalizarClasse(r.percentual_defeitos ?? r.percentual_defeito, r.classificacao),
+      // Mapear defeitos individuais (colunas da inspeção) para formato padrão
+      defeito_1_tipo: maiorDefeitoInspecao(r, 1)?.[0] || null,
+      defeito_1_qtd:  maiorDefeitoInspecao(r, 1)?.[1] || 0,
+      defeito_2_tipo: maiorDefeitoInspecao(r, 2)?.[0] || null,
+      defeito_2_qtd:  maiorDefeitoInspecao(r, 2)?.[1] || 0,
+      defeito_3_tipo: maiorDefeitoInspecao(r, 3)?.[0] || null,
+      defeito_3_qtd:  maiorDefeitoInspecao(r, 3)?.[1] || 0,
     }));
 
     // 2. Tabela legada (registros_cq)
@@ -696,6 +721,7 @@ async function carregar() {
   todosRegistros = todosTemp;
   popularFiltrosForn();
   popularFiltrosAnalista();
+  popularFiltrosDefeito();
 
   // Auto-filtro via query string (ex: ?filtro=criticos)
   const params = new URLSearchParams(window.location.search);
@@ -707,10 +733,10 @@ async function carregar() {
 }
 
 function normalizarClasse(pct, cls) {
-  const p = parseFloat(pct) || 0;
-  // Sempre recalcular — classificação do banco pode estar inconsistente
-  // Regra: A ≤ 5%, B ≤ 12%, C > 12%
-  return p <= 5 ? 'A' : p <= 12 ? 'B' : 'C';
+  // Usa motor de decisão local (CQRegras) — fonte única da verdade
+  // Limites reais vêm de cq_parametros_inspecao via backend
+  const d = CQRegras.motorDecisaoLocal(parseFloat(pct) || 0);
+  return d.classificacao;
 }
 
 function maiorDefeito(r, pos) {
@@ -721,6 +747,48 @@ function maiorDefeito(r, pos) {
     ['Corte irregular', r.corte_irregular||0], ['Folha extra', r.folha_extra||0]
   ].filter(d => d[1] > 0).sort((a,b) => b[1] - a[1]);
   return defeitos[pos-1] || null;
+}
+
+// Extrai defeitos individuais de registros_cq_inspecao (colunas separadas)
+function maiorDefeitoInspecao(r, pos) {
+  const defeitos = [
+    ['Fermentação',         r.fermentacao||0],
+    ['Sem Folhas',          r.sem_folhas||0],
+    ['Folhas Arrebentadas', r.folhas_arrebentadas||0],
+    ['Pedaço',              r.pedaco||0],
+    ['Sujo / Despojo',      r.sujo||0],
+    ['Rasgado',             r.rasgado||0],
+    ['Corte Irregular',     r.corte_irregular||0],
+    ['Furado',              r.furado||0],
+    ['Mau Cheiro',          r.mau_cheiro||0],
+    ['Contaminação',        r.contaminacao||0],
+    ['Outro Defeito',       r.outro_defeito||0],
+  ].filter(d => d[1] > 0).sort((a,b) => b[1] - a[1]);
+  return defeitos[pos-1] || null;
+}
+
+// Extrai todos os defeitos de qualquer registro (retorna array de {tipo, qtd})
+function extrairTodosDefeitos(row) {
+  const result = [];
+  // De registros_cq_inspecao (colunas individuais)
+  if (row._fonte === 'inspecao') {
+    const map = [
+      ['Fermentação', row.fermentacao], ['Sem Folhas', row.sem_folhas],
+      ['Folhas Arrebentadas', row.folhas_arrebentadas], ['Pedaço', row.pedaco],
+      ['Sujo / Despojo', row.sujo], ['Rasgado', row.rasgado],
+      ['Corte Irregular', row.corte_irregular], ['Furado', row.furado],
+      ['Mau Cheiro', row.mau_cheiro], ['Contaminação', row.contaminacao],
+      ['Outro Defeito', row.outro_defeito],
+    ];
+    map.forEach(([tipo, qtd]) => { if (qtd > 0) result.push({tipo, qtd}); });
+  }
+  // De defeito_X_tipo (cq_cargas e legado)
+  [1,2,3].forEach(i => {
+    const t = (row[`defeito_${i}_tipo`]||'').trim();
+    const q = row[`defeito_${i}_qtd`]||0;
+    if (t) result.push({tipo: t, qtd: q});
+  });
+  return result;
 }
 
 function popularFiltrosForn() {
@@ -743,12 +811,26 @@ function popularFiltrosAnalista() {
   sel.value = val;
 }
 
+function popularFiltrosDefeito() {
+  const defSet = new Set();
+  todosRegistros.forEach(row => {
+    extrairTodosDefeitos(row).forEach(({tipo}) => { if (tipo) defSet.add(tipo); });
+  });
+  const defs = [...defSet].sort();
+  const sel = document.getElementById('filtDefeito');
+  const val = sel.value;
+  sel.innerHTML = '<option value="">Todos</option>';
+  defs.forEach(d=>{ const o=document.createElement('option');o.value=d;o.textContent=d;sel.appendChild(o); });
+  sel.value = val;
+}
+
 function aplicarFiltro() {
   const de = document.getElementById('filtDe').value;
   const ate = document.getElementById('filtAte').value;
   const forn = document.getElementById('filtForn').value;
   const classe = document.getElementById('filtClasse').value;
   const analista = document.getElementById('filtAnalista').value;
+  const defeito = document.getElementById('filtDefeito').value;
 
   dadosFiltrados = todosRegistros.filter(r => {
     if (de && r.data_entrada && r.data_entrada < de) return false;
@@ -756,10 +838,14 @@ function aplicarFiltro() {
     if (forn && r.fornecedor !== forn) return false;
     if (classe && r.classificacao !== classe) return false;
     if (analista && r.analisador !== analista) return false;
+    if (defeito) {
+      const defs = extrairTodosDefeitos(r);
+      if (!defs.some(d => d.tipo === defeito)) return false;
+    }
     return true;
   });
 
-  const filtros = [forn,classe,analista].filter(Boolean).length;
+  const filtros = [forn,classe,analista,defeito].filter(Boolean).length;
   document.getElementById('filtroStatus').textContent = dadosFiltrados.length + ' registros' + (filtros?` · ${filtros} filtro(s) ativo(s)`:'');
 
   renderKPIs();
@@ -780,6 +866,7 @@ function limparFiltro() {
   document.getElementById('filtForn').value='';
   document.getElementById('filtClasse').value='';
   document.getElementById('filtAnalista').value='';
+  document.getElementById('filtDefeito').value='';
   const hoje = new Date();
   const de90 = new Date(); de90.setDate(hoje.getDate()-90);
   document.getElementById('filtDe').value = de90.toISOString().slice(0,10);
@@ -799,15 +886,17 @@ function renderKPIs() {
   const libCount = r.filter(x=>x.liberado_producao===true).length;
   const fornCount = new Set(r.map(x=>x.fornecedor).filter(Boolean)).size;
 
-  // top defeito
-  const defMap = {};
+  // top defeitos usando extrairTodosDefeitos
+  const defKpiMap = {};
   r.forEach(row => {
-    [1,2,3].forEach(i => {
-      const t = row[`defeito_${i}_tipo`];
-      if (t && t.trim()) { defMap[t.trim()] = (defMap[t.trim()]||0)+1; }
+    extrairTodosDefeitos(row).forEach(({tipo, qtd}) => {
+      if (!tipo) return;
+      if (!defKpiMap[tipo]) defKpiMap[tipo] = {n:0, qty:0};
+      defKpiMap[tipo].n++;
+      defKpiMap[tipo].qty += qtd;
     });
   });
-  const topDef = Object.entries(defMap).sort((a,b)=>b[1]-a[1])[0];
+  const topDefs = Object.entries(defKpiMap).sort((a,b)=>b[1].qty-a[1].qty).slice(0,3);
 
   document.getElementById('kTotal').textContent = n;
   document.getElementById('kTotalSub').textContent = `${((cA/n||0)*100).toFixed(0)}% aprovados`;
@@ -815,15 +904,25 @@ function renderKPIs() {
   document.getElementById('kASub').textContent = n?`${((cA/n)*100).toFixed(0)}% do total`:'';
   document.getElementById('kB').textContent = cB;
   document.getElementById('kC').textContent = cC;
-  const pctColor = avgPct <= 5 ? 'var(--ok2)' : avgPct <= 12 ? 'var(--warn2)' : 'var(--err2)';
+  const _limites = CQRegras.LIMITES_DEFAULT;
+  const pctColor = avgPct <= _limites.APROVACAO ? 'var(--ok2)' : avgPct <= _limites.RESSALVA ? 'var(--warn2)' : 'var(--err2)';
   const kPctEl = document.getElementById('kPct');
   kPctEl.textContent = avgPct.toFixed(1) + '%';
   kPctEl.style.color = pctColor;
   document.getElementById('kPctSub').textContent = `mediana: ${median(pcts).toFixed(1)}%`;
   document.getElementById('kLib').textContent = libCount;
   document.getElementById('kForn').textContent = fornCount;
-  document.getElementById('kDefTipo').textContent = topDef ? topDef[0].slice(0,12) : '—';
-  document.getElementById('kDefSub').textContent = topDef ? `${topDef[1]} ocorrências` : '';
+  // Top 3 defeitos
+  if (topDefs.length) {
+    document.getElementById('kDefTipo').innerHTML = topDefs.map(([nome,v])=>
+      `<span style="display:block;">${nome.slice(0,14)} <span style="color:var(--muted);font-size:11px;font-family:'DM Mono',monospace">${v.qty}</span></span>`
+    ).join('');
+    const totalDefQty = Object.values(defKpiMap).reduce((s,v)=>s+v.qty,0);
+    document.getElementById('kDefSub').textContent = `${totalDefQty.toLocaleString('pt-BR')} peças total`;
+  } else {
+    document.getElementById('kDefTipo').textContent = '—';
+    document.getElementById('kDefSub').textContent = '';
+  }
 }
 
 function median(arr) {
@@ -837,6 +936,7 @@ function median(arr) {
 function renderAlertasSimples() {
   // Agrupa por fornecedor com resumo (não lotes individuais — alertas avançados cuida disso)
   const fornMap = {};
+  const fornDefMap = {}; // fornecedor -> tipo -> qty
   dadosFiltrados.forEach(x => {
     if (!x.fornecedor) return;
     if (!fornMap[x.fornecedor]) fornMap[x.fornecedor] = { total:0, A:0, B:0, C:0, pctSum:0, amostra:0, defeitos:0 };
@@ -846,6 +946,11 @@ function renderAlertasSimples() {
     f.pctSum += (x.percentual_defeito||0);
     f.amostra += (x.qtd_amostra||0);
     f.defeitos += (x.total_defeitos||0);
+    // Coletar tipos de defeito por fornecedor
+    if (!fornDefMap[x.fornecedor]) fornDefMap[x.fornecedor] = {};
+    extrairTodosDefeitos(x).forEach(({tipo, qtd}) => {
+      if (tipo) fornDefMap[x.fornecedor][tipo] = (fornDefMap[x.fornecedor][tipo]||0) + qtd;
+    });
   });
   const fornList = Object.entries(fornMap)
     .map(([nome, f]) => ({ nome, ...f, media: f.total ? f.pctSum/f.total : 0 }))
@@ -856,12 +961,16 @@ function renderAlertasSimples() {
   el.innerHTML = fornList.map(x => {
     const cls = x.C > x.A ? 'C' : x.B > x.A ? 'B' : 'A';
     const cor = cls==='A'?'var(--ok2)':cls==='B'?'var(--warn2)':'var(--err2)';
+    // Top 3 defeitos deste fornecedor
+    const defsForn = Object.entries(fornDefMap[x.nome]||{}).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const defsStr = defsForn.length ? defsForn.map(([t,q])=>`${t} (${q})`).join(' · ') : 'sem detalhe';
     return `
     <div class="alerta" style="border-left:3px solid ${cor};">
       <div class="alerta-icon" style="color:${cor}">${cls==='C'?'⚠':cls==='B'?'◉':'✓'}</div>
       <div class="alerta-body">
         <div class="alerta-forn">${x.nome}</div>
-        <div class="alerta-meta mono">Lote${x.total>1?'s':''} ${x.total} · Amostra ${x.amostra.toLocaleString('pt-BR')} pcs · Total def. ${x.defeitos.toLocaleString('pt-BR')} pcs · ${x.data_entrada||'—'}</div>
+        <div class="alerta-meta mono">Lote${x.total>1?'s':''} ${x.total} · Amostra ${x.amostra.toLocaleString('pt-BR')} pcs · Total def. ${x.defeitos.toLocaleString('pt-BR')} pcs</div>
+        <div class="alerta-meta mono" style="margin-top:2px;color:var(--warn2);">Defeitos: ${defsStr}</div>
       </div>
       <div class="alerta-badge" style="color:${cor}">${x.media.toFixed(1)}% DEF · CLASSE ${cls}</div>
     </div>`;
@@ -917,8 +1026,8 @@ function renderVisaoGeral() {
           tension:.35,pointRadius:3,pointBackgroundColor:recent.map(x=>
             x.classificacao==='A'?'rgba(92,184,92,0.8)':x.classificacao==='B'?'rgba(240,168,68,0.8)':'rgba(224,92,92,0.8)'),
           pointBorderColor:'transparent',fill:true,borderWidth:1.5},
-        {label:'Limite A (5%)',data:recent.map(()=>5),borderColor:'rgba(92,184,92,0.3)',borderDash:[4,4],borderWidth:1,pointRadius:0,tension:0},
-        {label:'Limite B (12%)',data:recent.map(()=>12),borderColor:'rgba(240,168,68,0.3)',borderDash:[4,4],borderWidth:1,pointRadius:0,tension:0}
+        {label:`Limite A (${CQRegras.LIMITES_DEFAULT.APROVACAO}%)`,data:recent.map(()=>CQRegras.LIMITES_DEFAULT.APROVACAO),borderColor:'rgba(92,184,92,0.3)',borderDash:[4,4],borderWidth:1,pointRadius:0,tension:0},
+        {label:`Limite B (${CQRegras.LIMITES_DEFAULT.RESSALVA}%)`,data:recent.map(()=>CQRegras.LIMITES_DEFAULT.RESSALVA),borderColor:'rgba(240,168,68,0.3)',borderDash:[4,4],borderWidth:1,pointRadius:0,tension:0}
       ]
     },
     options:{...chartDefaults,
@@ -943,7 +1052,7 @@ function renderVisaoGeral() {
     data:{
       labels: fornList.map(f=>f.nome.length>14?f.nome.slice(0,14)+'…':f.nome),
       datasets:[{label:'% médio defeito',data:fornList.map(f=>f.avg.toFixed(2)),
-        backgroundColor:fornList.map(f=>f.avg<=5?COK:f.avg<=12?CWARN:CERR),
+        backgroundColor:fornList.map(f=>f.avg<=CQRegras.LIMITES_DEFAULT.APROVACAO?COK:f.avg<=CQRegras.LIMITES_DEFAULT.RESSALVA?CWARN:CERR),
         borderRadius:2,borderSkipped:false}]
     },
     options:{...chartDefaults,indexAxis:'y',
@@ -951,26 +1060,98 @@ function renderVisaoGeral() {
       plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>` ${c.raw}%`}}}}
   });
 
-  // Defeitos bar
+  // Defeitos — coletar todos os tipos de defeito com quantidade e ocorrências
   const defMap = {};
   r.forEach(row=>{
-    [1,2,3].forEach(i=>{
-      const t = row[`defeito_${i}_tipo`];
-      const q = row[`defeito_${i}_qtd`]||0;
-      if (t&&t.trim()) { if(!defMap[t.trim()]) defMap[t.trim()]={n:0,qty:0}; defMap[t.trim()].n++; defMap[t.trim()].qty+=q; }
+    const defs = extrairTodosDefeitos(row);
+    defs.forEach(({tipo, qtd}) => {
+      if (!tipo) return;
+      if (!defMap[tipo]) defMap[tipo]={n:0,qty:0,forn:new Set()};
+      defMap[tipo].n++;
+      defMap[tipo].qty += qtd;
+      if (row.fornecedor) defMap[tipo].forn.add(row.fornecedor);
     });
   });
-  const defList = Object.entries(defMap).map(([k,v])=>({nome:k,...v})).sort((a,b)=>b.n-a.n).slice(0,8);
+  const defList = Object.entries(defMap).map(([k,v])=>({nome:k,n:v.n,qty:v.qty,forn:v.forn.size})).sort((a,b)=>b.qty-a.qty);
+  const defListByN = [...defList].sort((a,b)=>b.n-a.n).slice(0,8);
 
+  // Frequência bar (por ocorrências em lotes)
   makeChart('chartDefBar', {
     type:'bar',
     data:{
-      labels:defList.map(d=>d.nome.length>16?d.nome.slice(0,16)+'…':d.nome),
-      datasets:[{label:'Ocorrências (lotes)',data:defList.map(d=>d.n),backgroundColor:CWARN,borderRadius:2,borderSkipped:false}]
+      labels:defListByN.map(d=>d.nome.length>16?d.nome.slice(0,16)+'…':d.nome),
+      datasets:[{label:'Ocorrências (lotes)',data:defListByN.map(d=>d.n),backgroundColor:CWARN,borderRadius:2,borderSkipped:false}]
     },
     options:{...chartDefaults,indexAxis:'y',
       scales:{x:{...chartDefaults.scales.x,min:0},y:{...chartDefaults.scales.y}},
       plugins:{legend:{display:false}}}
+  });
+
+  // Composição de defeitos — doughnut por peças
+  const defTop8 = defList.slice(0,8);
+  const defColors = [
+    'rgba(224,92,92,0.8)', 'rgba(240,168,68,0.8)', 'rgba(200,169,110,0.8)',
+    'rgba(74,158,208,0.8)', 'rgba(92,184,92,0.8)', 'rgba(180,120,200,0.8)',
+    'rgba(230,200,110,0.8)', 'rgba(100,200,180,0.8)'
+  ];
+  const totalDefQty = defTop8.reduce((s,d)=>s+d.qty,0);
+  makeChart('chartDefComposicao', {
+    type:'doughnut',
+    data:{
+      labels: defTop8.map(d=>d.nome),
+      datasets:[{
+        data: defTop8.map(d=>d.qty),
+        backgroundColor: defColors.slice(0, defTop8.length),
+        borderColor: defColors.slice(0, defTop8.length).map(c=>c.replace('0.8','0.3')),
+        borderWidth:1, hoverOffset:6
+      }]
+    },
+    options:{plugins:{
+      legend:{position:'right',labels:{color:'#666',font:{size:9,family:'DM Mono,monospace'},padding:8,boxWidth:12}},
+      tooltip:{callbacks:{label:c=>{const pct=totalDefQty?(c.raw/totalDefQty*100).toFixed(1)+'%':'';return ` ${c.label}: ${c.raw.toLocaleString('pt-BR')} pcs (${pct})`;}}}
+    }}
+  });
+
+  // Cards resumo de defeitos (top 6)
+  const resumoEl = document.getElementById('defeitoResumoCards');
+  if (resumoEl) {
+    const top6 = defList.slice(0,6);
+    resumoEl.innerHTML = top6.map((d,i)=>{
+      const pctOfTotal = totalDefQty ? (d.qty/totalDefQty*100).toFixed(1) : 0;
+      const cor = defColors[i] || CWARN;
+      return `<div style="background:var(--s1);border:1px solid var(--border);border-left:3px solid ${cor};border-radius:3px;padding:12px 14px;">
+        <div style="font-size:9px;letter-spacing:0.15em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;margin-bottom:6px;">${d.nome}</div>
+        <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;color:${cor}">${d.qty.toLocaleString('pt-BR')}</div>
+        <div style="font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:3px;">${pctOfTotal}% · ${d.n} lotes · ${d.forn} forn.</div>
+      </div>`;
+    }).join('');
+  }
+
+  // Fornecedor × Defeito stacked
+  const topFornNames = Object.entries(fornMap).sort((a,b)=>b[1].def-a[1].def).slice(0,6).map(([k])=>k);
+  const topDefNames = defList.slice(0,5).map(d=>d.nome);
+  const fornDefDatasets = topDefNames.map((defNome, di) => {
+    const data = topFornNames.map(fn => {
+      let qty = 0;
+      r.forEach(row => {
+        if (row.fornecedor !== fn) return;
+        extrairTodosDefeitos(row).forEach(({tipo,qtd}) => {
+          if (tipo === defNome) qty += qtd;
+        });
+      });
+      return qty;
+    });
+    return {
+      label: defNome.length > 14 ? defNome.slice(0,14)+'…' : defNome,
+      data, backgroundColor: defColors[di] || CWARN, borderRadius: 2, borderSkipped: false
+    };
+  });
+  makeChart('chartFornDefStack', {
+    type:'bar',
+    data:{ labels: topFornNames.map(f=>f.length>12?f.slice(0,12)+'…':f), datasets: fornDefDatasets },
+    options:{...chartDefaults,
+      scales:{x:{...chartDefaults.scales.x,stacked:true},y:{...chartDefaults.scales.y,stacked:true}},
+      plugins:{legend:{labels:{color:'#666',font:{size:9,family:'DM Mono,monospace'}}}}}
   });
 
   // Agrupado
@@ -1028,7 +1209,7 @@ function renderAlertasAvancados(dados) {
       const db = new Date((b.data_entrada||'').split('/').reverse().join('-'));
       return db - da;
     });
-    const cls = ordenados.map(x => x.classificacao || (pct(x)<=5?'A':pct(x)<=15?'B':'C'));
+    const cls = ordenados.map(x => x.classificacao || CQRegras.motorDecisaoLocal(pct(x)).classificacao);
     const ultimosTres = cls.slice(0, 3);
     if (ultimosTres.length >= 3 && ultimosTres.every(c => c === 'C')) {
       if (!alertas.find(a => a.title.includes(forn) && a.title.includes('consecutivos'))) {
@@ -1279,14 +1460,16 @@ function renderFornecedores() {
     const avg = v.pcts.length ? v.pcts.reduce((a,b)=>a+b,0)/v.pcts.length : 0;
     // Score CQ: 100 - (pct_C*3 + pct_B*1) + bônus A
     const tot = v.n||1;
-    const score = Math.max(0, Math.min(100, 100 - (v.C/tot*50) - (v.B/tot*20) + (v.A/tot*20))).toFixed(0);
-    return {nome:k,...v,avg,score:+score};
+    // Score via CQRegras — fórmula centralizada
+    const _sl = CQRegras.scoreLoteLocal(v.A, v.B, v.C);
+    const score = Math.round(_sl.score);
+    return {nome:k,...v,avg,score};
   }).sort((a,b)=>b.score-a.score);
 
   const tbody = document.getElementById('tbodyForn');
   tbody.innerHTML = list.map((f,i)=>{
     const avg = f.avg.toFixed(1);
-    const pClass = f.avg<=5?'pct-ok':f.avg<=12?'pct-warn':'pct-err';
+    const pClass = f.avg<=CQRegras.LIMITES_DEFAULT.APROVACAO?'pct-ok':f.avg<=CQRegras.LIMITES_DEFAULT.RESSALVA?'pct-warn':'pct-err';
     const sc = f.score;
     const scColor = sc>=70?'var(--ok2)':sc>=40?'var(--warn2)':'var(--err2)';
     return `<tr>
@@ -1335,18 +1518,16 @@ function renderFornecedores() {
 function renderDefeitos() {
   const r = dadosFiltrados;
 
-  // Build defect index
+  // Build defect index (usa extrairTodosDefeitos para capturar todas as fontes)
   const defMap = {};
   r.forEach(row=>{
-    [1,2,3].forEach(i=>{
-      const t = (row[`defeito_${i}_tipo`]||'').trim();
-      const q = row[`defeito_${i}_qtd`]||0;
-      if (!t) return;
-      if (!defMap[t]) defMap[t]={n:0,qty:0,pcts:[],forn:new Set()};
-      defMap[t].n++;
-      defMap[t].qty+=q;
-      defMap[t].pcts.push(row.percentual_defeito||0);
-      if (row.fornecedor) defMap[t].forn.add(row.fornecedor);
+    extrairTodosDefeitos(row).forEach(({tipo, qtd}) => {
+      if (!tipo) return;
+      if (!defMap[tipo]) defMap[tipo]={n:0,qty:0,pcts:[],forn:new Set()};
+      defMap[tipo].n++;
+      defMap[tipo].qty+=qtd;
+      defMap[tipo].pcts.push(row.percentual_defeito||0);
+      if (row.fornecedor) defMap[tipo].forn.add(row.fornecedor);
     });
   });
 
@@ -1386,17 +1567,19 @@ function renderDefeitos() {
     options:{...chartDefaults,indexAxis:'y',plugins:{legend:{display:false}}}
   });
 
-  // Heat chart: defect by fornecedor (radar proxy)
+  // Heat chart: defect by fornecedor
   const topForn = [...new Set(r.map(x=>x.fornecedor).filter(Boolean))].slice(0,6);
   const top3Def = defList.slice(0,5).map(d=>d.nome);
   const heatData = top3Def.map(def=>{
     return topForn.map(fn=>{
-      let n = 0;
+      let qty = 0;
       r.forEach(row=>{
         if (row.fornecedor!==fn) return;
-        [1,2,3].forEach(i=>{ if((row[`defeito_${i}_tipo`]||'').trim()===def) n++; });
+        extrairTodosDefeitos(row).forEach(({tipo, qtd}) => {
+          if (tipo === def) qty += qtd;
+        });
       });
-      return n;
+      return qty;
     });
   });
 
@@ -1417,11 +1600,13 @@ function renderDefeitos() {
     // Find worst fornecedor for this defect
     const fornCount = {};
     r.forEach(row=>{
-      [1,2,3].forEach(ii=>{ if((row[`defeito_${ii}_tipo`]||'').trim()===d.nome && row.fornecedor) fornCount[row.fornecedor]=(fornCount[row.fornecedor]||0)+1; });
+      extrairTodosDefeitos(row).forEach(({tipo}) => {
+        if (tipo === d.nome && row.fornecedor) fornCount[row.fornecedor] = (fornCount[row.fornecedor]||0)+1;
+      });
     });
     const worst = Object.entries(fornCount).sort((a,b)=>b[1]-a[1])[0];
     const avg = d.avg.toFixed(1);
-    const pClass = d.avg<=5?'pct-ok':d.avg<=12?'pct-warn':'pct-err';
+    const pClass = d.avg<=CQRegras.LIMITES_DEFAULT.APROVACAO?'pct-ok':d.avg<=CQRegras.LIMITES_DEFAULT.RESSALVA?'pct-warn':'pct-err';
     return `<tr>
       <td class="mono" style="color:var(--muted)">${i+1}</td>
       <td style="font-weight:500">${d.nome}</td>
@@ -1605,7 +1790,7 @@ function renderAnalisadores() {
     type:'bar',
     data:{labels:list.map(a=>a.nome),
       datasets:[{label:'% médio defeito',data:list.map(a=>a.avg.toFixed(2)),
-        backgroundColor:list.map(a=>a.avg<=5?COK:a.avg<=12?CWARN:CERR),borderRadius:2,borderSkipped:false}]},
+        backgroundColor:list.map(a=>a.avg<=CQRegras.LIMITES_DEFAULT.APROVACAO?COK:a.avg<=CQRegras.LIMITES_DEFAULT.RESSALVA?CWARN:CERR),borderRadius:2,borderSkipped:false}]},
     options:{...chartDefaults,indexAxis:'y',
       scales:{x:{...chartDefaults.scales.x,min:0},y:{...chartDefaults.scales.y}},plugins:{legend:{display:false}}}
   });
@@ -1613,7 +1798,7 @@ function renderAnalisadores() {
   const tbody = document.getElementById('tbodyAnalis');
   tbody.innerHTML = list.map(a=>{
     const avg = a.avg.toFixed(1);
-    const pClass = a.avg<=5?'pct-ok':a.avg<=12?'pct-warn':'pct-err';
+    const pClass = a.avg<=CQRegras.LIMITES_DEFAULT.APROVACAO?'pct-ok':a.avg<=CQRegras.LIMITES_DEFAULT.RESSALVA?'pct-warn':'pct-err';
     return `<tr>
       <td style="font-weight:500">${a.nome}</td>
       <td class="mono">${a.n}</td>
@@ -1637,10 +1822,16 @@ function renderTabelaRegistros() {
     return true;
   });
   const tbody = document.getElementById('tbodyRegistros');
-  if (!dados.length) { tbody.innerHTML='<tr><td colspan="13" class="empty">Nenhum registro encontrado.</td></tr>'; return; }
+  if (!dados.length) { tbody.innerHTML='<tr><td colspan="11" class="empty">Nenhum registro encontrado.</td></tr>'; return; }
+  const _lim = CQRegras.LIMITES_DEFAULT;
   tbody.innerHTML = dados.slice(0,100).map(row=>{
     const pct = row.percentual_defeito!=null?row.percentual_defeito.toFixed(1)+'%':'—';
-    const pClass = !row.percentual_defeito?'':row.percentual_defeito<=5?'n-ok':row.percentual_defeito<=12?'n-warn':'n-err';
+    const pClass = !row.percentual_defeito?'':row.percentual_defeito<=_lim.APROVACAO?'n-ok':row.percentual_defeito<=_lim.RESSALVA?'n-warn':'n-err';
+    // Defeitos detalhados
+    const defs = extrairTodosDefeitos(row);
+    const defsStr = defs.length
+      ? defs.sort((a,b)=>b.qtd-a.qtd).slice(0,3).map(d=>`<span style="color:var(--warn2)">${d.tipo}</span> <span class="mono" style="color:var(--muted)">${d.qtd}</span>`).join(' · ')
+      : '<span style="color:var(--muted2)">—</span>';
     return `<tr>
       <td class="mono">${row.data_entrada||'—'}</td>
       <td class="mono">${row.lote_atak||'—'}</td>
@@ -1649,9 +1840,7 @@ function renderTabelaRegistros() {
       <td class="mono">${row.qtd_amostra||'—'}</td>
       <td class="mono">${row.total_defeitos||0}</td>
       <td class="mono ${pClass}">${pct}</td>
-      <td style="font-size:10px;color:var(--muted)">${row.defeito_1_tipo||'—'}</td>
-      <td style="font-size:10px;color:var(--muted)">${row.defeito_2_tipo||'—'}</td>
-      <td style="font-size:10px;color:var(--muted)">${row.defeito_3_tipo||'—'}</td>
+      <td style="font-size:10px;">${defsStr}</td>
       <td><span class="badge badge-${row.classificacao||''}">${row.classificacao||'—'}</span></td>
       <td><span class="badge ${row.liberado_producao?'badge-ok':'badge-block'}">${row.liberado_producao?'Sim':'Não'}</span></td>
       <td style="font-size:11px;color:var(--muted)">${row.analisador||'—'}</td>
@@ -1661,9 +1850,14 @@ function renderTabelaRegistros() {
 
 // === EXPORT CSV ===
 function exportarCSV() {
-  const cols = ['data_entrada','lote_atak','numero_requisicao','fornecedor','qtd_amostra','total_defeitos','percentual_defeito','defeito_1_tipo','defeito_1_qtd','defeito_2_tipo','defeito_2_qtd','defeito_3_tipo','defeito_3_qtd','classificacao','liberado_producao','analisador','observacoes'];
+  const cols = ['data_entrada','lote_atak','numero_requisicao','fornecedor','qtd_amostra','total_defeitos','percentual_defeito','defeito_1_tipo','defeito_1_qtd','defeito_2_tipo','defeito_2_qtd','defeito_3_tipo','defeito_3_qtd','todos_defeitos','classificacao','liberado_producao','analisador','observacoes'];
   const header = cols.join(';');
-  const rows = dadosFiltrados.map(r=>cols.map(c=>`"${r[c]??''}"`).join(';'));
+  const rows = dadosFiltrados.map(r=>{
+    // Coluna extra: todos defeitos detalhados
+    const allDefs = extrairTodosDefeitos(r).sort((a,b)=>b.qtd-a.qtd).map(d=>`${d.tipo}:${d.qtd}`).join(', ');
+    const row = {...r, todos_defeitos: allDefs};
+    return cols.map(c=>`"${row[c]??''}"`).join(';');
+  });
   const csv = '\uFEFF' + [header,...rows].join('\n');
   const a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);

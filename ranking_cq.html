@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ranking de Qualidade · Classic CQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #080808; --s1: #101010; --s2: #161616; --s3: #1e1e1e;
+  --border: #242424; --border2: #2e2e2e;
+  --accent: #c8a96e; --accent2: #e8c98e; --accent3: #a07840;
+  --text: #ede9e3; --muted: #666; --muted2: #444;
+  --cb-blue: #0072B2; --cb-teal: #009E73; --cb-orange: #E69F00;
+  --cb-purple: #CC79A7; --cb-red: #D55E00; --cb-gray: #666666;
+  --radius: 10px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(8,8,8,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 0 24px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { width: 32px; height: 32px; object-fit: contain; border-radius: 6px; }
+.header-title { font-family: 'Syne'; font-weight: 800; font-size: 16px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+.header-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.btn-sm {
+  padding: 6px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: var(--muted);
+  transition: all .2s; text-decoration: none;
+}
+.btn-sm:hover { border-color: var(--accent); color: var(--text); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 20px 24px 40px; }
+
+/* TABS */
+.tabs {
+  display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 24px;
+}
+.tab {
+  padding: 10px 20px; font-size: 13px; font-family: 'Syne'; font-weight: 600;
+  cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent;
+  transition: all .2s; background: none; border-top: none; border-left: none; border-right: none;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* FILTER */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px; flex-wrap: wrap;
+}
+.filter-bar label { font-family: 'DM Mono'; font-size: 11px; color: var(--muted); text-transform: uppercase; }
+.filter-bar select, .filter-bar input {
+  background: var(--s2); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-family: 'DM Mono'; font-size: 12px; padding: 6px 10px;
+}
+.btn-refresh {
+  padding: 6px 14px; background: var(--s2); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--accent); font-size: 12px; cursor: pointer;
+  font-family: 'DM Mono'; transition: all .2s;
+}
+.btn-refresh:hover { background: var(--accent3); color: var(--bg); }
+
+/* KPI */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 28px; }
+.kpi-card {
+  background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 16px; border-left: 4px solid var(--muted2);
+}
+.kpi-num { font-family: 'Syne'; font-weight: 800; font-size: 28px; line-height: 1; margin-bottom: 6px; }
+.kpi-label { font-family: 'DM Mono'; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+
+/* TABLE */
+.panel { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 20px; }
+.panel-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--accent);
+  text-transform: uppercase; letter-spacing: .05em; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 8px;
+}
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 12px; }
+thead th {
+  background: var(--s2); color: var(--muted); font-family: 'DM Mono';
+  font-weight: 500; font-size: 10px; text-transform: uppercase;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none; white-space: nowrap;
+}
+thead th:hover { color: var(--accent); }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tbody tr:hover { background: var(--s2); }
+
+/* BADGE */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px; border-radius: 4px; font-family: 'DM Mono';
+  font-size: 10px; font-weight: 500; white-space: nowrap;
+}
+
+/* SCORE BAR */
+.score-bar { display: flex; align-items: center; gap: 8px; }
+.score-track { flex: 1; height: 6px; background: var(--s3); border-radius: 3px; overflow: hidden; min-width: 60px; }
+.score-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+.score-val { font-family: 'DM Mono'; font-size: 12px; font-weight: 700; min-width: 32px; }
+
+/* GRID */
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 28px; }
+@media (max-width: 768px) { .grid-2 { grid-template-columns: 1fr; } }
+
+/* CHART */
+.chart-wrap { background: var(--s1); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 28px; }
+.chart-box { max-height: 300px; position: relative; }
+
+/* LOADING */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+
+/* TAB CONTENT */
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .tabs { overflow-x: auto; }
+  .tab { white-space: nowrap; font-size: 12px; padding: 8px 14px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="app.html" style="display:flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:6px;background:var(--s2);border:1px solid var(--border);color:var(--muted);font-size:14px;text-decoration:none;flex-shrink:0;transition:all .2s" title="Voltar ao menu" aria-label="Voltar ao menu">&#9664;</a>
+  <img src="assets/logo-classic-icon.png" class="header-logo" alt="Logo Classic CQ">
+  <span class="header-title">RANKING QUALIDADE</span>
+  <span class="header-sub">Fornecedor × Produto × Defeitos</span>
+  <div class="header-right">
+    <span id="cq-user-chip"></span>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" data-tab="geral">Ranking Geral</button>
+    <button class="tab" data-tab="produto">Por Produto</button>
+    <button class="tab" data-tab="defeitos">Defeitos</button>
+    <button class="tab" data-tab="tendencia">Tendência 30d</button>
+    <button class="tab" data-tab="alertas">Alertas</button>
+  </div>
+
+  <!-- ═══════ TAB 1: RANKING GERAL ═══════ -->
+  <div class="tab-content active" id="tab-geral">
+
+    <div class="kpi-grid" id="kpi-geral">
+      <div class="loading">Carregando...</div>
+    </div>
+
+    <div class="filter-bar">
+      <label>Status:</label>
+      <select id="filtro-status" onchange="carregarTabGeral()">
+        <option value="">Todos</option>
+        <option value="normal">Normal</option>
+        <option value="atencao">Atenção</option>
+        <option value="critico">Crítico</option>
+        <option value="bloqueado">Bloqueado</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarTabGeral()">Atualizar</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Ranking Geral — Ponderado por Volume (90 dias)</div>
+      <div class="table-wrap" id="tabela-geral">
+        <div class="loading">Carregando ranking...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB 2: POR PRODUTO ═══════ -->
+  <div class="tab-content" id="tab-produto">
+
+    <div class="filter-bar">
+      <label>Produto:</label>
+      <select id="filtro-produto" onchange="carregarTabProduto()">
+        <option value="">Todos</option>
+      </select>
+      <label>Fornecedor:</label>
+      <input type="text" id="filtro-forn-prod" placeholder="Código..." style="width:100px;">
+      <button class="btn-refresh" onclick="carregarTabProduto()">Filtrar</button>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Ranking por Fornecedor × Produto</div>
+      <div class="table-wrap" id="tabela-produto">
+        <div class="loading">Selecione filtros e clique Filtrar</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB 3: DEFEITOS ═══════ -->
+  <div class="tab-content" id="tab-defeitos">
+
+    <div class="filter-bar">
+      <label>Defeito:</label>
+      <select id="filtro-defeito" onchange="carregarTabDefeitos()">
+        <option value="">Todos</option>
+      </select>
+      <label>
+        <input type="checkbox" id="filtro-alerta" onchange="carregarTabDefeitos()"> Apenas > 5%
+      </label>
+      <button class="btn-refresh" onclick="carregarTabDefeitos()">Filtrar</button>
+    </div>
+
+    <div class="grid-2">
+      <div class="chart-wrap">
+        <div class="panel-title">Distribuição de Defeitos (Top 10)</div>
+        <div class="chart-box"><canvas id="chart-defeitos"></canvas></div>
+      </div>
+      <div class="panel">
+        <div class="panel-title">Mapa de Calor — Defeitos por Fornecedor</div>
+        <div id="heatmap-defeitos"><div class="loading">Carregando...</div></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Detalhamento de Defeitos por Fornecedor</div>
+      <div class="table-wrap" id="tabela-defeitos">
+        <div class="loading">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB 4: TENDÊNCIA 30D ═══════ -->
+  <div class="tab-content" id="tab-tendencia">
+
+    <div class="kpi-grid" id="kpi-tendencia">
+      <div class="loading">Carregando...</div>
+    </div>
+
+    <div class="filter-bar">
+      <label>Tendência:</label>
+      <select id="filtro-tendencia" onchange="carregarTabTendencia()">
+        <option value="">Todos</option>
+        <option value="melhorando">Melhorando</option>
+        <option value="estavel">Estável</option>
+        <option value="piorando">Piorando</option>
+      </select>
+      <button class="btn-refresh" onclick="carregarTabTendencia()">Filtrar</button>
+    </div>
+
+    <div class="chart-wrap">
+      <div class="panel-title">Evolução de Score — Últimos 30 dias vs Anterior</div>
+      <div class="chart-box"><canvas id="chart-tendencia"></canvas></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-title">Tendência por Fornecedor</div>
+      <div class="table-wrap" id="tabela-tendencia">
+        <div class="loading">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════ TAB 5: ALERTAS ═══════ -->
+  <div class="tab-content" id="tab-alertas">
+    <div class="kpi-grid" id="kpi-alertas">
+      <div class="loading">Carregando alertas...</div>
+    </div>
+    <div class="panel">
+      <div class="panel-title">Alertas Ativos</div>
+      <div id="lista-alertas"><div class="loading">Carregando...</div></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- SCRIPTS -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="config.js"></script>
+<script src="cq_auth.js"></script>
+<script src="cq_toast.js"></script>
+<script src="cq_ranking.js"></script>
+
+<script>
+// ── TABS ────────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('tab-' + tab.dataset.tab).classList.add('active');
+    // Carregar dados da aba
+    const loaders = {
+      geral: carregarTabGeral,
+      produto: carregarTabProduto,
+      defeitos: carregarTabDefeitos,
+      tendencia: carregarTabTendencia,
+      alertas: carregarTabAlertas,
+    };
+    if (loaders[tab.dataset.tab]) loaders[tab.dataset.tab]();
+  });
+});
+
+// ── INIT ────────────────────────────────────────────────────
+let _chartDefeitos = null;
+let _chartTendencia = null;
+
+async function init() {
+  const user = await CQAuth.init({ perfisPermitidos: ['administrador','qualidade','diretoria'] });
+  if (!user) return;
+
+  // Popular selects
+  const selProd = document.getElementById('filtro-produto');
+  CQRanking.PRODUTOS.forEach(p => {
+    selProd.innerHTML += `<option value="${p.codigo}">${p.nome}</option>`;
+  });
+  const selDef = document.getElementById('filtro-defeito');
+  CQRanking.DEFEITOS.forEach(d => {
+    selDef.innerHTML += `<option value="${d.codigo}">${d.nome}</option>`;
+  });
+
+  carregarTabGeral();
+}
+
+// ── TAB: RANKING GERAL ──────────────────────────────────────
+async function carregarTabGeral() {
+  try {
+    const status = document.getElementById('filtro-status').value;
+    const dados = await CQRanking.carregarRankingGeral({ status: status || undefined });
+
+    // KPIs
+    const total = dados.length;
+    const normais = dados.filter(d => d.status_qualidade === 'normal').length;
+    const criticos = dados.filter(d => d.status_qualidade === 'critico').length;
+    const bloqueados = dados.filter(d => d.status_qualidade === 'bloqueado').length;
+    const scoreMedia = total > 0 ? Math.round(dados.reduce((s, d) => s + (d.score || 0), 0) / total) : 0;
+
+    document.getElementById('kpi-geral').innerHTML = `
+      <div class="kpi-card" style="border-left-color:var(--accent)"><div class="kpi-num" style="color:var(--accent)">${total}</div><div class="kpi-label">Fornecedores</div></div>
+      <div class="kpi-card" style="border-left-color:#009E73"><div class="kpi-num" style="color:#009E73">${normais}</div><div class="kpi-label">Normais</div></div>
+      <div class="kpi-card" style="border-left-color:#D55E00"><div class="kpi-num" style="color:#D55E00">${criticos}</div><div class="kpi-label">Críticos</div></div>
+      <div class="kpi-card" style="border-left-color:#666"><div class="kpi-num" style="color:#666">${bloqueados}</div><div class="kpi-label">Bloqueados</div></div>
+      <div class="kpi-card" style="border-left-color:#0072B2"><div class="kpi-num" style="color:#0072B2">${scoreMedia}</div><div class="kpi-label">Score Médio</div></div>
+    `;
+
+    // Tabela
+    if (dados.length === 0) {
+      document.getElementById('tabela-geral').innerHTML = '<p style="color:#666;font-size:13px;padding:20px;">Nenhum dado disponível. Finalize lotes de inspeção para gerar o ranking.</p>';
+      return;
+    }
+
+    let html = `<table>
+      <thead><tr>
+        <th>#</th><th>Fornecedor</th><th>UF</th><th>Score</th>
+        <th>A/B/C</th><th>Defeitos</th><th>Lotes</th>
+        <th>Peças</th><th>Vol. %</th><th>Principal Defeito</th><th>Status</th>
+      </tr></thead><tbody>`;
+
+    for (const d of dados) {
+      html += `<tr>
+        <td style="font-family:'DM Mono';color:var(--accent);font-weight:700;">${d.ranking}</td>
+        <td>
+          <div style="font-weight:600;">${esc(d.fornecedor_nome || d.fornecedor_codigo)}</div>
+          <div style="font-size:10px;color:#666;">${d.fornecedor_codigo}</div>
+        </td>
+        <td>${d.uf || '—'}</td>
+        <td style="min-width:120px;">${CQRanking.renderScoreBar(d.score || 0)}</td>
+        <td style="min-width:140px;">${CQRanking.renderBarraABC(d.pct_a, d.pct_b, d.pct_c)}</td>
+        <td style="font-family:'DM Mono';color:${(d.pct_defeitos||0)>5?'#D55E00':'#666'}">${d.pct_defeitos || 0}%</td>
+        <td style="font-family:'DM Mono';">${d.total_lotes}</td>
+        <td style="font-family:'DM Mono';">${(d.total_pecas || 0).toLocaleString('pt-BR')}</td>
+        <td style="font-family:'DM Mono';">${d.peso_volume_pct || 0}%</td>
+        <td style="font-size:11px;">${esc(d.principal_defeito || '—')}</td>
+        <td>${CQRanking.renderStatusBadge(d.status_qualidade)}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('tabela-geral').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('tabela-geral').innerHTML = `<p style="color:#D55E00;padding:20px;">Erro: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── TAB: POR PRODUTO ────────────────────────────────────────
+async function carregarTabProduto() {
+  const produto = document.getElementById('filtro-produto').value;
+  const fornecedor = document.getElementById('filtro-forn-prod').value.trim();
+  try {
+    const dados = await CQRanking.carregarRankingPorProduto({
+      produto: produto || undefined,
+      fornecedor: fornecedor || undefined,
+    });
+
+    if (!dados.length) {
+      document.getElementById('tabela-produto').innerHTML = '<p style="color:#666;font-size:13px;padding:20px;">Nenhum dado encontrado.</p>';
+      return;
+    }
+
+    let html = `<table>
+      <thead><tr>
+        <th>#</th><th>Fornecedor</th><th>Produto</th><th>Score</th>
+        <th>A/B/C</th><th>% Defeitos</th><th>Principal Defeito</th><th>Lotes</th><th>Peças</th>
+      </tr></thead><tbody>`;
+
+    for (const d of dados) {
+      html += `<tr>
+        <td style="font-family:'DM Mono';color:var(--accent);">${d.ranking}</td>
+        <td>
+          <div style="font-weight:600;">${esc(d.fornecedor_nome || d.fornecedor_codigo)}</div>
+          <div style="font-size:10px;color:#666;">${d.fornecedor_codigo}</div>
+        </td>
+        <td>
+          <span style="color:var(--accent);font-weight:600;">${esc(d.produto_nome)}</span>
+          <span style="font-size:9px;color:#444;margin-left:4px;">${d.produto_grupo}</span>
+        </td>
+        <td style="min-width:100px;">${CQRanking.renderScoreBar(d.score || 0)}</td>
+        <td style="min-width:120px;">${CQRanking.renderBarraABC(d.pct_a, d.pct_b, d.pct_c)}</td>
+        <td style="font-family:'DM Mono';color:${(d.pct_defeitos||0)>5?'#D55E00':'#666'}">${d.pct_defeitos || 0}%</td>
+        <td style="font-size:11px;">${esc(d.principal_defeito || '—')}</td>
+        <td style="font-family:'DM Mono';">${d.total_lotes}</td>
+        <td style="font-family:'DM Mono';">${(d.total_pecas || 0).toLocaleString('pt-BR')}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('tabela-produto').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('tabela-produto').innerHTML = `<p style="color:#D55E00;padding:20px;">Erro: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── TAB: DEFEITOS ───────────────────────────────────────────
+async function carregarTabDefeitos() {
+  const defeito = document.getElementById('filtro-defeito').value;
+  const apenasAlertas = document.getElementById('filtro-alerta').checked;
+
+  try {
+    const dados = await CQRanking.carregarRankingDefeitos({
+      defeito: defeito || undefined,
+      apenasAlertas: apenasAlertas || undefined,
+    });
+
+    // Gráfico de barras — top 10 defeitos
+    const porDefeito = {};
+    for (const d of dados) {
+      porDefeito[d.defeito_nome] = (porDefeito[d.defeito_nome] || 0) + d.total_ocorrencias;
+    }
+    const top10 = Object.entries(porDefeito).sort((a, b) => b[1] - a[1]).slice(0, 10);
+
+    if (_chartDefeitos) _chartDefeitos.destroy();
+    const ctx = document.getElementById('chart-defeitos').getContext('2d');
+    _chartDefeitos = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top10.map(d => d[0]),
+        datasets: [{
+          data: top10.map(d => d[1]),
+          backgroundColor: top10.map((_, i) => {
+            const cores = ['#D55E00','#E69F00','#0072B2','#009E73','#CC79A7','#666','#c8a96e','#56B4E9','#F0E442','#999'];
+            return cores[i] + '80';
+          }),
+          borderColor: top10.map((_, i) => {
+            const cores = ['#D55E00','#E69F00','#0072B2','#009E73','#CC79A7','#666','#c8a96e','#56B4E9','#F0E442','#999'];
+            return cores[i];
+          }),
+          borderWidth: 1,
+        }],
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: '#242424' }, ticks: { color: '#666' } },
+          y: { grid: { display: false }, ticks: { color: '#ede9e3', font: { size: 11 } } },
+        },
+      },
+    });
+
+    // Heatmap por fornecedor (agrupar defeitos)
+    const porForn = {};
+    for (const d of dados) {
+      if (!porForn[d.fornecedor_codigo]) {
+        porForn[d.fornecedor_codigo] = { nome: d.fornecedor_nome, defeitos: [] };
+      }
+      porForn[d.fornecedor_codigo].defeitos.push(d);
+    }
+    let heatHtml = '';
+    for (const [cod, info] of Object.entries(porForn).slice(0, 15)) {
+      heatHtml += `<div style="margin-bottom:10px;">
+        <div style="font-size:11px;font-weight:600;margin-bottom:4px;">${esc(info.nome)} <span style="color:#666;">(${cod})</span></div>
+        ${CQRanking.renderHeatmapDefeitos(info.defeitos)}
+      </div>`;
+    }
+    document.getElementById('heatmap-defeitos').innerHTML = heatHtml || '<span style="color:#666;">Sem dados</span>';
+
+    // Tabela detalhada
+    if (!dados.length) {
+      document.getElementById('tabela-defeitos').innerHTML = '<p style="color:#666;padding:20px;">Nenhum defeito encontrado.</p>';
+      return;
+    }
+    let html = `<table>
+      <thead><tr>
+        <th>Fornecedor</th><th>Defeito</th><th>Gravidade</th>
+        <th>Ocorrências</th><th>% Defeito</th><th>Produtos</th><th>Alerta</th>
+      </tr></thead><tbody>`;
+
+    for (const d of dados) {
+      const corPct = d.pct_defeito > 10 ? '#D55E00' : d.pct_defeito > 5 ? '#E69F00' : '#666';
+      html += `<tr>
+        <td>${esc(d.fornecedor_nome)} <span style="color:#666;font-size:10px;">(${d.fornecedor_codigo})</span></td>
+        <td style="font-weight:600;">${esc(d.defeito_nome)}</td>
+        <td><span class="badge" style="background:${d.defeito_gravidade==='critica'?'#D55E0018':d.defeito_gravidade==='alta'?'#E69F0018':'#0072B218'};color:${d.defeito_gravidade==='critica'?'#D55E00':d.defeito_gravidade==='alta'?'#E69F00':'#0072B2'};">${d.defeito_gravidade}</span></td>
+        <td style="font-family:'DM Mono';">${d.total_ocorrencias}</td>
+        <td style="font-family:'DM Mono';font-weight:700;color:${corPct};">${d.pct_defeito}%</td>
+        <td style="font-family:'DM Mono';">${d.produtos_afetados}</td>
+        <td>${d.alerta_acima_5pct ? '<span class="badge" style="background:#D55E0018;color:#D55E00;">ALERTA</span>' : ''}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('tabela-defeitos').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('tabela-defeitos').innerHTML = `<p style="color:#D55E00;padding:20px;">Erro: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── TAB: TENDÊNCIA ──────────────────────────────────────────
+async function carregarTabTendencia() {
+  const tendencia = document.getElementById('filtro-tendencia').value;
+  try {
+    const dados = await CQRanking.carregarTendencia({ tendencia: tendencia || undefined });
+
+    // KPIs
+    const melhorando = dados.filter(d => d.tendencia === 'melhorando').length;
+    const estaveis = dados.filter(d => d.tendencia === 'estavel').length;
+    const piorando = dados.filter(d => d.tendencia === 'piorando').length;
+    const novos = dados.filter(d => d.fornecedor_novo).length;
+
+    document.getElementById('kpi-tendencia').innerHTML = `
+      <div class="kpi-card" style="border-left-color:#009E73"><div class="kpi-num" style="color:#009E73">${melhorando}</div><div class="kpi-label">Melhorando</div></div>
+      <div class="kpi-card" style="border-left-color:#E69F00"><div class="kpi-num" style="color:#E69F00">${estaveis}</div><div class="kpi-label">Estáveis</div></div>
+      <div class="kpi-card" style="border-left-color:#D55E00"><div class="kpi-num" style="color:#D55E00">${piorando}</div><div class="kpi-label">Piorando</div></div>
+      <div class="kpi-card" style="border-left-color:#0072B2"><div class="kpi-num" style="color:#0072B2">${novos}</div><div class="kpi-label">Novos</div></div>
+    `;
+
+    // Gráfico: barras comparativas (score anterior vs atual)
+    const top20 = dados.slice(0, 20);
+    if (_chartTendencia) _chartTendencia.destroy();
+    const ctx = document.getElementById('chart-tendencia').getContext('2d');
+    _chartTendencia = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top20.map(d => (d.fornecedor_nome || d.fornecedor_codigo).substring(0, 20)),
+        datasets: [
+          {
+            label: 'Score Anterior',
+            data: top20.map(d => d.score_anterior || 0),
+            backgroundColor: '#66666660',
+            borderColor: '#666',
+            borderWidth: 1,
+          },
+          {
+            label: 'Score 30d',
+            data: top20.map(d => d.score_30d || 0),
+            backgroundColor: top20.map(d =>
+              d.tendencia === 'melhorando' ? '#009E7380' :
+              d.tendencia === 'piorando' ? '#D55E0080' : '#E69F0080'
+            ),
+            borderColor: top20.map(d =>
+              d.tendencia === 'melhorando' ? '#009E73' :
+              d.tendencia === 'piorando' ? '#D55E00' : '#E69F00'
+            ),
+            borderWidth: 1,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { labels: { color: '#666', font: { size: 11 } } },
+        },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: '#666', font: { size: 10 }, maxRotation: 45 } },
+          y: { grid: { color: '#242424' }, ticks: { color: '#666' }, min: 0, max: 100 },
+        },
+      },
+    });
+
+    // Tabela
+    if (!dados.length) {
+      document.getElementById('tabela-tendencia').innerHTML = '<p style="color:#666;padding:20px;">Nenhum dado de tendência disponível.</p>';
+      return;
+    }
+    let html = `<table>
+      <thead><tr>
+        <th>Fornecedor</th><th>Score 30d</th><th>Score Ant.</th><th>Variação</th>
+        <th>%A 30d</th><th>%C 30d</th><th>%Def 30d</th><th>Tendência</th><th>Peças 30d</th>
+      </tr></thead><tbody>`;
+
+    for (const d of dados) {
+      const corVar = d.variacao_score > 0 ? '#009E73' : d.variacao_score < 0 ? '#D55E00' : '#666';
+      const sinal = d.variacao_score > 0 ? '+' : '';
+      html += `<tr>
+        <td>
+          <div style="font-weight:600;">${esc(d.fornecedor_nome || d.fornecedor_codigo)}</div>
+          <div style="font-size:10px;color:#666;">${d.fornecedor_codigo}${d.fornecedor_novo?' · <span style="color:#0072B2;">NOVO</span>':''}</div>
+        </td>
+        <td style="min-width:100px;">${CQRanking.renderScoreBar(d.score_30d || 0)}</td>
+        <td style="font-family:'DM Mono';color:#666;">${d.score_anterior != null ? d.score_anterior : '—'}</td>
+        <td style="font-family:'DM Mono';font-weight:700;color:${corVar};">${sinal}${d.variacao_score != null ? d.variacao_score : '—'}</td>
+        <td style="font-family:'DM Mono';color:#009E73;">${d.pct_a_30d || 0}%</td>
+        <td style="font-family:'DM Mono';color:#D55E00;">${d.pct_c_30d || 0}%</td>
+        <td style="font-family:'DM Mono';color:${(d.pct_defeitos_30d||0)>5?'#D55E00':'#666'}">${d.pct_defeitos_30d || 0}%</td>
+        <td>${CQRanking.renderTendenciaBadge(d.tendencia)}</td>
+        <td style="font-family:'DM Mono';">${(d.pecas_30d || 0).toLocaleString('pt-BR')}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+    document.getElementById('tabela-tendencia').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('tabela-tendencia').innerHTML = `<p style="color:#D55E00;padding:20px;">Erro: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── TAB: ALERTAS ────────────────────────────────────────────
+async function carregarTabAlertas() {
+  try {
+    const alertas = await CQRanking.carregarAlertas();
+
+    // KPIs
+    const criticos = alertas.filter(a => a.severidade === 'critica').length;
+    const altos = alertas.filter(a => a.severidade === 'alta').length;
+    const medios = alertas.filter(a => a.severidade === 'media').length;
+
+    document.getElementById('kpi-alertas').innerHTML = `
+      <div class="kpi-card" style="border-left-color:#D55E00"><div class="kpi-num" style="color:#D55E00">${criticos}</div><div class="kpi-label">Críticos</div></div>
+      <div class="kpi-card" style="border-left-color:#E69F00"><div class="kpi-num" style="color:#E69F00">${altos}</div><div class="kpi-label">Altos</div></div>
+      <div class="kpi-card" style="border-left-color:#0072B2"><div class="kpi-num" style="color:#0072B2">${medios}</div><div class="kpi-label">Médios</div></div>
+      <div class="kpi-card" style="border-left-color:var(--accent)"><div class="kpi-num" style="color:var(--accent)">${alertas.length}</div><div class="kpi-label">Total</div></div>
+    `;
+
+    if (alertas.length === 0) {
+      document.getElementById('lista-alertas').innerHTML = '<p style="color:#009E73;padding:20px;font-size:13px;">Nenhum alerta ativo. Tudo dentro dos limites.</p>';
+      return;
+    }
+
+    document.getElementById('lista-alertas').innerHTML = alertas.map(a => CQRanking.renderAlertaCard(a)).join('');
+
+  } catch (e) {
+    document.getElementById('lista-alertas').innerHTML = `<p style="color:#D55E00;padding:20px;">Erro: ${esc(e.message)}</p>`;
+  }
+}
+
+// ── UTILS ───────────────────────────────────────────────────
+function esc(str) {
+  if (!str) return '';
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ── START ───────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

@@ -1,0 +1,295 @@
+{
+  "name": "ATAK → CQ | Sync Cadastros Mestres (5 tipos)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 24 }]
+        }
+      },
+      "id": "trigger-diario",
+      "name": "Cron Diário 00h",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Sync diário de cadastros mestres — deve rodar ANTES dos fluxos de cargas/embarques"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_config?endpoint_nome=like.WRCAD*&ativo=eq.true&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-configs",
+      "name": "Buscar Configs de Cadastro",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "endpoint_nome", "value": "WRCAD_cadastros_mestres" },
+            { "name": "status", "value": "em_execucao" },
+            { "name": "n8n_execution_id", "value": "={{$execution.id}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "criar-sync-log",
+      "name": "Criar Log de Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Buscar cada tipo de cadastro da API ATAK em sequência\nconst configs = $('Buscar Configs de Cadastro').all();\nconst results = [];\n\n// Mapear endpoint_nome → tipo_cadastro\nconst TIPO_MAP = {\n  'WRCAD009_fornecedores': 'fornecedor',\n  'WRCAD_motoristas': 'motorista',\n  'WRCAD_funcionarios': 'funcionario',\n  'WRCAD_veiculos': 'veiculo',\n  'WRCAD_produtos': 'produto'\n};\n\nfor (const cfg of configs) {\n  const c = cfg.json;\n  const tipoCadastro = TIPO_MAP[c.endpoint_nome] || 'fornecedor';\n  \n  results.push({\n    json: {\n      config_id: c.id,\n      endpoint_nome: c.endpoint_nome,\n      endpoint_url: c.endpoint_url,\n      tipo_cadastro: tipoCadastro,\n      parametros: c.parametros_json\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "mapear-endpoints",
+      "name": "Mapear Endpoints → Tipos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.endpoint_url}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{$env.ATAK_API_TOKEN}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "ativo", "value": "true" }
+          ]
+        },
+        "options": { "timeout": 60000, "batching": { "batch": { "batchSize": 1, "batchInterval": 2000 } } }
+      },
+      "id": "fetch-atak",
+      "name": "API ATAK - Buscar Cadastros",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Transformar resposta da API em registros de staging\nconst items = $input.all();\nconst crypto = require('crypto');\nconst syncLogId = $('Criar Log de Sync').first().json.id;\nconst results = [];\n\nfor (const item of items) {\n  const dados = Array.isArray(item.json) ? item.json : (item.json.data || [item.json]);\n  // Recuperar tipo do cadastro do nó anterior\n  // Como o HTTP Request pode perder o contexto, buscamos do item\n  const tipoCadastro = item.json._tipo_cadastro || \n    $('Mapear Endpoints → Tipos').first().json.tipo_cadastro || 'fornecedor';\n  \n  for (const reg of dados) {\n    // Hash para dedup\n    const hashInput = [tipoCadastro, reg.codigo || reg.placa || reg.id || '', reg.nome || ''].join('|');\n    const hash = crypto.createHash('sha256').update(hashInput).digest('hex');\n    \n    const staging = {\n      sync_log_id: syncLogId,\n      tipo_cadastro: tipoCadastro,\n      atak_id: reg.id || reg.atak_id || null,\n      codigo: reg.codigo || reg.placa || String(reg.id),\n      nome: reg.nome || reg.descricao || reg.razao_social || '',\n      apelido: reg.apelido || reg.nome_fantasia || null,\n      ativo: reg.ativo !== false,\n      hash_registro: hash,\n      payload_json: reg\n    };\n    \n    // Campos específicos por tipo\n    if (tipoCadastro === 'fornecedor') {\n      staging.cnpj = reg.cnpj || reg.cpf_cnpj || null;\n      staging.uf = reg.uf || reg.estado || null;\n    }\n    if (tipoCadastro === 'motorista') {\n      staging.cnh = reg.cnh || null;\n      staging.categoria_cnh = reg.categoria_cnh || reg.categoria || null;\n      staging.placa_padrao = reg.placa_padrao || reg.placa || null;\n      staging.telefone = reg.telefone || reg.celular || null;\n    }\n    if (tipoCadastro === 'funcionario') {\n      staging.cargo = reg.cargo || reg.funcao || null;\n      staging.setor = reg.setor || reg.departamento || null;\n      staging.telefone = reg.telefone || reg.celular || null;\n      staging.email = reg.email || null;\n      staging.data_admissao = reg.data_admissao || null;\n    }\n    if (tipoCadastro === 'veiculo') {\n      staging.placa = reg.placa || reg.codigo || null;\n      staging.tipo_veiculo = reg.tipo_veiculo || reg.tipo || 'OUTROS';\n      staging.funcao_veiculo = reg.funcao || reg.funcao_veiculo || 'outros';\n      staging.renavam = reg.renavam || null;\n      staging.ano_fabricacao = parseInt(reg.ano_fabricacao || reg.ano) || null;\n      staging.capacidade_kg = parseFloat(reg.capacidade_kg || reg.capacidade) || null;\n      staging.uf = reg.uf || null;\n    }\n    if (tipoCadastro === 'produto') {\n      staging.grupo = reg.grupo || reg.categoria || null;\n      staging.unidade = reg.unidade || 'PÇ';\n      staging.peso_medio_kg = parseFloat(reg.peso_medio_kg || reg.peso_medio) || null;\n    }\n    \n    results.push({ json: staging });\n  }\n}\n\nreturn results;"
+      },
+      "id": "transformar-cadastros",
+      "name": "Transformar → Staging",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_cadastros_staging",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": { "batching": { "batch": { "batchSize": 50, "batchInterval": 500 } } }
+      },
+      "id": "inserir-staging",
+      "name": "Inserir no Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/rpc/fn_promover_cadastros",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "p_sync_log_id", "value": "={{$('Criar Log de Sync').first().json.id}}" }
+          ]
+        },
+        "options": { "timeout": 120000 }
+      },
+      "id": "promover-cadastros",
+      "name": "Promover Staging → Final",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Consolidar resultado e atualizar log\nconst resultado = $input.first().json;\nconst syncLogId = $('Criar Log de Sync').first().json.id;\nconst totalStaging = $('Transformar → Staging').all().length;\n\nreturn [{\n  json: {\n    id: syncLogId,\n    status: (resultado.erros || 0) > 0 ? 'parcial' : 'sucesso',\n    total_registros: totalStaging,\n    novos: resultado.inseridos || 0,\n    atualizados: resultado.atualizados || 0,\n    erros: resultado.erros || 0,\n    fim: new Date().toISOString(),\n    mensagem: `Cadastros: ${resultado.inseridos || 0} novos, ${resultado.atualizados || 0} atualizados, ${resultado.erros || 0} erros`,\n    detalhes_json: {\n      resultado,\n      execution_id: $execution.id\n    }\n  }\n}];"
+      },
+      "id": "consolidar-resultado",
+      "name": "Consolidar Resultado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_log?id=eq.{{$json.id}}",
+        "method": "PATCH",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "atualizar-log",
+      "name": "Atualizar Log Final",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1760, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Após sync de cadastros, re-resolver vínculos pendentes em cargas\n// Busca cargas que têm códigos mas sem ID resolvido\nreturn [{ json: { action: 'relink_pending' } }];"
+      },
+      "id": "trigger-relink",
+      "name": "Trigger Re-vínculo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/vw_cargas_vinculos_pendentes?select=id&limit=500",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-pendentes",
+      "name": "Buscar Cargas Pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Para cada carga com vínculo pendente, fazer UPDATE para re-disparar o trigger\nconst cargas = $input.all().filter(c => c.json.id);\nif (cargas.length === 0) return [{ json: { relinked: 0 } }];\n\nreturn cargas.map(c => ({\n  json: {\n    id: c.json.id,\n    // UPDATE vazio para re-disparar fn_resolver_vinculos_carga\n    atualizado_trigger: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "preparar-relink",
+      "name": "Preparar Re-vínculo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2200, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_cargas_raw?id=eq.{{$json.id}}",
+        "method": "PATCH",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "processado_em", "value": "={{$json.atualizado_trigger}}" }
+          ]
+        },
+        "options": { "batching": { "batch": { "batchSize": 20, "batchInterval": 200 } } }
+      },
+      "id": "relink-cargas",
+      "name": "Re-vincular Cargas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [2420, 200]
+    }
+  ],
+  "connections": {
+    "Cron Diário 00h": { "main": [[
+      { "node": "Buscar Configs de Cadastro", "type": "main", "index": 0 },
+      { "node": "Criar Log de Sync", "type": "main", "index": 0 }
+    ]]},
+    "Buscar Configs de Cadastro": { "main": [[{ "node": "Mapear Endpoints → Tipos", "type": "main", "index": 0 }]] },
+    "Mapear Endpoints → Tipos": { "main": [[{ "node": "API ATAK - Buscar Cadastros", "type": "main", "index": 0 }]] },
+    "API ATAK - Buscar Cadastros": { "main": [[{ "node": "Transformar → Staging", "type": "main", "index": 0 }]] },
+    "Transformar → Staging": { "main": [[{ "node": "Inserir no Staging", "type": "main", "index": 0 }]] },
+    "Inserir no Staging": { "main": [[{ "node": "Promover Staging → Final", "type": "main", "index": 0 }]] },
+    "Promover Staging → Final": { "main": [[
+      { "node": "Consolidar Resultado", "type": "main", "index": 0 },
+      { "node": "Trigger Re-vínculo", "type": "main", "index": 0 }
+    ]]},
+    "Consolidar Resultado": { "main": [[{ "node": "Atualizar Log Final", "type": "main", "index": 0 }]] },
+    "Trigger Re-vínculo": { "main": [[{ "node": "Buscar Cargas Pendentes", "type": "main", "index": 0 }]] },
+    "Buscar Cargas Pendentes": { "main": [[{ "node": "Preparar Re-vínculo", "type": "main", "index": 0 }]] },
+    "Preparar Re-vínculo": { "main": [[{ "node": "Re-vincular Cargas", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": [
+    { "name": "atak-cq" },
+    { "name": "cadastros" },
+    { "name": "sync-diario" }
+  ]
+}

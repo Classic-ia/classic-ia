@@ -1,0 +1,435 @@
+-- ══════════════════════════════════════════════════════════════════════════════
+-- ARCHITECTURE.sql — Documento Canônico de Arquitetura do Classic CQ
+-- NÃO EXECUTAR — Este arquivo é documentação, não migration
+-- Última atualização: 2026-03-18
+-- ══════════════════════════════════════════════════════════════════════════════
+--
+-- Este documento define:
+--   1. Fluxo canônico de dados (arquitetura-mãe)
+--   2. Mapa completo de entidades
+--   3. Origem oficial (dono) de cada dado
+--   4. Modelo transacional (eventos do sistema)
+--   5. Regras de governança cadastral
+--   6. Matriz de permissões
+--
+-- REGRA: Nenhum módulo novo pode ser criado sem consultar este documento.
+-- ══════════════════════════════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 1. FLUXO CANÔNICO DE DADOS (ARQUITETURA-MÃE)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- O sistema segue 5 camadas, SEMPRE nesta ordem:
+--
+--   ┌─────────────────────────────────────────────────────────────────────┐
+--   │  CAMADA 1 — CADASTROS MESTRES                                     │
+--   │  Fonte de verdade. Sem cadastro mestre, nada funciona.             │
+--   │  Dados vêm do ATAK, RH, ou são criados pelo admin.                │
+--   │                                                                     │
+--   │  cadastros_atak (fornecedores, motoristas, funcionários)           │
+--   │  cq_produtos                                                       │
+--   │  cq_veiculos                                                       │
+--   │  cq_transportadoras                                                │
+--   │  cq_tipos_defeito / cq_ranking_defeitos                            │
+--   │  cq_ranking_produtos                                               │
+--   │  cq_usuarios / cq_permissoes                                       │
+--   │  cq_clientes                    ← NOVO (migration 07)             │
+--   │  cq_unidades                    ← NOVO (migration 07)             │
+--   │  cq_motivos_divergencia         ← NOVO (migration 07)             │
+--   │  cq_parametros_inspecao                                            │
+--   │  cq_canais_notificacao / cq_regras_notificacao                    │
+--   └──────────────────────────┬──────────────────────────────────────────┘
+--                              │
+--                              ▼
+--   ┌─────────────────────────────────────────────────────────────────────┐
+--   │  CAMADA 2 — MOVIMENTAÇÕES / EVENTOS                               │
+--   │  Registros transacionais. Referenciam cadastros mestres por UUID.  │
+--   │  Cada evento tem: quem, quando, onde, o quê.                      │
+--   │                                                                     │
+--   │  cq_eventos (tabela unificada)  ← NOVO (migration 08)             │
+--   │  registros_cq_inspecao                                             │
+--   │  cq_recebimentos                                                   │
+--   │  cq_cargas                                                         │
+--   │  cq_lote_inspecao / cq_lote_produto                               │
+--   │  cq_embarques_wrlog                                                │
+--   │  atak_cargas_raw / atak_embarques_raw / atak_producao_raw         │
+--   └──────────────────────────┬──────────────────────────────────────────┘
+--                              │
+--                              ▼
+--   ┌─────────────────────────────────────────────────────────────────────┐
+--   │  CAMADA 3 — VALIDAÇÕES / REGRAS DE NEGÓCIO                        │
+--   │  Triggers e functions que garantem integridade.                    │
+--   │  NENHUM dado passa sem validação.                                  │
+--   │                                                                     │
+--   │  fn_validar_abc_total (A+B+C = total)                             │
+--   │  fn_validar_defeitos_vs_total                                     │
+--   │  fn_validar_cadastro_existe                                       │
+--   │  fn_validar_item_ativo                                            │
+--   │  fn_validar_justificativa_bc    ← NOVO (migration 08)             │
+--   │  fn_validar_documento_unico                                       │
+--   │  fn_validar_divergencia_limite                                    │
+--   │  fn_registrar_evento                                              │
+--   │  cq_validacao_divergencias                                        │
+--   └──────────────────────────┬──────────────────────────────────────────┘
+--                              │
+--                              ▼
+--   ┌─────────────────────────────────────────────────────────────────────┐
+--   │  CAMADA 4 — DASHBOARDS / VIEWS                                    │
+--   │  Apenas leitura. Nunca escrevem dados.                            │
+--   │  Consomem views materializadas quando possível.                   │
+--   │                                                                     │
+--   │  vw_inspecoes_completa                                            │
+--   │  vw_cargas_completa                                               │
+--   │  vw_ranking_geral_fornecedor                                      │
+--   │  vw_ranking_fornecedor_produto                                    │
+--   │  vw_ranking_defeitos_fornecedor                                   │
+--   │  vw_ranking_tendencia_30d                                         │
+--   │  vw_ranking_alertas                                               │
+--   │  mv_fornecedor_ranking / mv_sync_sla_metricas_7d                 │
+--   │  vw_system_health                                                 │
+--   └──────────────────────────┬──────────────────────────────────────────┘
+--                              │
+--                              ▼
+--   ┌─────────────────────────────────────────────────────────────────────┐
+--   │  CAMADA 5 — AUTOMAÇÕES / INTEGRAÇÕES                              │
+--   │  n8n, webhooks, notificações.                                      │
+--   │  Consomem dados da camada 4. Disparam ações na camada 2.          │
+--   │                                                                     │
+--   │  atak_sync_config / atak_sync_log                                 │
+--   │  atak_cadastros_staging → fn_promover_cadastros                   │
+--   │  cq_fila_notificacao → cq_notificacao_log                        │
+--   │  n8n_webhook_tokens                                               │
+--   │  fn_refresh_all_mv()                                              │
+--   └─────────────────────────────────────────────────────────────────────┘
+--
+--
+-- REGRA DE OURO: Cada camada SÓ depende da camada acima.
+--   - Dashboard NÃO cria dados.
+--   - Validação NÃO depende de dashboard.
+--   - Movimentação NÃO existe sem cadastro mestre.
+--   - Cadastro mestre NÃO depende de nada (é a raiz).
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 2. MAPA COMPLETO DE ENTIDADES
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ┌─────────────────────────┬────────────┬──────────────┬────────────────┐
+-- │ ENTIDADE                │ TABELA     │ CAMADA       │ MIGRATION      │
+-- ├─────────────────────────┼────────────┼──────────────┼────────────────┤
+-- │                         │            │              │                │
+-- │ ═══ CADASTROS MESTRES ═══                                           │
+-- │ Fornecedores            │ cadastros_atak (tipo=fornecedor)│ 1 │ 00  │
+-- │ Motoristas              │ cadastros_atak (tipo=motorista) │ 1 │ 00  │
+-- │ Funcionários            │ cadastros_atak (tipo=funcionario)│ 1│ 00  │
+-- │ Produtos                │ cq_produtos                │ 1 │ 00       │
+-- │ Produtos de ranking     │ cq_ranking_produtos         │ 1 │ 05      │
+-- │ Veículos                │ cq_veiculos                 │ 1 │ fase2c  │
+-- │ Transportadoras         │ cq_transportadoras          │ 1 │ 06      │
+-- │ Clientes                │ cq_clientes                 │ 1 │ 07 NOVO │
+-- │ Unidades/Filiais        │ cq_unidades                 │ 1 │ 07 NOVO │
+-- │ Tipos de defeito        │ cq_tipos_defeito            │ 1 │ 00      │
+-- │ Defeitos de ranking     │ cq_ranking_defeitos         │ 1 │ 05      │
+-- │ Motivos divergência     │ cq_motivos_divergencia      │ 1 │ 07 NOVO │
+-- │ Usuários                │ cq_usuarios                 │ 1 │ 00      │
+-- │ Permissões              │ cq_permissoes               │ 1 │ fase2   │
+-- │ Perfis de acesso        │ cq_usuarios.perfil (CHECK)  │ 1 │ fase2   │
+-- │ Parâmetros inspeção     │ cq_parametros_inspecao      │ 1 │ fase1   │
+-- │ Canais notificação      │ cq_canais_notificacao       │ 1 │ 03      │
+-- │ Regras notificação      │ cq_regras_notificacao       │ 1 │ 03      │
+-- │                         │            │              │                │
+-- │ ═══ MOVIMENTAÇÕES ═══                                               │
+-- │ Inspeções               │ registros_cq_inspecao       │ 2 │ 00      │
+-- │ Lotes de ranking        │ cq_lote_inspecao            │ 2 │ 05      │
+-- │ Produtos no lote        │ cq_lote_produto             │ 2 │ 05      │
+-- │ Recebimentos            │ cq_recebimentos             │ 2 │ 01_SQL  │
+-- │ Cargas                  │ cq_cargas                   │ 2 │ fase5   │
+-- │ Embarques               │ cq_embarques_wrlog          │ 2 │ sql_emb │
+-- │ Revisões                │ cq_revisoes                 │ 2 │ fase2g  │
+-- │ Não conformidades       │ cq_nao_conformidades        │ 2 │ fase2g  │
+-- │ Planos de ação          │ cq_planos_acao              │ 2 │ 01_SQL  │
+-- │ Anexos                  │ cq_anexos                   │ 2 │ fase1   │
+-- │ Eventos (unificado)     │ cq_eventos                  │ 2 │ 08 NOVO │
+-- │                         │            │              │                │
+-- │ ═══ STAGING / RAW ═══                                               │
+-- │ Cargas ATAK             │ atak_cargas_raw             │ S │ 00_int  │
+-- │ Embarques ATAK          │ atak_embarques_raw          │ S │ 00_int  │
+-- │ Produção ATAK           │ atak_producao_raw           │ S │ 00_int  │
+-- │ Expedição ATAK          │ atak_expedicao_raw          │ S │ 00_int  │
+-- │ Cadastros staging       │ atak_cadastros_staging      │ S │ 01_int  │
+-- │                         │            │              │                │
+-- │ ═══ VALIDAÇÃO ═══                                                   │
+-- │ Divergências            │ cq_validacao_divergencias   │ 3 │ 00_int  │
+-- │ Score fornecedor        │ cq_fornecedor_score         │ 3 │ 00_int  │
+-- │ Histórico score         │ cq_fornecedor_score_hist    │ 3 │ 03      │
+-- │ Alertas qualidade       │ cq_alertas_qualidade        │ 3 │ sql_ale │
+-- │                         │            │              │                │
+-- │ ═══ CONFIG / INFRA ═══                                              │
+-- │ Sync config             │ atak_sync_config            │ 5 │ 00_int  │
+-- │ Sync log                │ atak_sync_log               │ 5 │ 00_int  │
+-- │ Webhook tokens          │ n8n_webhook_tokens          │ 5 │ 00_int  │
+-- │ Fila notificação        │ cq_fila_notificacao         │ 5 │ 03      │
+-- │ Log notificação         │ cq_notificacao_log          │ 5 │ 03      │
+-- │ Sessões                 │ cq_sessoes                  │ 5 │ RODAR   │
+-- │ Audit log               │ cq_audit_log                │ 5 │ RODAR   │
+-- │ Importações             │ cq_importacoes              │ 5 │ fase_im │
+-- │ Importação erros        │ cq_importacao_erros         │ 5 │ fase_im │
+-- └─────────────────────────┴────────────┴──────────────┴────────────────┘
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 3. ORIGEM OFICIAL (DONO) DE CADA DADO
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ┌────────────────────────┬─────────────────┬──────────────────────────────┐
+-- │ ENTIDADE               │ FONTE OFICIAL   │ REGRA DE SYNC                │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Fornecedores           │ ATAK (WRCAD009) │ ATAK → staging → cadastro.  │
+-- │                        │                 │ CQ pode anotar (score,       │
+-- │                        │                 │ bloqueio), mas NÃO altera    │
+-- │                        │                 │ nome/CNPJ/UF.               │
+-- │                        │                 │ Financeiro pode validar.     │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Produtos               │ ATAK (WRCAD)    │ ATAK → staging → cq_produtos.│
+-- │                        │                 │ CQ pode configurar params    │
+-- │                        │                 │ de inspeção, mas NÃO cria    │
+-- │                        │                 │ produto novo (só ATAK).      │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Produtos de ranking    │ CQ (sistema)    │ Cadastro fixo (31 produtos). │
+-- │                        │                 │ Só admin pode alterar.       │
+-- │                        │                 │ Mapeia para cq_produtos.     │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Motoristas             │ ATAK (WRCAD)    │ ATAK → staging → cadastro.  │
+-- │                        │                 │ Sistema NÃO cria motorista.  │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Funcionários           │ ATAK/RH         │ ATAK → staging → cadastro.  │
+-- │                        │                 │ RH pode atualizar via ATAK.  │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Veículos               │ ATAK (WRCAD)    │ ATAK → staging → cq_veiculos│
+-- │                        │ Transporte/Frota│ Transporte pode atualizar    │
+-- │                        │                 │ placa, tipo, capacidade.     │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Transportadoras        │ CQ (auto-cad)   │ Auto-cadastro via trigger.   │
+-- │                        │                 │ Admin pode mesclar/editar.   │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Clientes               │ ATAK/Comercial  │ ATAK → staging → cq_clientes│
+-- │                        │                 │ Comercial pode validar.      │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Defeitos (tipos)       │ CQ (sistema)    │ Cadastro fixo. Admin cria.   │
+-- │                        │                 │ Inspetores não alteram.      │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Motivos divergência    │ CQ (sistema)    │ Cadastro fixo. Admin cria.   │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Usuários               │ Auth (Supabase) │ Admin cadastra no sistema.   │
+-- │                        │                 │ Supabase Auth é o provedor.  │
+-- │                        │                 │ cq_usuarios espelha auth.    │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Unidades/Filiais       │ Admin           │ Cadastro manual. Raramente   │
+-- │                        │                 │ muda. Só admin.              │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Cargas/Lotes           │ ATAK (WRMVE500) │ ATAK → staging → validação  │
+-- │                        │                 │ → atak_cargas_raw.           │
+-- │                        │                 │ CQ lança inspeção vinculada. │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Inspeções              │ CQ (inspetores) │ Inspetor cria. Revisor valida│
+-- │                        │                 │ Admin encerra. Imutável após │
+-- │                        │                 │ encerramento.                │
+-- ├────────────────────────┼─────────────────┼──────────────────────────────┤
+-- │ Documentos ATAK        │ ATAK (vários)   │ atak_cargas_raw.numero_doc   │
+-- │                        │                 │ atak_cargas_raw.numero_pcr   │
+-- │                        │                 │ São chaves únicas (hash).    │
+-- └────────────────────────┴─────────────────┴──────────────────────────────┘
+--
+-- REGRA: Se a fonte oficial é ATAK, o CQ NÃO pode alterar dados-raiz
+-- (nome, código, CNPJ). Pode apenas anotar (score, bloqueio, observação).
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 4. MODELO TRANSACIONAL — EVENTOS DO SISTEMA
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Todo evento segue a estrutura:
+--   QUEM (usuario_id) + QUANDO (criado_em) + ONDE (unidade_id) + O QUÊ (tipo_evento)
+--
+-- ┌────────────────────────────────┬──────────────────────────────────────┐
+-- │ EVENTO                        │ TABELA ONDE OCORRE                   │
+-- ├────────────────────────────────┼──────────────────────────────────────┤
+-- │ entrada_produto                │ cq_recebimentos                     │
+-- │ lancamento_carga               │ atak_cargas_raw / cq_cargas         │
+-- │ inspecao_qualidade             │ registros_cq_inspecao                │
+-- │ lancamento_lote_ranking        │ cq_lote_inspecao + cq_lote_produto  │
+-- │ classificacao_abc              │ cq_lote_produto (trigger)           │
+-- │ apontamento_defeitos           │ cq_lote_produto (trigger)           │
+-- │ divergencia_detectada          │ cq_validacao_divergencias           │
+-- │ divergencia_resolvida          │ cq_validacao_divergencias           │
+-- │ revisao_inspecao               │ cq_revisoes                         │
+-- │ aprovacao_inspecao             │ registros_cq_inspecao (workflow)     │
+-- │ abertura_nc                    │ cq_nao_conformidades                │
+-- │ encerramento_nc                │ cq_nao_conformidades                │
+-- │ plano_acao_criado              │ cq_planos_acao                      │
+-- │ expedição                      │ atak_expedicao_raw                  │
+-- │ bloqueio_lote                  │ cq_fornecedor_score (trigger)       │
+-- │ liberacao_lote                 │ cq_fornecedor_score (manual)        │
+-- │ bloqueio_fornecedor            │ cq_fornecedor_score (trigger)       │
+-- │ score_recalculado              │ cq_fornecedor_score_historico       │
+-- │ sync_atak_executado            │ atak_sync_log                       │
+-- │ cadastro_mestre_alterado       │ cq_audit_log (trigger)              │
+-- │ usuario_login                  │ cq_audit_log                        │
+-- │ usuario_logout                 │ cq_audit_log                        │
+-- │ sessao_expirada                │ cq_audit_log                        │
+-- │ notificacao_enviada            │ cq_notificacao_log                  │
+-- │ importacao_planilha            │ cq_importacoes                      │
+-- └────────────────────────────────┴──────────────────────────────────────┘
+--
+-- TODOS esses eventos devem ter registro na tabela cq_eventos (migration 08)
+-- como log unificado, além do registro na tabela específica.
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 5. GOVERNANÇA CADASTRAL — QUEM PODE O QUÊ
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ┌──────────────────┬─────────┬────────┬──────────┬──────────┬──────────┬─────────┐
+-- │ CADASTRO         │ CRIAR   │ EDITAR │ INATIVAR │ MESCLAR  │ APROVAR  │ MAPEAR  │
+-- │                  │         │        │          │ DUPLICADOS│ NOVOS   │ ALIAS   │
+-- ├──────────────────┼─────────┼────────┼──────────┼──────────┼──────────┼─────────┤
+-- │ Fornecedores     │ ATAK/   │ ATAK   │ admin    │ admin    │ admin/   │ admin   │
+-- │                  │ admin   │        │          │          │ financ.  │         │
+-- │ Produtos         │ ATAK    │ ATAK   │ admin    │ admin    │ admin    │ admin   │
+-- │ Prod. ranking    │ admin   │ admin  │ admin    │ —        │ —        │ —       │
+-- │ Motoristas       │ ATAK    │ ATAK   │ admin    │ admin    │ —        │ —       │
+-- │ Funcionários     │ ATAK/RH │ ATAK   │ admin    │ admin    │ —        │ —       │
+-- │ Veículos         │ ATAK/   │ admin/ │ admin    │ admin    │ —        │ —       │
+-- │                  │ admin   │ logist │          │          │          │         │
+-- │ Transportadoras  │ auto/   │ admin  │ admin    │ admin    │ —        │ —       │
+-- │                  │ admin   │        │          │          │          │         │
+-- │ Clientes         │ ATAK/   │ ATAK   │ admin    │ admin    │ comercial│ admin   │
+-- │                  │ admin   │        │          │          │          │         │
+-- │ Defeitos         │ admin   │ admin  │ admin    │ —        │ —        │ —       │
+-- │ Motivos diverg.  │ admin   │ admin  │ admin    │ —        │ —        │ —       │
+-- │ Usuários         │ admin   │ admin  │ admin    │ —        │ —        │ —       │
+-- │ Unidades         │ admin   │ admin  │ admin    │ —        │ —        │ —       │
+-- │ Parâm. inspeção  │ admin/  │ admin/ │ admin    │ —        │ —        │ —       │
+-- │                  │ qualid. │ qualid.│          │          │          │         │
+-- └──────────────────┴─────────┴────────┴──────────┴──────────┴──────────┴─────────┘
+--
+-- REGRA: Campos vindos do ATAK são READ-ONLY no CQ.
+--        O CQ pode ANOTAR (score, bloqueio, observação), mas NÃO ALTERAR dados-raiz.
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 6. VALIDAÇÕES OBRIGATÓRIAS DE NEGÓCIO
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Implementadas como triggers BEFORE INSERT/UPDATE:
+--
+-- ┌────┬───────────────────────────────────────────────────────────────────┐
+-- │ V# │ REGRA                                                           │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V1 │ A + B + C = total inspecionado (OBRIGATÓRIO)                    │
+-- │    │ Já implementado: fn_validar_abc_total (migration 02)            │
+-- │    │ Aplica-se a: atak_cargas_raw, cq_lote_produto                  │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V2 │ Total de defeitos ≤ total analisado                             │
+-- │    │ NOVO: fn_validar_defeitos_vs_total (migration 08)               │
+-- │    │ Aplica-se a: registros_cq_inspecao, cq_lote_produto            │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V3 │ Documento ATAK não pode ser duplicado (hash_registro UNIQUE)    │
+-- │    │ Já implementado: UNIQUE em atak_cargas_raw.hash_registro        │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V4 │ Produto deve existir no cadastro mestre                         │
+-- │    │ NOVO: fn_validar_cadastro_existe (migration 08)                 │
+-- │    │ Trigger rejeita INSERT se produto_id não resolve                │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V5 │ Fornecedor deve existir no cadastro mestre                      │
+-- │    │ NOVO: fn_validar_cadastro_existe (migration 08)                 │
+-- │    │ Trigger rejeita INSERT se fornecedor_id não resolve             │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V6 │ Item inativo não pode ser lançado                               │
+-- │    │ NOVO: fn_validar_item_ativo (migration 08)                      │
+-- │    │ Fornecedor/produto inativo = REJECT no INSERT                   │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V7 │ Se houver B ou C, deve haver justificativa ou defeito ≥ 1       │
+-- │    │ NOVO: fn_validar_justificativa_bc (migration 08)                │
+-- │    │ class_b > 0 OR class_c > 0 → total_defeitos ≥ 1 OR obs != ''   │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V8 │ Divergência acima do limite gera alerta automático              │
+-- │    │ Já implementado: trigger + fn_enfileirar_notificacao (migration 03) │
+-- ├────┼───────────────────────────────────────────────────────────────────┤
+-- │ V9 │ Fornecedor bloqueado não pode receber carga nova               │
+-- │    │ NOVO: fn_validar_fornecedor_bloqueado (migration 08)            │
+-- └────┴───────────────────────────────────────────────────────────────────┘
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 7. MATRIZ DE PERMISSÕES POR PERFIL (resumo)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- Detalhada em cq_permissoes (fase2_migracao_perfis.sql)
+--
+-- ┌───────────────┬─────┬──────┬──────┬──────┬──────┬──────┬──────┐
+-- │ MÓDULO        │ADMIN│QUALID│LOGIST│FINAN │COMER │INDUS │DIRET │
+-- ├───────────────┼─────┼──────┼──────┼──────┼──────┼──────┼──────┤
+-- │ Cadastros     │CRUD │ R    │ R    │ R    │ R    │ R    │ R    │
+-- │ Inspeções     │CRUD │ CRU  │ —    │ —    │ —    │ —    │ R    │
+-- │ Recebimentos  │CRUD │ CRU  │ CRU  │ —    │ —    │ —    │ R    │
+-- │ Cargas        │CRUD │ CRU  │ CRU  │ —    │ —    │ —    │ R    │
+-- │ Ranking       │CRUD │ R    │ —    │ R    │ R    │ R    │ R    │
+-- │ Divergências  │CRUD │ RU   │ R    │ R    │ —    │ —    │ R    │
+-- │ NCs           │CRUD │ CRU  │ —    │ —    │ —    │ —    │ R    │
+-- │ Dashboards    │ R   │ R    │ R    │ R    │ R    │ R    │ R    │
+-- │ Importação    │CRUD │ CRU  │ —    │ —    │ —    │ —    │ —    │
+-- │ Usuários      │CRUD │ —    │ —    │ —    │ —    │ —    │ —    │
+-- │ Config sistema│CRUD │ —    │ —    │ —    │ —    │ —    │ —    │
+-- └───────────────┴─────┴──────┴──────┴──────┴──────┴──────┴──────┘
+-- CRUD = Create/Read/Update/Delete  |  CRU = sem Delete  |  RU = Read+Update
+-- R = Read-only  |  — = Sem acesso
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 8. TRILHA DE AUDITORIA
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- cq_audit_log registra automaticamente (via triggers):
+--   • quem (usuario_id, usuario_email, usuario_nome)
+--   • quando (criado_em)
+--   • o quê (acao, tabela, operacao, registro_id)
+--   • antes/depois (dados_antigos JSONB, dados_novos JSONB)
+--   • onde (latitude, longitude, dentro_planta)
+--
+-- Triggers de auditoria devem existir em TODAS as tabelas de cadastro mestre:
+--   cadastros_atak, cq_produtos, cq_veiculos, cq_transportadoras,
+--   cq_clientes, cq_unidades, cq_tipos_defeito, cq_ranking_defeitos,
+--   cq_ranking_produtos, cq_parametros_inspecao, cq_usuarios
+--
+-- cq_eventos (migration 08) serve como log unificado de TODOS os eventos
+-- transacionais (login, inspeção, divergência, score, etc.)
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 9. ORDEM DE EXECUÇÃO DAS MIGRATIONS
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- 1.  00_EXECUTAR_PRIMEIRO_supabase.sql  — Tabelas base
+-- 2.  RODAR_AGORA_supabase.sql           — Sessões, audit_log, inspeções
+-- 3.  01_SQL_complementar.sql            — Recebimentos, planos de ação
+-- 4.  fase1_complemento.sql              — Parâmetros, anexos
+-- 5.  fase2_migracao_perfis.sql          — Perfis 5→7, permissões
+-- 6.  fase2_governanca.sql               — Workflow, revisões, NCs
+-- 7.  fase2c_veiculos.sql                — Veículos
+-- 8.  fase5_cq_cargas.sql                — Cargas
+-- 9.  00_migration_integracao.sql        — ATAK: sync, staging, score
+-- 10. 01_migration_cadastros.sql         — ATAK: cadastros staging
+-- 11. 02_migration_guards.sql            — Guards de integridade
+-- 12. 03_migration_sla_notif_historico.sql — SLA, notificações, histórico
+-- 13. 04_migration_observabilidade.sql   — Views materializadas, health
+-- 14. 05_migration_ranking_qualidade.sql — Ranking: produtos, defeitos, lotes
+-- 15. 06_migration_padronizacao_ids.sql  — UUID FKs, resolução automática
+-- 16. 07_migration_cadastros_mestres.sql — Clientes, unidades, motivos, audit
+-- 17. 08_migration_eventos_validacoes.sql — Eventos, validações de negócio
+-- 18. 09_migration_backup_recuperacao.sql — Backup, changelog, snapshots
+-- 19. 10_migration_merge_estrutura.sql   — Merge SQL novo: movimentações, staging, defeitos normalizados
+-- 20. 11_migration_dashboard_decisao.sql — Views decisional: alertas, ranking, produtos, defeitos, pipeline
+-- 21. 12_migration_qualidade_4_dimensoes.sql — Views: qualidade por fornecedor/produto/lote/setor
+-- 22. 13_migration_motor_decisao_iqf.sql    — Motor decisão automática, IQF, reamostragem, NCs

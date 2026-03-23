@@ -1,0 +1,135 @@
+{
+  "name": "ATAK → CQ | Anti-Duplicidade de Documentos",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "atak-cq/check-duplicidade",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "webhook-dedup",
+      "name": "Webhook Check Duplicidade",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "notes": "Chamado antes de inserir carga/documento. Body: { numero_documento, numero_pcr, fornecedor_codigo }"
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $input.first().json.body || $input.first().json;\nconst doc = body.numero_documento || '';\nconst pcr = body.numero_pcr || '';\nconst forn = body.fornecedor_codigo || '';\n\n// Montar filtros para busca\nconst filters = [];\nif (doc) filters.push(`numero_documento=eq.${doc}`);\nif (pcr) filters.push(`numero_pcr=eq.${pcr}`);\n\nreturn [{ json: { doc, pcr, forn, filter: filters.join('&') } }];"
+      },
+      "id": "preparar-busca",
+      "name": "Preparar Filtros",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_cargas_raw?{{$json.filter}}&select=id,numero_documento,numero_pcr,fornecedor_codigo,criado_em",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "buscar-existente",
+      "name": "Buscar Documentos Existentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "const existentes = $input.all();\nconst original = $('Preparar Filtros').first().json;\n\nif (existentes.length > 0 && existentes[0].json.id) {\n  // DUPLICADO ENCONTRADO\n  const dup = existentes[0].json;\n  return [{\n    json: {\n      duplicado: true,\n      mensagem: `Documento já existe: ${dup.numero_documento || dup.numero_pcr} (ID: ${dup.id}, criado em: ${dup.criado_em})`,\n      registro_existente: dup,\n      tipo_divergencia: 'duplicidade_carga',\n      gravidade: 'atencao',\n      status: 'aberta',\n      tabela_origem: 'atak_cargas_raw',\n      registro_origem_id: dup.id,\n      fornecedor_codigo: original.forn,\n      numero_documento: original.doc || original.pcr,\n      campo_divergente: 'numero_documento/numero_pcr',\n      valor_esperado: 'Registro único',\n      valor_encontrado: `Duplicata de ${dup.id}`,\n      detectado_por: 'n8n_webhook_dedup'\n    }\n  }];\n} else {\n  return [{\n    json: {\n      duplicado: false,\n      mensagem: 'Documento não encontrado. Pode prosseguir com inserção.'\n    }\n  }];\n}"
+      },
+      "id": "verificar-resultado",
+      "name": "Verificar Duplicidade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json.duplicado}}", "value2": true }]
+        }
+      },
+      "id": "if-duplicado",
+      "name": "É Duplicado?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_validacao_divergencias",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify({ tipo_divergencia: $json.tipo_divergencia, gravidade: $json.gravidade, status: $json.status, tabela_origem: $json.tabela_origem, registro_origem_id: $json.registro_origem_id, fornecedor_codigo: $json.fornecedor_codigo, numero_documento: $json.numero_documento, campo_divergente: $json.campo_divergente, valor_esperado: $json.valor_esperado, valor_encontrado: $json.valor_encontrado, mensagem: $json.mensagem, detectado_por: $json.detectado_por })}}",
+        "options": {}
+      },
+      "id": "registrar-duplicidade",
+      "name": "Registrar Divergência",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, -80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({ status: 'blocked', duplicado: true, mensagem: $json.mensagem })}}",
+        "options": { "responseCode": 409 }
+      },
+      "id": "respond-blocked",
+      "name": "Responder Bloqueado",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1320, -80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{JSON.stringify({ status: 'ok', duplicado: false, mensagem: $json.mensagem })}}",
+        "options": { "responseCode": 200 }
+      },
+      "id": "respond-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1100, 100]
+    }
+  ],
+  "connections": {
+    "Webhook Check Duplicidade": { "main": [[{ "node": "Preparar Filtros", "type": "main", "index": 0 }]] },
+    "Preparar Filtros": { "main": [[{ "node": "Buscar Documentos Existentes", "type": "main", "index": 0 }]] },
+    "Buscar Documentos Existentes": { "main": [[{ "node": "Verificar Duplicidade", "type": "main", "index": 0 }]] },
+    "Verificar Duplicidade": { "main": [[{ "node": "É Duplicado?", "type": "main", "index": 0 }]] },
+    "É Duplicado?": {
+      "main": [
+        [{ "node": "Registrar Divergência", "type": "main", "index": 0 }],
+        [{ "node": "Responder OK", "type": "main", "index": 0 }]
+      ]
+    },
+    "Registrar Divergência": { "main": [[{ "node": "Responder Bloqueado", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "tags": [{ "name": "atak-cq" }, { "name": "dedup" }]
+}

@@ -1,0 +1,274 @@
+{
+  "name": "ATAK → CQ | Sync Cargas",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "minutes", "minutesInterval": 30 }]
+        }
+      },
+      "id": "trigger-cron",
+      "name": "Cron 30min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "notes": "Executa a cada 30 minutos para buscar cargas novas no ATAK"
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_config?endpoint_nome=eq.WRMVE500_cargas&ativo=eq.true&select=*",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-sync-config",
+      "name": "Buscar Config Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [220, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$json.endpoint_url}}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer {{$env.ATAK_API_TOKEN}}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "data_inicio", "value": "={{$today.toISODate()}}" },
+            { "name": "data_fim", "value": "={{$today.toISODate()}}" }
+          ]
+        },
+        "options": { "timeout": 30000 }
+      },
+      "id": "fetch-atak-cargas",
+      "name": "API ATAK - Buscar Cargas",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_log",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "endpoint_nome", "value": "WRMVE500_cargas" },
+            { "name": "status", "value": "em_execucao" },
+            { "name": "n8n_execution_id", "value": "={{$execution.id}}" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "create-sync-log",
+      "name": "Criar Log de Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [440, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Processar cada carga da API ATAK\nconst cargas = $input.all();\nconst crypto = require('crypto');\nconst results = [];\n\nfor (const item of cargas) {\n  const carga = item.json;\n  \n  // Gerar hash para dedup\n  const hashInput = [\n    carga.numero_documento || '',\n    carga.numero_pcr || '',\n    carga.fornecedor_codigo || '',\n    carga.data_coleta || ''\n  ].join('|');\n  const hash = crypto.createHash('sha256').update(hashInput).digest('hex');\n  \n  // Calcular total classificado\n  const classA = parseInt(carga.class_a) || 0;\n  const classB = parseInt(carga.class_b) || 0;\n  const classC = parseInt(carga.class_c) || 0;\n  const totalClassificado = parseInt(carga.total_classificado) || (classA + classB + classC);\n  \n  results.push({\n    json: {\n      atak_id: carga.id,\n      numero_documento: carga.numero_documento,\n      numero_pcr: carga.numero_pcr,\n      numero_carga: carga.numero_carga,\n      fornecedor_codigo: carga.fornecedor_codigo,\n      fornecedor_nome: carga.fornecedor_nome,\n      frigorifico: carga.frigorifico,\n      motorista: carga.motorista,\n      placa_veiculo: carga.placa_veiculo,\n      transportadora: carga.transportadora,\n      data_coleta: carga.data_coleta,\n      data_chegada: carga.data_chegada,\n      qtd_frigo: parseInt(carga.qtd_frigo) || 0,\n      peso_frigo_kg: parseFloat(carga.peso_frigo_kg) || 0,\n      produto: carga.produto,\n      tipo_conservacao: carga.tipo_conservacao,\n      class_a: classA,\n      class_b: classB,\n      class_c: classC,\n      total_classificado: totalClassificado,\n      hash_registro: hash,\n      payload_json: carga\n    }\n  });\n}\n\nreturn results;"
+      },
+      "id": "transform-cargas",
+      "name": "Transformar Cargas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_cargas_raw",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "resolution=merge-duplicates,return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": { "batching": { "batch": { "batchSize": 50, "batchInterval": 500 } } }
+      },
+      "id": "upsert-cargas",
+      "name": "Upsert Cargas no Supabase",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Validar regras de negócio em cada carga inserida\nconst cargas = $input.all();\nconst divergencias = [];\n\nfor (const item of cargas) {\n  const c = item.json;\n  \n  // REGRA 1: A + B + C deve bater com total\n  const somaABC = (c.class_a || 0) + (c.class_b || 0) + (c.class_c || 0);\n  if (c.total_classificado > 0 && somaABC !== c.total_classificado) {\n    divergencias.push({\n      json: {\n        tipo_divergencia: 'abc_total_mismatch',\n        gravidade: 'critica',\n        tabela_origem: 'atak_cargas_raw',\n        registro_origem_id: c.id,\n        carga_id: c.id,\n        fornecedor_codigo: c.fornecedor_codigo,\n        numero_documento: c.numero_documento,\n        campo_divergente: 'class_a+class_b+class_c',\n        valor_esperado: String(c.total_classificado),\n        valor_encontrado: String(somaABC),\n        diferenca_abs: Math.abs(c.total_classificado - somaABC),\n        mensagem: `A(${c.class_a}) + B(${c.class_b}) + C(${c.class_c}) = ${somaABC} ≠ Total(${c.total_classificado})`,\n        detectado_por: 'n8n_automatico',\n        n8n_execution_id: $execution.id\n      }\n    });\n  }\n  \n  // REGRA 2: Verificar %C para fornecedor crítico\n  if (c.total_classificado > 0) {\n    const pctC = ((c.class_c || 0) / c.total_classificado) * 100;\n    if (pctC > 15) {\n      divergencias.push({\n        json: {\n          tipo_divergencia: 'fornecedor_critico',\n          gravidade: pctC > 25 ? 'critica' : 'atencao',\n          tabela_origem: 'atak_cargas_raw',\n          registro_origem_id: c.id,\n          carga_id: c.id,\n          fornecedor_codigo: c.fornecedor_codigo,\n          numero_documento: c.numero_documento,\n          campo_divergente: 'pct_c',\n          valor_esperado: '≤15%',\n          valor_encontrado: pctC.toFixed(2) + '%',\n          diferenca_abs: pctC - 15,\n          mensagem: `Fornecedor ${c.fornecedor_nome || c.fornecedor_codigo}: %C = ${pctC.toFixed(1)}% (limite: 15%)`,\n          detectado_por: 'n8n_automatico',\n          n8n_execution_id: $execution.id\n        }\n      });\n    }\n  }\n}\n\nreturn divergencias.length > 0 ? divergencias : [{ json: { _skip: true } }];"
+      },
+      "id": "validar-regras",
+      "name": "Validar Regras CQ",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 0]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [{ "value1": "={{$json._skip}}", "operation": "notEqual", "value2": true }]
+        }
+      },
+      "id": "filter-divergencias",
+      "name": "Tem Divergências?",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [1320, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_validacao_divergencias",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "gravar-divergencias",
+      "name": "Gravar Divergências",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1540, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Gerar alerta para divergências críticas\nconst divs = $input.all();\nconst criticas = divs.filter(d => d.json.gravidade === 'critica');\n\nif (criticas.length === 0) return [{ json: { _skip: true } }];\n\nreturn criticas.map(d => ({\n  json: {\n    tipo: d.json.tipo_divergencia,\n    gravidade: 'critica',\n    status: 'aberto',\n    frigorifico: d.json.fornecedor_codigo,\n    numero_carga: d.json.numero_documento,\n    mensagem: d.json.mensagem,\n    acao_sugerida: d.json.tipo_divergencia === 'fornecedor_critico' \n      ? 'Bloquear recebimento do fornecedor até análise da qualidade'\n      : 'Verificar recontagem e reconciliar dados com frigorífico',\n    origem: 'n8n_integracao_atak',\n    criado_por: 'n8n_automatico'\n  }\n}));"
+      },
+      "id": "gerar-alertas",
+      "name": "Gerar Alertas Qualidade",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1760, 0]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/cq_alertas_qualidade",
+        "method": "POST",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "inserir-alertas",
+      "name": "Inserir Alertas CQ",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1980, 0]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Atualizar log de sync com resultado final\nconst items = $input.all();\nconst syncLogId = $('Criar Log de Sync').first().json.id;\n\nconst totalRegistros = $('Transformar Cargas').all().length;\nconst totalDivergencias = $('Validar Regras CQ').all().filter(d => !d.json._skip).length;\n\nreturn [{\n  json: {\n    id: syncLogId,\n    status: totalDivergencias > 0 ? 'parcial' : 'sucesso',\n    total_registros: totalRegistros,\n    novos: totalRegistros,\n    erros: 0,\n    fim: new Date().toISOString(),\n    detalhes_json: {\n      divergencias_encontradas: totalDivergencias,\n      execution_id: $execution.id\n    }\n  }\n}];"
+      },
+      "id": "preparar-update-log",
+      "name": "Preparar Update Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 200]
+    },
+    {
+      "parameters": {
+        "url": "={{$env.SUPABASE_URL}}/rest/v1/atak_sync_log?id=eq.{{$json.id}}",
+        "method": "PATCH",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{$env.SUPABASE_SERVICE_KEY}}" },
+            { "name": "Authorization", "value": "Bearer {{$env.SUPABASE_SERVICE_KEY}}" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{JSON.stringify($json)}}",
+        "options": {}
+      },
+      "id": "update-sync-log",
+      "name": "Atualizar Log Sync",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1320, 200]
+    }
+  ],
+  "connections": {
+    "Cron 30min": { "main": [[{ "node": "Buscar Config Sync", "type": "main", "index": 0 }]] },
+    "Buscar Config Sync": { "main": [
+      [{ "node": "API ATAK - Buscar Cargas", "type": "main", "index": 0 },
+       { "node": "Criar Log de Sync", "type": "main", "index": 0 }]
+    ]},
+    "API ATAK - Buscar Cargas": { "main": [[{ "node": "Transformar Cargas", "type": "main", "index": 0 }]] },
+    "Transformar Cargas": { "main": [[{ "node": "Upsert Cargas no Supabase", "type": "main", "index": 0 }]] },
+    "Upsert Cargas no Supabase": { "main": [[{ "node": "Validar Regras CQ", "type": "main", "index": 0 }]] },
+    "Validar Regras CQ": { "main": [
+      [{ "node": "Tem Divergências?", "type": "main", "index": 0 },
+       { "node": "Preparar Update Log", "type": "main", "index": 0 }]
+    ]},
+    "Tem Divergências?": { "main": [[{ "node": "Gravar Divergências", "type": "main", "index": 0 }]] },
+    "Gravar Divergências": { "main": [[{ "node": "Gerar Alertas Qualidade", "type": "main", "index": 0 }]] },
+    "Gerar Alertas Qualidade": { "main": [[{ "node": "Inserir Alertas CQ", "type": "main", "index": 0 }]] },
+    "Preparar Update Log": { "main": [[{ "node": "Atualizar Log Sync", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "tags": [
+    { "name": "atak-cq" },
+    { "name": "sync" },
+    { "name": "cargas" }
+  ]
+}

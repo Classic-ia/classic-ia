@@ -163,9 +163,15 @@ select option { background:var(--surface); }
 }
 .cond-dot { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background .2s; }
 .cond-item.ativo .cond-dot { background:var(--accent); }
-.cond-qtd-wrap { display:flex; gap:0; }
+.cond-qtd-wrap { display:flex; gap:0; align-items:stretch; }
+.cond-reset {
+  background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.3); border-left:none;
+  border-radius:0 6px 6px 0; color:#e74c3c; font-size:14px; font-weight:700;
+  padding:0 8px; cursor:pointer; transition:all .2s; display:flex; align-items:center;
+}
+.cond-reset:hover { background:rgba(231,76,60,.3); }
 .cond-qtd {
-  background:var(--surface); border:1px solid var(--border); border-radius:6px;
+  background:var(--surface); border:1px solid var(--border); border-radius:6px 0 0 6px;
   padding:6px 8px; color:var(--text); font-family:'DM Mono',monospace;
   font-size:14px; font-weight:500; text-align:center; width:100%;
 }
@@ -285,6 +291,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
+<script src="cq_fornecedores.js"></script>
 </head>
 <body>
 <div class="app-shell">
@@ -298,14 +305,14 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
     <span class="app-title">Controle de Qualidade — Lançamento de Bucho</span>
     <div class="header-spacer"></div>
     <span id="huser" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-right:12px;"></span>
-    <button class="btn-icon" onclick="exportarCSV()" style="margin-right:8px;">⬇ Exportar CSV</button>
+    <button class="btn-icon" onclick="exportarCSV()" style="margin-right:8px;">Exportar CSV</button>
     <button class="btn-icon" onclick="CQAuth.logout()">Sair</button>
   </div>
 
   <!-- TABS -->
   <div class="top-tabs">
-    <button class="ttab active" onclick="showTab('formulario',this)">➕ Novo Lançamento</button>
-    <button class="ttab" onclick="showTab('fechamento',this)">📋 Fechamento da Viagem</button>
+    <button class="ttab active" onclick="showTab('formulario',this)">Novo Lancamento</button>
+    <button class="ttab" onclick="showTab('fechamento',this)">Fechamento da Viagem</button>
   </div>
 
   <!-- MAIN -->
@@ -316,7 +323,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- Cabeçalho da viagem -->
       <div class="card">
-        <div class="card-title">📋 Identificação da Viagem</div>
+        <div class="card-title">Identificação da Viagem</div>
         <div class="grid-4">
           <div class="field">
             <label>Motorista</label>
@@ -339,7 +346,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- Dados do Frigorifico -->
       <div class="card">
-        <div class="card-title">🏭 Dados do Frigorifico</div>
+        <div class="card-title">Dados do Frigorifico</div>
         <div class="grid-4">
           <div class="field">
             <label>Frigorifico</label>
@@ -377,7 +384,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- CONTAGEM INICIAL — PRONTO PARA LAVAR -->
       <div class="card">
-        <div class="card-title">📦 Contagem Inicial — Pronto para Lavar</div>
+        <div class="card-title">Contagem Inicial — Pronto para Lavar</div>
         <div class="palete-grid" id="paletes-inicial">
           <!-- gerado via JS -->
         </div>
@@ -401,7 +408,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- ETAPAS: LAVAÇÃO / SEBO -->
       <div class="card">
-        <div class="card-title">🔄 Etapas de Processamento</div>
+        <div class="card-title">Etapas de Processamento</div>
         <div class="etapas">
 
           <!-- LAVAÇÃO -->
@@ -458,7 +465,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- CONDIÇÕES DO PRODUTO -->
       <div class="card">
-        <div class="card-title">⚠ Condições do Produto — Não Conformidades</div>
+        <div class="card-title">Condições do Produto — Não Conformidades</div>
         <div class="cond-grid" id="cond-grid">
           <!-- JS gera os 8 campos -->
         </div>
@@ -483,7 +490,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- OBSERVAÇÕES E AÇÃO -->
       <div class="card">
-        <div class="card-title">📝 Observações e Finalização</div>
+        <div class="card-title">Observações e Finalização</div>
         <div class="grid-2" style="margin-bottom:14px;">
           <div class="field">
             <label>Situação do Lançamento</label>
@@ -501,8 +508,8 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn-primary" onclick="salvarLancamento()">💾 Salvar Lançamento</button>
-          <button class="btn-secondary" onclick="limparFormulario()">↺ Limpar</button>
+          <button class="btn-primary" onclick="salvarLancamento()">Salvar Lancamento</button>
+          <button class="btn-secondary" onclick="limparFormulario()">Limpar</button>
         </div>
         <div id="save-status" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:10px;"></div>
       </div>
@@ -525,16 +532,16 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- KPIs de não conformidades totais -->
       <div class="card">
-        <div class="card-title">📊 Resumo Qualitativo Total da Viagem</div>
+        <div class="card-title">Resumo Qualitativo Total da Viagem</div>
         <div class="result-row" id="kpi-conds"><!-- JS --></div>
       </div>
 
       <!-- Tabela de fechamento -->
       <div class="card">
-        <div class="card-title">📋 Tabela de Fechamento</div>
+        <div class="card-title">Tabela de Fechamento</div>
         <div id="fech-body">
           <div class="empty-state">
-            <span class="empty-icon">📦</span>
+            <span class="empty-icon">—</span>
             Nenhum lançamento registrado ainda.<br>Preencha o formulário e salve para ver o fechamento.
           </div>
         </div>
@@ -542,7 +549,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 
       <!-- Cálculo de qualidade -->
       <div class="card">
-        <div class="card-title">🧮 Cálculo de Qualidade</div>
+        <div class="card-title">Cálculo de Qualidade</div>
         <div class="grid-4" style="margin-bottom:14px;">
           <div class="result-kpi">
             <div class="rlbl">Total Lote (Frigo)</div>
@@ -563,8 +570,8 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
           </div>
         </div>
         <div class="btn-row">
-          <button class="btn-secondary" onclick="exportarRelatorio()">📄 Gerar Relatório PDF</button>
-          <button class="btn-secondary" onclick="exportarCSV()">⬇ Exportar CSV</button>
+          <button class="btn-secondary" onclick="exportarRelatorio()">Gerar Relatorio PDF</button>
+          <button class="btn-secondary" onclick="exportarCSV()">Exportar CSV</button>
         </div>
       </div>
 
@@ -580,17 +587,18 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
 // ────────────────────────────────────
 // CONSTANTES E ESTADO
 // ────────────────────────────────────
-const FRIGOS = ["3G","ABLG","ALEXANDRE","ALIANCA","ALIANÇA","ANGUS","ARABUTA","ASSOCIAÇÃO","ASSOCIAÇÃO CIANORTE","BECKER","BERRANTE","BO DOURADO","BOI DOURADO","BOI GORDO","BOI NOBRE","BOI SUL","BOM SUCESSO","BOSSONI","CALIBRE","CAMPO DO GADO","CAPRINI","CARNE NOBRE","CAVALCANTE","CENTER","CHAPARRAL","COLIDER","DA MATA","DASKO","DIA","DISTRIBUIDORA","D´MATTA","EJ","ENTREPOSTO","ENTREPOSTO SÃO JOSÉ","EP","ESPERANCA","ESTRELA","ESTRELA DO SUL","EURO","FRASSUL","FRIBAL","FRIBAZ","FRIGOBECKER","FRIGODIA","FRIGODINTER","FRIGOINTER","FRIGORAIS","FRIGORINI","FRIGOTERRA","FRIGOVEMA","FRIJACUIPE","FRILEM","FRIMATOS","FRINORA","FRISPAR","FRIZONTE","GOLD","GOLD CARNES","GRANDEBULL","GUSMÃO","HIPER","INTER","IPER","ITAJARA","J GUSMAO","JACOB","JAGUAR","JARAGUA","JEAN","JEAN CARLOS","JPS","JR","JS","KM","KLEIN","LEME","LUZ","LUZENSE","MAGIA","MAGISTRAL","MARCELO SANTOS","MARCIO","MARCIO CAVALCANTE","MATOS","MAX","MBS","MENDES","MG","MG COUROS","MODELO","MONTALFRIG","MORRO AGUDO","MOYA","MUQUEM","NESI","NOBRE","NOSSA SENHORA","NOVA ALIANÇA","NOVA PRATA","ORION","OTJ","OURO VERDE","PAI NOSSO","PARACATU","PRO BOI","PROBOI","RAES","RANK","REAL","RECRISUL","RODEIO","ROSO","ROSSATO","ROSSI","SALTO VELOSO","SCAPINI","SCHAEDLER","SERRA","SERRANO","SIVIERO","SOMA","SÃO FRANCISCO","SÃO GERALDO","SÃO JOSE","SÃO JOSÉ","TALISMA","TERRA","TJ","TMJ","TOTI","VADECAR","VALDEIR","VALE DA PRATA","VALE DO BOI","VELOSO","VEMA","VEREDA","VIANNA","VIDAURRE","VIEIRA","VIOLA","WOLPI","WS"];
+// Lista unificada de frigoríficos — gerada a partir do cadastro mestre (cq_fornecedores.js)
+const FRIGOS = CQFornecedores.listarTodos().map(f => f.apelido);
 
 const CONDICOES = [
-  { key:'rasgados',  label:'Rasgados',    icon:'✂' },
-  { key:'furados',   label:'Furados',     icon:'🔵' },
-  { key:'pelando',   label:'Pelando',     icon:'⚠' },
-  { key:'sem_folha', label:'Sem Folha',   icon:'📄' },
-  { key:'sujos',     label:'Sujos',       icon:'🔶' },
-  { key:'pedacos',   label:'Pedaços',     icon:'🔩' },
-  { key:'corte_i',   label:'Corte Irr.', icon:'✂' },
-  { key:'folha_e',   label:'Folha Extra', icon:'📋' },
+  { key:'rasgados',  label:'Rasgados',    icon:'' },
+  { key:'furados',   label:'Furados',     icon:'' },
+  { key:'pelando',   label:'Pelando',     icon:'' },
+  { key:'sem_folha', label:'Sem Folha',   icon:'' },
+  { key:'sujos',     label:'Sujos',       icon:'' },
+  { key:'pedacos',   label:'Pedaços',     icon:'' },
+  { key:'corte_i',   label:'Corte Irr.',  icon:'' },
+  { key:'folha_e',   label:'Folha Extra', icon:'' },
 ];
 
 let lancamentos = []; // array de registros salvos
@@ -645,9 +653,12 @@ function renderCondicoes(){
         <span class="cond-dot" id="cd-${c.key}"></span>
         ${c.icon} ${c.label}
       </div>
-      <input class="cond-qtd" type="number" id="cq-${c.key}" placeholder="0"
-        min="0" onclick="event.stopPropagation()"
-        oninput="ativarCond('${c.key}');calcCondicoes()">
+      <div class="cond-qtd-wrap">
+        <input class="cond-qtd" type="number" id="cq-${c.key}" placeholder="0"
+          min="0" onclick="event.stopPropagation()"
+          oninput="ativarCond('${c.key}');calcCondicoes()">
+        <button class="cond-reset" onclick="event.stopPropagation();resetCond('${c.key}')" title="Zerar">×</button>
+      </div>
     </div>`).join('');
 }
 
@@ -728,14 +739,11 @@ function calcPeso(){
 
 function toggleCond(key){
   const item = document.getElementById(`ci-${key}`);
-  const wasAtivo = item.classList.contains('ativo');
-  if(wasAtivo){
-    item.classList.remove('ativo');
-    document.getElementById(`cq-${key}`).value='';
-  } else {
-    item.classList.add('ativo');
-    document.getElementById(`cq-${key}`).focus();
-  }
+  const input = document.getElementById(`cq-${key}`);
+  const atual = parseFloat(input.value) || 0;
+  // Cada clique soma +2
+  input.value = atual + 2;
+  item.classList.add('ativo');
   calcCondicoes();
 }
 
@@ -744,6 +752,12 @@ function ativarCond(key){
   const item = document.getElementById(`ci-${key}`);
   if(qtd>0) item.classList.add('ativo');
   else item.classList.remove('ativo');
+  calcCondicoes();
+}
+
+function resetCond(key){
+  document.getElementById(`cq-${key}`).value = '';
+  document.getElementById(`ci-${key}`).classList.remove('ativo');
   calcCondicoes();
 }
 
@@ -767,11 +781,11 @@ function calcCondicoes(){
   if(!classic && !frigo){
     badge.innerHTML='<span class="situacao-badge">—</span>';
   } else if(pct>0.7){
-    badge.innerHTML='<span class="situacao-badge sit-critico">⚠ CRÍTICO</span>';
+    badge.innerHTML='<span class="situacao-badge sit-critico">CRITICO</span>';
   } else if(pct>0.4){
     badge.innerHTML='<span class="situacao-badge sit-atencao">ATENÇÃO</span>';
   } else {
-    badge.innerHTML='<span class="situacao-badge sit-ok">✓ OK</span>';
+    badge.innerHTML='<span class="situacao-badge sit-ok">OK</span>';
   }
 }
 
@@ -815,7 +829,8 @@ function salvarLancamento(){
     placa:         document.getElementById('f-placa').value.trim().toUpperCase(),
     data_coleta:   document.getElementById('f-data-coleta').value,
     data_entrada:  document.getElementById('f-data-entrada').value,
-    frigorifico:   frg.toUpperCase(),
+    frigorifico:   CQFornecedores.apelidoOuOriginal(frg),
+    frigorifico_codigo: CQFornecedores.codigoOuNull(frg),
     cidade:        document.getElementById('f-cidade').value.trim(),
     tipo:          document.getElementById('f-tipo').value,
     pcr:           document.getElementById('f-pcr').value.trim(),
@@ -835,7 +850,7 @@ function salvarLancamento(){
   };
 
   lancamentos.push(reg);
-  toast(`✅ ${reg.frigorifico} salvo! (${lancamentos.length} lançamento${lancamentos.length>1?'s':''})`, 'ok');
+  toast(`${reg.frigorifico} salvo! (${lancamentos.length} lançamento${lancamentos.length>1?'s':''})`, 'ok');
   limparFrigo();
 }
 
@@ -897,7 +912,7 @@ function limparFormulario(){
 function renderFechamento(){
   if(!lancamentos.length){
     document.getElementById('fech-body').innerHTML=
-      '<div class="empty-state"><span class="empty-icon">📦</span>Nenhum lançamento registrado ainda.<br>Preencha o formulário e salve para ver o fechamento.</div>';
+      '<div class="empty-state"><span class="empty-icon">—</span>Nenhum lançamento registrado ainda.<br>Preencha o formulário e salve para ver o fechamento.</div>';
     renderKpiConds([]);
     atualizarHeaderFech([]);
     return;
@@ -924,7 +939,7 @@ function renderFechamento(){
       <td class="num" style="color:var(--amber)">${((r.pct_problema||0)*100).toFixed(2).replace('.',',')}%</td>
       <td><span class="situacao-badge ${sit}">${sitLabel}</span></td>
       <td style="color:var(--muted);font-size:10px">${r.pcr||'—'}</td>
-      <td><button onclick="removerLancamento(${r.id})" style="background:none;border:1px solid var(--danger-b);border-radius:6px;color:var(--red);font-size:10px;padding:3px 8px;cursor:pointer;">✕</button></td>
+      <td><button onclick="removerLancamento(${r.id})" style="background:none;border:1px solid var(--danger-b);border-radius:6px;color:var(--red);font-size:10px;padding:3px 8px;cursor:pointer;">X</button></td>
     </tr>`;
   }).join('');
 
@@ -970,7 +985,7 @@ function renderFechamento(){
   document.getElementById('cq-bar').style.background= pctPct>70?'#e74c3c':pctPct>40?'#e69f00':'#27ae60';
 
   const sit = pctPct>70?'sit-critico':pctPct>40?'sit-atencao':'sit-ok';
-  const sitL = pctPct>70?'⚠ CRÍTICO':pctPct>40?'ATENÇÃO':'✓ OK';
+  const sitL = pctPct>70?'CRITICO':pctPct>40?'ATENÇÃO':'OK';
   document.getElementById('cq-sit').innerHTML=`<span class="situacao-badge ${sit}">${sitL}</span>`;
 }
 
@@ -1097,8 +1112,8 @@ function exportarRelatorio(){
   table{border-collapse:collapse;}
 </style></head><body>
 <div class="no-print" style="padding:10px 0">
-  <button class="btn-print" onclick="window.print()">🖨 Imprimir / Salvar como PDF</button>
-  <button class="btn-close" onclick="window.close()">✕ Fechar</button>
+  <button class="btn-print" onclick="window.print()">Imprimir / Salvar como PDF</button>
+  <button class="btn-close" onclick="window.close()">X Fechar</button>
 </div>
 <div style="border-bottom:3px solid #c8a96e;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;">
   <div>

@@ -753,7 +753,7 @@ textarea.field-input {
              padding:24px;max-width:420px;width:100%;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
             <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;" id="ocrModalTitle">Fotografar</div>
-            <button onclick="fecharOCR()" style="background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;">✕</button>
+            <button onclick="fecharOCR()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 10px;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">Fechar</button>
           </div>
           <div style="background:var(--bg3);border-radius:8px;overflow:hidden;margin-bottom:16px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;" id="ocrPreview">
             <span style="color:var(--muted);font-size:13px;">Nenhuma foto ainda</span>
@@ -994,6 +994,17 @@ textarea.field-input {
         </div>
       </div>
 
+      <!-- Video de evidencia -->
+      <div style="margin-top:12px;">
+        <div class="foto-btn" id="videoBtnEvidencia" onclick="abrirVideoSource()" style="width:100%;min-height:64px;flex-direction:row;gap:12px;justify-content:center;">
+          <input type="file" id="videoInputFile" accept="video/*" style="display:none" onchange="previewVideo(this)">
+          <input type="file" id="videoInputCam" accept="video/*" capture="environment" style="display:none" onchange="previewVideo(this)">
+          <span class="foto-icon" style="font-size:13px;color:var(--muted);">VID</span>
+          <span id="videoLabel">Video de Evidencia (opcional)</span>
+          <video id="videoPreview" style="display:none;max-height:120px;max-width:200px;border-radius:8px;" controls></video>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1062,6 +1073,7 @@ let statusSelecionado = null;
 let fotoEtiquetaData  = null;
 let fotoProdutoData   = null;
 let fotoDifeitoData   = null;
+let videoEvidenciaFile = null;
 let isOnline          = navigator.onLine;
 
 // ══════════════════════════════════════════════════════════
@@ -1209,20 +1221,20 @@ async function carregarVeiculosMotoristas() {
   const SB_KEY = CQAuth.getSbKey();
   const jwt = CQAuth.getAuthToken() || SB_KEY;
   try {
-    const [resV, resM] = await Promise.all([
-      fetch(`${SB_URL}/rest/v1/cq_veiculos?ativo=eq.true&select=placa,nome,tipo_veiculo&order=placa`, {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
-      }),
-      fetch(`${SB_URL}/rest/v1/cadastros_atak?tipo=eq.motorista&ativo=eq.true&select=codigo,nome,apelido&order=nome`, {
-        headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
-      })
-    ]);
-    if (resV.ok) _veiculos = await resV.json();
+    // Motoristas e placas vem de cadastros_atak (fonte oficial ATAK/RH)
+    const resM = await fetch(`${SB_URL}/rest/v1/cadastros_atak?tipo=eq.motorista&ativo=eq.true&select=codigo,nome,apelido,placa_padrao,cnh,categoria_cnh&order=nome`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
+    });
     if (resM.ok) _motoristas = await resM.json();
+
+    // Montar lista de placas a partir dos motoristas com placa_padrao
+    _veiculos = _motoristas
+      .filter(m => m.placa_padrao)
+      .map(m => ({ placa: m.placa_padrao.toUpperCase().replace(/[^A-Z0-9]/g,''), nome: m.nome, apelido: m.apelido || '' }));
 
     const dlPlacas = document.getElementById('dl-placas');
     if (dlPlacas) dlPlacas.innerHTML = _veiculos.map(v =>
-      `<option value="${v.placa}" label="${v.nome} (${v.tipo_veiculo})">`
+      `<option value="${v.placa}" label="${v.nome}">`
     ).join('');
 
     const dlMot = document.getElementById('dl-motoristas');
@@ -1230,17 +1242,21 @@ async function carregarVeiculosMotoristas() {
       `<option value="${m.nome}"${m.apelido ? ' label="'+m.apelido+'"' : ''}>`
     ).join('');
   } catch(e) {
-    console.warn('Erro ao carregar veículos/motoristas:', e);
+    console.warn('Erro ao carregar veiculos/motoristas:', e);
   }
 }
 
 function onPlacaSelect(val) {
   const info = document.getElementById('placa-info');
   if (!info) return;
-  const v = _veiculos.find(x => x.placa === val.toUpperCase());
+  const placa = val.toUpperCase().replace(/[^A-Z0-9]/g,'');
+  const v = _veiculos.find(x => x.placa === placa);
   if (v) {
-    info.textContent = `${v.nome} · ${v.tipo_veiculo}`;
+    info.textContent = v.nome + (v.apelido ? ' (' + v.apelido + ')' : '');
     info.style.display = 'block';
+    // Auto-preencher motorista se vazio
+    const motEl = document.getElementById('f-motorista');
+    if (motEl && !motEl.value.trim()) motEl.value = v.nome;
   } else {
     info.style.display = 'none';
   }
@@ -1495,6 +1511,68 @@ function previewFoto(input, btnId, previewId){
   reader.readAsDataURL(file);
 }
 
+// ── VIDEO DE EVIDENCIA ──────────────────────────────────
+function abrirVideoSource(){
+  // Mostra opcoes: Gravar ou Selecionar
+  const el = document.createElement('div');
+  el.id = '_videoSourcePicker';
+  el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;';
+  el.innerHTML = `
+    <div style="background:var(--bg2,#141414);border:1px solid var(--border,#2a2a2a);border-radius:14px;padding:28px;max-width:320px;width:90%;text-align:center;">
+      <div style="font-weight:700;font-size:16px;margin-bottom:16px;color:var(--text,#e8e3da);">Video de Evidencia</div>
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <button onclick="document.getElementById('videoInputCam').click();document.getElementById('_videoSourcePicker').remove();"
+          style="padding:14px;background:var(--bg3,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:10px;color:var(--text,#e8e3da);font-size:14px;cursor:pointer;transition:all .15s;"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          Gravar Video
+        </button>
+        <button onclick="document.getElementById('videoInputFile').click();document.getElementById('_videoSourcePicker').remove();"
+          style="padding:14px;background:var(--bg3,#1a1a1a);border:1px solid var(--border,#2a2a2a);border-radius:10px;color:var(--text,#e8e3da);font-size:14px;cursor:pointer;transition:all .15s;"
+          onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          Selecionar da Galeria
+        </button>
+        ${videoEvidenciaFile ? '<button onclick="removerVideo();document.getElementById(\'_videoSourcePicker\').remove();" style="padding:14px;background:rgba(204,68,68,.15);border:1px solid rgba(204,68,68,.3);border-radius:10px;color:#cc4444;font-size:14px;cursor:pointer;">Remover Video</button>' : ''}
+        <button onclick="document.getElementById('_videoSourcePicker').remove();"
+          style="padding:10px;background:none;border:none;color:var(--muted,#888);font-size:13px;cursor:pointer;">
+          Cancelar
+        </button>
+      </div>
+    </div>`;
+  document.body.appendChild(el);
+}
+
+function previewVideo(input){
+  const file = input.files[0];
+  if(!file) return;
+  // Limite de 50MB
+  if(file.size > 50 * 1024 * 1024){
+    toast('Video muito grande (max 50MB)', 'err');
+    return;
+  }
+  videoEvidenciaFile = file;
+  const btn = document.getElementById('videoBtnEvidencia');
+  const preview = document.getElementById('videoPreview');
+  const label = document.getElementById('videoLabel');
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+  btn.classList.add('has-foto');
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+  label.textContent = file.name.slice(0,30) + ' (' + sizeMB + ' MB)';
+}
+
+function removerVideo(){
+  videoEvidenciaFile = null;
+  const btn = document.getElementById('videoBtnEvidencia');
+  const preview = document.getElementById('videoPreview');
+  const label = document.getElementById('videoLabel');
+  preview.src = '';
+  preview.style.display = 'none';
+  btn.classList.remove('has-foto');
+  label.textContent = 'Video de Evidencia (opcional)';
+  document.getElementById('videoInputFile').value = '';
+  document.getElementById('videoInputCam').value = '';
+}
+
 // ══════════════════════════════════════════════════════════
 // SCANNER / BARCODE — detecção de leitura rápida (pistola USB)
 // ══════════════════════════════════════════════════════════
@@ -1738,16 +1816,56 @@ async function salvarInspecao(){
       for(const f of fotosDados){
         if(!f.data) continue;
         try{
-          const res  = await fetch(f.data);
-          const blob = await res.blob();
+          // Converter data URL (base64) para blob
+          let blob;
+          if (f.data.startsWith('data:')) {
+            const parts = f.data.split(',');
+            const mime = parts[0].match(/:(.*?);/)[1];
+            const bstr = atob(parts[1]);
+            const u8 = new Uint8Array(bstr.length);
+            for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+            blob = new Blob([u8], { type: mime });
+          } else {
+            const res = await fetch(f.data);
+            blob = await res.blob();
+          }
           const path = `inspecao/${registro.id}/${f.key}_${Date.now()}.jpg`;
           const up = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${path}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${JWT}`, 'apikey': SB_KEY, 'Content-Type': blob.type || 'image/jpeg', 'x-upsert': 'true' },
             body: blob,
           });
-          if(up.ok) fotoUrls[f.key] = `${SB_URL}/storage/v1/object/public/cq-fotos/${path}`;
-        } catch(e){ console.warn('Foto upload falhou:', f.key, e); }
+          if(up.ok) {
+            fotoUrls[f.key] = `${SB_URL}/storage/v1/object/public/cq-fotos/${path}`;
+          } else {
+            toast('Aviso: Foto ' + f.key + ' nao foi enviada', 'warn');
+          }
+        } catch(e){
+          console.warn('Foto upload falhou:', f.key, e);
+          toast('Aviso: Foto ' + f.key + ' nao foi enviada', 'warn');
+        }
+      }
+
+      // PASSO 1b: Upload de video para Storage (se existir)
+      let videoUrl = null;
+      if(videoEvidenciaFile){
+        try{
+          const ext = videoEvidenciaFile.name.split('.').pop() || 'mp4';
+          const vpath = `inspecao/${registro.id}/video_${Date.now()}.${ext}`;
+          const vup = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${vpath}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${JWT}`, 'apikey': SB_KEY, 'Content-Type': videoEvidenciaFile.type || 'video/mp4', 'x-upsert': 'true' },
+            body: videoEvidenciaFile,
+          });
+          if(vup.ok) {
+            videoUrl = `${SB_URL}/storage/v1/object/public/cq-fotos/${vpath}`;
+          } else {
+            toast('Aviso: Video nao foi enviado', 'warn');
+          }
+        } catch(e){
+          console.warn('Video upload falhou:', e);
+          toast('Aviso: Video nao foi enviado', 'warn');
+        }
       }
 
       // PASSO 2: INSERT como rascunho — SEM classificação/status do frontend
@@ -1790,6 +1908,7 @@ async function salvarInspecao(){
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
         foto_defeito_url:        fotoUrls.defeito,
+        video_evidencia_url:     videoUrl,
         ...authData,
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
@@ -1916,6 +2035,8 @@ function limparForm(){
 
   // Fotos
   fotoEtiquetaData = fotoProdutoData = fotoDifeitoData = null;
+  videoEvidenciaFile = null;
+  removerVideo();
   ['fotoBtnEtiqueta','fotoBtnProduto','fotoBtnDefeito'].forEach(id=>{
     const btn = document.getElementById(id);
     if(!btn) return;

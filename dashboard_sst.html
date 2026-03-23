@@ -1,0 +1,817 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard SST - Classic RH</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --accent: #c8a96e; --accent2: #e8c98e; --text: #f0ede8; --muted: #888;
+    --red: #e74c3c; --green: #2ecc71; --yellow: #f1c40f;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+
+  .bg-pattern {
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
+      repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
+  }
+
+  /* Header */
+  header {
+    position:sticky; top:0; z-index:100;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:14px 32px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .header-left { display:flex; align-items:center; gap:16px; }
+  .btn-back {
+    display:inline-flex; align-items:center; gap:6px;
+    background:transparent; border:1px solid var(--border); border-radius:2px;
+    color:var(--muted); font-size:12px; padding:7px 14px; cursor:pointer;
+    letter-spacing:0.05em; text-decoration:none; transition:all 0.2s;
+    font-family:'DM Sans',sans-serif;
+  }
+  .btn-back:hover { border-color:var(--accent); color:var(--accent); }
+  .header-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; letter-spacing:0.05em; }
+  .header-title span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:16px; }
+
+  /* Period Filter */
+  .period-filter {
+    display:flex; gap:0; border:1px solid var(--border); border-radius:2px; overflow:hidden;
+  }
+  .period-btn {
+    background:transparent; border:none; color:var(--muted);
+    font-family:'DM Sans',sans-serif; font-size:11px; padding:7px 16px;
+    cursor:pointer; letter-spacing:0.05em; text-transform:uppercase;
+    transition:all 0.2s; border-right:1px solid var(--border);
+  }
+  .period-btn:last-child { border-right:none; }
+  .period-btn.active { background:var(--accent); color:#0a0a0a; font-weight:600; }
+  .period-btn:hover:not(.active) { color:var(--text); background:rgba(200,169,110,0.1); }
+
+  /* Main */
+  main { position:relative; z-index:1; max-width:1400px; margin:0 auto; padding:32px 24px 64px; }
+
+  /* Grid */
+  .grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:24px; }
+  .grid-2 { display:grid; grid-template-columns:repeat(2,1fr); gap:16px; margin-bottom:24px; }
+  .grid-1 { display:grid; grid-template-columns:1fr; gap:16px; margin-bottom:24px; }
+
+  /* KPI Card */
+  .kpi-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px; padding:24px;
+    transition:border-color 0.2s;
+  }
+  .kpi-card:hover { border-color:rgba(200,169,110,0.3); }
+  .kpi-card .value { font-family:'Syne',sans-serif; font-size:32px; font-weight:800; color:var(--accent); line-height:1; }
+  .kpi-card .label { font-size:11px; text-transform:uppercase; letter-spacing:0.1em; color:var(--muted); margin-top:4px; }
+  .kpi-card .trend { font-size:12px; margin-top:8px; }
+  .kpi-card .trend.good { color:var(--green); }
+  .kpi-card .trend.bad { color:var(--red); }
+  .kpi-card .trend.neutral { color:var(--muted); }
+
+  /* Skeleton */
+  .skeleton {
+    background:linear-gradient(90deg,var(--surface) 25%,#1a1a1a 50%,var(--surface) 75%);
+    background-size:200% 100%;
+    animation:shimmer 1.5s infinite;
+    border-radius:2px;
+  }
+  @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+  .skeleton-value { width:80px; height:36px; margin-bottom:8px; }
+  .skeleton-label { width:120px; height:12px; }
+  .skeleton-chart { width:100%; height:260px; }
+
+  /* Chart Card */
+  .chart-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px; padding:24px;
+  }
+  .chart-card .chart-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.15em; text-transform:uppercase; color:var(--accent);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+  }
+  .chart-card .chart-title::before {
+    content:''; width:3px; height:12px; background:var(--accent); border-radius:1px; display:inline-block;
+  }
+  .chart-container { position:relative; width:100%; height:280px; }
+
+  /* Table Card */
+  .table-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px; padding:24px;
+  }
+  .table-card .table-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.15em; text-transform:uppercase; color:var(--accent);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+  }
+  .table-card .table-title::before {
+    content:''; width:3px; height:12px; background:var(--accent); border-radius:1px; display:inline-block;
+  }
+  .data-table { width:100%; border-collapse:collapse; }
+  .data-table th {
+    text-align:left; font-size:10px; text-transform:uppercase; letter-spacing:0.1em;
+    color:var(--muted); padding:8px 12px; border-bottom:1px solid var(--border); font-weight:600;
+  }
+  .data-table td {
+    font-size:13px; padding:10px 12px; border-bottom:1px solid var(--border); color:var(--text);
+  }
+  .data-table tr:last-child td { border-bottom:none; }
+  .data-table tr:hover td { background:rgba(200,169,110,0.03); }
+  .data-table .empty-row td { color:var(--muted); font-style:italic; text-align:center; }
+
+  /* Alert Card */
+  .alert-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px; padding:24px;
+  }
+  .alert-card .alert-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.15em; text-transform:uppercase; color:var(--red);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:8px;
+  }
+  .alert-card .alert-title::before {
+    content:''; width:3px; height:12px; background:var(--red); border-radius:1px; display:inline-block;
+  }
+  .alert-list { list-style:none; }
+  .alert-list li {
+    padding:10px 14px; border-left:3px solid var(--border); margin-bottom:8px;
+    font-size:13px; border-radius:0 2px 2px 0; background:rgba(0,0,0,0.2);
+  }
+  .alert-list li.alert-red { border-left-color:var(--red); }
+  .alert-list li.alert-yellow { border-left-color:var(--yellow); }
+  .alert-list li .alert-badge {
+    display:inline-block; font-size:10px; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.08em; padding:2px 8px; border-radius:2px; margin-right:8px;
+  }
+  .alert-red .alert-badge { background:rgba(231,76,60,0.15); color:var(--red); }
+  .alert-yellow .alert-badge { background:rgba(241,196,15,0.15); color:var(--yellow); }
+  .alert-empty { color:var(--muted); font-size:13px; font-style:italic; }
+
+  /* Badge for tables */
+  .badge {
+    display:inline-block; font-size:10px; font-weight:600; padding:2px 8px;
+    border-radius:2px; text-transform:uppercase; letter-spacing:0.05em;
+  }
+  .badge-red { background:rgba(231,76,60,0.15); color:var(--red); }
+  .badge-green { background:rgba(46,204,113,0.15); color:var(--green); }
+  .badge-yellow { background:rgba(241,196,15,0.15); color:var(--yellow); }
+
+  /* Responsive */
+  @media (max-width:1024px) {
+    .grid-4 { grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width:640px) {
+    .grid-4, .grid-2 { grid-template-columns:1fr; }
+    header { padding:12px 16px; flex-wrap:wrap; gap:10px; }
+    .header-title { font-size:15px; }
+    main { padding:20px 12px 48px; }
+    .kpi-card .value { font-size:26px; }
+    .chart-container { height:220px; }
+    .period-filter { flex-wrap:wrap; }
+    .period-btn { flex:1; text-align:center; }
+  }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width:6px; }
+  ::-webkit-scrollbar-track { background:var(--bg); }
+  ::-webkit-scrollbar-thumb { background:var(--border); border-radius:3px; }
+  ::-webkit-scrollbar-thumb:hover { background:var(--muted); }
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+
+<header>
+  <div class="header-left">
+    <a href="app_rh.html" class="btn-back">&#8592; Voltar</a>
+    <div class="header-title">Dashboard <span>SST</span></div>
+  </div>
+  <div class="header-right">
+    <div class="period-filter">
+      <button class="period-btn active" data-period="month" onclick="setPeriod('month',this)">Este Mes</button>
+      <button class="period-btn" data-period="quarter" onclick="setPeriod('quarter',this)">Ultimos 3 Meses</button>
+      <button class="period-btn" data-period="year" onclick="setPeriod('year',this)">Ultimo Ano</button>
+    </div>
+    <div id="rh-user-chip"></div>
+  </div>
+</header>
+
+<main>
+  <!-- Row 1: KPI Cards -->
+  <div class="grid-4" id="kpi-row1">
+    <div class="kpi-card" id="kpi-ativos">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-aso-vencidos">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-epi">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-ocorrencias">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+  </div>
+
+  <!-- Row 2: KPI Cards -->
+  <div class="grid-4" id="kpi-row2">
+    <div class="kpi-card" id="kpi-turnover">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-absenteismo">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-vagas">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+    <div class="kpi-card" id="kpi-treinamentos">
+      <div class="skeleton skeleton-value"></div>
+      <div class="skeleton skeleton-label"></div>
+    </div>
+  </div>
+
+  <!-- Row 3: Charts -->
+  <div class="grid-2">
+    <div class="chart-card">
+      <div class="chart-title">Desligamentos por Mes</div>
+      <div class="chart-container" id="chart-desligamentos-wrap">
+        <div class="skeleton skeleton-chart"></div>
+        <canvas id="chart-desligamentos" style="display:none"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Ocorrencias por Tipo</div>
+      <div class="chart-container" id="chart-ocorrencias-wrap">
+        <div class="skeleton skeleton-chart"></div>
+        <canvas id="chart-ocorrencias" style="display:none"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 4: Charts -->
+  <div class="grid-2">
+    <div class="chart-card">
+      <div class="chart-title">Colaboradores por Setor</div>
+      <div class="chart-container" id="chart-setores-wrap">
+        <div class="skeleton skeleton-chart"></div>
+        <canvas id="chart-setores" style="display:none"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">ASOs - Status Geral</div>
+      <div class="chart-container" id="chart-aso-wrap">
+        <div class="skeleton skeleton-chart"></div>
+        <canvas id="chart-aso" style="display:none"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 5: Tables -->
+  <div class="grid-2">
+    <div class="table-card">
+      <div class="table-title">Ultimos Desligamentos</div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="table-desligamentos">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Motivo</th>
+              <th>Tempo Empresa</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="5"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+            <tr><td colspan="5"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+            <tr><td colspan="5"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="table-card">
+      <div class="table-title">ASOs Proximos a Vencer</div>
+      <div style="overflow-x:auto">
+        <table class="data-table" id="table-aso-vencer">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Tipo</th>
+              <th>Validade</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="4"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+            <tr><td colspan="4"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+            <tr><td colspan="4"><div class="skeleton" style="height:16px;margin:4px 0"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Row 6: Alertas Criticos -->
+  <div class="grid-1">
+    <div class="alert-card">
+      <div class="alert-title">Alertas Criticos</div>
+      <ul class="alert-list" id="alert-list">
+        <li style="border-left-color:var(--border)"><div class="skeleton" style="height:14px;width:60%"></div></li>
+        <li style="border-left-color:var(--border)"><div class="skeleton" style="height:14px;width:50%"></div></li>
+      </ul>
+    </div>
+  </div>
+</main>
+
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
+<script>
+// Chart.js dark theme defaults
+Chart.defaults.color = '#888';
+Chart.defaults.borderColor = '#2a2a2a';
+Chart.defaults.plugins.legend.labels.usePointStyle = true;
+Chart.defaults.plugins.legend.labels.padding = 16;
+Chart.defaults.plugins.legend.labels.font = { family: "'DM Sans', sans-serif", size: 11 };
+
+const COLORS = {
+  gold: '#c8a96e',
+  gold2: '#e8c98e',
+  brown1: '#8B7355',
+  brown2: '#5d4e37',
+  brown3: '#3d342a',
+};
+const PALETTE = [COLORS.gold, COLORS.gold2, COLORS.brown1, COLORS.brown2, COLORS.brown3, '#a08050', '#c4b896'];
+
+let currentPeriod = 'month';
+let chartInstances = {};
+
+// === Utility ===
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function startOfMonth(d) {
+  const dt = new Date(d || new Date());
+  return new Date(dt.getFullYear(), dt.getMonth(), 1).toISOString().slice(0, 10);
+}
+
+function periodStart() {
+  const now = new Date();
+  if (currentPeriod === 'month') return startOfMonth();
+  if (currentPeriod === 'quarter') {
+    const d = new Date(now.getFullYear(), now.getMonth() - 2, 1);
+    return d.toISOString().slice(0, 10);
+  }
+  // year
+  return new Date(now.getFullYear() - 1, now.getMonth(), now.getDate()).toISOString().slice(0, 10);
+}
+
+function monthsBack(n) {
+  const months = [];
+  const now = new Date();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      start: d.toISOString().slice(0, 10),
+      end: new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10),
+      label: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }),
+    });
+  }
+  return months;
+}
+
+function formatDate(s) {
+  if (!s) return '--';
+  const d = new Date(s + 'T00:00:00');
+  return d.toLocaleDateString('pt-BR');
+}
+
+function renderKPI(id, value, label, trend, trendGood) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  let trendClass = 'neutral';
+  if (trend !== undefined && trend !== null) {
+    trendClass = trendGood ? 'good' : 'bad';
+  }
+  el.innerHTML = `
+    <div class="value">${value}</div>
+    <div class="label">${label}</div>
+    ${trend !== undefined && trend !== null ? `<div class="trend ${trendClass}">${trend}</div>` : ''}
+  `;
+}
+
+// === Period ===
+function setPeriod(period, btn) {
+  currentPeriod = period;
+  document.querySelectorAll('.period-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  loadAll();
+}
+
+// === Data Loading ===
+async function loadKPIs() {
+  const todayStr = today();
+  const pStart = periodStart();
+  const monthStart = startOfMonth();
+
+  // 1. Colaboradores Ativos
+  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
+  renderKPI('kpi-ativos', totalAtivos, 'Colaboradores Ativos', null);
+
+  // 2. ASOs Vencidos
+  const asosVencidos = await RH_API.get(`rh_aso?data_validade=lt.${todayStr}&select=id`);
+  renderKPI('kpi-aso-vencidos', asosVencidos.length, 'ASOs Vencidos', asosVencidos.length > 0 ? 'Requer atencao' : 'Tudo em dia', asosVencidos.length === 0);
+
+  // 3. EPIs Entregues (periodo)
+  const episEntregues = await RH_API.get(`rh_epi_entregas?data_entrega=gte.${pStart}&select=id`);
+  renderKPI('kpi-epi', episEntregues.length, 'EPIs Entregues (periodo)', null);
+
+  // 4. Ocorrencias (periodo)
+  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=id`);
+  renderKPI('kpi-ocorrencias', ocorrencias.length, 'Ocorrencias (periodo)', ocorrencias.length > 5 ? 'Acima da media' : null, ocorrencias.length <= 5);
+}
+
+async function loadKPIs2() {
+  const todayStr = today();
+  const pStart = periodStart();
+  const monthStart = startOfMonth();
+  const todayDate = new Date();
+
+  // 5. Turnover Mensal
+  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
+  const desligMes = await RH_API.get(`rh_desligamentos?data_desligamento=gte.${pStart}&select=id`);
+  const turnover = totalAtivos > 0 ? ((desligMes.length / totalAtivos) * 100).toFixed(1) : '0.0';
+  renderKPI('kpi-turnover', turnover + '%', 'Turnover (periodo)', parseFloat(turnover) > 3 ? 'Acima do ideal' : 'Dentro do esperado', parseFloat(turnover) <= 3);
+
+  // 6. Absenteismo
+  const apuracao = await RH_API.get(`rh_apuracao_mensal?mes=gte.${pStart}&select=faltas,dias_uteis`);
+  let absenteismo = 0;
+  if (apuracao.length > 0) {
+    const totalFaltas = apuracao.reduce((s, r) => s + (r.faltas || 0), 0);
+    const totalDias = apuracao.reduce((s, r) => s + (r.dias_uteis || 0), 0);
+    absenteismo = totalDias > 0 ? ((totalFaltas / totalDias) * 100).toFixed(1) : 0;
+  }
+  renderKPI('kpi-absenteismo', absenteismo + '%', 'Absenteismo', parseFloat(absenteismo) > 5 ? 'Acima do limite' : 'Normal', parseFloat(absenteismo) <= 5);
+
+  // 7. Vagas Abertas
+  const vagas = await RH_API.get('rs_vagas?status=eq.aberta&select=id');
+  renderKPI('kpi-vagas', vagas.length, 'Vagas Abertas', null);
+
+  // 8. Treinamentos Pendentes (ASOs periodicos vencendo em 60 dias)
+  const in60 = new Date(todayDate.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const treinPend = await RH_API.get(`rh_aso?tipo=eq.periodico&data_validade=gte.${todayStr}&data_validade=lte.${in60}&select=id`);
+  renderKPI('kpi-treinamentos', treinPend.length, 'Treinamentos Pendentes', treinPend.length > 0 ? 'Vencem em 60 dias' : null, treinPend.length === 0);
+}
+
+async function loadChartDesligamentos() {
+  const months = monthsBack(6);
+  const counts = [];
+  for (const m of months) {
+    const rows = await RH_API.get(`rh_desligamentos?data_desligamento=gte.${m.start}&data_desligamento=lte.${m.end}&select=id`);
+    counts.push(rows.length);
+  }
+
+  const wrap = document.getElementById('chart-desligamentos-wrap');
+  const canvas = document.getElementById('chart-desligamentos');
+  wrap.querySelector('.skeleton')?.remove();
+  canvas.style.display = 'block';
+
+  if (chartInstances.desligamentos) chartInstances.desligamentos.destroy();
+  chartInstances.desligamentos = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: 'Desligamentos',
+        data: counts,
+        backgroundColor: COLORS.gold,
+        borderColor: COLORS.gold,
+        borderWidth: 0,
+        borderRadius: 2,
+        barPercentage: 0.6,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#1a1a1a' } },
+        x: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+async function loadChartOcorrencias() {
+  const pStart = periodStart();
+  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=tipo`);
+
+  const grouped = {};
+  ocorrencias.forEach(o => {
+    const t = o.tipo || 'Outros';
+    grouped[t] = (grouped[t] || 0) + 1;
+  });
+
+  const labels = Object.keys(grouped);
+  const data = Object.values(grouped);
+
+  const wrap = document.getElementById('chart-ocorrencias-wrap');
+  const canvas = document.getElementById('chart-ocorrencias');
+  wrap.querySelector('.skeleton')?.remove();
+  canvas.style.display = 'block';
+
+  if (chartInstances.ocorrencias) chartInstances.ocorrencias.destroy();
+  chartInstances.ocorrencias = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels,
+      datasets: [{
+        data,
+        backgroundColor: PALETTE.slice(0, labels.length),
+        borderColor: '#141414',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '55%',
+      plugins: {
+        legend: { position: 'right', labels: { padding: 12 } }
+      }
+    }
+  });
+}
+
+async function loadChartSetores() {
+  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=setor');
+
+  const grouped = {};
+  colaboradores.forEach(c => {
+    const s = c.setor || 'Sem setor';
+    grouped[s] = (grouped[s] || 0) + 1;
+  });
+
+  const sorted = Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(e => e[0]);
+  const data = sorted.map(e => e[1]);
+
+  const wrap = document.getElementById('chart-setores-wrap');
+  const canvas = document.getElementById('chart-setores');
+  wrap.querySelector('.skeleton')?.remove();
+  canvas.style.display = 'block';
+
+  if (chartInstances.setores) chartInstances.setores.destroy();
+  chartInstances.setores = new Chart(canvas, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Colaboradores',
+        data,
+        backgroundColor: COLORS.gold,
+        borderColor: COLORS.gold,
+        borderWidth: 0,
+        borderRadius: 2,
+        barPercentage: 0.7,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#1a1a1a' } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+}
+
+async function loadChartASO() {
+  const todayStr = today();
+  const todayDate = new Date();
+  const in30 = new Date(todayDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const allAsos = await RH_API.get('rh_aso?select=data_validade');
+
+  let ok = 0, aVencer = 0, vencido = 0;
+  allAsos.forEach(a => {
+    if (!a.data_validade) { ok++; return; }
+    if (a.data_validade < todayStr) vencido++;
+    else if (a.data_validade <= in30) aVencer++;
+    else ok++;
+  });
+
+  const wrap = document.getElementById('chart-aso-wrap');
+  const canvas = document.getElementById('chart-aso');
+  wrap.querySelector('.skeleton')?.remove();
+  canvas.style.display = 'block';
+
+  if (chartInstances.aso) chartInstances.aso.destroy();
+  chartInstances.aso = new Chart(canvas, {
+    type: 'doughnut',
+    data: {
+      labels: ['OK', 'A Vencer (30d)', 'Vencido'],
+      datasets: [{
+        data: [ok, aVencer, vencido],
+        backgroundColor: ['#2ecc71', '#f1c40f', '#e74c3c'],
+        borderColor: '#141414',
+        borderWidth: 3,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '55%',
+      plugins: {
+        legend: { position: 'right', labels: { padding: 12 } }
+      }
+    }
+  });
+}
+
+async function loadTableDesligamentos() {
+  const deslig = await RH_API.get('rh_desligamentos?order=data_desligamento.desc&limit=10&select=nome,data_desligamento,tipo,motivo,tempo_empresa');
+
+  const tbody = document.querySelector('#table-desligamentos tbody');
+  if (deslig.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum desligamento encontrado</td></tr>';
+    return;
+  }
+  tbody.innerHTML = deslig.map(d => `
+    <tr>
+      <td>${d.nome || '--'}</td>
+      <td>${formatDate(d.data_desligamento)}</td>
+      <td><span class="badge ${d.tipo === 'justa_causa' ? 'badge-red' : 'badge-yellow'}">${d.tipo || '--'}</span></td>
+      <td>${d.motivo || '--'}</td>
+      <td>${d.tempo_empresa || '--'}</td>
+    </tr>
+  `).join('');
+}
+
+async function loadTableASOVencer() {
+  const todayStr = today();
+  const todayDate = new Date();
+  const in30 = new Date(todayDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+
+  const asos = await RH_API.get(`rh_aso?data_validade=gte.${todayStr}&data_validade=lte.${in30}&order=data_validade.asc&select=colaborador_nome,tipo,data_validade`);
+
+  const tbody = document.querySelector('#table-aso-vencer tbody');
+  if (asos.length === 0) {
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">Nenhum ASO proximo a vencer</td></tr>';
+    return;
+  }
+  tbody.innerHTML = asos.map(a => {
+    const dias = Math.ceil((new Date(a.data_validade) - new Date()) / (1000 * 60 * 60 * 24));
+    let badgeClass = 'badge-green';
+    let statusText = dias + ' dias';
+    if (dias <= 7) { badgeClass = 'badge-red'; statusText = dias + ' dias'; }
+    else if (dias <= 15) { badgeClass = 'badge-yellow'; statusText = dias + ' dias'; }
+    return `
+      <tr>
+        <td>${a.colaborador_nome || '--'}</td>
+        <td>${a.tipo || '--'}</td>
+        <td>${formatDate(a.data_validade)}</td>
+        <td><span class="badge ${badgeClass}">${statusText}</span></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+async function loadAlertas() {
+  const todayStr = today();
+  const todayDate = new Date();
+  const alertList = document.getElementById('alert-list');
+  const alerts = [];
+
+  // ASOs vencidos
+  const asosVencidos = await RH_API.get(`rh_aso?data_validade=lt.${todayStr}&select=colaborador_nome,data_validade`);
+  asosVencidos.forEach(a => {
+    alerts.push({
+      level: 'red',
+      badge: 'CRITICO',
+      text: `ASO vencido: ${a.colaborador_nome || 'Colaborador'} - Validade: ${formatDate(a.data_validade)}`
+    });
+  });
+
+  // EPIs sem entrega > 6 meses
+  const sixMonthsAgo = new Date(todayDate.getFullYear(), todayDate.getMonth() - 6, todayDate.getDate()).toISOString().slice(0, 10);
+  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=id,nome');
+  const episRecentes = await RH_API.get(`rh_epi_entregas?data_entrega=gte.${sixMonthsAgo}&select=colaborador_id`);
+  const colabComEPI = new Set(episRecentes.map(e => e.colaborador_id));
+  colaboradores.forEach(c => {
+    if (!colabComEPI.has(c.id)) {
+      alerts.push({
+        level: 'yellow',
+        badge: 'ATENCAO',
+        text: `EPI sem entrega ha mais de 6 meses: ${c.nome || 'Colaborador ID ' + c.id}`
+      });
+    }
+  });
+
+  // Colaboradores com > 3 ocorrencias no mes
+  const monthStart = startOfMonth();
+  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${monthStart}&select=colaborador_nome,colaborador_id`);
+  const ocCount = {};
+  ocorrencias.forEach(o => {
+    const key = o.colaborador_nome || o.colaborador_id || 'Desconhecido';
+    ocCount[key] = (ocCount[key] || 0) + 1;
+  });
+  Object.entries(ocCount).forEach(([nome, count]) => {
+    if (count > 3) {
+      alerts.push({
+        level: 'red',
+        badge: 'CRITICO',
+        text: `${nome} - ${count} ocorrencias neste mes`
+      });
+    }
+  });
+
+  // Render
+  if (alerts.length === 0) {
+    alertList.innerHTML = '<li class="alert-empty">Nenhum alerta critico no momento.</li>';
+    return;
+  }
+
+  // Sort: red first, then yellow
+  alerts.sort((a, b) => (a.level === 'red' ? 0 : 1) - (b.level === 'red' ? 0 : 1));
+
+  alertList.innerHTML = alerts.map(a => `
+    <li class="alert-${a.level}">
+      <span class="alert-badge">${a.badge}</span>
+      ${a.text}
+    </li>
+  `).join('');
+}
+
+// === Load All ===
+async function loadAll() {
+  // Reset skeletons for KPIs
+  ['kpi-ativos','kpi-aso-vencidos','kpi-epi','kpi-ocorrencias','kpi-turnover','kpi-absenteismo','kpi-vagas','kpi-treinamentos'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.innerHTML = '<div class="skeleton skeleton-value"></div><div class="skeleton skeleton-label"></div>';
+  });
+
+  // Reset chart skeletons
+  ['chart-desligamentos','chart-ocorrencias','chart-setores','chart-aso'].forEach(id => {
+    const wrap = document.getElementById(id + '-wrap');
+    const canvas = document.getElementById(id);
+    if (wrap && canvas) {
+      canvas.style.display = 'none';
+      if (!wrap.querySelector('.skeleton')) {
+        const sk = document.createElement('div');
+        sk.className = 'skeleton skeleton-chart';
+        wrap.insertBefore(sk, canvas);
+      }
+    }
+  });
+
+  // Load all in parallel
+  await Promise.all([
+    loadKPIs(),
+    loadKPIs2(),
+    loadChartDesligamentos(),
+    loadChartOcorrencias(),
+    loadChartSetores(),
+    loadChartASO(),
+    loadTableDesligamentos(),
+    loadTableASOVencer(),
+    loadAlertas(),
+  ]);
+}
+
+// === Init ===
+(async () => {
+  const perfil = await RHAuth.init();
+  if (!perfil) return;
+
+  await loadAll();
+
+  // Auto-resize charts
+  window.addEventListener('resize', () => {
+    Object.values(chartInstances).forEach(c => { if (c) c.resize(); });
+  });
+})();
+</script>
+</body>
+</html>

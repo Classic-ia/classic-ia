@@ -11,7 +11,7 @@
  *   }
  */
 
-const CACHE_VERSION = 'cq-v2026.03.18';
+const CACHE_VERSION = 'cq-v2026.03.23';
 const CACHE_STATIC = `${CACHE_VERSION}-static`;
 const CACHE_DATA = `${CACHE_VERSION}-data`;
 
@@ -20,14 +20,18 @@ const STATIC_ASSETS = [
   '/',
   '/app.html',
   '/login.html',
-  '/formulario_cq.html',
+  '/inspecao_qualidade.html',
   '/fila_inspecoes.html',
+  '/recebimento_lote.html',
+  '/rastreabilidade_lote.html',
   '/config.js',
+  '/cq_api.js',
   '/cq_auth.js',
   '/cq_workflow.js',
   '/cq_fornecedores.js',
   '/cq_toast.js',
-  '/cq_cache.js',
+  '/cq_regras.js',
+  '/cq_scan.js',
   '/assets/logo-classic-icon.png',
   '/assets/logo-classic-text.png',
 ];

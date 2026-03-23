@@ -212,6 +212,13 @@ textarea.field-input {
 .step-btn:active { background: var(--accent3); color: var(--accent); border-color: var(--accent); transform: scale(.95); }
 .step-btn.minus:active { background: var(--reprovado-bg); color: var(--reprovado); border-color: var(--reprovado-bd); }
 .defect-stepper .defect-input { flex: 1; height: 40px; font-size: 18px; }
+.defect-pct {
+  min-width: 48px; text-align: right;
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600;
+  color: var(--muted); white-space: nowrap;
+  transition: color .2s;
+}
+.defect-item.active .defect-pct { color: var(--reprovado); }
 
 /* ──────────────────────────────────────────────────
    RESULTADO — BLOCO PRINCIPAL
@@ -1331,12 +1338,15 @@ function renderDeleitos(){
         <span class="defect-icon">${d.icon}</span>
         <span class="defect-name">${d.label}</span>
       </div>
-      <div class="defect-stepper">
-        <button class="step-btn minus" onclick="stepDefect('${d.key}',-1)">−</button>
-        <input class="defect-input" type="number" id="df-${d.key}"
-          value="0" min="0" inputmode="numeric"
-          oninput="onDefectInput('${d.key}')">
-        <button class="step-btn" onclick="stepDefect('${d.key}',1)">+</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="defect-stepper">
+          <button class="step-btn minus" onclick="stepDefect('${d.key}',-1)">−</button>
+          <input class="defect-input" type="number" id="df-${d.key}"
+            value="0" min="0" inputmode="numeric"
+            oninput="onDefectInput('${d.key}')">
+          <button class="step-btn" onclick="stepDefect('${d.key}',1)">+</button>
+        </div>
+        <span class="defect-pct" id="pct-${d.key}">--</span>
       </div>
     </div>`).join('');
 }
@@ -1368,14 +1378,23 @@ function onDefectInput(key){
 // CÁLCULO RESULTADO (REGRA 1 e 2)
 // ══════════════════════════════════════════════════════════
 function calcResultado(){
-  // Regra 2: soma todos os defeitos
+  const analisada = Math.max(0, parseFloat(document.getElementById('f-qtd-analisada').value)||0);
+
+  // Regra 2: soma todos os defeitos + calcula % individual
   let totalDef = 0;
   DEFEITOS.forEach(d=>{
     const el = document.getElementById(`df-${d.key}`);
-    if(el) totalDef += Math.max(0, parseInt(el.value)||0);
+    const pctEl = document.getElementById(`pct-${d.key}`);
+    const v = el ? Math.max(0, parseInt(el.value)||0) : 0;
+    totalDef += v;
+    if(pctEl){
+      if(v > 0 && analisada > 0){
+        pctEl.textContent = (v / analisada * 100).toFixed(1).replace('.',',') + '%';
+      } else {
+        pctEl.textContent = v > 0 ? '--' : '';
+      }
+    }
   });
-
-  const analisada = Math.max(0, parseFloat(document.getElementById('f-qtd-analisada').value)||0);
 
   // Regra 1: não calcular se analisada = 0
   const block  = document.getElementById('resultBlock');

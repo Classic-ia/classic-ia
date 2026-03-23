@@ -145,12 +145,12 @@ tbody tr:last-child{border-bottom:none;}
 <div class="container">
 
   <div class="page-hd">
-    <div class="page-title">👥 Usuários do Sistema</div>
+    <div class="page-title">Usuarios do Sistema</div>
     <button class="btn btn-primary" onclick="abrirModal()">+ Novo Usuário</button>
   </div>
 
   <div class="alert alert-info" style="margin-bottom:20px;">
-    ℹ️ Usuários criados aqui recebem acesso ao sistema CQ. O e-mail de boas-vindas com a senha temporária é enviado automaticamente pelo Supabase.
+    Usuarios criados aqui recebem acesso ao sistema CQ. O e-mail de boas-vindas com a senha temporaria e enviado automaticamente pelo Supabase.
   </div>
 
   <!-- Resumo por perfil -->
@@ -179,11 +179,13 @@ tbody tr:last-child{border-bottom:none;}
             style="background:var(--bg3);border:1px solid var(--border);border-radius:8px;
                    color:var(--text);padding:7px 12px;font-size:12px;outline:none;">
             <option value="">Todos os perfis</option>
-            <option value="gestor">Gestor</option>
-            <option value="analisador">Analisador</option>
-            <option value="conferente">Conferente</option>
+            <option value="administrador">Administrador</option>
+            <option value="qualidade">Qualidade</option>
+            <option value="comercial">Comercial</option>
             <option value="financeiro">Financeiro</option>
-            <option value="qualidade_externo">Qualidade Externo</option>
+            <option value="logistica">Logistica</option>
+            <option value="industrial">Industrial</option>
+            <option value="diretoria">Diretoria</option>
           </select>
         </div>
       </div>
@@ -270,11 +272,13 @@ tbody tr:last-child{border-bottom:none;}
       <label>Perfil de Acesso *</label>
       <select id="f-perfil">
         <option value="">Selecione...</option>
-        <option value="gestor">Gestor — acesso total</option>
-        <option value="analisador">Analisador — cria inspeções</option>
-        <option value="conferente">Conferente — somente visualização</option>
-        <option value="financeiro">Financeiro — dashboards e relatórios</option>
-        <option value="qualidade_externo">Qualidade Externo — acesso externo</option>
+        <option value="administrador">Administrador — acesso total</option>
+        <option value="qualidade">Qualidade — inspecoes e CQ</option>
+        <option value="comercial">Comercial — dashboards e fornecedores</option>
+        <option value="financeiro">Financeiro — dashboards e relatorios</option>
+        <option value="logistica">Logistica — recebimento e transporte</option>
+        <option value="industrial">Industrial — producao e embarques</option>
+        <option value="diretoria">Diretoria — acesso completo leitura</option>
       </select>
     </div>
 
@@ -300,11 +304,13 @@ tbody tr:last-child{border-bottom:none;}
 const SB_SERVICE = ''; // Preencher com Service Role Key — NUNCA expor em produção
 
 const PERFIS = {
-  gestor:           { icon:'👑', label:'Gestor',           cor:'var(--gold)' },
-  analisador:       { icon:'🔬', label:'Analisador',       cor:'#5ec2e8' },
-  conferente:       { icon:'📋', label:'Conferente',       cor:'#1abc9c' },
-  financeiro:       { icon:'💰', label:'Financeiro',       cor:'#b07fd3' },
-  qualidade_externo:{ icon:'🌐', label:'Qualidade Ext.',   cor:'var(--yellow)' },
+  administrador:    { icon:'ADM', label:'Administrador',    cor:'var(--gold)' },
+  qualidade:        { icon:'CQ',  label:'Qualidade',        cor:'#5ec2e8' },
+  comercial:        { icon:'COM', label:'Comercial',        cor:'#1abc9c' },
+  financeiro:       { icon:'FIN', label:'Financeiro',       cor:'#b07fd3' },
+  logistica:        { icon:'LOG', label:'Logistica',        cor:'#e67e22' },
+  industrial:       { icon:'IND', label:'Industrial',       cor:'#3498db' },
+  diretoria:        { icon:'DIR', label:'Diretoria',        cor:'#e74c3c' },
 };
 
 let todosUsuarios = [];
@@ -325,7 +331,10 @@ let sessoesCarregadas = false;
 })();
 
 // ── SUPABASE HELPERS ──────────────────────────────────────────
-const hdrs = () => ({ 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' });
+const hdrs = () => {
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt, 'Content-Type': 'application/json' };
+};
 
 async function sbGet(tabela, qs = '') {
   const r = await fetch(`${SB_URL}/rest/v1/${tabela}?${qs}`, { headers: hdrs() });
@@ -356,7 +365,7 @@ async function carregarUsuarios() {
 
   document.getElementById('perfilGrid').innerHTML = Object.entries(PERFIS).map(([k, p]) => `
     <div class="perfil-card" onclick="filtrarPorPerfil('${k}')">
-      <div class="perfil-icon">${p.icon}</div>
+      <div class="perfil-icon" style="font-size:14px;font-weight:800;color:${p.cor};font-family:'DM Mono',monospace;">${p.icon}</div>
       <div class="perfil-nome">${p.label}</div>
       <div class="perfil-count">${contagem[k] || 0}</div>
     </div>`).join('');
@@ -387,7 +396,7 @@ function renderTabela(rows) {
         </div>
       </td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;color:var(--muted)">${u.email}</td>
-      <td><span class="perfil-badge p-${u.perfil}">${p.icon} ${p.label}</span></td>
+      <td><span class="perfil-badge" style="background:${p.cor}22;color:${p.cor};border:1px solid ${p.cor}44;">${p.label}</span></td>
       <td>
         <span class="status-dot ${ativo?'dot-on':'dot-off'}"></span>
         ${ativo ? 'Ativo' : 'Inativo'}
@@ -395,12 +404,12 @@ function renderTabela(rows) {
       <td style="font-size:12px;color:var(--muted)">${ultimoLogin}</td>
       <td>
         <div style="display:flex;gap:6px;">
-          <button class="btn btn-outline btn-sm" onclick="editarUsuario('${u.id}')">✏️ Editar</button>
+          <button class="btn btn-outline btn-sm" onclick="editarUsuario('${u.id}')">Editar</button>
           <button class="btn btn-sm" onclick="toggleAtivo('${u.id}',${ativo})"
             style="background:${ativo?'rgba(231,76,60,.12)':'rgba(39,174,96,.12)'};
                    border:1px solid ${ativo?'rgba(231,76,60,.3)':'rgba(39,174,96,.3)'};
                    color:${ativo?'var(--red)':'var(--green)'};">
-            ${ativo ? '🔒 Desativar' : '✅ Ativar'}
+            ${ativo ? 'Desativar' : 'Ativar'}
           </button>
         </div>
       </td>

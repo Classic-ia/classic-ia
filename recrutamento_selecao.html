@@ -1,0 +1,1560 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Recrutamento & Seleção · Classic</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c; --orange:#e67e22;
+  --purple:#9b59b6;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+/* KPI STRIP */
+.kpi-strip{display:flex;gap:0;background:var(--bg2);border-bottom:1px solid var(--border);flex-wrap:wrap;}
+.kpi-box{flex:1;min-width:140px;padding:12px 16px;text-align:center;border-right:1px solid var(--border);}
+.kpi-box:last-child{border-right:none;}
+.kpi-value{font-family:'Syne',sans-serif;font-size:24px;font-weight:800;color:var(--gold);line-height:1;}
+.kpi-label{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:4px;}
+
+/* CONTAINER */
+.container{max-width:1200px;margin:0 auto;padding:20px 20px 80px;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--muted);white-space:nowrap;transition:all .2s;
+  font-family:'DM Sans',sans-serif;}
+.tab:hover{background:var(--bg3);color:var(--text);}
+.tab.active{background:var(--blue);color:white;border-color:var(--blue);}
+
+/* CARDS & TABLE */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.4);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:10px;vertical-align:middle;}
+
+/* BADGES */
+.badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.badge-green{background:rgba(39,174,96,.15);color:var(--green);}
+.badge-yellow{background:rgba(243,156,18,.15);color:var(--yellow);}
+.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
+.badge-blue{background:rgba(46,107,138,.2);color:#5ec2e8;}
+.badge-muted{background:rgba(93,127,149,.15);color:var(--muted);}
+.badge-purple{background:rgba(155,89,182,.15);color:var(--purple);}
+.badge-orange{background:rgba(230,126,34,.15);color:var(--orange);}
+.badge-gold{background:rgba(200,169,110,.15);color:var(--gold);}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;display:inline-flex;align-items:center;gap:6px;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+.btn-danger{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:var(--red);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn-icon{padding:5px 8px;font-size:14px;background:transparent;border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;color:var(--muted);transition:all .2s;}
+.btn-icon:hover{border-color:var(--blue);color:var(--text);}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.search-box{flex:1;min-width:200px;padding:9px 14px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:13px;outline:none;font-family:'DM Sans',sans-serif;}
+.search-box:focus{border-color:var(--blue);}
+.filter-select{padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:12px;outline:none;font-family:'DM Sans',sans-serif;cursor:pointer;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:28px;max-width:650px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);}
+.field textarea{resize:vertical;min-height:80px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* KANBAN */
+.kanban{display:flex;gap:12px;overflow-x:auto;padding-bottom:12px;min-height:400px;}
+.kanban-col{min-width:220px;max-width:260px;flex:1;background:var(--bg3);border:1px solid var(--border);
+  border-radius:10px;display:flex;flex-direction:column;}
+.kanban-header{padding:12px 14px;border-bottom:1px solid var(--border);
+  font-family:'Syne',sans-serif;font-size:11px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.06em;display:flex;align-items:center;justify-content:space-between;}
+.kanban-count{background:var(--bg2);border-radius:10px;padding:2px 8px;font-size:10px;color:var(--muted);}
+.kanban-body{padding:8px;flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:8px;}
+.kanban-card{background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:12px;
+  cursor:pointer;transition:all .15s;font-size:12px;}
+.kanban-card:hover{border-color:var(--blue);transform:translateY(-1px);}
+.kanban-card-name{font-weight:600;color:var(--text);margin-bottom:4px;}
+.kanban-card-info{color:var(--muted);font-size:11px;line-height:1.4;}
+.kanban-card-score{display:flex;gap:4px;margin-top:6px;}
+.kanban-card-score .star{width:14px;height:14px;border-radius:50%;font-size:9px;
+  display:flex;align-items:center;justify-content:center;}
+.star-filled{background:rgba(200,169,110,.25);color:var(--gold);}
+.star-empty{background:rgba(93,127,149,.1);color:var(--muted);}
+
+/* AGENDA */
+.agenda-day{margin-bottom:20px;}
+.agenda-day-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
+  padding:8px 0;border-bottom:1px solid var(--border);margin-bottom:10px;}
+.agenda-item{display:flex;gap:14px;padding:10px 14px;background:var(--bg3);border:1px solid var(--border);
+  border-radius:8px;margin-bottom:8px;align-items:center;transition:all .15s;}
+.agenda-item:hover{border-color:var(--blue);}
+.agenda-time{font-family:'Syne',sans-serif;font-size:14px;font-weight:700;color:var(--blue2);min-width:50px;}
+.agenda-detail{flex:1;}
+.agenda-detail-name{font-weight:600;font-size:13px;}
+.agenda-detail-info{font-size:11px;color:var(--muted);margin-top:2px;}
+.agenda-actions{display:flex;gap:4px;}
+
+/* TAB CONTENT */
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* EMPTY STATE */
+.empty-state{text-align:center;padding:60px 20px;color:var(--muted);}
+.empty-state .icon{font-size:48px;margin-bottom:16px;}
+.empty-state .msg{font-size:14px;margin-bottom:20px;}
+
+/* STARS */
+.stars-input{display:flex;gap:4px;}
+.stars-input .star-btn{width:28px;height:28px;border-radius:50%;border:1px solid var(--border);
+  background:var(--bg3);color:var(--muted);font-size:13px;cursor:pointer;transition:all .15s;
+  display:flex;align-items:center;justify-content:center;}
+.stars-input .star-btn.active{background:rgba(200,169,110,.25);color:var(--gold);border-color:var(--gold);}
+
+@media(max-width:768px){
+  .kpi-strip{flex-direction:column;}
+  .kpi-box{border-right:none;border-bottom:1px solid var(--border);}
+  .kanban{flex-direction:column;}
+  .kanban-col{max-width:none;min-width:0;}
+  .field-row,.field-row-3{grid-template-columns:1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="ht">Recrutamento & Seleção</div>
+    <div class="hs">Pipeline de vagas, candidatos, agenda e banco de talentos</div>
+  </div>
+  <a href="app.html" class="btn-back">← Voltar</a>
+</div>
+
+<!-- KPI STRIP -->
+<div class="kpi-strip">
+  <div class="kpi-box"><div class="kpi-value" id="kpiVagasAbertas">—</div><div class="kpi-label">Vagas Abertas</div></div>
+  <div class="kpi-box"><div class="kpi-value" id="kpiCandidatos">—</div><div class="kpi-label">Candidatos Ativos</div></div>
+  <div class="kpi-box"><div class="kpi-value" id="kpiEmSelecao">—</div><div class="kpi-label">Em Seleção</div></div>
+  <div class="kpi-box"><div class="kpi-value" id="kpiEntrevistas">—</div><div class="kpi-label">Entrevistas Semana</div></div>
+  <div class="kpi-box"><div class="kpi-value" id="kpiContratados">—</div><div class="kpi-label">Contratados (mês)</div></div>
+  <div class="kpi-box"><div class="kpi-value" id="kpiBancoTalentos">—</div><div class="kpi-label">Banco Talentos</div></div>
+</div>
+
+<div class="container">
+
+<!-- TABS -->
+<div class="tabs">
+  <div class="tab active" data-tab="vagas">Vagas</div>
+  <div class="tab" data-tab="candidatos">Candidatos</div>
+  <div class="tab" data-tab="pipeline">Pipeline</div>
+  <div class="tab" data-tab="agenda">Agenda de Entrevistas</div>
+  <div class="tab" data-tab="banco">Banco de Talentos</div>
+</div>
+
+<!-- ═══════════════ TAB: VAGAS ═══════════════ -->
+<div class="tab-content active" id="tab-vagas">
+  <div class="toolbar">
+    <input class="search-box" id="searchVagas" placeholder="Buscar vagas..." oninput="filtrarVagas()">
+    <select class="filter-select" id="filterVagaStatus" onchange="filtrarVagas()">
+      <option value="">Todos status</option>
+      <option value="aberta">Aberta</option>
+      <option value="em_selecao">Em seleção</option>
+      <option value="suspensa">Suspensa</option>
+      <option value="fechada">Fechada</option>
+    </select>
+    <select class="filter-select" id="filterVagaPrior" onchange="filtrarVagas()">
+      <option value="">Prioridade</option>
+      <option value="urgente">Urgente</option>
+      <option value="alta">Alta</option>
+      <option value="normal">Normal</option>
+      <option value="baixa">Baixa</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalVaga()">+ Nova Vaga</button>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Vaga</th><th>Setor</th><th>Tipo</th><th>Qtd</th><th>Prioridade</th>
+          <th>Status</th><th>Candidatos</th><th>Abertura</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbVagas"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyVagas" style="display:none;">
+      <div class="icon">📋</div>
+      <div class="msg">Nenhuma vaga cadastrada</div>
+      <button class="btn btn-primary" onclick="abrirModalVaga()">+ Criar primeira vaga</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB: CANDIDATOS ═══════════════ -->
+<div class="tab-content" id="tab-candidatos">
+  <div class="toolbar">
+    <input class="search-box" id="searchCand" placeholder="Buscar candidatos..." oninput="filtrarCandidatos()">
+    <select class="filter-select" id="filterCandStatus" onchange="filtrarCandidatos()">
+      <option value="">Todos status</option>
+      <option value="ativo">Ativo</option>
+      <option value="contratado">Contratado</option>
+      <option value="banco_talentos">Banco Talentos</option>
+      <option value="desistiu">Desistiu</option>
+    </select>
+    <select class="filter-select" id="filterCandFonte" onchange="filtrarCandidatos()">
+      <option value="">Fonte</option>
+      <option value="indicacao">Indicação</option>
+      <option value="site">Site</option>
+      <option value="agencia">Agência</option>
+      <option value="linkedin">LinkedIn</option>
+      <option value="whatsapp">WhatsApp</option>
+      <option value="presencial">Presencial</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalCandidato()">+ Novo Candidato</button>
+  </div>
+  <div class="card">
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Nome</th><th>Telefone</th><th>Cidade</th><th>Escolaridade</th>
+          <th>Fonte</th><th>Disponibilidade</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbCandidatos"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyCand" style="display:none;">
+      <div class="icon">👤</div>
+      <div class="msg">Nenhum candidato cadastrado</div>
+      <button class="btn btn-primary" onclick="abrirModalCandidato()">+ Cadastrar candidato</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB: PIPELINE ═══════════════ -->
+<div class="tab-content" id="tab-pipeline">
+  <div class="toolbar">
+    <select class="filter-select" id="filterPipeVaga" onchange="carregarPipeline()">
+      <option value="">Todas as vagas</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalPipeline()">+ Vincular Candidato</button>
+  </div>
+  <div class="kanban" id="kanbanBoard">
+    <div class="kanban-col" data-etapa="triagem">
+      <div class="kanban-header">Triagem <span class="kanban-count" id="cnt-triagem">0</span></div>
+      <div class="kanban-body" id="col-triagem"></div>
+    </div>
+    <div class="kanban-col" data-etapa="entrevista_rh">
+      <div class="kanban-header">Entrevista RH <span class="kanban-count" id="cnt-entrevista_rh">0</span></div>
+      <div class="kanban-body" id="col-entrevista_rh"></div>
+    </div>
+    <div class="kanban-col" data-etapa="teste_pratico">
+      <div class="kanban-header">Teste Prático <span class="kanban-count" id="cnt-teste_pratico">0</span></div>
+      <div class="kanban-body" id="col-teste_pratico"></div>
+    </div>
+    <div class="kanban-col" data-etapa="entrevista_gestor">
+      <div class="kanban-header">Entrev. Gestor <span class="kanban-count" id="cnt-entrevista_gestor">0</span></div>
+      <div class="kanban-body" id="col-entrevista_gestor"></div>
+    </div>
+    <div class="kanban-col" data-etapa="exame_admissional">
+      <div class="kanban-header">Exame Admissional <span class="kanban-count" id="cnt-exame_admissional">0</span></div>
+      <div class="kanban-body" id="col-exame_admissional"></div>
+    </div>
+    <div class="kanban-col" data-etapa="documentacao">
+      <div class="kanban-header">Documentação <span class="kanban-count" id="cnt-documentacao">0</span></div>
+      <div class="kanban-body" id="col-documentacao"></div>
+    </div>
+    <div class="kanban-col" data-etapa="aprovado" style="border-color:var(--green);">
+      <div class="kanban-header" style="color:var(--green);">Aprovado <span class="kanban-count" id="cnt-aprovado">0</span></div>
+      <div class="kanban-body" id="col-aprovado"></div>
+    </div>
+    <div class="kanban-col" data-etapa="reprovado" style="border-color:var(--red);">
+      <div class="kanban-header" style="color:var(--red);">Reprovado <span class="kanban-count" id="cnt-reprovado">0</span></div>
+      <div class="kanban-body" id="col-reprovado"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB: AGENDA ═══════════════ -->
+<div class="tab-content" id="tab-agenda">
+  <div class="toolbar">
+    <select class="filter-select" id="filterAgendaPeriodo" onchange="carregarAgenda()">
+      <option value="semana">Esta semana</option>
+      <option value="hoje">Hoje</option>
+      <option value="amanha">Amanhã</option>
+      <option value="mes">Este mês</option>
+      <option value="todas">Todas</option>
+    </select>
+    <select class="filter-select" id="filterAgendaStatus" onchange="carregarAgenda()">
+      <option value="">Todos status</option>
+      <option value="agendada">Agendada</option>
+      <option value="confirmada">Confirmada</option>
+      <option value="realizada">Realizada</option>
+      <option value="cancelada">Cancelada</option>
+      <option value="nao_compareceu">Não compareceu</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalEntrevista()">+ Agendar Entrevista</button>
+  </div>
+  <div id="agendaContainer">
+    <div class="empty-state" id="emptyAgenda" style="display:none;">
+      <div class="icon">📅</div>
+      <div class="msg">Nenhuma entrevista agendada</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════ TAB: BANCO TALENTOS ═══════════════ -->
+<div class="tab-content" id="tab-banco">
+  <div class="toolbar">
+    <input class="search-box" id="searchBanco" placeholder="Buscar por nome, tags, área..." oninput="filtrarBanco()">
+    <button class="btn btn-outline" onclick="moverParaBanco()">+ Adicionar ao Banco</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Candidatos no Banco de Talentos</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Nome</th><th>Telefone</th><th>Área de Interesse</th><th>Tags</th>
+          <th>Última Interação</th><th>Próxima Ação</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbBanco"></tbody>
+      </table>
+    </div>
+    <div class="empty-state" id="emptyBanco" style="display:none;">
+      <div class="icon">💎</div>
+      <div class="msg">Banco de talentos vazio</div>
+    </div>
+  </div>
+</div>
+
+</div><!-- container -->
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: VAGA -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalVaga">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalVagaTitle">Nova Vaga</span>
+      <button class="modal-close" onclick="fecharModal('modalVaga')">×</button>
+    </div>
+    <input type="hidden" id="vagaId">
+    <div class="field-row">
+      <div class="field"><label>Título da Vaga *</label><input id="vagaTitulo"></div>
+      <div class="field"><label>Cargo *</label><input id="vagaCargo"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Setor *</label><input id="vagaSetor"></div>
+      <div class="field">
+        <label>Tipo Contrato</label>
+        <select id="vagaTipo">
+          <option value="CLT">CLT</option>
+          <option value="PJ">PJ</option>
+          <option value="temporario">Temporário</option>
+          <option value="estagio">Estágio</option>
+          <option value="jovem_aprendiz">Jovem Aprendiz</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Turno</label>
+        <select id="vagaTurno">
+          <option value="diurno">Diurno</option>
+          <option value="noturno">Noturno</option>
+          <option value="misto">Misto</option>
+          <option value="comercial">Comercial</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Quantidade</label><input id="vagaQtd" type="number" value="1" min="1"></div>
+      <div class="field"><label>Faixa Salarial</label><input id="vagaSalario" placeholder="Ex: R$ 1.800 - 2.200"></div>
+      <div class="field">
+        <label>Prioridade</label>
+        <select id="vagaPrioridade">
+          <option value="normal">Normal</option>
+          <option value="baixa">Baixa</option>
+          <option value="alta">Alta</option>
+          <option value="urgente">Urgente</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Motivo da Abertura</label>
+        <select id="vagaMotivo">
+          <option value="substituicao">Substituição</option>
+          <option value="aumento_quadro">Aumento de quadro</option>
+          <option value="nova_funcao">Nova função</option>
+          <option value="temporario">Temporário</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="field"><label>Data Limite</label><input id="vagaDataLimite" type="date"></div>
+    </div>
+    <div class="field"><label>Responsável</label><input id="vagaResponsavel"></div>
+    <div class="field"><label>Requisitos</label><textarea id="vagaRequisitos" placeholder="Experiência, habilidades, certificações..."></textarea></div>
+    <div class="field"><label>Descrição</label><textarea id="vagaDescricao" placeholder="Atividades, responsabilidades..."></textarea></div>
+    <div class="field"><label>Observações</label><textarea id="vagaObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalVaga')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarVaga()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: CANDIDATO -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalCandidato">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalCandTitle">Novo Candidato</span>
+      <button class="modal-close" onclick="fecharModal('modalCandidato')">×</button>
+    </div>
+    <input type="hidden" id="candId">
+    <div class="field"><label>Nome Completo *</label><input id="candNome"></div>
+    <div class="field-row-3">
+      <div class="field"><label>CPF</label><input id="candCpf" maxlength="11" placeholder="Somente números"></div>
+      <div class="field"><label>Telefone</label><input id="candTelefone"></div>
+      <div class="field"><label>Email</label><input id="candEmail" type="email"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Cidade</label><input id="candCidade"></div>
+      <div class="field"><label>UF</label><input id="candUf" maxlength="2"></div>
+      <div class="field">
+        <label>Escolaridade</label>
+        <select id="candEscolaridade">
+          <option value="">Selecione</option>
+          <option value="fundamental">Fundamental</option>
+          <option value="medio">Médio</option>
+          <option value="tecnico">Técnico</option>
+          <option value="superior">Superior</option>
+          <option value="pos_graduacao">Pós-graduação</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Disponibilidade</label>
+        <select id="candDisp">
+          <option value="imediata">Imediata</option>
+          <option value="15_dias">15 dias</option>
+          <option value="30_dias">30 dias</option>
+          <option value="a_combinar">A combinar</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Fonte</label>
+        <select id="candFonte">
+          <option value="presencial">Presencial</option>
+          <option value="indicacao">Indicação</option>
+          <option value="site">Site</option>
+          <option value="agencia">Agência</option>
+          <option value="linkedin">LinkedIn</option>
+          <option value="whatsapp">WhatsApp</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Indicado por</label><input id="candIndicado"></div>
+      <div class="field"><label>Pretensão Salarial</label><input id="candPretensao" type="number" step="0.01"></div>
+    </div>
+    <div class="field"><label>Experiência (resumo)</label><textarea id="candExperiencia" placeholder="Empregos anteriores, funções..."></textarea></div>
+    <div class="field"><label>Observações</label><textarea id="candObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalCandidato')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCandidato()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: VINCULAR AO PIPELINE -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalPipeline">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span>Vincular Candidato a Vaga</span>
+      <button class="modal-close" onclick="fecharModal('modalPipeline')">×</button>
+    </div>
+    <div class="field">
+      <label>Vaga *</label>
+      <select id="pipeVaga"></select>
+    </div>
+    <div class="field">
+      <label>Candidato *</label>
+      <select id="pipeCandidato"></select>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="pipeObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalPipeline')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarPipeline()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: MOVER ETAPA (com notas e parecer) -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalMoverEtapa">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalMoverTitle">Mover Candidato</span>
+      <button class="modal-close" onclick="fecharModal('modalMoverEtapa')">×</button>
+    </div>
+    <input type="hidden" id="movePipeId">
+    <div class="field">
+      <label>Nova Etapa *</label>
+      <select id="moveEtapa">
+        <option value="triagem">Triagem</option>
+        <option value="entrevista_rh">Entrevista RH</option>
+        <option value="teste_pratico">Teste Prático</option>
+        <option value="entrevista_gestor">Entrevista Gestor</option>
+        <option value="exame_admissional">Exame Admissional</option>
+        <option value="documentacao">Documentação</option>
+        <option value="aprovado">Aprovado</option>
+        <option value="reprovado">Reprovado</option>
+        <option value="desistiu">Desistiu</option>
+      </select>
+    </div>
+    <div id="moveNotasSection">
+      <div class="field-row">
+        <div class="field"><label>Nota Triagem (1-5)</label><input id="moveNotaTriagem" type="number" min="1" max="5"></div>
+        <div class="field"><label>Nota Entrevista (1-5)</label><input id="moveNotaEntrevista" type="number" min="1" max="5"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Nota Teste (1-5)</label><input id="moveNotaTeste" type="number" min="1" max="5"></div>
+        <div class="field"><label>Nota Gestor (1-5)</label><input id="moveNotaGestor" type="number" min="1" max="5"></div>
+      </div>
+    </div>
+    <div class="field"><label>Parecer RH</label><textarea id="moveParecerRH" rows="2"></textarea></div>
+    <div class="field"><label>Parecer Gestor</label><textarea id="moveParecerGestor" rows="2"></textarea></div>
+    <div class="field" id="moveMotivoReprovDiv" style="display:none;">
+      <label>Motivo da Reprovação</label><textarea id="moveMotivoReprov" rows="2"></textarea>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="moveObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalMoverEtapa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarMoverEtapa()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: AGENDAR ENTREVISTA -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalEntrevista">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span id="modalEntrevTitle">Agendar Entrevista</span>
+      <button class="modal-close" onclick="fecharModal('modalEntrevista')">×</button>
+    </div>
+    <input type="hidden" id="entrevId">
+    <div class="field">
+      <label>Candidato (Pipeline) *</label>
+      <select id="entrevPipeline"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Tipo *</label>
+        <select id="entrevTipo">
+          <option value="entrevista_rh">Entrevista RH</option>
+          <option value="teste_pratico">Teste Prático</option>
+          <option value="entrevista_gestor">Entrevista Gestor</option>
+          <option value="exame_admissional">Exame Admissional</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div class="field"><label>Data e Hora *</label><input id="entrevDataHora" type="datetime-local"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Duração (min)</label><input id="entrevDuracao" type="number" value="30"></div>
+      <div class="field"><label>Local</label><input id="entrevLocal" placeholder="Sala, endereço..."></div>
+      <div class="field"><label>Entrevistador</label><input id="entrevEntrevistador"></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="entrevObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalEntrevista')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarEntrevista()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: FICHA DE AVALIAÇÃO -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalAvaliacao">
+  <div class="modal-box" style="max-width:700px;">
+    <div class="modal-title">
+      <span>Ficha de Avaliação</span>
+      <button class="modal-close" onclick="fecharModal('modalAvaliacao')">×</button>
+    </div>
+    <input type="hidden" id="avalPipeId">
+    <div class="field"><label>Avaliador *</label><input id="avalAvaliador"></div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Critérios (1 a 5)</div>
+      <div class="field-row-3">
+        <div class="field"><label>Apresentação</label><input id="avalApresentacao" type="number" min="1" max="5"></div>
+        <div class="field"><label>Comunicação</label><input id="avalComunicacao" type="number" min="1" max="5"></div>
+        <div class="field"><label>Experiência</label><input id="avalExperiencia" type="number" min="1" max="5"></div>
+      </div>
+      <div class="field-row-3">
+        <div class="field"><label>Motivação</label><input id="avalMotivacao" type="number" min="1" max="5"></div>
+        <div class="field"><label>Adequação à Vaga</label><input id="avalAdequacao" type="number" min="1" max="5"></div>
+        <div class="field"><label>Trabalho em Equipe</label><input id="avalEquipe" type="number" min="1" max="5"></div>
+      </div>
+    </div>
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:600;color:var(--gold);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Roteiro de Entrevista</div>
+      <div class="field"><label>1. Conte sobre sua experiência anterior</label><textarea id="avalP1" rows="2"></textarea></div>
+      <div class="field"><label>2. Por que quer trabalhar aqui?</label><textarea id="avalP2" rows="2"></textarea></div>
+      <div class="field"><label>3. Maior desafio profissional</label><textarea id="avalP3" rows="2"></textarea></div>
+      <div class="field"><label>4. Expectativas para a vaga</label><textarea id="avalP4" rows="2"></textarea></div>
+      <div class="field"><label>5. Disponibilidade e restrições</label><textarea id="avalP5" rows="2"></textarea></div>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Parecer *</label>
+        <select id="avalParecer">
+          <option value="recomendado">Recomendado</option>
+          <option value="recomendado_restricao">Recomendado com Restrição</option>
+          <option value="nao_recomendado">Não Recomendado</option>
+        </select>
+      </div>
+      <div class="field"><label>Nota Geral (0-10)</label><input id="avalNotaGeral" type="number" min="0" max="10" step="0.5"></div>
+    </div>
+    <div class="field"><label>Justificativa</label><textarea id="avalJustificativa" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalAvaliacao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAvaliacao()">Salvar Avaliação</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════ -->
+<!-- MODAL: ADICIONAR AO BANCO DE TALENTOS -->
+<!-- ═══════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="modalBanco">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span>Adicionar ao Banco de Talentos</span>
+      <button class="modal-close" onclick="fecharModal('modalBanco')">×</button>
+    </div>
+    <div class="field">
+      <label>Candidato *</label>
+      <select id="bancoCandidato"></select>
+    </div>
+    <div class="field"><label>Área de Interesse</label><input id="bancoArea" placeholder="Ex: Produção, Administrativo..."></div>
+    <div class="field"><label>Tags (separadas por vírgula)</label><input id="bancoTags" placeholder="Ex: solda, empilhadeira, noturno"></div>
+    <div class="field"><label>Próxima Ação</label><input id="bancoProxAcao" placeholder="Ex: Ligar em abril, aguardar vaga produção..."></div>
+    <div class="field"><label>Observações</label><textarea id="bancoObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button class="btn btn-outline" onclick="fecharModal('modalBanco')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarBancoTalentos()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+// DATA CACHE
+// ═══════════════════════════════════════════════════════════
+let vagas = [], candidatos = [], pipelines = [], entrevistas = [], bancoTalentos = [];
+
+// ═══════════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  try { await CQAuth.init(); } catch(e) { window.location.href = 'index_2.html'; return; }
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  // Show/hide motivo reprovação
+  document.getElementById('moveEtapa').addEventListener('change', e => {
+    document.getElementById('moveMotivoReprovDiv').style.display =
+      (e.target.value === 'reprovado') ? 'block' : 'none';
+  });
+
+  await carregarTudo();
+});
+
+async function carregarTudo() {
+  await Promise.all([
+    carregarVagas(),
+    carregarCandidatos(),
+    carregarPipeline(),
+    carregarAgenda(),
+    carregarBancoTalentos()
+  ]);
+  carregarKPIs();
+}
+
+// ═══════════════════════════════════════════════════════════
+// KPIs
+// ═══════════════════════════════════════════════════════════
+function carregarKPIs() {
+  const vagasAbertas = vagas.filter(v => v.status === 'aberta' || v.status === 'em_selecao').length;
+  const candAtivos = candidatos.filter(c => c.status === 'ativo').length;
+  const emSelecao = pipelines.filter(p => !['aprovado','reprovado','desistiu'].includes(p.etapa)).length;
+
+  const hoje = new Date();
+  const inicioSemana = new Date(hoje); inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+  const fimSemana = new Date(inicioSemana); fimSemana.setDate(inicioSemana.getDate() + 6);
+  const entrevSemana = entrevistas.filter(e => {
+    const d = new Date(e.data_hora);
+    return d >= inicioSemana && d <= fimSemana && e.status !== 'cancelada';
+  }).length;
+
+  const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  const contratadosMes = pipelines.filter(p => {
+    return p.etapa === 'aprovado' && new Date(p.data_ultima_etapa) >= inicioMes;
+  }).length;
+
+  document.getElementById('kpiVagasAbertas').textContent = vagasAbertas;
+  document.getElementById('kpiCandidatos').textContent = candAtivos;
+  document.getElementById('kpiEmSelecao').textContent = emSelecao;
+  document.getElementById('kpiEntrevistas').textContent = entrevSemana;
+  document.getElementById('kpiContratados').textContent = contratadosMes;
+  document.getElementById('kpiBancoTalentos').textContent = bancoTalentos.length;
+}
+
+// ═══════════════════════════════════════════════════════════
+// VAGAS
+// ═══════════════════════════════════════════════════════════
+async function carregarVagas() {
+  try {
+    vagas = await CQ_API.get('rs_vagas?order=created_at.desc') || [];
+  } catch(e) { vagas = []; }
+  renderVagas();
+  preencherSelectVagas();
+}
+
+function renderVagas() {
+  const q = (document.getElementById('searchVagas').value || '').toLowerCase();
+  const st = document.getElementById('filterVagaStatus').value;
+  const pr = document.getElementById('filterVagaPrior').value;
+
+  let lista = vagas.filter(v => {
+    if (q && !`${v.titulo} ${v.setor} ${v.cargo}`.toLowerCase().includes(q)) return false;
+    if (st && v.status !== st) return false;
+    if (pr && v.prioridade !== pr) return false;
+    return true;
+  });
+
+  const tb = document.getElementById('tbVagas');
+  const empty = document.getElementById('emptyVagas');
+
+  if (!lista.length) {
+    tb.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tb.innerHTML = lista.map(v => {
+    const candCount = pipelines.filter(p => p.vaga_id === v.id).length;
+    return `<tr>
+      <td><strong>${esc(v.titulo)}</strong><br><small style="color:var(--muted)">${esc(v.cargo)}</small></td>
+      <td>${esc(v.setor)}</td>
+      <td><span class="badge badge-muted">${esc(v.tipo_contrato)}</span></td>
+      <td>${v.quantidade || 1}</td>
+      <td>${badgePrioridade(v.prioridade)}</td>
+      <td>${badgeStatusVaga(v.status)}</td>
+      <td style="text-align:center">${candCount}</td>
+      <td>${formatDate(v.data_abertura)}</td>
+      <td>
+        <button class="btn-icon" onclick="editarVaga('${v.id}')" title="Editar">✏️</button>
+        <button class="btn-icon" onclick="alterarStatusVaga('${v.id}')" title="Alterar status">🔄</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarVagas() { renderVagas(); }
+
+function badgePrioridade(p) {
+  const map = { urgente:'badge-red', alta:'badge-orange', normal:'badge-blue', baixa:'badge-muted' };
+  return `<span class="badge ${map[p]||'badge-muted'}">${p||'—'}</span>`;
+}
+
+function badgeStatusVaga(s) {
+  const map = { aberta:'badge-green', em_selecao:'badge-blue', suspensa:'badge-yellow', fechada:'badge-muted', cancelada:'badge-red' };
+  const labels = { aberta:'Aberta', em_selecao:'Em Seleção', suspensa:'Suspensa', fechada:'Fechada', cancelada:'Cancelada' };
+  return `<span class="badge ${map[s]||'badge-muted'}">${labels[s]||s||'—'}</span>`;
+}
+
+function abrirModalVaga(id) {
+  document.getElementById('vagaId').value = '';
+  document.getElementById('modalVagaTitle').textContent = 'Nova Vaga';
+  ['vagaTitulo','vagaCargo','vagaSetor','vagaSalario','vagaResponsavel','vagaRequisitos','vagaDescricao','vagaObs','vagaDataLimite'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('vagaQtd').value = 1;
+  document.getElementById('vagaTipo').value = 'CLT';
+  document.getElementById('vagaTurno').value = 'diurno';
+  document.getElementById('vagaPrioridade').value = 'normal';
+  document.getElementById('vagaMotivo').value = 'substituicao';
+  document.getElementById('modalVaga').classList.add('show');
+}
+
+function editarVaga(id) {
+  const v = vagas.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('vagaId').value = v.id;
+  document.getElementById('modalVagaTitle').textContent = 'Editar Vaga';
+  document.getElementById('vagaTitulo').value = v.titulo || '';
+  document.getElementById('vagaCargo').value = v.cargo || '';
+  document.getElementById('vagaSetor').value = v.setor || '';
+  document.getElementById('vagaTipo').value = v.tipo_contrato || 'CLT';
+  document.getElementById('vagaTurno').value = v.turno || 'diurno';
+  document.getElementById('vagaQtd').value = v.quantidade || 1;
+  document.getElementById('vagaSalario').value = v.salario_faixa || '';
+  document.getElementById('vagaPrioridade').value = v.prioridade || 'normal';
+  document.getElementById('vagaMotivo').value = v.motivo_abertura || 'substituicao';
+  document.getElementById('vagaDataLimite').value = v.data_limite || '';
+  document.getElementById('vagaResponsavel').value = v.responsavel || '';
+  document.getElementById('vagaRequisitos').value = v.requisitos || '';
+  document.getElementById('vagaDescricao').value = v.descricao || '';
+  document.getElementById('vagaObs').value = v.observacoes || '';
+  document.getElementById('modalVaga').classList.add('show');
+}
+
+async function salvarVaga() {
+  const titulo = document.getElementById('vagaTitulo').value.trim();
+  const setor = document.getElementById('vagaSetor').value.trim();
+  const cargo = document.getElementById('vagaCargo').value.trim();
+  if (!titulo || !setor || !cargo) return alert('Preencha título, setor e cargo.');
+
+  const obj = {
+    titulo, setor, cargo,
+    tipo_contrato: document.getElementById('vagaTipo').value,
+    turno: document.getElementById('vagaTurno').value,
+    quantidade: parseInt(document.getElementById('vagaQtd').value) || 1,
+    salario_faixa: document.getElementById('vagaSalario').value.trim() || null,
+    prioridade: document.getElementById('vagaPrioridade').value,
+    motivo_abertura: document.getElementById('vagaMotivo').value,
+    data_limite: document.getElementById('vagaDataLimite').value || null,
+    responsavel: document.getElementById('vagaResponsavel').value.trim() || null,
+    requisitos: document.getElementById('vagaRequisitos').value.trim() || null,
+    descricao: document.getElementById('vagaDescricao').value.trim() || null,
+    observacoes: document.getElementById('vagaObs').value.trim() || null
+  };
+
+  const id = document.getElementById('vagaId').value;
+  try {
+    if (id) {
+      await CQ_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+    } else {
+      await CQ_API.post('rs_vagas', obj);
+    }
+    fecharModal('modalVaga');
+    await carregarVagas();
+    carregarKPIs();
+  } catch(e) { alert('Erro ao salvar: ' + e.message); }
+}
+
+async function alterarStatusVaga(id) {
+  const v = vagas.find(x => x.id === id);
+  if (!v) return;
+  const opcoes = ['aberta','em_selecao','suspensa','fechada','cancelada'];
+  const novo = prompt(`Status atual: ${v.status}\nNovo status (${opcoes.join(', ')}):`);
+  if (!novo || !opcoes.includes(novo) || novo === v.status) return;
+  try {
+    const body = { status: novo };
+    if (novo === 'fechada') body.data_fechamento = new Date().toISOString().slice(0,10);
+    await CQ_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
+    await carregarVagas();
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+function preencherSelectVagas() {
+  const selects = ['filterPipeVaga','pipeVaga'];
+  const vagasAbertas = vagas.filter(v => v.status === 'aberta' || v.status === 'em_selecao');
+
+  selects.forEach(sid => {
+    const sel = document.getElementById(sid);
+    if (!sel) return;
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    if (sid === 'filterPipeVaga') {
+      sel.appendChild(first || new Option('Todas as vagas',''));
+    }
+    vagasAbertas.forEach(v => {
+      sel.add(new Option(`${v.titulo} — ${v.setor}`, v.id));
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// CANDIDATOS
+// ═══════════════════════════════════════════════════════════
+async function carregarCandidatos() {
+  try {
+    candidatos = await CQ_API.get('rs_candidatos?order=created_at.desc') || [];
+  } catch(e) { candidatos = []; }
+  renderCandidatos();
+  preencherSelectCandidatos();
+}
+
+function renderCandidatos() {
+  const q = (document.getElementById('searchCand').value || '').toLowerCase();
+  const st = document.getElementById('filterCandStatus').value;
+  const ft = document.getElementById('filterCandFonte').value;
+
+  let lista = candidatos.filter(c => {
+    if (q && !`${c.nome_completo} ${c.cidade||''} ${c.email||''}`.toLowerCase().includes(q)) return false;
+    if (st && c.status !== st) return false;
+    if (ft && c.fonte !== ft) return false;
+    return true;
+  });
+
+  const tb = document.getElementById('tbCandidatos');
+  const empty = document.getElementById('emptyCand');
+
+  if (!lista.length) {
+    tb.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  const escMap = { fundamental:'Fund.', medio:'Médio', tecnico:'Técnico', superior:'Superior', pos_graduacao:'Pós' };
+  const fonteMap = { indicacao:'Indicação', site:'Site', agencia:'Agência', linkedin:'LinkedIn', whatsapp:'WhatsApp', presencial:'Presencial', outro:'Outro' };
+  const dispMap = { imediata:'Imediata', '15_dias':'15 dias', '30_dias':'30 dias', a_combinar:'A combinar' };
+
+  tb.innerHTML = lista.map(c => {
+    const statusBadge = c.status === 'ativo' ? 'badge-green' :
+                        c.status === 'contratado' ? 'badge-blue' :
+                        c.status === 'banco_talentos' ? 'badge-gold' : 'badge-muted';
+    return `<tr>
+      <td><strong>${esc(c.nome_completo)}</strong></td>
+      <td>${esc(c.telefone||'—')}</td>
+      <td>${esc(c.cidade||'—')}${c.uf ? '/'+c.uf : ''}</td>
+      <td>${escMap[c.escolaridade]||'—'}</td>
+      <td>${fonteMap[c.fonte]||c.fonte||'—'}</td>
+      <td>${dispMap[c.disponibilidade]||'—'}</td>
+      <td><span class="badge ${statusBadge}">${c.status||'—'}</span></td>
+      <td>
+        <button class="btn-icon" onclick="editarCandidato('${c.id}')" title="Editar">✏️</button>
+        <button class="btn-icon" onclick="abrirAvaliacaoCandidato('${c.id}')" title="Avaliar">📝</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarCandidatos() { renderCandidatos(); }
+
+function abrirModalCandidato(id) {
+  document.getElementById('candId').value = '';
+  document.getElementById('modalCandTitle').textContent = 'Novo Candidato';
+  ['candNome','candCpf','candTelefone','candEmail','candCidade','candUf','candIndicado','candPretensao','candExperiencia','candObs'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('candEscolaridade').value = '';
+  document.getElementById('candDisp').value = 'imediata';
+  document.getElementById('candFonte').value = 'presencial';
+  document.getElementById('modalCandidato').classList.add('show');
+}
+
+function editarCandidato(id) {
+  const c = candidatos.find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('candId').value = c.id;
+  document.getElementById('modalCandTitle').textContent = 'Editar Candidato';
+  document.getElementById('candNome').value = c.nome_completo || '';
+  document.getElementById('candCpf').value = c.cpf || '';
+  document.getElementById('candTelefone').value = c.telefone || '';
+  document.getElementById('candEmail').value = c.email || '';
+  document.getElementById('candCidade').value = c.cidade || '';
+  document.getElementById('candUf').value = c.uf || '';
+  document.getElementById('candEscolaridade').value = c.escolaridade || '';
+  document.getElementById('candDisp').value = c.disponibilidade || 'imediata';
+  document.getElementById('candFonte').value = c.fonte || 'presencial';
+  document.getElementById('candIndicado').value = c.indicado_por || '';
+  document.getElementById('candPretensao').value = c.pretensao_salarial || '';
+  document.getElementById('candExperiencia').value = c.experiencia_resumo || '';
+  document.getElementById('candObs').value = c.observacoes || '';
+  document.getElementById('modalCandidato').classList.add('show');
+}
+
+async function salvarCandidato() {
+  const nome = document.getElementById('candNome').value.trim();
+  if (!nome) return alert('Nome é obrigatório.');
+
+  const obj = {
+    nome_completo: nome,
+    cpf: document.getElementById('candCpf').value.trim() || null,
+    telefone: document.getElementById('candTelefone').value.trim() || null,
+    email: document.getElementById('candEmail').value.trim() || null,
+    cidade: document.getElementById('candCidade').value.trim() || null,
+    uf: document.getElementById('candUf').value.trim().toUpperCase() || null,
+    escolaridade: document.getElementById('candEscolaridade').value || null,
+    disponibilidade: document.getElementById('candDisp').value || null,
+    fonte: document.getElementById('candFonte').value || null,
+    indicado_por: document.getElementById('candIndicado').value.trim() || null,
+    pretensao_salarial: parseFloat(document.getElementById('candPretensao').value) || null,
+    experiencia_resumo: document.getElementById('candExperiencia').value.trim() || null,
+    observacoes: document.getElementById('candObs').value.trim() || null
+  };
+
+  const id = document.getElementById('candId').value;
+  try {
+    if (id) {
+      await CQ_API.fetch(`rs_candidatos?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+    } else {
+      await CQ_API.post('rs_candidatos', obj);
+    }
+    fecharModal('modalCandidato');
+    await carregarCandidatos();
+    carregarKPIs();
+  } catch(e) { alert('Erro ao salvar: ' + e.message); }
+}
+
+function preencherSelectCandidatos() {
+  const candAtivos = candidatos.filter(c => c.status === 'ativo');
+  ['pipeCandidato','bancoCandidato'].forEach(sid => {
+    const sel = document.getElementById(sid);
+    if (!sel) return;
+    sel.innerHTML = '';
+    candAtivos.forEach(c => {
+      sel.add(new Option(c.nome_completo, c.id));
+    });
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// PIPELINE (KANBAN)
+// ═══════════════════════════════════════════════════════════
+async function carregarPipeline() {
+  try {
+    pipelines = await CQ_API.get('rs_pipeline?order=created_at.desc') || [];
+  } catch(e) { pipelines = []; }
+  renderKanban();
+  preencherSelectPipeline();
+}
+
+function renderKanban() {
+  const vagaFiltro = document.getElementById('filterPipeVaga').value;
+  const etapas = ['triagem','entrevista_rh','teste_pratico','entrevista_gestor','exame_admissional','documentacao','aprovado','reprovado'];
+
+  let lista = pipelines;
+  if (vagaFiltro) lista = lista.filter(p => p.vaga_id === vagaFiltro);
+
+  etapas.forEach(etapa => {
+    const col = document.getElementById('col-' + etapa);
+    const cnt = document.getElementById('cnt-' + etapa);
+    const cards = lista.filter(p => p.etapa === etapa);
+    cnt.textContent = cards.length;
+
+    col.innerHTML = cards.map(p => {
+      const cand = candidatos.find(c => c.id === p.candidato_id);
+      const vaga = vagas.find(v => v.id === p.vaga_id);
+      const nome = cand ? cand.nome_completo : 'Candidato';
+      const vagaNome = vaga ? vaga.titulo : '';
+      const notas = [p.nota_triagem, p.nota_entrevista, p.nota_teste, p.nota_gestor].filter(n => n != null);
+      const mediaNotas = notas.length ? (notas.reduce((a,b) => a+b, 0) / notas.length).toFixed(1) : null;
+
+      return `<div class="kanban-card" onclick="abrirMoverEtapa('${p.id}')">
+        <div class="kanban-card-name">${esc(nome)}</div>
+        <div class="kanban-card-info">
+          ${vagaNome ? esc(vagaNome) + '<br>' : ''}
+          ${mediaNotas ? `Média: ${mediaNotas}/5` : ''}
+        </div>
+        ${notas.length ? `<div class="kanban-card-score">${renderStars(Math.round(notas.reduce((a,b)=>a+b,0)/notas.length))}</div>` : ''}
+        <div style="margin-top:6px;display:flex;gap:4px;">
+          <button class="btn-icon btn-sm" onclick="event.stopPropagation();abrirAvaliacaoPipe('${p.id}')" title="Avaliar">📝</button>
+          <button class="btn-icon btn-sm" onclick="event.stopPropagation();agendarEntrevistaPipe('${p.id}')" title="Agendar">📅</button>
+        </div>
+      </div>`;
+    }).join('');
+  });
+}
+
+function renderStars(n) {
+  let html = '';
+  for (let i = 1; i <= 5; i++) {
+    html += `<span class="star ${i <= n ? 'star-filled':'star-empty'}">★</span>`;
+  }
+  return html;
+}
+
+function abrirModalPipeline() {
+  document.getElementById('pipeObs').value = '';
+  document.getElementById('modalPipeline').classList.add('show');
+}
+
+async function salvarPipeline() {
+  const vaga_id = document.getElementById('pipeVaga').value;
+  const candidato_id = document.getElementById('pipeCandidato').value;
+  if (!vaga_id || !candidato_id) return alert('Selecione vaga e candidato.');
+
+  // Verificar duplicata
+  const existe = pipelines.find(p => p.vaga_id === vaga_id && p.candidato_id === candidato_id);
+  if (existe) return alert('Candidato já vinculado a esta vaga.');
+
+  try {
+    await CQ_API.post('rs_pipeline', {
+      vaga_id, candidato_id, etapa:'triagem',
+      observacoes: document.getElementById('pipeObs').value.trim() || null
+    });
+    fecharModal('modalPipeline');
+    await carregarPipeline();
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+function abrirMoverEtapa(pipeId) {
+  const p = pipelines.find(x => x.id === pipeId);
+  if (!p) return;
+  const cand = candidatos.find(c => c.id === p.candidato_id);
+  document.getElementById('modalMoverTitle').textContent = `Mover: ${cand ? cand.nome_completo : 'Candidato'}`;
+  document.getElementById('movePipeId').value = pipeId;
+  document.getElementById('moveEtapa').value = p.etapa;
+  document.getElementById('moveNotaTriagem').value = p.nota_triagem || '';
+  document.getElementById('moveNotaEntrevista').value = p.nota_entrevista || '';
+  document.getElementById('moveNotaTeste').value = p.nota_teste || '';
+  document.getElementById('moveNotaGestor').value = p.nota_gestor || '';
+  document.getElementById('moveParecerRH').value = p.parecer_rh || '';
+  document.getElementById('moveParecerGestor').value = p.parecer_gestor || '';
+  document.getElementById('moveMotivoReprov').value = p.motivo_reprovacao || '';
+  document.getElementById('moveObs').value = p.observacoes || '';
+  document.getElementById('moveMotivoReprovDiv').style.display = p.etapa === 'reprovado' ? 'block' : 'none';
+  document.getElementById('modalMoverEtapa').classList.add('show');
+}
+
+async function salvarMoverEtapa() {
+  const id = document.getElementById('movePipeId').value;
+  const etapa = document.getElementById('moveEtapa').value;
+
+  const obj = {
+    etapa,
+    data_ultima_etapa: new Date().toISOString().slice(0,10),
+    nota_triagem: parseInt(document.getElementById('moveNotaTriagem').value) || null,
+    nota_entrevista: parseInt(document.getElementById('moveNotaEntrevista').value) || null,
+    nota_teste: parseInt(document.getElementById('moveNotaTeste').value) || null,
+    nota_gestor: parseInt(document.getElementById('moveNotaGestor').value) || null,
+    parecer_rh: document.getElementById('moveParecerRH').value.trim() || null,
+    parecer_gestor: document.getElementById('moveParecerGestor').value.trim() || null,
+    motivo_reprovacao: etapa === 'reprovado' ? document.getElementById('moveMotivoReprov').value.trim() || null : null,
+    observacoes: document.getElementById('moveObs').value.trim() || null
+  };
+
+  try {
+    await CQ_API.fetch(`rs_pipeline?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+
+    // Se aprovado, marcar candidato como contratado
+    if (etapa === 'aprovado') {
+      const pipe = pipelines.find(p => p.id === id);
+      if (pipe) {
+        await CQ_API.fetch(`rs_candidatos?id=eq.${pipe.candidato_id}`, {
+          method:'PATCH', body:JSON.stringify({ status:'contratado' })
+        });
+      }
+    }
+
+    fecharModal('modalMoverEtapa');
+    await Promise.all([carregarPipeline(), carregarCandidatos()]);
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+function preencherSelectPipeline() {
+  const sel = document.getElementById('entrevPipeline');
+  if (!sel) return;
+  sel.innerHTML = '';
+  pipelines.filter(p => !['aprovado','reprovado','desistiu'].includes(p.etapa)).forEach(p => {
+    const cand = candidatos.find(c => c.id === p.candidato_id);
+    const vaga = vagas.find(v => v.id === p.vaga_id);
+    const label = `${cand ? cand.nome_completo : '?'} — ${vaga ? vaga.titulo : '?'}`;
+    sel.add(new Option(label, p.id));
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
+// AGENDA DE ENTREVISTAS
+// ═══════════════════════════════════════════════════════════
+async function carregarAgenda() {
+  try {
+    entrevistas = await CQ_API.get('rs_entrevistas?order=data_hora.asc') || [];
+  } catch(e) { entrevistas = []; }
+  renderAgenda();
+}
+
+function renderAgenda() {
+  const periodo = document.getElementById('filterAgendaPeriodo').value;
+  const statusF = document.getElementById('filterAgendaStatus').value;
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+
+  let lista = entrevistas;
+  if (statusF) lista = lista.filter(e => e.status === statusF);
+
+  // Filtro por período
+  if (periodo === 'hoje') {
+    const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+    lista = lista.filter(e => { const d = new Date(e.data_hora); return d >= hoje && d < amanha; });
+  } else if (periodo === 'amanha') {
+    const amanha = new Date(hoje); amanha.setDate(amanha.getDate() + 1);
+    const depois = new Date(hoje); depois.setDate(depois.getDate() + 2);
+    lista = lista.filter(e => { const d = new Date(e.data_hora); return d >= amanha && d < depois; });
+  } else if (periodo === 'semana') {
+    const inicioSemana = new Date(hoje); inicioSemana.setDate(hoje.getDate() - hoje.getDay());
+    const fimSemana = new Date(inicioSemana); fimSemana.setDate(inicioSemana.getDate() + 7);
+    lista = lista.filter(e => { const d = new Date(e.data_hora); return d >= inicioSemana && d < fimSemana; });
+  } else if (periodo === 'mes') {
+    const inicioMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    const fimMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0, 23, 59, 59);
+    lista = lista.filter(e => { const d = new Date(e.data_hora); return d >= inicioMes && d <= fimMes; });
+  }
+
+  const container = document.getElementById('agendaContainer');
+  const empty = document.getElementById('emptyAgenda');
+
+  if (!lista.length) {
+    container.innerHTML = '';
+    container.appendChild(empty);
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Agrupar por dia
+  const porDia = {};
+  lista.forEach(e => {
+    const dia = new Date(e.data_hora).toISOString().slice(0,10);
+    if (!porDia[dia]) porDia[dia] = [];
+    porDia[dia].push(e);
+  });
+
+  const tipoLabel = { entrevista_rh:'Entrevista RH', teste_pratico:'Teste Prático', entrevista_gestor:'Entrev. Gestor', exame_admissional:'Exame Admissional', outro:'Outro' };
+  const statusBadge = { agendada:'badge-blue', confirmada:'badge-green', realizada:'badge-muted', cancelada:'badge-red', reagendada:'badge-yellow', nao_compareceu:'badge-orange' };
+
+  let html = '';
+  Object.keys(porDia).sort().forEach(dia => {
+    const dObj = new Date(dia + 'T12:00:00');
+    const diaLabel = dObj.toLocaleDateString('pt-BR', { weekday:'long', day:'2-digit', month:'long' });
+    const isHoje = dia === hoje.toISOString().slice(0,10);
+
+    html += `<div class="agenda-day">
+      <div class="agenda-day-title">${isHoje ? '📌 HOJE — ' : ''}${diaLabel}</div>`;
+
+    porDia[dia].forEach(e => {
+      const pipe = pipelines.find(p => p.id === e.pipeline_id);
+      const cand = pipe ? candidatos.find(c => c.id === pipe.candidato_id) : null;
+      const vaga = pipe ? vagas.find(v => v.id === pipe.vaga_id) : null;
+      const hora = new Date(e.data_hora).toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+
+      html += `<div class="agenda-item">
+        <div class="agenda-time">${hora}</div>
+        <div class="agenda-detail">
+          <div class="agenda-detail-name">${cand ? esc(cand.nome_completo) : 'Candidato'}</div>
+          <div class="agenda-detail-info">
+            ${tipoLabel[e.tipo]||e.tipo} ${vaga ? '· '+esc(vaga.titulo) : ''}
+            ${e.local ? ' · '+esc(e.local) : ''}
+            ${e.entrevistador ? ' · '+esc(e.entrevistador) : ''}
+          </div>
+        </div>
+        <span class="badge ${statusBadge[e.status]||'badge-muted'}">${e.status}</span>
+        <div class="agenda-actions">
+          <button class="btn-icon btn-sm" onclick="alterarStatusEntrevista('${e.id}')" title="Alterar status">🔄</button>
+          <button class="btn-icon btn-sm" onclick="editarEntrevista('${e.id}')" title="Editar">✏️</button>
+        </div>
+      </div>`;
+    });
+
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+function abrirModalEntrevista() {
+  document.getElementById('entrevId').value = '';
+  document.getElementById('modalEntrevTitle').textContent = 'Agendar Entrevista';
+  document.getElementById('entrevTipo').value = 'entrevista_rh';
+  document.getElementById('entrevDataHora').value = '';
+  document.getElementById('entrevDuracao').value = 30;
+  document.getElementById('entrevLocal').value = '';
+  document.getElementById('entrevEntrevistador').value = '';
+  document.getElementById('entrevObs').value = '';
+  document.getElementById('modalEntrevista').classList.add('show');
+}
+
+function agendarEntrevistaPipe(pipeId) {
+  abrirModalEntrevista();
+  document.getElementById('entrevPipeline').value = pipeId;
+}
+
+function editarEntrevista(id) {
+  const e = entrevistas.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('entrevId').value = e.id;
+  document.getElementById('modalEntrevTitle').textContent = 'Editar Entrevista';
+  document.getElementById('entrevPipeline').value = e.pipeline_id;
+  document.getElementById('entrevTipo').value = e.tipo;
+  document.getElementById('entrevDataHora').value = e.data_hora ? e.data_hora.slice(0,16) : '';
+  document.getElementById('entrevDuracao').value = e.duracao_min || 30;
+  document.getElementById('entrevLocal').value = e.local || '';
+  document.getElementById('entrevEntrevistador').value = e.entrevistador || '';
+  document.getElementById('entrevObs').value = e.observacoes || '';
+  document.getElementById('modalEntrevista').classList.add('show');
+}
+
+async function salvarEntrevista() {
+  const pipeline_id = document.getElementById('entrevPipeline').value;
+  const data_hora = document.getElementById('entrevDataHora').value;
+  if (!pipeline_id || !data_hora) return alert('Selecione candidato e data/hora.');
+
+  const obj = {
+    pipeline_id,
+    tipo: document.getElementById('entrevTipo').value,
+    data_hora: new Date(data_hora).toISOString(),
+    duracao_min: parseInt(document.getElementById('entrevDuracao').value) || 30,
+    local: document.getElementById('entrevLocal').value.trim() || null,
+    entrevistador: document.getElementById('entrevEntrevistador').value.trim() || null,
+    observacoes: document.getElementById('entrevObs').value.trim() || null
+  };
+
+  const id = document.getElementById('entrevId').value;
+  try {
+    if (id) {
+      await CQ_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+    } else {
+      await CQ_API.post('rs_entrevistas', obj);
+    }
+    fecharModal('modalEntrevista');
+    await carregarAgenda();
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function alterarStatusEntrevista(id) {
+  const e = entrevistas.find(x => x.id === id);
+  if (!e) return;
+  const opcoes = ['agendada','confirmada','realizada','cancelada','reagendada','nao_compareceu'];
+  const novo = prompt(`Status atual: ${e.status}\nNovo status (${opcoes.join(', ')}):`);
+  if (!novo || !opcoes.includes(novo)) return;
+  try {
+    const body = { status: novo };
+    if (novo === 'realizada') body.resultado = prompt('Resultado (aprovado / reprovado / pendente):') || 'pendente';
+    await CQ_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
+    await carregarAgenda();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// FICHA DE AVALIAÇÃO
+// ═══════════════════════════════════════════════════════════
+function abrirAvaliacaoPipe(pipeId) {
+  document.getElementById('avalPipeId').value = pipeId;
+  document.getElementById('avalAvaliador').value = '';
+  ['avalApresentacao','avalComunicacao','avalExperiencia','avalMotivacao','avalAdequacao','avalEquipe','avalNotaGeral'].forEach(f => document.getElementById(f).value = '');
+  ['avalP1','avalP2','avalP3','avalP4','avalP5','avalJustificativa'].forEach(f => document.getElementById(f).value = '');
+  document.getElementById('avalParecer').value = 'recomendado';
+  document.getElementById('modalAvaliacao').classList.add('show');
+}
+
+function abrirAvaliacaoCandidato(candId) {
+  // Encontrar pipeline ativo do candidato
+  const pipe = pipelines.find(p => p.candidato_id === candId && !['aprovado','reprovado','desistiu'].includes(p.etapa));
+  if (!pipe) return alert('Candidato não está em nenhum processo ativo. Vincule-o a uma vaga primeiro.');
+  abrirAvaliacaoPipe(pipe.id);
+}
+
+async function salvarAvaliacao() {
+  const pipeline_id = document.getElementById('avalPipeId').value;
+  const avaliador = document.getElementById('avalAvaliador').value.trim();
+  const parecer = document.getElementById('avalParecer').value;
+  if (!avaliador) return alert('Informe o avaliador.');
+
+  const obj = {
+    pipeline_id, avaliador, parecer,
+    apresentacao: parseInt(document.getElementById('avalApresentacao').value) || null,
+    comunicacao: parseInt(document.getElementById('avalComunicacao').value) || null,
+    experiencia: parseInt(document.getElementById('avalExperiencia').value) || null,
+    motivacao: parseInt(document.getElementById('avalMotivacao').value) || null,
+    adequacao_vaga: parseInt(document.getElementById('avalAdequacao').value) || null,
+    trabalho_equipe: parseInt(document.getElementById('avalEquipe').value) || null,
+    p1_experiencia: document.getElementById('avalP1').value.trim() || null,
+    p2_motivo: document.getElementById('avalP2').value.trim() || null,
+    p3_desafio: document.getElementById('avalP3').value.trim() || null,
+    p4_expectativa: document.getElementById('avalP4').value.trim() || null,
+    p5_disponibilidade: document.getElementById('avalP5').value.trim() || null,
+    nota_geral: parseFloat(document.getElementById('avalNotaGeral').value) || null,
+    justificativa: document.getElementById('avalJustificativa').value.trim() || null
+  };
+
+  try {
+    await CQ_API.post('rs_avaliacoes', obj);
+    fecharModal('modalAvaliacao');
+    alert('Avaliação salva com sucesso!');
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BANCO DE TALENTOS
+// ═══════════════════════════════════════════════════════════
+async function carregarBancoTalentos() {
+  try {
+    bancoTalentos = await CQ_API.get('rs_banco_talentos?order=created_at.desc') || [];
+  } catch(e) { bancoTalentos = []; }
+  renderBancoTalentos();
+}
+
+function renderBancoTalentos() {
+  const q = (document.getElementById('searchBanco').value || '').toLowerCase();
+
+  let lista = bancoTalentos;
+  if (q) {
+    lista = lista.filter(b => {
+      const cand = candidatos.find(c => c.id === b.candidato_id);
+      const nome = cand ? cand.nome_completo : '';
+      return `${nome} ${b.tags||''} ${b.area_interesse||''}`.toLowerCase().includes(q);
+    });
+  }
+
+  const tb = document.getElementById('tbBanco');
+  const empty = document.getElementById('emptyBanco');
+
+  if (!lista.length) {
+    tb.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tb.innerHTML = lista.map(b => {
+    const cand = candidatos.find(c => c.id === b.candidato_id);
+    const tags = (b.tags || '').split(',').filter(t => t.trim()).map(t =>
+      `<span class="badge badge-purple" style="margin:1px;">${esc(t.trim())}</span>`
+    ).join(' ');
+    return `<tr>
+      <td><strong>${cand ? esc(cand.nome_completo) : '—'}</strong></td>
+      <td>${cand ? esc(cand.telefone||'—') : '—'}</td>
+      <td>${esc(b.area_interesse||'—')}</td>
+      <td>${tags || '—'}</td>
+      <td>${formatDate(b.ultima_interacao)}</td>
+      <td>${esc(b.proxima_acao||'—')}</td>
+      <td>
+        <button class="btn-icon btn-sm" onclick="removerDoBanco('${b.id}')" title="Remover">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarBanco() { renderBancoTalentos(); }
+
+function moverParaBanco() {
+  document.getElementById('bancoArea').value = '';
+  document.getElementById('bancoTags').value = '';
+  document.getElementById('bancoProxAcao').value = '';
+  document.getElementById('bancoObs').value = '';
+  document.getElementById('modalBanco').classList.add('show');
+}
+
+async function salvarBancoTalentos() {
+  const candidato_id = document.getElementById('bancoCandidato').value;
+  if (!candidato_id) return alert('Selecione um candidato.');
+
+  // Verificar se já está no banco
+  const existe = bancoTalentos.find(b => b.candidato_id === candidato_id);
+  if (existe) return alert('Candidato já está no banco de talentos.');
+
+  try {
+    await CQ_API.post('rs_banco_talentos', {
+      candidato_id,
+      area_interesse: document.getElementById('bancoArea').value.trim() || null,
+      tags: document.getElementById('bancoTags').value.trim() || null,
+      proxima_acao: document.getElementById('bancoProxAcao').value.trim() || null,
+      observacoes: document.getElementById('bancoObs').value.trim() || null
+    });
+
+    // Atualizar status do candidato
+    await CQ_API.fetch(`rs_candidatos?id=eq.${candidato_id}`, {
+      method:'PATCH', body:JSON.stringify({ status:'banco_talentos' })
+    });
+
+    fecharModal('modalBanco');
+    await Promise.all([carregarBancoTalentos(), carregarCandidatos()]);
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+async function removerDoBanco(id) {
+  if (!confirm('Remover do banco de talentos?')) return;
+  try {
+    const b = bancoTalentos.find(x => x.id === id);
+    await CQ_API.fetch(`rs_banco_talentos?id=eq.${id}`, { method:'DELETE' });
+    if (b) {
+      await CQ_API.fetch(`rs_candidatos?id=eq.${b.candidato_id}`, {
+        method:'PATCH', body:JSON.stringify({ status:'ativo' })
+      });
+    }
+    await Promise.all([carregarBancoTalentos(), carregarCandidatos()]);
+    carregarKPIs();
+  } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ═══════════════════════════════════════════════════════════
+// UTILS
+// ═══════════════════════════════════════════════════════════
+function fecharModal(id) { document.getElementById(id).classList.remove('show'); }
+function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+function formatDate(d) { if (!d) return '—'; return new Date(d+'T12:00:00').toLocaleDateString('pt-BR'); }
+</script>
+</body>
+</html>

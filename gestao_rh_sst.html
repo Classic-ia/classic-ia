@@ -1,0 +1,1896 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestão RH & SST · Classic</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<style>
+:root {
+  --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
+  --gold:#c8a96e; --blue:#2E6B8A; --blue2:#3d8aad;
+  --text:#e8f0f5; --muted:#5d7f95;
+  --green:#27ae60; --yellow:#f39c12; --red:#e74c3c; --orange:#e67e22;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
+
+/* HEADER */
+.header{background:linear-gradient(135deg,var(--bg2),#09131e);border-bottom:1px solid var(--border);
+  padding:14px 20px;display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:50;}
+.ht{font-family:'Syne',sans-serif;font-weight:800;font-size:17px;color:var(--gold);}
+.hs{font-size:11px;color:var(--muted);margin-top:1px;}
+.btn-back{margin-left:auto;padding:7px 14px;background:transparent;border:1px solid var(--border);
+  border-radius:8px;color:var(--muted);font-size:12px;cursor:pointer;text-decoration:none;
+  display:flex;align-items:center;gap:5px;transition:all .2s;}
+.btn-back:hover{border-color:var(--blue);color:var(--text);}
+
+/* MOTOR LÓGICO BANNER */
+.motor-banner{background:var(--bg2);border-bottom:1px solid var(--border);padding:10px 20px;
+  display:flex;gap:16px;align-items:center;flex-wrap:wrap;font-size:12px;}
+.motor-stat{display:flex;align-items:center;gap:6px;}
+.motor-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.motor-dot.ok{background:var(--green);}
+.motor-dot.warn{background:var(--yellow);}
+.motor-dot.danger{background:var(--red);}
+
+/* CONTAINER */
+.container{max-width:1200px;margin:0 auto;padding:20px 20px 80px;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:16px;border-bottom:1px solid var(--border);margin-bottom:20px;}
+.tab{padding:8px 16px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;
+  background:transparent;border:1px solid transparent;color:var(--muted);white-space:nowrap;transition:all .2s;
+  font-family:'DM Sans',sans-serif;}
+.tab:hover{background:var(--bg3);color:var(--text);}
+.tab.active{background:var(--blue);color:white;border-color:var(--blue);}
+
+/* CARDS & TABLE */
+.card{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:16px;
+  display:flex;align-items:center;justify-content:space-between;}
+.table-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+tbody tr{border-bottom:1px solid rgba(30,58,82,.4);transition:background .15s;}
+tbody tr:hover{background:rgba(46,107,138,.08);}
+tbody td{padding:10px;vertical-align:middle;}
+
+/* BADGES */
+.badge{display:inline-flex;padding:3px 8px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.badge-green{background:rgba(39,174,96,.15);color:var(--green);}
+.badge-yellow{background:rgba(243,156,18,.15);color:var(--yellow);}
+.badge-red{background:rgba(231,76,60,.15);color:var(--red);}
+.badge-blue{background:rgba(46,107,138,.2);color:#5ec2e8;}
+.badge-muted{background:rgba(93,127,149,.15);color:var(--muted);}
+
+/* BUTTONS */
+.btn{padding:9px 18px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;
+  border:none;display:inline-flex;align-items:center;gap:6px;transition:all .2s;font-family:'DM Sans',sans-serif;}
+.btn-primary{background:var(--blue);color:white;}
+.btn-primary:hover{background:var(--blue2);}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--muted);}
+.btn-outline:hover{border-color:var(--blue);color:var(--text);}
+.btn-danger{background:rgba(231,76,60,.15);border:1px solid rgba(231,76,60,.3);color:var(--red);}
+.btn-sm{padding:5px 10px;font-size:11px;}
+.btn-icon{padding:5px 8px;font-size:14px;background:transparent;border:1px solid var(--border);
+  border-radius:6px;cursor:pointer;color:var(--muted);transition:all .2s;}
+.btn-icon:hover{border-color:var(--blue);color:var(--text);}
+
+/* TOOLBAR */
+.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:16px;}
+.search-box{flex:1;min-width:200px;padding:9px 14px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:13px;outline:none;font-family:'DM Sans',sans-serif;}
+.search-box:focus{border-color:var(--blue);}
+.filter-select{padding:9px 12px;background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:12px;outline:none;font-family:'DM Sans',sans-serif;cursor:pointer;}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;
+  display:none;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:var(--bg2);border:1px solid var(--border);border-radius:14px;
+  padding:28px;max-width:600px;width:100%;max-height:90vh;overflow-y:auto;}
+.modal-title{font-family:'Syne',sans-serif;font-weight:700;font-size:18px;margin-bottom:20px;
+  display:flex;align-items:center;justify-content:space-between;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;}
+.field{margin-bottom:14px;}
+.field label{display:block;font-size:11px;font-weight:600;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.07em;margin-bottom:5px;}
+.field input,.field select,.field textarea{width:100%;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:8px;color:var(--text);font-size:14px;padding:10px 12px;outline:none;
+  font-family:'DM Sans',sans-serif;transition:border .2s;}
+.field input:focus,.field select:focus,.field textarea:focus{border-color:var(--blue);}
+.field textarea{resize:vertical;min-height:80px;}
+.field-row{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.field-row-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;}
+
+/* STATUS INDICADOR */
+.status-indicator{display:flex;align-items:center;gap:6px;font-size:12px;}
+.status-indicator .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+
+/* TAB CONTENT */
+.tab-content{display:none;}
+.tab-content.active{display:block;}
+
+/* TOAST */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--bg2);border:1px solid var(--green);
+  border-radius:10px;padding:14px 20px;z-index:200;display:none;font-size:13px;
+  box-shadow:0 8px 32px rgba(0,0,0,.4);max-width:360px;}
+.toast.show{display:flex;align-items:center;gap:10px;}
+.toast.error{border-color:var(--red);}
+
+/* KPI ROW */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+.kpi-card{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--gold);}
+.kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
+
+/* RESPONSIVE */
+@media(max-width:768px){
+  .tabs{gap:2px;}
+  .tab{padding:6px 10px;font-size:11px;}
+  .field-row,.field-row-3{grid-template-columns:1fr;}
+  .toolbar{flex-direction:column;}
+  .kpi-row{grid-template-columns:1fr 1fr;}
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div>
+    <div class="ht">Gestão RH & SST</div>
+    <div class="hs">Funcionários · ASO · Treinamentos · EPIs · Acidentes · Desligamentos</div>
+  </div>
+  <div id="cq-user-chip"></div>
+  <a href="app.html" class="btn-back">← Painel</a>
+</div>
+
+<!-- MOTOR LÓGICO BANNER -->
+<div class="motor-banner" id="motorBanner">
+  <div class="motor-stat"><div class="motor-dot ok"></div><span id="motorAptos">—</span> Aptos</div>
+  <div class="motor-stat"><div class="motor-dot warn"></div><span id="motorPendentes">—</span> Pendências</div>
+  <div class="motor-stat"><div class="motor-dot danger"></div><span id="motorBloqueados">—</span> Bloqueados</div>
+  <div class="motor-stat" style="margin-left:auto;color:var(--muted)">Motor Lógico: <strong style="color:var(--green);margin-left:4px">ATIVO</strong></div>
+</div>
+
+<!-- TABS -->
+<div class="container">
+<div class="tabs" id="tabsBar">
+  <div class="tab active" data-tab="funcionarios">Funcionários</div>
+  <div class="tab" data-tab="aso">ASO</div>
+  <div class="tab" data-tab="treinamentos">Treinamentos</div>
+  <div class="tab" data-tab="epis">EPIs</div>
+  <div class="tab" data-tab="acidentes">CAT / Acidentes</div>
+  <div class="tab" data-tab="absenteismo">Absenteísmo</div>
+  <div class="tab" data-tab="restricoes">Restrições</div>
+  <div class="tab" data-tab="desligamentos">Desligamentos</div>
+</div>
+
+<!-- ═══ ABA: FUNCIONÁRIOS ═══ -->
+<div class="tab-content active" id="tab-funcionarios">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiTotalFunc">—</div><div class="kpi-lbl">Total Ativos</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAdmMes">—</div><div class="kpi-lbl">Admissões Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiDesligMes">—</div><div class="kpi-lbl">Desligamentos Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTurnover">—</div><div class="kpi-lbl">Turnover Mês</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchFunc" placeholder="Buscar funcionário..." oninput="filtrarFuncionarios()">
+    <select class="filter-select" id="filterSetor" onchange="filtrarFuncionarios()">
+      <option value="">Todos os setores</option>
+    </select>
+    <select class="filter-select" id="filterStatus" onchange="filtrarFuncionarios()">
+      <option value="">Todos</option>
+      <option value="ativo">Ativos</option>
+      <option value="inativo">Inativos</option>
+      <option value="afastado">Afastados</option>
+      <option value="ferias">Férias</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalFunc()">+ Novo Funcionário</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Funcionários Cadastrados <span id="countFunc" style="font-size:11px;color:var(--muted)"></span></div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Nome</th><th>CPF</th><th>Cargo</th><th>Setor</th><th>Admissão</th><th>Status</th><th>Motor</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbFuncionarios"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: ASO ═══ -->
+<div class="tab-content" id="tab-aso">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiAsoValidos">—</div><div class="kpi-lbl">ASOs Válidos</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAsoVencer">—</div><div class="kpi-lbl">Vencem em 30d</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAsoVencidos">—</div><div class="kpi-lbl">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAsoPercent">—</div><div class="kpi-lbl">% Em dia</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchAso" placeholder="Buscar por funcionário..." oninput="filtrarAso()">
+    <select class="filter-select" id="filterAsoStatus" onchange="filtrarAso()">
+      <option value="">Todos</option>
+      <option value="valido">Válidos</option>
+      <option value="vencer">Vence em 30d</option>
+      <option value="vencido">Vencidos</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalAso()">+ Novo ASO</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Exames Ocupacionais</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Tipo</th><th>Data Exame</th><th>Validade</th><th>Resultado</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbAso"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: TREINAMENTOS ═══ -->
+<div class="tab-content" id="tab-treinamentos">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiTreinValidos">—</div><div class="kpi-lbl">Em Dia</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTreinVencer">—</div><div class="kpi-lbl">Vencem em 30d</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTreinVencidos">—</div><div class="kpi-lbl">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTreinPercent">—</div><div class="kpi-lbl">% Conformidade</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchTrein" placeholder="Buscar..." oninput="filtrarTreinamentos()">
+    <select class="filter-select" id="filterNR" onchange="filtrarTreinamentos()">
+      <option value="">Todas NRs</option>
+      <option value="NR-06">NR-06 EPI</option>
+      <option value="NR-10">NR-10 Elétrica</option>
+      <option value="NR-12">NR-12 Máquinas</option>
+      <option value="NR-35">NR-35 Altura</option>
+      <option value="NR-36">NR-36 Frigorífico</option>
+      <option value="CIPA">CIPA</option>
+      <option value="Integração">Integração</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalTrein()">+ Novo Treinamento</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Treinamentos NR</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Treinamento</th><th>Realizado</th><th>Validade</th><th>Carga Horária</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbTreinamentos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: EPIs ═══ -->
+<div class="tab-content" id="tab-epis">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiEntregues">—</div><div class="kpi-lbl">Entregas Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiPendentes">—</div><div class="kpi-lbl">Pendentes</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiVencidos">—</div><div class="kpi-lbl">Vencidos</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiPercent">—</div><div class="kpi-lbl">% Conformidade</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchEpi" placeholder="Buscar..." oninput="filtrarEpis()">
+    <select class="filter-select" id="filterEpiTipo" onchange="filtrarEpis()">
+      <option value="">Todos EPIs</option>
+      <option value="Capacete">Capacete</option>
+      <option value="Luva">Luva</option>
+      <option value="Bota">Bota</option>
+      <option value="Óculos">Óculos</option>
+      <option value="Protetor Auricular">Protetor Auricular</option>
+      <option value="Avental">Avental</option>
+      <option value="Mangote">Mangote</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalEpi()">+ Registrar Entrega</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Entregas de EPI</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>EPI</th><th>CA</th><th>Entrega</th><th>Validade</th><th>Devolvido</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbEpis"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: CAT / ACIDENTES ═══ -->
+<div class="tab-content" id="tab-acidentes">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiAcidAno">—</div><div class="kpi-lbl">Acidentes Ano</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAcidMes">—</div><div class="kpi-lbl">Acidentes Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiDiasSemAcid">—</div><div class="kpi-lbl">Dias Sem Acidente</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTaxaFreq">—</div><div class="kpi-lbl">Taxa Frequência</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchAcid" placeholder="Buscar..." oninput="filtrarAcidentes()">
+    <button class="btn btn-primary" onclick="abrirModalAcidente()">+ Registrar Acidente</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Registro de Acidentes / CAT</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Data</th><th>Tipo</th><th>Gravidade</th><th>Setor</th><th>CAT Emitida</th><th>Afastamento</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbAcidentes"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: ABSENTEÍSMO ═══ -->
+<div class="tab-content" id="tab-absenteismo">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiFaltasMes">—</div><div class="kpi-lbl">Faltas Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAtestadosMes">—</div><div class="kpi-lbl">Atestados Mês</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiAbsentPercent">—</div><div class="kpi-lbl">% Absenteísmo</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiSetorCritico">—</div><div class="kpi-lbl">Setor Crítico</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchAbsent" placeholder="Buscar..." oninput="filtrarAbsenteismo()">
+    <select class="filter-select" id="filterAbsentTipo" onchange="filtrarAbsenteismo()">
+      <option value="">Todos</option>
+      <option value="falta_justificada">Falta Justificada</option>
+      <option value="falta_injustificada">Falta Injustificada</option>
+      <option value="atestado">Atestado Médico</option>
+      <option value="afastamento_inss">Afastamento INSS</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalAbsent()">+ Registrar Ausência</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Registro de Ausências</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Data</th><th>Tipo</th><th>Dias</th><th>Motivo</th><th>CID</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbAbsenteismo"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: RESTRIÇÕES ═══ -->
+<div class="tab-content" id="tab-restricoes">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiRestAtivas">—</div><div class="kpi-lbl">Restrições Ativas</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiRestPeso">—</div><div class="kpi-lbl">Restrição Peso</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiRestAltura">—</div><div class="kpi-lbl">Restrição Altura</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiRestTemp">—</div><div class="kpi-lbl">Temporárias</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchRest" placeholder="Buscar..." oninput="filtrarRestricoes()">
+    <button class="btn btn-primary" onclick="abrirModalRestricao()">+ Nova Restrição</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Restrições Médicas / Funcionais</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Tipo</th><th>Descrição</th><th>Início</th><th>Previsão Fim</th><th>Status</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbRestricoes"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ ABA: DESLIGAMENTOS ═══ -->
+<div class="tab-content" id="tab-desligamentos">
+  <div class="kpi-row">
+    <div class="kpi-card"><div class="kpi-val" id="kpiDesligTotal">—</div><div class="kpi-lbl">Desligamentos Ano</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiDeslig90d">—</div><div class="kpi-lbl">Saíram &lt;90 dias</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiDesligCausa">—</div><div class="kpi-lbl">Principal Causa</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiTempoMedio">—</div><div class="kpi-lbl">Tempo Médio (dias)</div></div>
+  </div>
+  <div class="toolbar">
+    <input class="search-box" id="searchDeslig" placeholder="Buscar..." oninput="filtrarDesligamentos()">
+    <select class="filter-select" id="filterDesligTipo" onchange="filtrarDesligamentos()">
+      <option value="">Todos</option>
+      <option value="pedido_demissao">Pedido de Demissão</option>
+      <option value="demissao_empresa">Demissão pela Empresa</option>
+      <option value="termino_contrato">Término de Contrato</option>
+    </select>
+    <button class="btn btn-primary" onclick="abrirModalDeslig()">+ Registrar Desligamento</button>
+  </div>
+  <div class="card">
+    <div class="card-title">Registro de Desligamentos</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Funcionário</th><th>Desligamento</th><th>Tipo</th><th>Categoria</th><th>Tempo Casa</th><th>Entrevista</th><th>Ações</th>
+        </tr></thead>
+        <tbody id="tbDesligamentos"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+</div><!-- /container -->
+
+<!-- ═══ MODAL FUNCIONÁRIO ═══ -->
+<div class="modal-overlay" id="modalFunc">
+<div class="modal-box">
+  <div class="modal-title">
+    <span id="modalFuncTitle">Novo Funcionário</span>
+    <button class="modal-close" onclick="fecharModal('modalFunc')">&times;</button>
+  </div>
+  <form id="formFunc" onsubmit="salvarFuncionario(event)">
+    <input type="hidden" id="funcId">
+    <div class="field-row">
+      <div class="field"><label>Nome Completo *</label><input id="funcNome" required></div>
+      <div class="field"><label>CPF *</label><input id="funcCpf" required maxlength="14" oninput="mascaraCPF(this)"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Nascimento</label><input type="date" id="funcNasc"></div>
+      <div class="field"><label>Sexo</label>
+        <select id="funcSexo"><option value="">Selecione</option><option>Masculino</option><option>Feminino</option></select>
+      </div>
+      <div class="field"><label>Estado Civil</label>
+        <select id="funcEstadoCivil"><option value="">Selecione</option><option>Solteiro(a)</option><option>Casado(a)</option><option>Divorciado(a)</option><option>Viúvo(a)</option><option>União Estável</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Telefone</label><input id="funcTel"></div>
+      <div class="field"><label>E-mail</label><input type="email" id="funcEmail"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Cargo *</label><input id="funcCargo" required></div>
+      <div class="field"><label>Setor *</label>
+        <select id="funcSetor" required><option value="">Selecione</option></select>
+      </div>
+      <div class="field"><label>Centro de Custo</label><input id="funcCCusto"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Admissão *</label><input type="date" id="funcAdmissao" required></div>
+      <div class="field"><label>Tipo Contrato</label>
+        <select id="funcContrato"><option value="CLT">CLT</option><option value="Temporário">Temporário</option><option value="Experiência">Experiência</option><option value="PJ">PJ</option></select>
+      </div>
+      <div class="field"><label>Salário Base</label><input type="number" step="0.01" id="funcSalario"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Empresa</label>
+        <select id="funcEmpresa"><option value="">Selecione</option></select>
+      </div>
+      <div class="field"><label>Filial</label>
+        <select id="funcFilial"><option value="">Selecione</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Matrícula</label><input id="funcMatricula"></div>
+      <div class="field"><label>PIS/PASEP</label><input id="funcPis"></div>
+    </div>
+    <div class="field">
+      <label>Observações</label>
+      <textarea id="funcObs" rows="2"></textarea>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalFunc')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL ASO ═══ -->
+<div class="modal-overlay" id="modalAso">
+<div class="modal-box">
+  <div class="modal-title">
+    <span id="modalAsoTitle">Novo ASO</span>
+    <button class="modal-close" onclick="fecharModal('modalAso')">&times;</button>
+  </div>
+  <form id="formAso" onsubmit="salvarAso(event)">
+    <input type="hidden" id="asoId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="asoFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Tipo *</label>
+        <select id="asoTipo" required>
+          <option value="">Selecione</option>
+          <option value="admissional">Admissional</option>
+          <option value="periodico">Periódico</option>
+          <option value="retorno_trabalho">Retorno ao Trabalho</option>
+          <option value="mudanca_funcao">Mudança de Função</option>
+          <option value="demissional">Demissional</option>
+        </select>
+      </div>
+      <div class="field"><label>Data Exame *</label><input type="date" id="asoData" required></div>
+      <div class="field"><label>Validade *</label><input type="date" id="asoValidade" required></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Resultado *</label>
+        <select id="asoResultado" required>
+          <option value="">Selecione</option>
+          <option value="apto">Apto</option>
+          <option value="apto_restricao">Apto com Restrição</option>
+          <option value="inapto">Inapto</option>
+        </select>
+      </div>
+      <div class="field"><label>Médico Responsável</label><input id="asoMedico"></div>
+    </div>
+    <div class="field"><label>CRM</label><input id="asoCrm"></div>
+    <div class="field"><label>Observações</label><textarea id="asoObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalAso')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL TREINAMENTO ═══ -->
+<div class="modal-overlay" id="modalTrein">
+<div class="modal-box">
+  <div class="modal-title">
+    <span>Novo Treinamento</span>
+    <button class="modal-close" onclick="fecharModal('modalTrein')">&times;</button>
+  </div>
+  <form id="formTrein" onsubmit="salvarTreinamento(event)">
+    <input type="hidden" id="treinId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="treinFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Treinamento / NR *</label>
+        <select id="treinTipo" required>
+          <option value="">Selecione</option>
+          <option value="NR-06">NR-06 – EPI</option>
+          <option value="NR-10">NR-10 – Segurança em Eletricidade</option>
+          <option value="NR-12">NR-12 – Máquinas e Equipamentos</option>
+          <option value="NR-35">NR-35 – Trabalho em Altura</option>
+          <option value="NR-36">NR-36 – Abate e Processamento</option>
+          <option value="CIPA">CIPA</option>
+          <option value="Integração">Integração</option>
+          <option value="Brigada">Brigada de Incêndio</option>
+          <option value="Primeiro Socorros">Primeiros Socorros</option>
+          <option value="Outro">Outro</option>
+        </select>
+      </div>
+      <div class="field"><label>Carga Horária (h)</label><input type="number" id="treinCarga"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data Realização *</label><input type="date" id="treinData" required></div>
+      <div class="field"><label>Data Validade *</label><input type="date" id="treinValidade" required></div>
+    </div>
+    <div class="field"><label>Instrutor</label><input id="treinInstrutor"></div>
+    <div class="field"><label>Observações</label><textarea id="treinObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalTrein')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL EPI ═══ -->
+<div class="modal-overlay" id="modalEpi">
+<div class="modal-box">
+  <div class="modal-title">
+    <span>Registrar Entrega de EPI</span>
+    <button class="modal-close" onclick="fecharModal('modalEpi')">&times;</button>
+  </div>
+  <form id="formEpi" onsubmit="salvarEpi(event)">
+    <input type="hidden" id="epiId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="epiFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>EPI *</label><input id="epiNome" required placeholder="Ex: Luva Nitrílica"></div>
+      <div class="field"><label>CA (Certificado)</label><input id="epiCa"></div>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Entrega *</label><input type="date" id="epiDataEntrega" required></div>
+      <div class="field"><label>Validade</label><input type="date" id="epiValidade"></div>
+      <div class="field"><label>Quantidade</label><input type="number" id="epiQtd" value="1" min="1"></div>
+    </div>
+    <div class="field"><label>Observações</label><textarea id="epiObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalEpi')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL ACIDENTE ═══ -->
+<div class="modal-overlay" id="modalAcidente">
+<div class="modal-box">
+  <div class="modal-title">
+    <span>Registrar Acidente</span>
+    <button class="modal-close" onclick="fecharModal('modalAcidente')">&times;</button>
+  </div>
+  <form id="formAcidente" onsubmit="salvarAcidente(event)">
+    <input type="hidden" id="acidId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="acidFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Ocorrência *</label><input type="date" id="acidData" required></div>
+      <div class="field"><label>Hora</label><input type="time" id="acidHora"></div>
+      <div class="field"><label>Tipo *</label>
+        <select id="acidTipo" required>
+          <option value="">Selecione</option>
+          <option value="tipico">Típico</option>
+          <option value="trajeto">Trajeto</option>
+          <option value="doenca_ocupacional">Doença Ocupacional</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Gravidade *</label>
+        <select id="acidGravidade" required>
+          <option value="">Selecione</option>
+          <option value="leve">Leve</option>
+          <option value="moderado">Moderado</option>
+          <option value="grave">Grave</option>
+          <option value="fatal">Fatal</option>
+        </select>
+      </div>
+      <div class="field"><label>Parte do Corpo Atingida</label><input id="acidParte"></div>
+    </div>
+    <div class="field"><label>Descrição do Acidente *</label><textarea id="acidDescricao" rows="3" required></textarea></div>
+    <div class="field-row">
+      <div class="field"><label>CAT Emitida?</label>
+        <select id="acidCat"><option value="nao">Não</option><option value="sim">Sim</option></select>
+      </div>
+      <div class="field"><label>Dias Afastamento</label><input type="number" id="acidAfastamento" value="0" min="0"></div>
+    </div>
+    <div class="field"><label>Ação Corretiva</label><textarea id="acidAcao" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalAcidente')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL AUSÊNCIA ═══ -->
+<div class="modal-overlay" id="modalAbsent">
+<div class="modal-box">
+  <div class="modal-title">
+    <span>Registrar Ausência</span>
+    <button class="modal-close" onclick="fecharModal('modalAbsent')">&times;</button>
+  </div>
+  <form id="formAbsent" onsubmit="salvarAusencia(event)">
+    <input type="hidden" id="absentId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="absentFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Início *</label><input type="date" id="absentInicio" required></div>
+      <div class="field"><label>Data Fim</label><input type="date" id="absentFim"></div>
+      <div class="field"><label>Tipo *</label>
+        <select id="absentTipo" required>
+          <option value="">Selecione</option>
+          <option value="falta_justificada">Falta Justificada</option>
+          <option value="falta_injustificada">Falta Injustificada</option>
+          <option value="atestado">Atestado Médico</option>
+          <option value="afastamento_inss">Afastamento INSS</option>
+          <option value="licenca_maternidade">Licença Maternidade</option>
+          <option value="licenca_paternidade">Licença Paternidade</option>
+        </select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>CID (se atestado)</label><input id="absentCid"></div>
+      <div class="field"><label>Dias</label><input type="number" id="absentDias" min="1" value="1"></div>
+    </div>
+    <div class="field"><label>Motivo / Observações</label><textarea id="absentObs" rows="2"></textarea></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalAbsent')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL RESTRIÇÃO ═══ -->
+<div class="modal-overlay" id="modalRestricao">
+<div class="modal-box">
+  <div class="modal-title">
+    <span>Nova Restrição</span>
+    <button class="modal-close" onclick="fecharModal('modalRestricao')">&times;</button>
+  </div>
+  <form id="formRestricao" onsubmit="salvarRestricao(event)">
+    <input type="hidden" id="restId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="restFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de Restrição *</label>
+        <select id="restTipo" required>
+          <option value="">Selecione</option>
+          <option value="peso">Não pode carregar peso</option>
+          <option value="altura">Não pode trabalhar em altura</option>
+          <option value="repetitivo">Restrição mov. repetitivo</option>
+          <option value="temperatura">Restrição temperatura</option>
+          <option value="quimica">Restrição agentes químicos</option>
+          <option value="funcional">Restrição funcional geral</option>
+          <option value="outra">Outra</option>
+        </select>
+      </div>
+      <div class="field"><label>Permanente?</label>
+        <select id="restPermanente"><option value="nao">Temporária</option><option value="sim">Permanente</option></select>
+      </div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data Início *</label><input type="date" id="restInicio" required></div>
+      <div class="field"><label>Previsão Fim</label><input type="date" id="restFim"></div>
+    </div>
+    <div class="field"><label>Descrição / Detalhes *</label><textarea id="restDesc" rows="3" required></textarea></div>
+    <div class="field"><label>Laudo Médico (ref)</label><input id="restLaudo"></div>
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalRestricao')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- ═══ MODAL DESLIGAMENTO ═══ -->
+<div class="modal-overlay" id="modalDeslig">
+<div class="modal-box" style="max-width:700px;">
+  <div class="modal-title">
+    <span>Registrar Desligamento</span>
+    <button class="modal-close" onclick="fecharModal('modalDeslig')">&times;</button>
+  </div>
+  <form id="formDeslig" onsubmit="salvarDesligamento(event)">
+    <input type="hidden" id="desligId">
+    <div class="field"><label>Funcionário *</label>
+      <select id="desligFunc" required><option value="">Selecione</option></select>
+    </div>
+    <div class="field-row-3">
+      <div class="field"><label>Data Desligamento *</label><input type="date" id="desligData" required></div>
+      <div class="field"><label>Tipo *</label>
+        <select id="desligTipoDeslig" required>
+          <option value="">Selecione</option>
+          <option value="pedido_demissao">Pedido de Demissão</option>
+          <option value="demissao_empresa">Demissão pela Empresa</option>
+          <option value="termino_contrato">Término de Contrato</option>
+          <option value="justa_causa">Justa Causa</option>
+          <option value="acordo_mutuo">Acordo Mútuo</option>
+        </select>
+      </div>
+      <div class="field"><label>Categoria da Causa *</label>
+        <select id="desligCategoria" required>
+          <option value="">Selecione</option>
+          <option value="admissao">Admissão (não adaptou, expectativa errada)</option>
+          <option value="operacional">Operacional (liderança, ambiente, carga)</option>
+          <option value="financeiro">Financeiro (salário, benefícios)</option>
+          <option value="pessoal">Pessoal (família, mudança, saúde)</option>
+        </select>
+      </div>
+    </div>
+    <div class="field"><label>Descrição Detalhada *</label>
+      <textarea id="desligDescricao" rows="3" required placeholder="Descreva o motivo do desligamento em detalhes..."></textarea>
+    </div>
+
+    <div style="background:var(--bg3);border-radius:10px;padding:16px;margin:16px 0;border:1px solid var(--border);">
+      <div style="font-family:'Syne',sans-serif;font-size:12px;font-weight:700;color:var(--gold);margin-bottom:14px;text-transform:uppercase;letter-spacing:.06em;">
+        Entrevista de Desligamento
+      </div>
+      <div class="field"><label>O trabalho foi diferente do apresentado na admissão?</label>
+        <select id="entrevP1"><option value="">Selecione</option><option value="sim">Sim</option><option value="nao">Não</option><option value="parcialmente">Parcialmente</option></select>
+      </div>
+      <div class="field"><label>O que mais incomodava no dia a dia?</label>
+        <textarea id="entrevP2" rows="2" placeholder="Resposta do funcionário..."></textarea>
+      </div>
+      <div class="field"><label>Como avalia sua liderança? (1-5)</label>
+        <select id="entrevP3"><option value="">Selecione</option><option value="1">1 - Péssima</option><option value="2">2 - Ruim</option><option value="3">3 - Regular</option><option value="4">4 - Boa</option><option value="5">5 - Excelente</option></select>
+      </div>
+      <div class="field"><label>Voltaria a trabalhar aqui?</label>
+        <select id="entrevP4"><option value="">Selecione</option><option value="sim">Sim</option><option value="nao">Não</option><option value="talvez">Talvez</option></select>
+      </div>
+      <div class="field"><label>O que faria você permanecer?</label>
+        <textarea id="entrevP5" rows="2" placeholder="Resposta do funcionário..."></textarea>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
+      <button type="button" class="btn btn-outline" onclick="fecharModal('modalDeslig')">Cancelar</button>
+      <button type="submit" class="btn btn-primary">Salvar Desligamento</button>
+    </div>
+  </form>
+</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+// GESTÃO RH & SST — CLASSIC
+// ═══════════════════════════════════════════════════════════════
+
+// ── GLOBALS ──────────────────────────────────────────────
+let FUNCIONARIOS = [];
+let ASOS = [];
+let TREINAMENTOS = [];
+let EPIS = [];
+let ACIDENTES = [];
+let AUSENCIAS = [];
+let RESTRICOES = [];
+let DESLIGAMENTOS = [];
+let SETORES = [];
+let EMPRESAS = [];
+
+const TABELAS = {
+  func: 'rh_funcionarios',
+  aso: 'rh_aso',
+  trein: 'rh_treinamentos',
+  epi: 'rh_epi_entregas',
+  acid: 'rh_acidentes',
+  absent: 'rh_ausencias',
+  rest: 'rh_restricoes',
+  deslig: 'rh_desligamentos',
+  setores: 'rh_setores',
+  empresas: 'rh_empresas',
+};
+
+// ── TABS ─────────────────────────────────────────────────
+document.querySelectorAll('.tab').forEach(t => {
+  t.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(x => x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+  });
+});
+
+// ── HELPERS ──────────────────────────────────────────────
+function toast(msg, error) {
+  const el = document.getElementById('toast');
+  const m = document.getElementById('toastMsg');
+  m.textContent = msg;
+  el.className = error ? 'toast show error' : 'toast show';
+  setTimeout(() => el.className = 'toast', 3000);
+}
+
+function fecharModal(id) {
+  document.getElementById(id).classList.remove('show');
+}
+
+function abrirModal(id) {
+  document.getElementById(id).classList.add('show');
+}
+
+function fmtData(d) {
+  if (!d) return '—';
+  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function fmtCPF(v) {
+  if (!v) return '—';
+  v = v.replace(/\D/g, '');
+  if (v.length === 11) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  return v;
+}
+
+function mascaraCPF(el) {
+  let v = el.value.replace(/\D/g, '').slice(0, 11);
+  if (v.length > 9) v = v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+  else if (v.length > 6) v = v.replace(/(\d{3})(\d{3})(\d{1,3})/, '$1.$2.$3');
+  else if (v.length > 3) v = v.replace(/(\d{3})(\d{1,3})/, '$1.$2');
+  el.value = v;
+}
+
+function diasEntre(d1, d2) {
+  return Math.floor((new Date(d2) - new Date(d1)) / 86400000);
+}
+
+function nomeFunc(id) {
+  const f = FUNCIONARIOS.find(x => x.id === id);
+  return f ? f.nome_completo : '—';
+}
+
+// ── MOTOR LÓGICO: "Pode trabalhar hoje?" ─────────────────
+function avaliarMotorLogico(func) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const problemas = [];
+
+  // ASO válido?
+  const asos = ASOS.filter(a => a.funcionario_id === func.id);
+  const asoAtual = asos.sort((a, b) => b.data_exame > a.data_exame ? 1 : -1)[0];
+  if (!asoAtual) {
+    problemas.push('Sem ASO');
+  } else if (asoAtual.data_validade < hoje) {
+    problemas.push('ASO vencido');
+  } else if (asoAtual.resultado === 'inapto') {
+    problemas.push('ASO: Inapto');
+  }
+
+  // Treinamento de Integração?
+  const integ = TREINAMENTOS.find(t => t.funcionario_id === func.id && t.tipo_treinamento === 'Integração');
+  if (!integ) {
+    problemas.push('Sem Integração');
+  }
+
+  // Treinamentos NR vencidos?
+  const treinVencidos = TREINAMENTOS.filter(t => t.funcionario_id === func.id && t.data_validade && t.data_validade < hoje);
+  if (treinVencidos.length > 0) {
+    problemas.push(treinVencidos.length + ' NR vencida(s)');
+  }
+
+  // Restrições ativas impeditivas?
+  const restAtivas = RESTRICOES.filter(r => r.funcionario_id === func.id && r.status === 'ativa');
+  if (restAtivas.length > 0) {
+    problemas.push(restAtivas.length + ' restrição(ões)');
+  }
+
+  // Status
+  if (func.status === 'afastado') problemas.push('Afastado');
+  if (func.status === 'inativo') problemas.push('Inativo');
+  if (func.status === 'ferias') problemas.push('Férias');
+
+  return {
+    apto: problemas.length === 0 && func.status === 'ativo',
+    problemas
+  };
+}
+
+function renderMotorBanner() {
+  const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo');
+  let aptos = 0, pendentes = 0, bloqueados = 0;
+
+  ativos.forEach(f => {
+    const m = avaliarMotorLogico(f);
+    if (m.apto) aptos++;
+    else if (m.problemas.some(p => p.includes('Inapto') || p === 'Afastado' || p === 'Inativo'))
+      bloqueados++;
+    else pendentes++;
+  });
+
+  document.getElementById('motorAptos').textContent = aptos;
+  document.getElementById('motorPendentes').textContent = pendentes;
+  document.getElementById('motorBloqueados').textContent = bloqueados;
+}
+
+// ── API HELPERS ──────────────────────────────────────────
+async function carregarDados(tabela) {
+  try {
+    return await CQ_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
+  } catch (e) {
+    console.warn('Erro ao carregar ' + tabela, e);
+    return [];
+  }
+}
+
+async function salvarRegistro(tabela, dados, id) {
+  try {
+    if (id) {
+      const res = await CQ_API.fetch(tabela + '?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=minimal' },
+        body: dados
+      });
+      return res.ok;
+    } else {
+      const res = await CQ_API.post(tabela, dados, 'return=minimal');
+      return res.ok;
+    }
+  } catch (e) {
+    console.error('Erro ao salvar:', e);
+    return false;
+  }
+}
+
+async function deletarRegistro(tabela, id) {
+  try {
+    const res = await CQ_API.fetch(tabela + '?id=eq.' + id, { method: 'DELETE' });
+    return res.ok;
+  } catch (e) {
+    return false;
+  }
+}
+
+// ── AUDIT LOG ────────────────────────────────────────────
+async function logAudit(acao, tabela, registro_id, antes, depois) {
+  const user = CQAuth.getUser();
+  if (!user) return;
+  try {
+    await CQ_API.post('rh_audit_log', {
+      usuario_id: user.id,
+      usuario_nome: user.nome,
+      acao,
+      tabela,
+      registro_id,
+      dados_antes: antes ? JSON.stringify(antes) : null,
+      dados_depois: depois ? JSON.stringify(depois) : null,
+    }, 'return=minimal');
+  } catch (e) { console.warn('Audit log error:', e); }
+}
+
+// ── POPULATE SELECTS ─────────────────────────────────────
+function popularSelectsFuncionarios() {
+  const selects = ['asoFunc', 'treinFunc', 'epiFunc', 'acidFunc', 'absentFunc', 'restFunc', 'desligFunc'];
+  const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo').sort((a, b) => a.nome_completo.localeCompare(b.nome_completo));
+
+  selects.forEach(sel => {
+    const el = document.getElementById(sel);
+    if (!el) return;
+    const val = el.value;
+    el.innerHTML = '<option value="">Selecione</option>';
+    ativos.forEach(f => {
+      el.innerHTML += `<option value="${f.id}">${f.nome_completo} — ${f.cargo || ''}</option>`;
+    });
+    if (val) el.value = val;
+  });
+}
+
+function popularSetores() {
+  const sel = document.getElementById('filterSetor');
+  const selFunc = document.getElementById('funcSetor');
+  const setores = [...new Set(FUNCIONARIOS.map(f => f.setor).filter(Boolean))].sort();
+
+  sel.innerHTML = '<option value="">Todos os setores</option>';
+  selFunc.innerHTML = '<option value="">Selecione</option>';
+  setores.forEach(s => {
+    sel.innerHTML += `<option value="${s}">${s}</option>`;
+    selFunc.innerHTML += `<option value="${s}">${s}</option>`;
+  });
+  // Adicionar setores padrão se vazio
+  if (setores.length === 0) {
+    ['Produção', 'Desossa', 'Miúdos', 'Expedição', 'Qualidade', 'Manutenção', 'Administrativo', 'RH', 'Logística'].forEach(s => {
+      selFunc.innerHTML += `<option value="${s}">${s}</option>`;
+    });
+  }
+}
+
+// ══════════════════════════════════════════════════════════
+// RENDERIZAÇÃO DAS TABELAS
+// ══════════════════════════════════════════════════════════
+
+// ── FUNCIONÁRIOS ─────────────────────────────────────────
+function renderFuncionarios(lista) {
+  const tb = document.getElementById('tbFuncionarios');
+  if (!lista) lista = FUNCIONARIOS;
+
+  const statusBadge = (s) => {
+    const map = { ativo: 'badge-green', inativo: 'badge-muted', afastado: 'badge-yellow', ferias: 'badge-blue' };
+    return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
+  };
+
+  tb.innerHTML = lista.map(f => {
+    const motor = avaliarMotorLogico(f);
+    const motorHtml = motor.apto
+      ? '<span class="badge badge-green">APTO</span>'
+      : `<span class="badge badge-red" title="${motor.problemas.join(', ')}">BLOQUEADO</span>`;
+
+    return `<tr>
+      <td><strong>${f.nome_completo || '—'}</strong></td>
+      <td style="font-size:11px;font-family:monospace">${fmtCPF(f.cpf)}</td>
+      <td>${f.cargo || '—'}</td>
+      <td>${f.setor || '—'}</td>
+      <td>${fmtData(f.data_admissao)}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>${motorHtml}</td>
+      <td>
+        <button class="btn-icon" onclick="editarFunc('${f.id}')" title="Editar">✏️</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('countFunc').textContent = `(${lista.length})`;
+}
+
+function filtrarFuncionarios() {
+  const busca = document.getElementById('searchFunc').value.toLowerCase();
+  const setor = document.getElementById('filterSetor').value;
+  const status = document.getElementById('filterStatus').value;
+  let lista = FUNCIONARIOS;
+  if (busca) lista = lista.filter(f => (f.nome_completo || '').toLowerCase().includes(busca) || (f.cpf || '').includes(busca));
+  if (setor) lista = lista.filter(f => f.setor === setor);
+  if (status) lista = lista.filter(f => f.status === status);
+  renderFuncionarios(lista);
+}
+
+// ── ASO ──────────────────────────────────────────────────
+function renderAso(lista) {
+  const tb = document.getElementById('tbAso');
+  if (!lista) lista = ASOS;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  tb.innerHTML = lista.map(a => {
+    const dias = diasEntre(hoje, a.data_validade);
+    let statusHtml;
+    if (dias < 0) statusHtml = '<span class="badge badge-red">VENCIDO</span>';
+    else if (dias <= 30) statusHtml = `<span class="badge badge-yellow">Vence em ${dias}d</span>`;
+    else statusHtml = '<span class="badge badge-green">Válido</span>';
+
+    const resultado = {
+      apto: '<span class="badge badge-green">Apto</span>',
+      apto_restricao: '<span class="badge badge-yellow">Apto c/ Restrição</span>',
+      inapto: '<span class="badge badge-red">Inapto</span>'
+    };
+
+    return `<tr>
+      <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+      <td>${(a.tipo_exame || '').replace(/_/g, ' ')}</td>
+      <td>${fmtData(a.data_exame)}</td>
+      <td>${fmtData(a.data_validade)}</td>
+      <td>${resultado[a.resultado] || '—'}</td>
+      <td>${statusHtml}</td>
+      <td><button class="btn-icon" onclick="editarAso('${a.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarAso() {
+  const busca = document.getElementById('searchAso').value.toLowerCase();
+  const status = document.getElementById('filterAsoStatus').value;
+  const hoje = new Date().toISOString().slice(0, 10);
+  let lista = ASOS;
+  if (busca) lista = lista.filter(a => nomeFunc(a.funcionario_id).toLowerCase().includes(busca));
+  if (status === 'valido') lista = lista.filter(a => diasEntre(hoje, a.data_validade) > 30);
+  if (status === 'vencer') lista = lista.filter(a => { const d = diasEntre(hoje, a.data_validade); return d >= 0 && d <= 30; });
+  if (status === 'vencido') lista = lista.filter(a => diasEntre(hoje, a.data_validade) < 0);
+  renderAso(lista);
+}
+
+// ── TREINAMENTOS ─────────────────────────────────────────
+function renderTreinamentos(lista) {
+  const tb = document.getElementById('tbTreinamentos');
+  if (!lista) lista = TREINAMENTOS;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  tb.innerHTML = lista.map(t => {
+    const dias = t.data_validade ? diasEntre(hoje, t.data_validade) : 999;
+    let statusHtml;
+    if (dias < 0) statusHtml = '<span class="badge badge-red">VENCIDO</span>';
+    else if (dias <= 30) statusHtml = `<span class="badge badge-yellow">Vence em ${dias}d</span>`;
+    else statusHtml = '<span class="badge badge-green">Em dia</span>';
+
+    return `<tr>
+      <td><strong>${nomeFunc(t.funcionario_id)}</strong></td>
+      <td>${t.tipo_treinamento || '—'}</td>
+      <td>${fmtData(t.data_realizacao)}</td>
+      <td>${fmtData(t.data_validade)}</td>
+      <td>${t.carga_horaria ? t.carga_horaria + 'h' : '—'}</td>
+      <td>${statusHtml}</td>
+      <td><button class="btn-icon" onclick="editarTrein('${t.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarTreinamentos() {
+  const busca = document.getElementById('searchTrein').value.toLowerCase();
+  const nr = document.getElementById('filterNR').value;
+  let lista = TREINAMENTOS;
+  if (busca) lista = lista.filter(t => nomeFunc(t.funcionario_id).toLowerCase().includes(busca));
+  if (nr) lista = lista.filter(t => t.tipo_treinamento === nr);
+  renderTreinamentos(lista);
+}
+
+// ── EPIs ─────────────────────────────────────────────────
+function renderEpis(lista) {
+  const tb = document.getElementById('tbEpis');
+  if (!lista) lista = EPIS;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  tb.innerHTML = lista.map(e => {
+    const dias = e.data_validade ? diasEntre(hoje, e.data_validade) : 999;
+    let statusHtml;
+    if (e.data_devolucao) statusHtml = '<span class="badge badge-muted">Devolvido</span>';
+    else if (dias < 0) statusHtml = '<span class="badge badge-red">Vencido</span>';
+    else if (dias <= 30) statusHtml = `<span class="badge badge-yellow">Vence em ${dias}d</span>`;
+    else statusHtml = '<span class="badge badge-green">Ativo</span>';
+
+    return `<tr>
+      <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td>${e.epi_nome || '—'}</td>
+      <td style="font-family:monospace;font-size:11px">${e.ca_numero || '—'}</td>
+      <td>${fmtData(e.data_entrega)}</td>
+      <td>${fmtData(e.data_validade)}</td>
+      <td>${e.data_devolucao ? fmtData(e.data_devolucao) : '—'}</td>
+      <td>${statusHtml}</td>
+      <td><button class="btn-icon" onclick="editarEpi('${e.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarEpis() {
+  const busca = document.getElementById('searchEpi').value.toLowerCase();
+  const tipo = document.getElementById('filterEpiTipo').value;
+  let lista = EPIS;
+  if (busca) lista = lista.filter(e => nomeFunc(e.funcionario_id).toLowerCase().includes(busca));
+  if (tipo) lista = lista.filter(e => (e.epi_nome || '').includes(tipo));
+  renderEpis(lista);
+}
+
+// ── ACIDENTES ────────────────────────────────────────────
+function renderAcidentes(lista) {
+  const tb = document.getElementById('tbAcidentes');
+  if (!lista) lista = ACIDENTES;
+
+  const gravBadge = { leve: 'badge-green', moderado: 'badge-yellow', grave: 'badge-red', fatal: 'badge-red' };
+
+  tb.innerHTML = lista.map(a => `<tr>
+    <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+    <td>${fmtData(a.data_ocorrencia)}</td>
+    <td>${(a.tipo_acidente || '').replace(/_/g, ' ')}</td>
+    <td><span class="badge ${gravBadge[a.gravidade] || 'badge-muted'}">${a.gravidade || '—'}</span></td>
+    <td>${a.setor || '—'}</td>
+    <td>${a.cat_emitida ? '<span class="badge badge-green">Sim</span>' : '<span class="badge badge-red">Não</span>'}</td>
+    <td>${a.dias_afastamento || 0}d</td>
+    <td><button class="btn-icon" onclick="editarAcidente('${a.id}')" title="Editar">✏️</button></td>
+  </tr>`).join('');
+}
+
+function filtrarAcidentes() {
+  const busca = document.getElementById('searchAcid').value.toLowerCase();
+  let lista = ACIDENTES;
+  if (busca) lista = lista.filter(a => nomeFunc(a.funcionario_id).toLowerCase().includes(busca));
+  renderAcidentes(lista);
+}
+
+// ── ABSENTEÍSMO ──────────────────────────────────────────
+function renderAbsenteismo(lista) {
+  const tb = document.getElementById('tbAbsenteismo');
+  if (!lista) lista = AUSENCIAS;
+
+  const tipoBadge = {
+    falta_justificada: 'badge-yellow', falta_injustificada: 'badge-red',
+    atestado: 'badge-blue', afastamento_inss: 'badge-red'
+  };
+
+  tb.innerHTML = lista.map(a => `<tr>
+    <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+    <td>${fmtData(a.data_inicio)}</td>
+    <td><span class="badge ${tipoBadge[a.tipo_ausencia] || 'badge-muted'}">${(a.tipo_ausencia || '').replace(/_/g, ' ')}</span></td>
+    <td>${a.dias || 1}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.motivo || ''}">${a.motivo || '—'}</td>
+    <td style="font-family:monospace;font-size:11px">${a.cid || '—'}</td>
+    <td><button class="btn-icon" onclick="editarAbsent('${a.id}')" title="Editar">✏️</button></td>
+  </tr>`).join('');
+}
+
+function filtrarAbsenteismo() {
+  const busca = document.getElementById('searchAbsent').value.toLowerCase();
+  const tipo = document.getElementById('filterAbsentTipo').value;
+  let lista = AUSENCIAS;
+  if (busca) lista = lista.filter(a => nomeFunc(a.funcionario_id).toLowerCase().includes(busca));
+  if (tipo) lista = lista.filter(a => a.tipo_ausencia === tipo);
+  renderAbsenteismo(lista);
+}
+
+// ── RESTRIÇÕES ───────────────────────────────────────────
+function renderRestricoes(lista) {
+  const tb = document.getElementById('tbRestricoes');
+  if (!lista) lista = RESTRICOES;
+
+  const tipoLabel = { peso: 'Peso', altura: 'Altura', repetitivo: 'Mov. Repetitivo', temperatura: 'Temperatura', quimica: 'Químico', funcional: 'Funcional', outra: 'Outra' };
+
+  tb.innerHTML = lista.map(r => {
+    const statusHtml = r.status === 'ativa'
+      ? '<span class="badge badge-red">Ativa</span>'
+      : '<span class="badge badge-muted">Encerrada</span>';
+
+    return `<tr>
+      <td><strong>${nomeFunc(r.funcionario_id)}</strong></td>
+      <td>${tipoLabel[r.tipo_restricao] || r.tipo_restricao || '—'}</td>
+      <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.descricao || '—'}</td>
+      <td>${fmtData(r.data_inicio)}</td>
+      <td>${fmtData(r.data_previsao_fim)}</td>
+      <td>${statusHtml}</td>
+      <td><button class="btn-icon" onclick="editarRestricao('${r.id}')" title="Editar">✏️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarRestricoes() {
+  const busca = document.getElementById('searchRest').value.toLowerCase();
+  let lista = RESTRICOES;
+  if (busca) lista = lista.filter(r => nomeFunc(r.funcionario_id).toLowerCase().includes(busca));
+  renderRestricoes(lista);
+}
+
+// ── DESLIGAMENTOS ────────────────────────────────────────
+function renderDesligamentos(lista) {
+  const tb = document.getElementById('tbDesligamentos');
+  if (!lista) lista = DESLIGAMENTOS;
+
+  const tipoLabel = { pedido_demissao: 'Pedido Demissão', demissao_empresa: 'Demissão', termino_contrato: 'Término Contrato', justa_causa: 'Justa Causa', acordo_mutuo: 'Acordo' };
+  const catLabel = { admissao: 'Admissão', operacional: 'Operacional', financeiro: 'Financeiro', pessoal: 'Pessoal' };
+  const catBadge = { admissao: 'badge-blue', operacional: 'badge-red', financeiro: 'badge-yellow', pessoal: 'badge-muted' };
+
+  tb.innerHTML = lista.map(d => {
+    // Calcular tempo de casa
+    const func = FUNCIONARIOS.find(f => f.id === d.funcionario_id);
+    let tempoCasa = '—';
+    if (func && func.data_admissao && d.data_desligamento) {
+      const dias = diasEntre(func.data_admissao, d.data_desligamento);
+      tempoCasa = dias < 30 ? dias + 'd' : dias < 365 ? Math.floor(dias / 30) + 'm' : Math.floor(dias / 365) + 'a ' + Math.floor((dias % 365) / 30) + 'm';
+    }
+
+    const temEntrevista = d.entrevista_p1 || d.entrevista_p2;
+
+    return `<tr>
+      <td><strong>${nomeFunc(d.funcionario_id)}</strong></td>
+      <td>${fmtData(d.data_desligamento)}</td>
+      <td>${tipoLabel[d.tipo_desligamento] || '—'}</td>
+      <td><span class="badge ${catBadge[d.categoria_causa] || 'badge-muted'}">${catLabel[d.categoria_causa] || '—'}</span></td>
+      <td>${tempoCasa}</td>
+      <td>${temEntrevista ? '<span class="badge badge-green">Sim</span>' : '<span class="badge badge-muted">Não</span>'}</td>
+      <td><button class="btn-icon" onclick="editarDeslig('${d.id}')" title="Ver">👁️</button></td>
+    </tr>`;
+  }).join('');
+}
+
+function filtrarDesligamentos() {
+  const busca = document.getElementById('searchDeslig').value.toLowerCase();
+  const tipo = document.getElementById('filterDesligTipo').value;
+  let lista = DESLIGAMENTOS;
+  if (busca) lista = lista.filter(d => nomeFunc(d.funcionario_id).toLowerCase().includes(busca));
+  if (tipo) lista = lista.filter(d => d.tipo_desligamento === tipo);
+  renderDesligamentos(lista);
+}
+
+// ══════════════════════════════════════════════════════════
+// KPIs
+// ══════════════════════════════════════════════════════════
+function calcularKPIs() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const mesAtual = hoje.slice(0, 7);
+  const anoAtual = hoje.slice(0, 4);
+
+  // FUNCIONÁRIOS
+  const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo');
+  const admMes = FUNCIONARIOS.filter(f => (f.data_admissao || '').startsWith(mesAtual));
+  const desligMes = DESLIGAMENTOS.filter(d => (d.data_desligamento || '').startsWith(mesAtual));
+  const turnover = ativos.length > 0 ? ((desligMes.length / ativos.length) * 100).toFixed(1) : '0';
+
+  document.getElementById('kpiTotalFunc').textContent = ativos.length;
+  document.getElementById('kpiAdmMes').textContent = admMes.length;
+  document.getElementById('kpiDesligMes').textContent = desligMes.length;
+  document.getElementById('kpiTurnover').textContent = turnover + '%';
+
+  // ASO
+  const asoValidos = ASOS.filter(a => a.data_validade >= hoje);
+  const asoVencer = ASOS.filter(a => { const d = diasEntre(hoje, a.data_validade); return d >= 0 && d <= 30; });
+  const asoVencidos = ASOS.filter(a => a.data_validade < hoje);
+  const asoPercent = ASOS.length > 0 ? ((asoValidos.length / ASOS.length) * 100).toFixed(0) : '0';
+
+  document.getElementById('kpiAsoValidos').textContent = asoValidos.length;
+  document.getElementById('kpiAsoVencer').textContent = asoVencer.length;
+  document.getElementById('kpiAsoVencidos').textContent = asoVencidos.length;
+  document.getElementById('kpiAsoPercent').textContent = asoPercent + '%';
+
+  // TREINAMENTOS
+  const treinValidos = TREINAMENTOS.filter(t => !t.data_validade || t.data_validade >= hoje);
+  const treinVencer = TREINAMENTOS.filter(t => { const d = diasEntre(hoje, t.data_validade); return d >= 0 && d <= 30; });
+  const treinVencidos = TREINAMENTOS.filter(t => t.data_validade && t.data_validade < hoje);
+  const treinPercent = TREINAMENTOS.length > 0 ? ((treinValidos.length / TREINAMENTOS.length) * 100).toFixed(0) : '0';
+
+  document.getElementById('kpiTreinValidos').textContent = treinValidos.length;
+  document.getElementById('kpiTreinVencer').textContent = treinVencer.length;
+  document.getElementById('kpiTreinVencidos').textContent = treinVencidos.length;
+  document.getElementById('kpiTreinPercent').textContent = treinPercent + '%';
+
+  // EPIs
+  const epiMes = EPIS.filter(e => (e.data_entrega || '').startsWith(mesAtual));
+  const epiPendentes = EPIS.filter(e => !e.data_devolucao && (!e.data_validade || e.data_validade >= hoje));
+  const epiVencidos = EPIS.filter(e => !e.data_devolucao && e.data_validade && e.data_validade < hoje);
+  const epiTotal = epiPendentes.length + epiVencidos.length;
+  const epiPercent = epiTotal > 0 ? ((epiPendentes.length / epiTotal) * 100).toFixed(0) : '100';
+
+  document.getElementById('kpiEpiEntregues').textContent = epiMes.length;
+  document.getElementById('kpiEpiPendentes').textContent = epiPendentes.length;
+  document.getElementById('kpiEpiVencidos').textContent = epiVencidos.length;
+  document.getElementById('kpiEpiPercent').textContent = epiPercent + '%';
+
+  // ACIDENTES
+  const acidAno = ACIDENTES.filter(a => (a.data_ocorrencia || '').startsWith(anoAtual));
+  const acidMes = ACIDENTES.filter(a => (a.data_ocorrencia || '').startsWith(mesAtual));
+  const ultimoAcid = ACIDENTES.length > 0 ? ACIDENTES.sort((a, b) => b.data_ocorrencia > a.data_ocorrencia ? 1 : -1)[0] : null;
+  const diasSem = ultimoAcid ? diasEntre(ultimoAcid.data_ocorrencia, hoje) : '∞';
+
+  document.getElementById('kpiAcidAno').textContent = acidAno.length;
+  document.getElementById('kpiAcidMes').textContent = acidMes.length;
+  document.getElementById('kpiDiasSemAcid').textContent = diasSem;
+  document.getElementById('kpiTaxaFreq').textContent = ativos.length > 0 ? ((acidAno.length / ativos.length) * 1000000 / (ativos.length * 2000)).toFixed(1) : '0';
+
+  // ABSENTEÍSMO
+  const faltasMes = AUSENCIAS.filter(a => (a.data_inicio || '').startsWith(mesAtual));
+  const atestadosMes = faltasMes.filter(a => a.tipo_ausencia === 'atestado');
+  const totalDiasMes = faltasMes.reduce((s, a) => s + (a.dias || 1), 0);
+  const diasUteisMes = 22;
+  const absentPercent = ativos.length > 0 ? ((totalDiasMes / (ativos.length * diasUteisMes)) * 100).toFixed(1) : '0';
+
+  document.getElementById('kpiFaltasMes').textContent = faltasMes.length;
+  document.getElementById('kpiAtestadosMes').textContent = atestadosMes.length;
+  document.getElementById('kpiAbsentPercent').textContent = absentPercent + '%';
+
+  // Setor crítico
+  const setorFaltas = {};
+  faltasMes.forEach(a => {
+    const func = FUNCIONARIOS.find(f => f.id === a.funcionario_id);
+    const s = func ? func.setor : 'N/A';
+    setorFaltas[s] = (setorFaltas[s] || 0) + (a.dias || 1);
+  });
+  const setorCritico = Object.entries(setorFaltas).sort((a, b) => b[1] - a[1])[0];
+  document.getElementById('kpiSetorCritico').textContent = setorCritico ? setorCritico[0] : '—';
+
+  // RESTRIÇÕES
+  const restAtivas = RESTRICOES.filter(r => r.status === 'ativa');
+  const restPeso = restAtivas.filter(r => r.tipo_restricao === 'peso');
+  const restAltura = restAtivas.filter(r => r.tipo_restricao === 'altura');
+  const restTemp = restAtivas.filter(r => !r.permanente || r.permanente === 'nao');
+
+  document.getElementById('kpiRestAtivas').textContent = restAtivas.length;
+  document.getElementById('kpiRestPeso').textContent = restPeso.length;
+  document.getElementById('kpiRestAltura').textContent = restAltura.length;
+  document.getElementById('kpiRestTemp').textContent = restTemp.length;
+
+  // DESLIGAMENTOS
+  const desligAno = DESLIGAMENTOS.filter(d => (d.data_desligamento || '').startsWith(anoAtual));
+  const deslig90d = desligAno.filter(d => {
+    const func = FUNCIONARIOS.find(f => f.id === d.funcionario_id);
+    if (!func || !func.data_admissao) return false;
+    return diasEntre(func.data_admissao, d.data_desligamento) < 90;
+  });
+
+  // Principal causa
+  const causas = {};
+  desligAno.forEach(d => { causas[d.categoria_causa] = (causas[d.categoria_causa] || 0) + 1; });
+  const principalCausa = Object.entries(causas).sort((a, b) => b[1] - a[1])[0];
+
+  // Tempo médio
+  let totalDias = 0, countDias = 0;
+  desligAno.forEach(d => {
+    const func = FUNCIONARIOS.find(f => f.id === d.funcionario_id);
+    if (func && func.data_admissao) {
+      totalDias += diasEntre(func.data_admissao, d.data_desligamento);
+      countDias++;
+    }
+  });
+
+  document.getElementById('kpiDesligTotal').textContent = desligAno.length;
+  document.getElementById('kpiDeslig90d').textContent = deslig90d.length;
+  document.getElementById('kpiDesligCausa').textContent = principalCausa ? principalCausa[0] : '—';
+  document.getElementById('kpiTempoMedio').textContent = countDias > 0 ? Math.round(totalDias / countDias) : '—';
+}
+
+// ══════════════════════════════════════════════════════════
+// MODAIS — ABRIR / EDITAR / SALVAR
+// ══════════════════════════════════════════════════════════
+
+// ── FUNCIONÁRIO ──────���───────────────────────────────────
+function abrirModalFunc() {
+  document.getElementById('formFunc').reset();
+  document.getElementById('funcId').value = '';
+  document.getElementById('modalFuncTitle').textContent = 'Novo Funcionário';
+  abrirModal('modalFunc');
+}
+
+function editarFunc(id) {
+  const f = FUNCIONARIOS.find(x => x.id === id);
+  if (!f) return;
+  document.getElementById('funcId').value = f.id;
+  document.getElementById('funcNome').value = f.nome_completo || '';
+  document.getElementById('funcCpf').value = f.cpf || '';
+  document.getElementById('funcNasc').value = f.data_nascimento || '';
+  document.getElementById('funcSexo').value = f.sexo || '';
+  document.getElementById('funcEstadoCivil').value = f.estado_civil || '';
+  document.getElementById('funcTel').value = f.telefone || '';
+  document.getElementById('funcEmail').value = f.email || '';
+  document.getElementById('funcCargo').value = f.cargo || '';
+  document.getElementById('funcSetor').value = f.setor || '';
+  document.getElementById('funcCCusto').value = f.centro_custo || '';
+  document.getElementById('funcAdmissao').value = f.data_admissao || '';
+  document.getElementById('funcContrato').value = f.tipo_contrato || 'CLT';
+  document.getElementById('funcSalario').value = f.salario_base || '';
+  document.getElementById('funcMatricula').value = f.matricula || '';
+  document.getElementById('funcPis').value = f.pis_pasep || '';
+  document.getElementById('funcObs').value = f.observacoes || '';
+  document.getElementById('modalFuncTitle').textContent = 'Editar Funcionário';
+  abrirModal('modalFunc');
+}
+
+async function salvarFuncionario(e) {
+  e.preventDefault();
+  const id = document.getElementById('funcId').value;
+  const dados = {
+    nome_completo: document.getElementById('funcNome').value.trim(),
+    cpf: document.getElementById('funcCpf').value.replace(/\D/g, ''),
+    data_nascimento: document.getElementById('funcNasc').value || null,
+    sexo: document.getElementById('funcSexo').value || null,
+    estado_civil: document.getElementById('funcEstadoCivil').value || null,
+    telefone: document.getElementById('funcTel').value.trim() || null,
+    email: document.getElementById('funcEmail').value.trim() || null,
+    cargo: document.getElementById('funcCargo').value.trim(),
+    setor: document.getElementById('funcSetor').value,
+    centro_custo: document.getElementById('funcCCusto').value.trim() || null,
+    data_admissao: document.getElementById('funcAdmissao').value,
+    tipo_contrato: document.getElementById('funcContrato').value,
+    salario_base: parseFloat(document.getElementById('funcSalario').value) || null,
+    matricula: document.getElementById('funcMatricula').value.trim() || null,
+    pis_pasep: document.getElementById('funcPis').value.trim() || null,
+    observacoes: document.getElementById('funcObs').value.trim() || null,
+    status: 'ativo',
+  };
+
+  const antes = id ? FUNCIONARIOS.find(x => x.id === id) : null;
+  const ok = await salvarRegistro(TABELAS.func, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_funcionario' : 'criar_funcionario', TABELAS.func, id, antes, dados);
+    toast(id ? 'Funcionário atualizado' : 'Funcionário cadastrado');
+    fecharModal('modalFunc');
+    await recarregar();
+  } else {
+    toast('Erro ao salvar funcionário', true);
+  }
+}
+
+// ── ASO ──────────────────────────────────────────────────
+function abrirModalAso() {
+  document.getElementById('formAso').reset();
+  document.getElementById('asoId').value = '';
+  abrirModal('modalAso');
+}
+
+function editarAso(id) {
+  const a = ASOS.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('asoId').value = a.id;
+  document.getElementById('asoFunc').value = a.funcionario_id;
+  document.getElementById('asoTipo').value = a.tipo_exame || '';
+  document.getElementById('asoData').value = a.data_exame || '';
+  document.getElementById('asoValidade').value = a.data_validade || '';
+  document.getElementById('asoResultado').value = a.resultado || '';
+  document.getElementById('asoMedico').value = a.medico_responsavel || '';
+  document.getElementById('asoCrm').value = a.crm || '';
+  document.getElementById('asoObs').value = a.observacoes || '';
+  abrirModal('modalAso');
+}
+
+async function salvarAso(e) {
+  e.preventDefault();
+  const id = document.getElementById('asoId').value;
+  const dados = {
+    funcionario_id: document.getElementById('asoFunc').value,
+    tipo_exame: document.getElementById('asoTipo').value,
+    data_exame: document.getElementById('asoData').value,
+    data_validade: document.getElementById('asoValidade').value,
+    resultado: document.getElementById('asoResultado').value,
+    medico_responsavel: document.getElementById('asoMedico').value.trim() || null,
+    crm: document.getElementById('asoCrm').value.trim() || null,
+    observacoes: document.getElementById('asoObs').value.trim() || null,
+  };
+  const ok = await salvarRegistro(TABELAS.aso, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_aso' : 'criar_aso', TABELAS.aso, id, null, dados);
+    toast(id ? 'ASO atualizado' : 'ASO registrado');
+    fecharModal('modalAso');
+    await recarregar();
+  } else toast('Erro ao salvar ASO', true);
+}
+
+// ── TREINAMENTO ──────────────────────────────────────────
+function abrirModalTrein() {
+  document.getElementById('formTrein').reset();
+  document.getElementById('treinId').value = '';
+  abrirModal('modalTrein');
+}
+
+function editarTrein(id) {
+  const t = TREINAMENTOS.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('treinId').value = t.id;
+  document.getElementById('treinFunc').value = t.funcionario_id;
+  document.getElementById('treinTipo').value = t.tipo_treinamento || '';
+  document.getElementById('treinCarga').value = t.carga_horaria || '';
+  document.getElementById('treinData').value = t.data_realizacao || '';
+  document.getElementById('treinValidade').value = t.data_validade || '';
+  document.getElementById('treinInstrutor').value = t.instrutor || '';
+  document.getElementById('treinObs').value = t.observacoes || '';
+  abrirModal('modalTrein');
+}
+
+async function salvarTreinamento(e) {
+  e.preventDefault();
+  const id = document.getElementById('treinId').value;
+  const dados = {
+    funcionario_id: document.getElementById('treinFunc').value,
+    tipo_treinamento: document.getElementById('treinTipo').value,
+    carga_horaria: parseInt(document.getElementById('treinCarga').value) || null,
+    data_realizacao: document.getElementById('treinData').value,
+    data_validade: document.getElementById('treinValidade').value,
+    instrutor: document.getElementById('treinInstrutor').value.trim() || null,
+    observacoes: document.getElementById('treinObs').value.trim() || null,
+  };
+  const ok = await salvarRegistro(TABELAS.trein, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_treinamento' : 'criar_treinamento', TABELAS.trein, id, null, dados);
+    toast(id ? 'Treinamento atualizado' : 'Treinamento registrado');
+    fecharModal('modalTrein');
+    await recarregar();
+  } else toast('Erro ao salvar treinamento', true);
+}
+
+// ── EPI ──────────────────────────────────────────────────
+function abrirModalEpi() {
+  document.getElementById('formEpi').reset();
+  document.getElementById('epiId').value = '';
+  abrirModal('modalEpi');
+}
+
+function editarEpi(id) {
+  const e = EPIS.find(x => x.id === id);
+  if (!e) return;
+  document.getElementById('epiId').value = e.id;
+  document.getElementById('epiFunc').value = e.funcionario_id;
+  document.getElementById('epiNome').value = e.epi_nome || '';
+  document.getElementById('epiCa').value = e.ca_numero || '';
+  document.getElementById('epiDataEntrega').value = e.data_entrega || '';
+  document.getElementById('epiValidade').value = e.data_validade || '';
+  document.getElementById('epiQtd').value = e.quantidade || 1;
+  document.getElementById('epiObs').value = e.observacoes || '';
+  abrirModal('modalEpi');
+}
+
+async function salvarEpi(e) {
+  e.preventDefault();
+  const id = document.getElementById('epiId').value;
+  const dados = {
+    funcionario_id: document.getElementById('epiFunc').value,
+    epi_nome: document.getElementById('epiNome').value.trim(),
+    ca_numero: document.getElementById('epiCa').value.trim() || null,
+    data_entrega: document.getElementById('epiDataEntrega').value,
+    data_validade: document.getElementById('epiValidade').value || null,
+    quantidade: parseInt(document.getElementById('epiQtd').value) || 1,
+    observacoes: document.getElementById('epiObs').value.trim() || null,
+  };
+  const ok = await salvarRegistro(TABELAS.epi, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_epi' : 'criar_epi', TABELAS.epi, id, null, dados);
+    toast(id ? 'EPI atualizado' : 'Entrega de EPI registrada');
+    fecharModal('modalEpi');
+    await recarregar();
+  } else toast('Erro ao salvar EPI', true);
+}
+
+// ── ACIDENTE ─────────────────────────────────────────────
+function abrirModalAcidente() {
+  document.getElementById('formAcidente').reset();
+  document.getElementById('acidId').value = '';
+  abrirModal('modalAcidente');
+}
+
+function editarAcidente(id) {
+  const a = ACIDENTES.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('acidId').value = a.id;
+  document.getElementById('acidFunc').value = a.funcionario_id;
+  document.getElementById('acidData').value = a.data_ocorrencia || '';
+  document.getElementById('acidHora').value = a.hora_ocorrencia || '';
+  document.getElementById('acidTipo').value = a.tipo_acidente || '';
+  document.getElementById('acidGravidade').value = a.gravidade || '';
+  document.getElementById('acidParte').value = a.parte_corpo || '';
+  document.getElementById('acidDescricao').value = a.descricao || '';
+  document.getElementById('acidCat').value = a.cat_emitida ? 'sim' : 'nao';
+  document.getElementById('acidAfastamento').value = a.dias_afastamento || 0;
+  document.getElementById('acidAcao').value = a.acao_corretiva || '';
+  abrirModal('modalAcidente');
+}
+
+async function salvarAcidente(e) {
+  e.preventDefault();
+  const id = document.getElementById('acidId').value;
+  const funcId = document.getElementById('acidFunc').value;
+  const func = FUNCIONARIOS.find(f => f.id === funcId);
+  const dados = {
+    funcionario_id: funcId,
+    data_ocorrencia: document.getElementById('acidData').value,
+    hora_ocorrencia: document.getElementById('acidHora').value || null,
+    tipo_acidente: document.getElementById('acidTipo').value,
+    gravidade: document.getElementById('acidGravidade').value,
+    parte_corpo: document.getElementById('acidParte').value.trim() || null,
+    descricao: document.getElementById('acidDescricao').value.trim(),
+    cat_emitida: document.getElementById('acidCat').value === 'sim',
+    dias_afastamento: parseInt(document.getElementById('acidAfastamento').value) || 0,
+    acao_corretiva: document.getElementById('acidAcao').value.trim() || null,
+    setor: func ? func.setor : null,
+  };
+  const ok = await salvarRegistro(TABELAS.acid, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_acidente' : 'criar_acidente', TABELAS.acid, id, null, dados);
+    toast(id ? 'Acidente atualizado' : 'Acidente registrado');
+    fecharModal('modalAcidente');
+    await recarregar();
+  } else toast('Erro ao salvar acidente', true);
+}
+
+// ── AUSÊNCIA ─────────────────────────────────────────────
+function abrirModalAbsent() {
+  document.getElementById('formAbsent').reset();
+  document.getElementById('absentId').value = '';
+  abrirModal('modalAbsent');
+}
+
+function editarAbsent(id) {
+  const a = AUSENCIAS.find(x => x.id === id);
+  if (!a) return;
+  document.getElementById('absentId').value = a.id;
+  document.getElementById('absentFunc').value = a.funcionario_id;
+  document.getElementById('absentInicio').value = a.data_inicio || '';
+  document.getElementById('absentFim').value = a.data_fim || '';
+  document.getElementById('absentTipo').value = a.tipo_ausencia || '';
+  document.getElementById('absentCid').value = a.cid || '';
+  document.getElementById('absentDias').value = a.dias || 1;
+  document.getElementById('absentObs').value = a.motivo || '';
+  abrirModal('modalAbsent');
+}
+
+async function salvarAusencia(e) {
+  e.preventDefault();
+  const id = document.getElementById('absentId').value;
+  const dados = {
+    funcionario_id: document.getElementById('absentFunc').value,
+    data_inicio: document.getElementById('absentInicio').value,
+    data_fim: document.getElementById('absentFim').value || null,
+    tipo_ausencia: document.getElementById('absentTipo').value,
+    cid: document.getElementById('absentCid').value.trim() || null,
+    dias: parseInt(document.getElementById('absentDias').value) || 1,
+    motivo: document.getElementById('absentObs').value.trim() || null,
+  };
+  const ok = await salvarRegistro(TABELAS.absent, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_ausencia' : 'criar_ausencia', TABELAS.absent, id, null, dados);
+    toast(id ? 'Ausência atualizada' : 'Ausência registrada');
+    fecharModal('modalAbsent');
+    await recarregar();
+  } else toast('Erro ao salvar ausência', true);
+}
+
+// ── RESTRIÇÃO ────────────────────────────────────────────
+function abrirModalRestricao() {
+  document.getElementById('formRestricao').reset();
+  document.getElementById('restId').value = '';
+  abrirModal('modalRestricao');
+}
+
+function editarRestricao(id) {
+  const r = RESTRICOES.find(x => x.id === id);
+  if (!r) return;
+  document.getElementById('restId').value = r.id;
+  document.getElementById('restFunc').value = r.funcionario_id;
+  document.getElementById('restTipo').value = r.tipo_restricao || '';
+  document.getElementById('restPermanente').value = r.permanente ? 'sim' : 'nao';
+  document.getElementById('restInicio').value = r.data_inicio || '';
+  document.getElementById('restFim').value = r.data_previsao_fim || '';
+  document.getElementById('restDesc').value = r.descricao || '';
+  document.getElementById('restLaudo').value = r.laudo_referencia || '';
+  abrirModal('modalRestricao');
+}
+
+async function salvarRestricao(e) {
+  e.preventDefault();
+  const id = document.getElementById('restId').value;
+  const dados = {
+    funcionario_id: document.getElementById('restFunc').value,
+    tipo_restricao: document.getElementById('restTipo').value,
+    permanente: document.getElementById('restPermanente').value === 'sim',
+    data_inicio: document.getElementById('restInicio').value,
+    data_previsao_fim: document.getElementById('restFim').value || null,
+    descricao: document.getElementById('restDesc').value.trim(),
+    laudo_referencia: document.getElementById('restLaudo').value.trim() || null,
+    status: 'ativa',
+  };
+  const ok = await salvarRegistro(TABELAS.rest, dados, id);
+  if (ok) {
+    await logAudit(id ? 'editar_restricao' : 'criar_restricao', TABELAS.rest, id, null, dados);
+    toast(id ? 'Restrição atualizada' : 'Restrição registrada');
+    fecharModal('modalRestricao');
+    await recarregar();
+  } else toast('Erro ao salvar restrição', true);
+}
+
+// ── DESLIGAMENTO ─────────────────────────────────────────
+function abrirModalDeslig() {
+  document.getElementById('formDeslig').reset();
+  document.getElementById('desligId').value = '';
+  abrirModal('modalDeslig');
+}
+
+function editarDeslig(id) {
+  const d = DESLIGAMENTOS.find(x => x.id === id);
+  if (!d) return;
+  document.getElementById('desligId').value = d.id;
+  document.getElementById('desligFunc').value = d.funcionario_id;
+  document.getElementById('desligData').value = d.data_desligamento || '';
+  document.getElementById('desligTipoDeslig').value = d.tipo_desligamento || '';
+  document.getElementById('desligCategoria').value = d.categoria_causa || '';
+  document.getElementById('desligDescricao').value = d.descricao || '';
+  document.getElementById('entrevP1').value = d.entrevista_p1 || '';
+  document.getElementById('entrevP2').value = d.entrevista_p2 || '';
+  document.getElementById('entrevP3').value = d.entrevista_p3 || '';
+  document.getElementById('entrevP4').value = d.entrevista_p4 || '';
+  document.getElementById('entrevP5').value = d.entrevista_p5 || '';
+  abrirModal('modalDeslig');
+}
+
+async function salvarDesligamento(e) {
+  e.preventDefault();
+  const id = document.getElementById('desligId').value;
+  const funcId = document.getElementById('desligFunc').value;
+  const dados = {
+    funcionario_id: funcId,
+    data_desligamento: document.getElementById('desligData').value,
+    tipo_desligamento: document.getElementById('desligTipoDeslig').value,
+    categoria_causa: document.getElementById('desligCategoria').value,
+    descricao: document.getElementById('desligDescricao').value.trim(),
+    entrevista_p1: document.getElementById('entrevP1').value || null,
+    entrevista_p2: document.getElementById('entrevP2').value.trim() || null,
+    entrevista_p3: document.getElementById('entrevP3').value || null,
+    entrevista_p4: document.getElementById('entrevP4').value || null,
+    entrevista_p5: document.getElementById('entrevP5').value.trim() || null,
+  };
+
+  const ok = await salvarRegistro(TABELAS.deslig, dados, id);
+  if (ok) {
+    // Inativar funcionário
+    if (!id) {
+      await salvarRegistro(TABELAS.func, { status: 'inativo', data_desligamento: dados.data_desligamento }, funcId);
+    }
+    await logAudit(id ? 'editar_desligamento' : 'criar_desligamento', TABELAS.deslig, id, null, dados);
+    toast(id ? 'Desligamento atualizado' : 'Desligamento registrado');
+    fecharModal('modalDeslig');
+    await recarregar();
+  } else toast('Erro ao salvar desligamento', true);
+}
+
+// ══════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════
+async function recarregar() {
+  [FUNCIONARIOS, ASOS, TREINAMENTOS, EPIS, ACIDENTES, AUSENCIAS, RESTRICOES, DESLIGAMENTOS] = await Promise.all([
+    carregarDados(TABELAS.func),
+    carregarDados(TABELAS.aso),
+    carregarDados(TABELAS.trein),
+    carregarDados(TABELAS.epi),
+    carregarDados(TABELAS.acid),
+    carregarDados(TABELAS.absent),
+    carregarDados(TABELAS.rest),
+    carregarDados(TABELAS.deslig),
+  ]);
+
+  popularSelectsFuncionarios();
+  popularSetores();
+  renderFuncionarios();
+  renderAso();
+  renderTreinamentos();
+  renderEpis();
+  renderAcidentes();
+  renderAbsenteismo();
+  renderRestricoes();
+  renderDesligamentos();
+  calcularKPIs();
+  renderMotorBanner();
+}
+
+(async () => {
+  const user = await CQAuth.init();
+  if (!user) return;
+  await recarregar();
+})();
+</script>
+</body>
+</html>

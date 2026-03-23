@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - Classic RH & SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  background: #0a0a0a;
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'DM Sans', sans-serif;
+  padding: 20px;
+}
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
+    repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
+  pointer-events: none;
+}
+.card {
+  background: #141414;
+  border: 1px solid #2a2a2a;
+  border-radius: 16px;
+  padding: 40px 36px;
+  width: 100%;
+  max-width: 380px;
+  position: relative;
+  box-shadow: 0 24px 64px rgba(0,0,0,.5);
+}
+.card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 24px; right: 24px;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #c8a96e, transparent);
+  border-radius: 2px;
+}
+.logo-wrap { text-align: center; margin-bottom: 28px; }
+.logo-img {
+  width: 64px; height: 64px;
+  object-fit: contain; border-radius: 12px; margin-bottom: 12px;
+}
+.logo-title {
+  font-family: 'Syne', sans-serif;
+  font-weight: 800; font-size: 22px;
+  color: #c8a96e; letter-spacing: .02em;
+}
+.logo-sub { font-size: 12px; color: #888; margin-top: 3px; }
+.field { margin-bottom: 16px; }
+label {
+  display: block; font-size: 12px; font-weight: 600;
+  color: #888; text-transform: uppercase;
+  letter-spacing: .07em; margin-bottom: 7px;
+}
+input {
+  width: 100%;
+  background: #1a1a1a;
+  border: 1.5px solid #2a2a2a;
+  border-radius: 10px;
+  color: #f0ede8;
+  font-size: 14px; padding: 12px 14px;
+  outline: none; font-family: 'DM Sans', sans-serif;
+  transition: border-color .2s, box-shadow .2s;
+}
+input:focus { border-color: #c8a96e; box-shadow: 0 0 0 3px rgba(200,169,110,.15); }
+input.error { border-color: #e74c3c; }
+.btn-login {
+  width: 100%; padding: 13px;
+  background: linear-gradient(135deg, #c8a96e, #e8c98e);
+  border: none; border-radius: 10px;
+  color: #0a0a0a; font-size: 15px; font-weight: 700;
+  cursor: pointer; font-family: 'Syne', sans-serif;
+  letter-spacing: .03em;
+  transition: opacity .2s, transform .1s;
+  margin-top: 4px;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+}
+.btn-login:hover  { opacity: .9; }
+.btn-login:active { transform: scale(.98); }
+.btn-login:disabled { opacity: .5; cursor: not-allowed; }
+.spinner {
+  width: 16px; height: 16px;
+  border: 2px solid rgba(0,0,0,.3);
+  border-top-color: #0a0a0a;
+  border-radius: 50%;
+  animation: spin .7s linear infinite;
+  display: none;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.error-msg {
+  background: rgba(231,76,60,.1);
+  border: 1px solid rgba(231,76,60,.3);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 13px; color: #e74c3c;
+  margin-top: 14px; display: none;
+  align-items: center; gap: 8px;
+}
+.expired-banner {
+  background: rgba(243,156,18,.1);
+  border: 1px solid rgba(243,156,18,.3);
+  border-radius: 8px; padding: 10px 14px;
+  font-size: 12px; color: #f39c12;
+  margin-bottom: 18px; display: none;
+  align-items: center; gap: 8px;
+}
+.version {
+  text-align: center; font-size: 10px;
+  color: #2a2a2a; margin-top: 28px;
+  font-family: 'DM Mono', monospace;
+}
+.link-cq {
+  text-align: center; margin-top: 16px;
+}
+.link-cq a {
+  font-size: 11px; color: #888;
+  text-decoration: none; transition: color .2s;
+}
+.link-cq a:hover { color: #c8a96e; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo-wrap">
+    <img class="logo-img" id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="Classic Couros"
+      onerror="this.style.display='none'">
+    <div class="logo-title">Classic RH & SST</div>
+    <div class="logo-sub">Recursos Humanos & Seguranca do Trabalho</div>
+  </div>
+
+  <div class="expired-banner" id="expiredBanner">
+    Sessao expirada por inatividade. Faca login novamente.
+  </div>
+
+  <div class="field">
+    <label for="inp-email">E-mail</label>
+    <input type="email" id="inp-email" placeholder="usuario@classic.com.br"
+      autocomplete="email" onkeydown="if(event.key==='Enter') document.getElementById('inp-senha').focus()">
+  </div>
+
+  <div class="field">
+    <label for="inp-senha">Senha</label>
+    <input type="password" id="inp-senha" placeholder="********"
+      autocomplete="current-password"
+      onkeydown="if(event.key==='Enter') fazerLogin()">
+  </div>
+
+  <button class="btn-login" id="btnLogin" onclick="fazerLogin()">
+    <div class="spinner" id="spinner"></div>
+    <span id="btnTxt">Entrar</span>
+  </button>
+
+  <div class="error-msg" id="errMsg">
+    <span id="errTxt"></span>
+  </div>
+
+  <div id="demoDiv" style="text-align:center;margin-top:16px;">
+    <button onclick="entrarModoDemo()" style="
+      background:none;border:none;color:#2a2a2a;cursor:pointer;
+      font-size:11px;font-family:'DM Mono',monospace;
+      text-decoration:underline;padding:4px;
+    ">Modo demonstracao (sem servidor)</button>
+  </div>
+
+  <div class="link-cq">
+    <a href="login.html">Ir para Controle de Qualidade</a>
+  </div>
+
+  <div class="version">Classic RH & SST - v2026.03 - Jardim Alegre/PR</div>
+</div>
+
+<script>
+(function(){
+  const el = document.getElementById('logoImg');
+  const s = localStorage.getItem('classic_logo');
+  if (s) el.src = s;
+
+  try {
+    const raw = localStorage.getItem('rh_sess_v2');
+    if (raw) {
+      const sess = JSON.parse(raw);
+      if (sess.token && sess.user && sess.ts) {
+        const umHora = 60 * 60 * 1000;
+        if (Date.now() - (sess.ts || 0) < umHora) {
+          window.location.href = 'app_rh.html';
+          return;
+        } else {
+          localStorage.removeItem('rh_sess_v2');
+        }
+      } else {
+        localStorage.removeItem('rh_sess_v2');
+      }
+    }
+  } catch { localStorage.removeItem('rh_sess_v2'); }
+
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('exp') === '1') {
+    document.getElementById('expiredBanner').style.display = 'flex';
+  }
+})();
+
+async function fazerLogin() {
+  const email = document.getElementById('inp-email').value.trim();
+  const senha = document.getElementById('inp-senha').value;
+  const btn   = document.getElementById('btnLogin');
+  const err   = document.getElementById('errMsg');
+  const spin  = document.getElementById('spinner');
+  const txt   = document.getElementById('btnTxt');
+
+  err.style.display = 'none';
+  document.getElementById('inp-email').classList.remove('error');
+  document.getElementById('inp-senha').classList.remove('error');
+
+  if (!email) { document.getElementById('inp-email').classList.add('error'); mostrarErro('Informe o e-mail'); return; }
+  if (!senha) { document.getElementById('inp-senha').classList.add('error'); mostrarErro('Informe a senha'); return; }
+
+  btn.disabled = true;
+  spin.style.display = 'block';
+  txt.textContent = 'Entrando...';
+
+  try {
+    await RHAuth.login(email, senha);
+    const params = new URLSearchParams(window.location.search);
+    window.location.href = params.get('next') || 'app_rh.html';
+  } catch (e) {
+    mostrarErro(e.message || 'Erro ao conectar. Tente novamente.');
+    btn.disabled = false;
+    spin.style.display = 'none';
+    txt.textContent = 'Entrar';
+  }
+}
+
+function entrarModoDemo() {
+  const sessaoDemo = {
+    token: 'demo-' + Date.now(),
+    user: {
+      id:     'demo-rh-001',
+      email:  'rh@classic.com.br',
+      nome:   'Usuario Demo RH',
+      perfil: 'administrador',
+    },
+    ts: Date.now(),
+  };
+  localStorage.setItem('rh_sess_v2', JSON.stringify(sessaoDemo));
+  window.location.href = 'app_rh.html';
+}
+
+function mostrarErro(msg) {
+  const err = document.getElementById('errMsg');
+  document.getElementById('errTxt').textContent = msg;
+  err.style.display = 'flex';
+}
+</script>
+</body>
+</html>

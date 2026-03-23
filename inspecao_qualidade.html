@@ -212,6 +212,13 @@ textarea.field-input {
 .step-btn:active { background: var(--accent3); color: var(--accent); border-color: var(--accent); transform: scale(.95); }
 .step-btn.minus:active { background: var(--reprovado-bg); color: var(--reprovado); border-color: var(--reprovado-bd); }
 .defect-stepper .defect-input { flex: 1; height: 40px; font-size: 18px; }
+.defect-pct {
+  min-width: 48px; text-align: right;
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600;
+  color: var(--muted); white-space: nowrap;
+  transition: color .2s;
+}
+.defect-item.active .defect-pct { color: var(--reprovado); }
 
 /* ──────────────────────────────────────────────────
    RESULTADO — BLOCO PRINCIPAL
@@ -1220,27 +1227,54 @@ async function carregarVeiculosMotoristas() {
   const SB_URL = CQAuth.getSbUrl();
   const SB_KEY = CQAuth.getSbKey();
   const jwt = CQAuth.getAuthToken() || SB_KEY;
+  const h = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt };
   try {
-    // Motoristas e placas vem de cadastros_atak (fonte oficial ATAK/RH)
-    const resM = await fetch(`${SB_URL}/rest/v1/cadastros_atak?tipo=eq.motorista&ativo=eq.true&select=codigo,nome,apelido,placa_padrao,cnh,categoria_cnh&order=nome`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + jwt }
-    });
+    // Buscar de 3 fontes em paralelo:
+    // 1) cq_veiculos (placas cadastradas)
+    // 2) cadastros_atak tipo=motorista (motoristas + placa_padrao)
+    const [resV, resM] = await Promise.all([
+      fetch(`${SB_URL}/rest/v1/cq_veiculos?ativo=eq.true&select=placa,nome,tipo_veiculo&order=placa`, { headers: h }),
+      fetch(`${SB_URL}/rest/v1/cadastros_atak?tipo=eq.motorista&ativo=eq.true&select=codigo,nome,apelido,placa_padrao&order=nome`, { headers: h })
+    ]);
+
+    let veiculosCQ = [];
+    if (resV.ok) veiculosCQ = await resV.json();
     if (resM.ok) _motoristas = await resM.json();
 
-    // Montar lista de placas a partir dos motoristas com placa_padrao
-    _veiculos = _motoristas
-      .filter(m => m.placa_padrao)
-      .map(m => ({ placa: m.placa_padrao.toUpperCase().replace(/[^A-Z0-9]/g,''), nome: m.nome, apelido: m.apelido || '' }));
+    // Combinar placas: cq_veiculos + motoristas com placa_padrao
+    const placaMap = {};
+    veiculosCQ.forEach(v => {
+      const p = (v.placa || '').toUpperCase().replace(/[^A-Z0-9]/g,'');
+      if (p) placaMap[p] = { placa: p, nome: v.nome || '', tipo: v.tipo_veiculo || '', motorista: '' };
+    });
+    _motoristas.forEach(m => {
+      if (m.placa_padrao) {
+        const p = m.placa_padrao.toUpperCase().replace(/[^A-Z0-9]/g,'');
+        if (p) {
+          if (placaMap[p]) {
+            placaMap[p].motorista = m.nome;
+          } else {
+            placaMap[p] = { placa: p, nome: m.nome, tipo: '', motorista: m.nome };
+          }
+        }
+      }
+    });
+    _veiculos = Object.values(placaMap);
 
+    // Datalist de placas
     const dlPlacas = document.getElementById('dl-placas');
-    if (dlPlacas) dlPlacas.innerHTML = _veiculos.map(v =>
-      `<option value="${v.placa}" label="${v.nome}">`
-    ).join('');
+    if (dlPlacas) dlPlacas.innerHTML = _veiculos.map(v => {
+      const label = [v.nome, v.tipo, v.motorista].filter(Boolean).join(' - ');
+      return `<option value="${v.placa}" label="${label}">`;
+    }).join('');
 
+    // Datalist de motoristas
     const dlMot = document.getElementById('dl-motoristas');
     if (dlMot) dlMot.innerHTML = _motoristas.map(m =>
       `<option value="${m.nome}"${m.apelido ? ' label="'+m.apelido+'"' : ''}>`
     ).join('');
+
+    console.log('[CQ] Placas carregadas:', _veiculos.length, '| Motoristas:', _motoristas.length);
   } catch(e) {
     console.warn('Erro ao carregar veiculos/motoristas:', e);
   }
@@ -1252,11 +1286,14 @@ function onPlacaSelect(val) {
   const placa = val.toUpperCase().replace(/[^A-Z0-9]/g,'');
   const v = _veiculos.find(x => x.placa === placa);
   if (v) {
-    info.textContent = v.nome + (v.apelido ? ' (' + v.apelido + ')' : '');
+    const parts = [v.nome, v.tipo].filter(Boolean);
+    if (v.motorista) parts.push('Mot: ' + v.motorista);
+    info.textContent = parts.join(' - ');
     info.style.display = 'block';
     // Auto-preencher motorista se vazio
     const motEl = document.getElementById('f-motorista');
-    if (motEl && !motEl.value.trim()) motEl.value = v.nome;
+    const nomeMot = v.motorista || v.nome;
+    if (motEl && !motEl.value.trim() && nomeMot) motEl.value = nomeMot;
   } else {
     info.style.display = 'none';
   }
@@ -1301,12 +1338,15 @@ function renderDeleitos(){
         <span class="defect-icon">${d.icon}</span>
         <span class="defect-name">${d.label}</span>
       </div>
-      <div class="defect-stepper">
-        <button class="step-btn minus" onclick="stepDefect('${d.key}',-1)">−</button>
-        <input class="defect-input" type="number" id="df-${d.key}"
-          value="0" min="0" inputmode="numeric"
-          oninput="onDefectInput('${d.key}')">
-        <button class="step-btn" onclick="stepDefect('${d.key}',1)">+</button>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="defect-stepper">
+          <button class="step-btn minus" onclick="stepDefect('${d.key}',-1)">−</button>
+          <input class="defect-input" type="number" id="df-${d.key}"
+            value="0" min="0" inputmode="numeric"
+            oninput="onDefectInput('${d.key}')">
+          <button class="step-btn" onclick="stepDefect('${d.key}',1)">+</button>
+        </div>
+        <span class="defect-pct" id="pct-${d.key}">--</span>
       </div>
     </div>`).join('');
 }
@@ -1338,14 +1378,23 @@ function onDefectInput(key){
 // CÁLCULO RESULTADO (REGRA 1 e 2)
 // ══════════════════════════════════════════════════════════
 function calcResultado(){
-  // Regra 2: soma todos os defeitos
+  const analisada = Math.max(0, parseFloat(document.getElementById('f-qtd-analisada').value)||0);
+
+  // Regra 2: soma todos os defeitos + calcula % individual
   let totalDef = 0;
   DEFEITOS.forEach(d=>{
     const el = document.getElementById(`df-${d.key}`);
-    if(el) totalDef += Math.max(0, parseInt(el.value)||0);
+    const pctEl = document.getElementById(`pct-${d.key}`);
+    const v = el ? Math.max(0, parseInt(el.value)||0) : 0;
+    totalDef += v;
+    if(pctEl){
+      if(v > 0 && analisada > 0){
+        pctEl.textContent = (v / analisada * 100).toFixed(1).replace('.',',') + '%';
+      } else {
+        pctEl.textContent = v > 0 ? '--' : '';
+      }
+    }
   });
-
-  const analisada = Math.max(0, parseFloat(document.getElementById('f-qtd-analisada').value)||0);
 
   // Regra 1: não calcular se analisada = 0
   const block  = document.getElementById('resultBlock');

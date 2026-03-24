@@ -1950,38 +1950,64 @@ async function salvarInspecao(){
         obs_reprovado:           registro.obs_reprovado,
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
-        ...authData,
+        // Campos de autenticação — apenas os que existem na tabela
+        usuario_id:              authData.usuario_id,
+        usuario_email:           authData.usuario_email,
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
         offline:                 false,
         criado_em:               registro.criado_em,
       };
 
-      // Adicionar campos opcionais apenas se tiverem valor (evita erro se coluna não existe)
+      // Campos opcionais — só incluir se tiverem valor (evita erro se coluna não existe)
       if(videoUrl) payload.video_evidencia_url = videoUrl;
+      if(authData.latitude != null) payload.latitude = authData.latitude;
+      if(authData.longitude != null) payload.longitude = authData.longitude;
 
-      // Insert no Supabase como rascunho
-      const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SB_KEY,
-          'Authorization': `Bearer ${JWT}`,
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(payload),
-      });
+      // Insert no Supabase como rascunho — com retry para colunas inexistentes
+      let insertedRows;
+      let tentativas = 0;
+      const maxTentativas = 5;
+      while(tentativas < maxTentativas){
+        tentativas++;
+        const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${JWT}`,
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(payload),
+        });
 
-      if(!insertResp.ok){
+        if(insertResp.ok){
+          insertedRows = await insertResp.json();
+          break;
+        }
+
         const errTxt = await insertResp.text();
-        console.error('Supabase insert error:', insertResp.status, errTxt);
-        // Extrair mensagem útil do erro Supabase
+        console.error('Supabase insert error (tentativa ' + tentativas + '):', insertResp.status, errTxt);
+
+        // Se o erro for coluna inexistente, remover e tentar novamente
+        const colMatch = errTxt.match(/Could not find the '(\w+)' column/);
+        if(colMatch && tentativas < maxTentativas){
+          const badCol = colMatch[1];
+          console.warn('Removendo coluna inexistente do payload:', badCol);
+          delete payload[badCol];
+          continue;
+        }
+
+        // Outro erro — abortar
         let detalhe = '';
         try { const ej = JSON.parse(errTxt); detalhe = ej.message || ej.msg || ej.error || ''; } catch(_){}
         throw new Error('Falha ao salvar inspeção (HTTP ' + insertResp.status + ')' + (detalhe ? ': ' + detalhe : ''));
       }
 
-      const insertedRows = await insertResp.json();
+      if(!insertedRows){
+        throw new Error('Falha ao salvar após ' + maxTentativas + ' tentativas');
+      }
+
       const inspecaoId = insertedRows[0]?.id;
 
       if(!inspecaoId){

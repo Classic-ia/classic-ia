@@ -892,10 +892,45 @@ function classificarLote(pct) {
 
 async function carregarLotesRecentes() {
   try {
-    const rows = await sbFetch('registros_cq_inspecao',
-      'select=id,lote_atak,fornecedor,produto,quantidade_analisada,data_inspecao,classificacao,inspetor,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,percentual_defeitos&order=data_inspecao.desc&limit=50');
+    // Buscar de 3 fontes: inspecoes CQ, recebimentos PCR, registros legados
+    let allRows = [];
+    const fontes = [
+      { tabela: 'registros_cq_inspecao',
+        query: 'select=id,lote_atak,fornecedor,produto,quantidade_analisada,data_inspecao,classificacao,inspetor,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,percentual_defeitos&order=data_inspecao.desc&limit=50' },
+      { tabela: 'cq_recebimentos',
+        query: 'select=id,lote_atak,fornecedor,produto,quantidade_lote,data_recebimento,status&order=created_at.desc&limit=50' },
+      { tabela: 'registros_cq',
+        query: 'select=id,lote_atak,fornecedor,produto,qtd_amostra,data_entrada,classificacao,analizador,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,percentual_defeito&order=data_entrada.desc&limit=50' },
+    ];
 
-    _todosLotesRecentes = (rows || []).map(r => {
+    for (const f of fontes) {
+      try {
+        const rows = await sbFetch(f.tabela, f.query);
+        if (rows && rows.length > 0) {
+          console.log('Rastreabilidade:', rows.length, 'de', f.tabela);
+          allRows = allRows.concat(rows.map(r => ({
+            ...r,
+            lote_atak: r.lote_atak || r.lote || '',
+            fornecedor: r.fornecedor || '',
+            produto: r.produto || 'Omaso Bovino',
+            quantidade_analisada: r.quantidade_analisada || r.qtd_amostra || r.quantidade_lote || 0,
+            data_inspecao: r.data_inspecao || r.data_recebimento || r.data_entrada || '',
+            inspetor: r.inspetor || r.analizador || '',
+          })));
+        }
+      } catch(e) { console.warn('Erro em', f.tabela, e.message); }
+    }
+
+    // Remover duplicatas por lote_atak
+    const vistos = new Set();
+    allRows = allRows.filter(r => {
+      const key = r.lote_atak || r.id;
+      if (!key || vistos.has(key)) return false;
+      vistos.add(key);
+      return true;
+    });
+
+    _todosLotesRecentes = allRows.map(r => {
       const qtd = r.quantidade_analisada || 1;
       const pctDesc = DEFEITOS_DESC_RASTR.reduce((s, k) => s + ((r[k] || 0) / qtd * 100), 0);
       return { ...r, pctDesc, class: classificarLote(pctDesc) };

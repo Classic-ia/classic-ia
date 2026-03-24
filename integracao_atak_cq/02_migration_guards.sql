@@ -8,23 +8,37 @@
 -- 1. CONSTRAINTS RÍGIDOS EM atak_cargas_raw
 -- ════════════════════════════════════════════════════════════════════════════
 
--- Quantidade não pode ser negativa
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_qtd_frigo_pos
-  CHECK (qtd_frigo >= 0);
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_a_pos
-  CHECK (class_a >= 0);
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_b_pos
-  CHECK (class_b >= 0);
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_c_pos
-  CHECK (class_c >= 0);
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_total_pos
-  CHECK (total_classificado >= 0);
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_peso_pos
-  CHECK (peso_frigo_kg >= 0);
+-- Quantidade não pode ser negativa (idempotente)
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_qtd_frigo_pos CHECK (qtd_frigo >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_a_pos CHECK (class_a >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_b_pos CHECK (class_b >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_class_c_pos CHECK (class_c >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_total_pos CHECK (total_classificado >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_peso_pos CHECK (peso_frigo_kg >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Data de coleta não pode ser futura (margem de 1 dia por fuso)
-ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_data_nao_futura
-  CHECK (data_coleta <= CURRENT_DATE + INTERVAL '1 day');
+DO $$ BEGIN
+  ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_data_nao_futura CHECK (data_coleta <= CURRENT_DATE + INTERVAL '1 day');
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Fornecedor obrigatório
 ALTER TABLE atak_cargas_raw ALTER COLUMN fornecedor_codigo SET NOT NULL;
@@ -36,6 +50,7 @@ ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_tipo_conservacao
 
 -- Status de validação padronizado (já existe, reforçar)
 ALTER TABLE atak_cargas_raw DROP CONSTRAINT IF EXISTS atak_cargas_raw_status_validacao_check;
+ALTER TABLE atak_cargas_raw DROP CONSTRAINT IF EXISTS chk_cargas_status_validacao;
 ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_status_validacao
   CHECK (status_validacao IN ('pendente','valido','invalido','divergente'));
 

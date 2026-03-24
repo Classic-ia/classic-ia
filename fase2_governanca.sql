@@ -414,7 +414,8 @@ ON CONFLICT (perfil, modulo) DO NOTHING;
 -- PASSO 9: View de inspeções com workflow
 -- ════════════════════════════════════════════════════════════
 
-CREATE OR REPLACE VIEW vw_inspecoes_workflow AS
+DROP VIEW IF EXISTS vw_inspecoes_workflow;
+CREATE VIEW vw_inspecoes_workflow AS
 SELECT
   i.id,
   i.id_inspecao,
@@ -422,6 +423,7 @@ SELECT
   i.fornecedor,
   i.produto,
   i.lote_atak,
+  i.etiqueta,
   i.classificacao,
   i.status_final,
   i.status_workflow,

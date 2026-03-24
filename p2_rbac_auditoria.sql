@@ -473,46 +473,40 @@ DECLARE
   v_depois JSONB;
   v_registro_id UUID;
   v_registro_codigo TEXT;
+  v_row JSONB;
 BEGIN
-  -- Determinar ação
+  -- Determinar ação e capturar JSONB (acesso seguro a campos opcionais)
   IF TG_OP = 'INSERT' THEN
     v_acao := 'criar';
     v_antes := NULL;
     v_depois := to_jsonb(NEW);
-    v_registro_id := NEW.id;
-    v_registro_codigo := COALESCE(
-      NEW.id_inspecao,
-      NEW.codigo,
-      NEW.id::TEXT
-    );
+    v_row := v_depois;
   ELSIF TG_OP = 'UPDATE' THEN
     v_acao := 'editar';
     v_antes := to_jsonb(OLD);
     v_depois := to_jsonb(NEW);
-    v_registro_id := NEW.id;
-    v_registro_codigo := COALESCE(
-      NEW.id_inspecao,
-      NEW.codigo,
-      NEW.id::TEXT
-    );
-    -- Detectar transição de status
-    IF OLD.status_workflow IS DISTINCT FROM NEW.status_workflow THEN
+    v_row := v_depois;
+    -- Detectar transição de status (via JSONB, seguro se campo não existir)
+    IF (v_antes->>'status_workflow') IS DISTINCT FROM (v_row->>'status_workflow') AND v_row ? 'status_workflow' THEN
       v_acao := 'transicao_status';
     END IF;
-    IF OLD.status_final IS DISTINCT FROM NEW.status_final THEN
+    IF (v_antes->>'status_final') IS DISTINCT FROM (v_row->>'status_final') AND v_row ? 'status_final' THEN
       v_acao := 'alterar_status_final';
     END IF;
   ELSIF TG_OP = 'DELETE' THEN
     v_acao := 'excluir';
     v_antes := to_jsonb(OLD);
     v_depois := NULL;
-    v_registro_id := OLD.id;
-    v_registro_codigo := COALESCE(
-      OLD.id_inspecao,
-      OLD.codigo,
-      OLD.id::TEXT
-    );
+    v_row := v_antes;
   END IF;
+
+  -- Extrair ID e código de forma segura (campos podem não existir em todas as tabelas)
+  v_registro_id := (v_row->>'id')::UUID;
+  v_registro_codigo := COALESCE(
+    v_row->>'id_inspecao',
+    v_row->>'codigo',
+    v_row->>'id'
+  );
 
   -- Registrar na trilha (ignora erros para não bloquear operação)
   BEGIN

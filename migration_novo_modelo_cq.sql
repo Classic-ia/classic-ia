@@ -55,14 +55,19 @@ create unique index if not exists uq_cq_fornecedores_nome_normalizado
 create index if not exists idx_cq_fornecedores_ativo
   on public.cq_fornecedores (ativo) where ativo = true;
 
+drop trigger if exists trg_cq_fornecedores_atualizado on public.cq_fornecedores;
 create trigger trg_cq_fornecedores_atualizado
   before update on public.cq_fornecedores
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_fornecedores enable row level security;
+drop policy if exists "cq_fornecedores_select" on public.cq_fornecedores;
 create policy "cq_fornecedores_select" on public.cq_fornecedores for select to authenticated using (true);
+drop policy if exists "cq_fornecedores_anon_select" on public.cq_fornecedores;
 create policy "cq_fornecedores_anon_select" on public.cq_fornecedores for select to anon using (true);
+drop policy if exists "cq_fornecedores_insert" on public.cq_fornecedores;
 create policy "cq_fornecedores_insert" on public.cq_fornecedores for insert to authenticated with check (true);
+drop policy if exists "cq_fornecedores_update" on public.cq_fornecedores;
 create policy "cq_fornecedores_update" on public.cq_fornecedores for update to authenticated using (true) with check (true);
 
 
@@ -86,14 +91,19 @@ create unique index if not exists uq_cq_produtos_v2_nome_normalizado
 create index if not exists idx_cq_produtos_v2_ativo
   on public.cq_produtos_v2 (ativo) where ativo = true;
 
+drop trigger if exists trg_cq_produtos_v2_atualizado on public.cq_produtos_v2;
 create trigger trg_cq_produtos_v2_atualizado
   before update on public.cq_produtos_v2
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_produtos_v2 enable row level security;
+drop policy if exists "cq_produtos_v2_select" on public.cq_produtos_v2;
 create policy "cq_produtos_v2_select" on public.cq_produtos_v2 for select to authenticated using (true);
+drop policy if exists "cq_produtos_v2_anon_select" on public.cq_produtos_v2;
 create policy "cq_produtos_v2_anon_select" on public.cq_produtos_v2 for select to anon using (true);
+drop policy if exists "cq_produtos_v2_insert" on public.cq_produtos_v2;
 create policy "cq_produtos_v2_insert" on public.cq_produtos_v2 for insert to authenticated with check (true);
+drop policy if exists "cq_produtos_v2_update" on public.cq_produtos_v2;
 create policy "cq_produtos_v2_update" on public.cq_produtos_v2 for update to authenticated using (true) with check (true);
 
 
@@ -115,14 +125,19 @@ create table if not exists public.cq_defeitos (
 create unique index if not exists uq_cq_defeitos_nome_normalizado
   on public.cq_defeitos (nome_normalizado);
 
+drop trigger if exists trg_cq_defeitos_atualizado on public.cq_defeitos;
 create trigger trg_cq_defeitos_atualizado
   before update on public.cq_defeitos
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_defeitos enable row level security;
+drop policy if exists "cq_defeitos_select" on public.cq_defeitos;
 create policy "cq_defeitos_select" on public.cq_defeitos for select to authenticated using (true);
+drop policy if exists "cq_defeitos_anon_select" on public.cq_defeitos;
 create policy "cq_defeitos_anon_select" on public.cq_defeitos for select to anon using (true);
+drop policy if exists "cq_defeitos_insert" on public.cq_defeitos;
 create policy "cq_defeitos_insert" on public.cq_defeitos for insert to authenticated with check (true);
+drop policy if exists "cq_defeitos_update" on public.cq_defeitos;
 create policy "cq_defeitos_update" on public.cq_defeitos for update to authenticated using (true) with check (true);
 
 
@@ -139,14 +154,19 @@ create table if not exists public.cq_parametros_produto (
   constraint uq_cq_parametros_produto_ativo unique (produto_id, ativo)
 );
 
+drop trigger if exists trg_cq_parametros_produto_atualizado on public.cq_parametros_produto;
 create trigger trg_cq_parametros_produto_atualizado
   before update on public.cq_parametros_produto
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_parametros_produto enable row level security;
+drop policy if exists "cq_parametros_select" on public.cq_parametros_produto;
 create policy "cq_parametros_select" on public.cq_parametros_produto for select to authenticated using (true);
+drop policy if exists "cq_parametros_anon_select" on public.cq_parametros_produto;
 create policy "cq_parametros_anon_select" on public.cq_parametros_produto for select to anon using (true);
+drop policy if exists "cq_parametros_insert" on public.cq_parametros_produto;
 create policy "cq_parametros_insert" on public.cq_parametros_produto for insert to authenticated with check (true);
+drop policy if exists "cq_parametros_update" on public.cq_parametros_produto;
 create policy "cq_parametros_update" on public.cq_parametros_produto for update to authenticated using (true) with check (true);
 
 
@@ -193,18 +213,24 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_cq_lotes_preparar on public.cq_lotes;
 create trigger trg_cq_lotes_preparar
   before insert or update on public.cq_lotes
   for each row execute function public.fn_cq_lotes_preparar();
 
+drop trigger if exists trg_cq_lotes_atualizado on public.cq_lotes;
 create trigger trg_cq_lotes_atualizado
   before update on public.cq_lotes
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_lotes enable row level security;
+drop policy if exists "cq_lotes_select" on public.cq_lotes;
 create policy "cq_lotes_select" on public.cq_lotes for select to authenticated using (true);
+drop policy if exists "cq_lotes_anon_select" on public.cq_lotes;
 create policy "cq_lotes_anon_select" on public.cq_lotes for select to anon using (true);
+drop policy if exists "cq_lotes_insert" on public.cq_lotes;
 create policy "cq_lotes_insert" on public.cq_lotes for insert to authenticated with check (true);
+drop policy if exists "cq_lotes_update" on public.cq_lotes;
 create policy "cq_lotes_update" on public.cq_lotes for update to authenticated using (true) with check (true);
 
 
@@ -238,14 +264,19 @@ create index if not exists idx_cq_recebimentos_v2_lote on public.cq_recebimentos
 create index if not exists idx_cq_recebimentos_v2_data on public.cq_recebimentos_v2 (data_recebimento);
 create index if not exists idx_cq_recebimentos_v2_status on public.cq_recebimentos_v2 (status_recebimento);
 
+drop trigger if exists trg_cq_recebimentos_v2_atualizado on public.cq_recebimentos_v2;
 create trigger trg_cq_recebimentos_v2_atualizado
   before update on public.cq_recebimentos_v2
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_recebimentos_v2 enable row level security;
+drop policy if exists "cq_recebimentos_v2_select" on public.cq_recebimentos_v2;
 create policy "cq_recebimentos_v2_select" on public.cq_recebimentos_v2 for select to authenticated using (true);
+drop policy if exists "cq_recebimentos_v2_anon_select" on public.cq_recebimentos_v2;
 create policy "cq_recebimentos_v2_anon_select" on public.cq_recebimentos_v2 for select to anon using (true);
+drop policy if exists "cq_recebimentos_v2_insert" on public.cq_recebimentos_v2;
 create policy "cq_recebimentos_v2_insert" on public.cq_recebimentos_v2 for insert to authenticated with check (true);
+drop policy if exists "cq_recebimentos_v2_update" on public.cq_recebimentos_v2;
 create policy "cq_recebimentos_v2_update" on public.cq_recebimentos_v2 for update to authenticated using (true) with check (true);
 
 
@@ -282,14 +313,19 @@ create index if not exists idx_cq_inspecoes_data on public.cq_inspecoes (data_in
 create index if not exists idx_cq_inspecoes_status on public.cq_inspecoes (status_final);
 create index if not exists idx_cq_inspecoes_classificacao on public.cq_inspecoes (classificacao_abc);
 
+drop trigger if exists trg_cq_inspecoes_atualizado on public.cq_inspecoes;
 create trigger trg_cq_inspecoes_atualizado
   before update on public.cq_inspecoes
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_inspecoes enable row level security;
+drop policy if exists "cq_inspecoes_select" on public.cq_inspecoes;
 create policy "cq_inspecoes_select" on public.cq_inspecoes for select to authenticated using (true);
+drop policy if exists "cq_inspecoes_anon_select" on public.cq_inspecoes;
 create policy "cq_inspecoes_anon_select" on public.cq_inspecoes for select to anon using (true);
+drop policy if exists "cq_inspecoes_insert" on public.cq_inspecoes;
 create policy "cq_inspecoes_insert" on public.cq_inspecoes for insert to authenticated with check (true);
+drop policy if exists "cq_inspecoes_update" on public.cq_inspecoes;
 create policy "cq_inspecoes_update" on public.cq_inspecoes for update to authenticated using (true) with check (true);
 
 
@@ -310,14 +346,19 @@ create table if not exists public.cq_inspecao_defeitos (
 create index if not exists idx_cq_inspecao_defeitos_inspecao
   on public.cq_inspecao_defeitos (inspecao_id);
 
+drop trigger if exists trg_cq_inspecao_defeitos_atualizado on public.cq_inspecao_defeitos;
 create trigger trg_cq_inspecao_defeitos_atualizado
   before update on public.cq_inspecao_defeitos
   for each row execute function public.fn_set_atualizado_em();
 
 alter table public.cq_inspecao_defeitos enable row level security;
+drop policy if exists "cq_inspecao_defeitos_select" on public.cq_inspecao_defeitos;
 create policy "cq_inspecao_defeitos_select" on public.cq_inspecao_defeitos for select to authenticated using (true);
+drop policy if exists "cq_inspecao_defeitos_anon_select" on public.cq_inspecao_defeitos;
 create policy "cq_inspecao_defeitos_anon_select" on public.cq_inspecao_defeitos for select to anon using (true);
+drop policy if exists "cq_inspecao_defeitos_insert" on public.cq_inspecao_defeitos;
 create policy "cq_inspecao_defeitos_insert" on public.cq_inspecao_defeitos for insert to authenticated with check (true);
+drop policy if exists "cq_inspecao_defeitos_update" on public.cq_inspecao_defeitos;
 create policy "cq_inspecao_defeitos_update" on public.cq_inspecao_defeitos for update to authenticated using (true) with check (true);
 
 
@@ -332,6 +373,7 @@ create table if not exists public.cq_classificacoes_recebimento (
   atualizado_em timestamptz not null default now()
 );
 
+drop trigger if exists trg_cq_classificacoes_atualizado on public.cq_classificacoes_recebimento;
 create trigger trg_cq_classificacoes_atualizado
   before update on public.cq_classificacoes_recebimento
   for each row execute function public.fn_set_atualizado_em();
@@ -359,14 +401,19 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_validar_classificacao_recebimento on public.cq_classificacoes_recebimento;
 create trigger trg_validar_classificacao_recebimento
   before insert or update on public.cq_classificacoes_recebimento
   for each row execute function public.fn_validar_classificacao_recebimento();
 
 alter table public.cq_classificacoes_recebimento enable row level security;
+drop policy if exists "cq_classificacoes_select" on public.cq_classificacoes_recebimento;
 create policy "cq_classificacoes_select" on public.cq_classificacoes_recebimento for select to authenticated using (true);
+drop policy if exists "cq_classificacoes_anon_select" on public.cq_classificacoes_recebimento;
 create policy "cq_classificacoes_anon_select" on public.cq_classificacoes_recebimento for select to anon using (true);
+drop policy if exists "cq_classificacoes_insert" on public.cq_classificacoes_recebimento;
 create policy "cq_classificacoes_insert" on public.cq_classificacoes_recebimento for insert to authenticated with check (true);
+drop policy if exists "cq_classificacoes_update" on public.cq_classificacoes_recebimento;
 create policy "cq_classificacoes_update" on public.cq_classificacoes_recebimento for update to authenticated using (true) with check (true);
 
 
@@ -396,7 +443,9 @@ create table if not exists public.cq_overrides_v2 (
 );
 
 alter table public.cq_overrides_v2 enable row level security;
+drop policy if exists "cq_overrides_v2_select" on public.cq_overrides_v2;
 create policy "cq_overrides_v2_select" on public.cq_overrides_v2 for select to authenticated using (true);
+drop policy if exists "cq_overrides_v2_insert" on public.cq_overrides_v2;
 create policy "cq_overrides_v2_insert" on public.cq_overrides_v2 for insert to authenticated with check (true);
 
 -- 13) AUDIT TRAIL
@@ -418,7 +467,9 @@ create index if not exists idx_cq_audit_trail_v2_criado
   on public.cq_audit_trail_v2 (criado_em);
 
 alter table public.cq_audit_trail_v2 enable row level security;
+drop policy if exists "cq_audit_v2_select" on public.cq_audit_trail_v2;
 create policy "cq_audit_v2_select" on public.cq_audit_trail_v2 for select to authenticated using (true);
+drop policy if exists "cq_audit_v2_insert" on public.cq_audit_trail_v2;
 create policy "cq_audit_v2_insert" on public.cq_audit_trail_v2 for insert to authenticated with check (true);
 
 
@@ -503,6 +554,7 @@ begin
 end;
 $$;
 
+drop trigger if exists trg_recalcular_inspecao_after_defeitos on public.cq_inspecao_defeitos;
 create trigger trg_recalcular_inspecao_after_defeitos
   after insert or update or delete on public.cq_inspecao_defeitos
   for each row execute function public.fn_trigger_recalcular_inspecao();

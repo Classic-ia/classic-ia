@@ -424,9 +424,34 @@ CREATE TRIGGER trg_resolver_ids_divergencia
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- Garantir que colunas texto de referência existam antes do backfill
+-- 5.1 registros_cq_inspecao
 ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
+ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS fornecedor TEXT;
+ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS produto TEXT;
+ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS motorista TEXT;
+ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS placa_caminhao TEXT;
+-- 5.2 cq_cargas
+ALTER TABLE cq_cargas ADD COLUMN IF NOT EXISTS motorista TEXT;
+ALTER TABLE cq_cargas ADD COLUMN IF NOT EXISTS frigorifico TEXT;
+-- 5.3 cq_recebimentos
 ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS fornecedor_cod TEXT;
+ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS fornecedor TEXT;
+ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS produto TEXT;
+ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS motorista TEXT;
+ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS placa_caminhao TEXT;
+-- 5.4 cq_planos_acao
 ALTER TABLE cq_planos_acao ADD COLUMN IF NOT EXISTS fornecedor_cod TEXT;
+ALTER TABLE cq_planos_acao ADD COLUMN IF NOT EXISTS fornecedor TEXT;
+-- 5.5 cq_lote_inspecao
+ALTER TABLE cq_lote_inspecao ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
+ALTER TABLE cq_lote_inspecao ADD COLUMN IF NOT EXISTS fornecedor_nome TEXT;
+-- 5.6 cq_lote_produto
+ALTER TABLE cq_lote_produto ADD COLUMN IF NOT EXISTS produto_codigo TEXT;
+-- 5.7/5.8 cq_fornecedor_score / historico
+ALTER TABLE cq_fornecedor_score ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
+ALTER TABLE cq_fornecedor_score_historico ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
+-- 5.9 cq_validacao_divergencias
+ALTER TABLE cq_validacao_divergencias ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
 
 -- 5.1 registros_cq_inspecao
 UPDATE registros_cq_inspecao SET

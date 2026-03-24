@@ -653,7 +653,7 @@ SELECT
 
   -- Transportadora (por ID)
   i.transportadora_id,
-  COALESCE(transp.nome, i.transportadora) AS transportadora_nome,
+  transp.nome AS transportadora_nome,
 
   -- Inspetor / Usuário
   i.usuario_id,

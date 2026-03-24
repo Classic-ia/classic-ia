@@ -690,10 +690,10 @@ textarea.field-input {
           <div class="field-hint">Obrigatório para salvar</div>
         </div>
         <div class="field">
-          <label class="field-label">Nº Etiqueta <span class="req">*</span></label>
+          <label class="field-label">Nº Etiqueta</label>
           <div style="display:flex;gap:8px;align-items:stretch;">
             <input class="field-input scannable" type="text" id="f-etiqueta"
-              placeholder="Digite ou bipe com scanner" required
+              placeholder="Digite ou bipe com scanner"
               style="flex:1;" oninput="updateSaveStatus()">
             <button type="button" onclick="abrirOCR('etiqueta')" title="Fotografar etiqueta"
               style="background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
@@ -702,7 +702,7 @@ textarea.field-input {
               onmouseover="this.style.borderColor='var(--blue)'"
               onmouseout="this.style.borderColor='var(--border)'">Foto</button>
           </div>
-          <div class="field-hint">Obrigatório para salvar</div>
+          <div class="field-hint">Opcional</div>
         </div>
       </div>
 
@@ -1047,6 +1047,7 @@ textarea.field-input {
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
@@ -1681,7 +1682,6 @@ function getObrigatorios(){
     { id:'f-fornecedor',    nome:'Fornecedor' },   // hidden — preenchido pelo componente
     { id:'f-produto',       nome:'Produto' },
     { id:'f-lote-atak',     nome:'Lote ATAK' },
-    { id:'f-etiqueta',      nome:'Nº Etiqueta' },
     { id:'f-qtd-analisada', nome:'Qtd Analisada' },
   ];
 }
@@ -2285,33 +2285,70 @@ function processarOCR(input) {
   reader.onload = function(e) {
     // Mostrar preview da foto
     const prev = document.getElementById('ocrPreview');
-    prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain;">`;
+    prev.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:contain;">';
 
-    // Tentar extrair texto com a API do navegador (Web OCR via canvas)
+    // OCR via Tesseract.js
     const img = new Image();
     img.onload = function() {
-      // Usa Tesseract.js se disponível, senão pede digitação manual
+      document.getElementById('ocrResultado').style.display = 'block';
+      const statusEl = document.getElementById('ocrStatus');
+
       if (typeof Tesseract !== 'undefined') {
-        document.getElementById('ocrTexto').value = 'Processando...';
-        document.getElementById('ocrResultado').style.display = 'block';
-        Tesseract.recognize(e.target.result, 'eng', { logger: () => {} })
-          .then(({ data: { text } }) => {
-            // Extrai padrões de lote (ex: 0046) ou etiqueta (101-001-XXXXX)
-            let extraido = '';
-            if (ocrCampoAlvo === 'etiqueta') {
-              const m = text.match(/101[-\s]?001[-\s]?\d{5,6}/);
-              extraido = m ? m[0].replace(/\s/g,'') : text.replace(/[^0-9\-]/g,'').trim();
-            } else {
-              const m = text.match(/\d{4}/);
-              extraido = m ? m[0] : text.replace(/[^0-9]/g,'').trim().slice(0,8);
-            }
-            document.getElementById('ocrTexto').value = extraido;
-          });
-      } else {
-        // Sem Tesseract — pedir revisão manual com a foto como referência
         document.getElementById('ocrTexto').value = '';
-        document.getElementById('ocrResultado').style.display = 'block';
-        setTimeout(() => document.getElementById('ocrTexto').focus(), 100);
+        statusEl.textContent = 'Processando OCR...';
+
+        Tesseract.recognize(e.target.result, 'por', {
+          logger: function(m) {
+            if (m.status === 'recognizing text') {
+              statusEl.textContent = 'Lendo... ' + Math.round((m.progress || 0) * 100) + '%';
+            }
+          }
+        }).then(function(result) {
+          var text = result.data.text;
+          console.log('OCR texto bruto:', text);
+          statusEl.textContent = '';
+
+          var extraido = '';
+          if (ocrCampoAlvo === 'etiqueta') {
+            // Etiqueta: padrao 101-001-XXXXX
+            var m = text.match(/101[-\s]?001[-\s]?\d{5,6}/);
+            extraido = m ? m[0].replace(/\s/g, '') : text.replace(/[^0-9\-]/g, '').trim();
+          } else {
+            // Lote/Requisicao: procurar REQUISICAO nnnnn
+            var m = text.match(/REQUISI[CÇ][AÃ]O\s*[:\-
+]?\s*(\d{3,8})/i);
+            if (!m) m = text.match(/REQ[.\s]*[:\-]?\s*(\d{3,8})/i);
+            if (m) {
+              extraido = m[1];
+            } else {
+              // Fallback: maior numero com 4+ digitos
+              var nums = text.match(/\d{4,8}/g);
+              if (nums) {
+                nums.sort(function(a, b) { return b.length - a.length; });
+                extraido = nums[0];
+              } else {
+                extraido = text.replace(/[^0-9]/g, '').trim().slice(0, 8);
+              }
+            }
+          }
+          document.getElementById('ocrTexto').value = extraido;
+          if (extraido) toast('Numero identificado: ' + extraido, 'ok');
+        }).catch(function(err) {
+          console.error('OCR erro:', err);
+          statusEl.textContent = 'OCR falhou - digite manualmente';
+          document.getElementById('ocrTexto').value = '';
+          setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
+        });
+      } else {
+        // Sem Tesseract - carregar dinamicamente
+        statusEl.textContent = 'Carregando OCR...';
+        document.getElementById('ocrTexto').value = '';
+        var scr = document.createElement('script');
+        scr.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        scr.onload = function() { statusEl.textContent = 'OCR pronto - tire outra foto'; };
+        scr.onerror = function() { statusEl.textContent = 'OCR indisponivel - digite manualmente'; };
+        document.head.appendChild(scr);
+        setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
       }
     };
     img.src = e.target.result;

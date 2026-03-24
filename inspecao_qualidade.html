@@ -1032,9 +1032,9 @@ textarea.field-input {
 <!-- Modal de sucesso -->
 <div class="modal-overlay" id="modalSucesso">
   <div class="modal-box">
-    <div class="modal-icon" style="font-size:32px;color:var(--aprovado,#4CAF50);">OK</div>
-    <div class="modal-title">Inspeção Salva!</div>
-    <div class="modal-sub">Registro criado com sucesso.<br>Número único gerado:</div>
+    <div class="modal-icon" style="font-size:32px;" id="modalIconStatus">OK</div>
+    <div class="modal-title" id="modalTitleStatus">Inspeção Salva!</div>
+    <div class="modal-sub" id="modalSubStatus">Registro criado com sucesso.<br>Número único gerado:</div>
     <div class="modal-id" id="modalInspId">—</div>
     <div class="modal-sub" style="margin-top:8px;font-size:10px;" id="modalOfflineNote"></div>
     <div class="modal-actions" style="margin-top:18px;flex-direction:column;gap:8px;">
@@ -1885,6 +1885,8 @@ async function salvarInspecao(){
         try{
           const ext = videoEvidenciaFile.name.split('.').pop() || 'mp4';
           const vpath = `inspecao/${registro.id}/video_${Date.now()}.${ext}`;
+          const sizeMB = (videoEvidenciaFile.size / 1024 / 1024).toFixed(1);
+          console.log('Uploading video:', vpath, sizeMB + 'MB', videoEvidenciaFile.type);
           const vup = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${vpath}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${JWT}`, 'apikey': SB_KEY, 'Content-Type': videoEvidenciaFile.type || 'video/mp4', 'x-upsert': 'true' },
@@ -1893,11 +1895,15 @@ async function salvarInspecao(){
           if(vup.ok) {
             videoUrl = `${SB_URL}/storage/v1/object/public/cq-fotos/${vpath}`;
           } else {
-            toast('Aviso: Video nao foi enviado', 'warn');
+            const vErrTxt = await vup.text();
+            console.error('Video upload error:', vup.status, vErrTxt);
+            let vDetalhe = '';
+            try { const vj = JSON.parse(vErrTxt); vDetalhe = vj.message || vj.error || ''; } catch(_){}
+            toast('Video nao enviado (HTTP ' + vup.status + ')' + (vDetalhe ? ': ' + vDetalhe : ''), 'err');
           }
         } catch(e){
-          console.warn('Video upload falhou:', e);
-          toast('Aviso: Video nao foi enviado', 'warn');
+          console.error('Video upload falhou:', e);
+          toast('Video nao enviado: ' + (e.message || 'erro de rede'), 'err');
         }
       }
 
@@ -1965,8 +1971,11 @@ async function salvarInspecao(){
 
       if(!insertResp.ok){
         const errTxt = await insertResp.text();
-        console.warn('Supabase insert error:', errTxt);
-        throw new Error('Falha ao salvar inspeção no servidor');
+        console.error('Supabase insert error:', insertResp.status, errTxt);
+        // Extrair mensagem útil do erro Supabase
+        let detalhe = '';
+        try { const ej = JSON.parse(errTxt); detalhe = ej.message || ej.msg || ej.error || ''; } catch(_){}
+        throw new Error('Falha ao salvar inspeção (HTTP ' + insertResp.status + ')' + (detalhe ? ': ' + detalhe : ''));
       }
 
       const insertedRows = await insertResp.json();
@@ -2012,17 +2021,39 @@ async function salvarInspecao(){
     }
   }
 
-  // Mostra modal com resultado do backend
+  // Mostra modal com resultado do backend — reflete status real
   document.getElementById('modalInspId').textContent = registro.id;
+  const iconEl = document.getElementById('modalIconStatus');
+  const titleEl = document.getElementById('modalTitleStatus');
+  const subEl = document.getElementById('modalSubStatus');
   let statusMsg;
+
   if(!salvouOnline){
-    statusMsg = _ultimoErroSave
-      ? 'Erro ao salvar: ' + _ultimoErroSave
-      : 'Salvo localmente — sera sincronizado quando houver conexao';
+    if(_ultimoErroSave){
+      iconEl.textContent = '✗';
+      iconEl.style.color = '#ef5350';
+      titleEl.textContent = 'Erro ao Salvar';
+      subEl.innerHTML = 'Não foi possível salvar no servidor.<br>Salvo localmente para sincronização posterior.<br>Número:';
+      statusMsg = _ultimoErroSave;
+    } else {
+      iconEl.textContent = '⏳';
+      iconEl.style.color = '#FFA726';
+      titleEl.textContent = 'Salvo Localmente';
+      subEl.innerHTML = 'Sem conexão — será sincronizado quando houver internet.<br>Número:';
+      statusMsg = 'Salvo localmente — sera sincronizado quando houver conexao';
+    }
   } else if(resultadoBackend && resultadoBackend.ok){
+    iconEl.textContent = 'OK';
+    iconEl.style.color = 'var(--aprovado,#4CAF50)';
+    titleEl.textContent = 'Inspeção Salva!';
+    subEl.innerHTML = 'Registro criado com sucesso.<br>Número único gerado:';
     const d = resultadoBackend.decisao || {};
     statusMsg = 'Sincronizado — ' + (d.classificacao || '') + ' / ' + (d.status_final || '');
   } else {
+    iconEl.textContent = 'OK';
+    iconEl.style.color = 'var(--aprovado,#4CAF50)';
+    titleEl.textContent = 'Rascunho Salvo';
+    subEl.innerHTML = 'Rascunho salvo no servidor.<br>Número:';
     statusMsg = 'Rascunho salvo — submissao pendente de revisao dos dados';
   }
   document.getElementById('modalOfflineNote').textContent = statusMsg;
@@ -2414,7 +2445,38 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
 </div>
 </body></html>`;
 
-  // Usar iframe oculto para evitar bloqueio de popup
+  // Abrir em nova janela (funciona melhor em mobile e evita bloqueio de iframe)
+  try {
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const blobUrl = URL.createObjectURL(blob);
+
+    // Tentar abrir nova janela
+    const win = window.open(blobUrl, '_blank');
+    if (win) {
+      // Nova janela abriu — adicionar botão de imprimir após carregamento
+      win.addEventListener('load', () => {
+        try {
+          const bar = win.document.createElement('div');
+          bar.style.cssText = 'position:sticky;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;print-color-adjust:exact;';
+          bar.innerHTML = '<button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button onclick="window.close()" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
+          bar.className = 'no-print';
+          // Adicionar style para esconder barra na impressão
+          const style = win.document.createElement('style');
+          style.textContent = '@media print { .no-print { display: none !important; } body { padding-top: 0 !important; } }';
+          win.document.head.appendChild(style);
+          win.document.body.style.paddingTop = '50px';
+          win.document.body.insertBefore(bar, win.document.body.firstChild);
+        } catch(_){}
+      });
+      // Limpar URL após um tempo
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      return;
+    }
+  } catch(e) {
+    console.warn('Blob URL falhou:', e);
+  }
+
+  // Fallback: iframe (caso popup bloqueado)
   let iframe = document.getElementById('_pdfFrame');
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -2429,20 +2491,13 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
   iDoc.write(html);
   iDoc.close();
 
-  // Adicionar botão de fechar e botão de imprimir no topo do iframe
   setTimeout(() => {
     const bar = iDoc.createElement('div');
     bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
-    bar.innerHTML = `
-      <button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button>
-      <button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>
-    `;
+    bar.innerHTML = '<button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
     iDoc.body.style.paddingTop = '50px';
     iDoc.body.insertBefore(bar, iDoc.body.firstChild);
-
-    iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
-      iframe.style.display = 'none';
-    });
+    iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => { iframe.style.display = 'none'; });
   }, 100);
 }
 

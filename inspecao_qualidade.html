@@ -1128,6 +1128,21 @@ function initFornecedores(){
 }
 
 (async function init(){
+  // ═══ RENDERIZAR UI ESSENCIAL PRIMEIRO (antes de qualquer await) ═══
+  try {
+    renderDeleitos();
+    // Data/hora padrão agora
+    const now0 = new Date();
+    document.getElementById('f-data').value = now0.toISOString().slice(0,10);
+    document.getElementById('f-hora').value = now0.toTimeString().slice(0,5);
+    // Responsáveis
+    const dlResp0 = document.getElementById('resp-list');
+    if(dlResp0) RESPONSAVEIS.forEach(r=>{ const o=document.createElement('option'); o.value=r; dlResp0.appendChild(o); });
+    // Gera ID único
+    gerarId();
+  } catch(e) { console.error('Erro ao renderizar UI essencial:', e); }
+
+  // ═══ INICIALIZAÇÃO ASYNC (auth, permissões, etc.) ═══
   // Inicializar auth — bloqueia se não autenticado
   const usuario = await CQAuth.init({
     perfisPermitidos: ['administrador','qualidade'],
@@ -1178,9 +1193,6 @@ function initFornecedores(){
     if (elDen) elDen.value = geo.dentro_planta ? '1' : '0';
   };
 
-  // Gera ID único
-  gerarId();
-
   // Pré-preencher campos vindos do Recebimento (?lote=0046&fornecedor=60111&...)
   (function preencherDeURL(){
     const p = new URLSearchParams(window.location.search);
@@ -1208,18 +1220,7 @@ function initFornecedores(){
     if (lote || fornCod) updateSaveStatus();
   })();
 
-  // Data/hora padrão agora
-  const now = new Date();
-  document.getElementById('f-data').value = now.toISOString().slice(0,10);
-  document.getElementById('f-hora').value = now.toTimeString().slice(0,5);
-
-  // Popula selects
-
-  const dlResp = document.getElementById('resp-list');
-  RESPONSAVEIS.forEach(r=>{ const o=document.createElement('option'); o.value=r; dlResp.appendChild(o); });
-
-  // Renderiza defeitos
-  renderDeleitos();
+  // (Data/hora, responsáveis e defeitos já renderizados no topo do init)
 
   // Offline
   window.addEventListener('online',  ()=>{ isOnline=true;  document.getElementById('offlineBanner').classList.remove('show'); });

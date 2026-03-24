@@ -567,43 +567,43 @@ BEGIN
     COUNT(*)::BIGINT, COUNT(fornecedor_id)::BIGINT,
     (COUNT(*) - COUNT(fornecedor_id))::BIGINT,
     ROUND(COUNT(fornecedor_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM registros_cq_inspecao WHERE fornecedor IS NOT NULL
+  FROM registros_cq_inspecao
 
   UNION ALL
   SELECT 'registros_cq_inspecao', 'produto_id',
     COUNT(*), COUNT(produto_id), COUNT(*) - COUNT(produto_id),
     ROUND(COUNT(produto_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM registros_cq_inspecao WHERE produto IS NOT NULL
+  FROM registros_cq_inspecao
 
   UNION ALL
   SELECT 'registros_cq_inspecao', 'motorista_id',
     COUNT(*), COUNT(motorista_id), COUNT(*) - COUNT(motorista_id),
     ROUND(COUNT(motorista_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM registros_cq_inspecao WHERE motorista IS NOT NULL
+  FROM registros_cq_inspecao
 
   UNION ALL
   SELECT 'registros_cq_inspecao', 'veiculo_id',
     COUNT(*), COUNT(veiculo_id), COUNT(*) - COUNT(veiculo_id),
     ROUND(COUNT(veiculo_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM registros_cq_inspecao WHERE placa_caminhao IS NOT NULL
+  FROM registros_cq_inspecao
 
   UNION ALL
   SELECT 'cq_cargas', 'motorista_id',
     COUNT(*), COUNT(motorista_id), COUNT(*) - COUNT(motorista_id),
     ROUND(COUNT(motorista_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM cq_cargas WHERE motorista IS NOT NULL
+  FROM cq_cargas
 
   UNION ALL
   SELECT 'cq_cargas', 'frigorifico_id',
     COUNT(*), COUNT(frigorifico_id), COUNT(*) - COUNT(frigorifico_id),
     ROUND(COUNT(frigorifico_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM cq_cargas WHERE frigorifico IS NOT NULL
+  FROM cq_cargas
 
   UNION ALL
   SELECT 'cq_lote_inspecao', 'fornecedor_id',
     COUNT(*), COUNT(fornecedor_id), COUNT(*) - COUNT(fornecedor_id),
     ROUND(COUNT(fornecedor_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
-  FROM cq_lote_inspecao WHERE fornecedor_codigo IS NOT NULL
+  FROM cq_lote_inspecao
 
   UNION ALL
   SELECT 'cq_fornecedor_score', 'fornecedor_id',
@@ -611,7 +611,7 @@ BEGIN
     ROUND(COUNT(fornecedor_id)::NUMERIC / NULLIF(COUNT(*), 0) * 100, 2)
   FROM cq_fornecedor_score
 
-  ORDER BY tabela, campo;
+  ORDER BY 1, 2;
 END;
 $$ LANGUAGE plpgsql;
 

@@ -212,9 +212,9 @@ BEGIN
     + COALESCE(NEW.corte_irregular, 0)
     + COALESCE(NEW.folha_extra, 0);
 
-  -- Porcentagem de problemas (cap em 9999 para caber em NUMERIC(8,4))
+  -- Porcentagem de problemas (cap em 100 para respeitar chk_cqcargas_pct_range)
   IF NEW.qtd_classic > 0 THEN
-    NEW.porcentagem := LEAST(9999, ROUND((NEW.total_problemas::NUMERIC / NEW.qtd_classic) * 100, 4));
+    NEW.porcentagem := LEAST(100, ROUND((NEW.total_problemas::NUMERIC / NEW.qtd_classic) * 100, 4));
   ELSE
     NEW.porcentagem := 0;
   END IF;

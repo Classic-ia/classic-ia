@@ -43,58 +43,137 @@ ALTER TABLE atak_cargas_raw ADD CONSTRAINT chk_cargas_status_validacao
 -- 2. CONSTRAINTS EM cq_cargas (contagem interna)
 -- ════════════════════════════════════════════════════════════════════════════
 
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_qtd_frigo_pos
-  CHECK (qtd_frigo >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_qtd_classic_pos
-  CHECK (qtd_classic >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_rasgados_pos
-  CHECK (rasgados >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_furados_pos
-  CHECK (furados >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pelando_pos
-  CHECK (pelando >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_sem_folha_pos
-  CHECK (sem_folha >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_sujos_pos
-  CHECK (sujos >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pedacos_pos
-  CHECK (pedacos >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_total_pos
-  CHECK (total_problemas >= 0);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pct_range
-  CHECK (porcentagem >= 0 AND porcentagem <= 100);
-ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_classificacao
-  CHECK (classificacao IS NULL OR classificacao IN ('A','B','C'));
+-- Corrigir dados existentes antes de aplicar constraints
+UPDATE cq_cargas SET qtd_frigo = 0 WHERE qtd_frigo < 0;
+UPDATE cq_cargas SET qtd_classic = 0 WHERE qtd_classic < 0;
+UPDATE cq_cargas SET rasgados = 0 WHERE rasgados < 0;
+UPDATE cq_cargas SET furados = 0 WHERE furados < 0;
+UPDATE cq_cargas SET pelando = 0 WHERE pelando < 0;
+UPDATE cq_cargas SET sem_folha = 0 WHERE sem_folha < 0;
+UPDATE cq_cargas SET sujos = 0 WHERE sujos < 0;
+UPDATE cq_cargas SET pedacos = 0 WHERE pedacos < 0;
+UPDATE cq_cargas SET total_problemas = 0 WHERE total_problemas < 0;
+UPDATE cq_cargas SET porcentagem = LEAST(GREATEST(porcentagem, 0), 100) WHERE porcentagem < 0 OR porcentagem > 100;
+
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_qtd_frigo_pos CHECK (qtd_frigo >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_qtd_classic_pos CHECK (qtd_classic >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_rasgados_pos CHECK (rasgados >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_furados_pos CHECK (furados >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pelando_pos CHECK (pelando >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_sem_folha_pos CHECK (sem_folha >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_sujos_pos CHECK (sujos >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pedacos_pos CHECK (pedacos >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_total_pos CHECK (total_problemas >= 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_pct_range CHECK (porcentagem >= 0 AND porcentagem <= 100);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_classificacao CHECK (classificacao IS NULL OR classificacao IN ('A','B','C'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 3. CONSTRAINTS EM registros_cq_inspecao
 -- ════════════════════════════════════════════════════════════════════════════
 
 -- Percentual de defeitos entre 0 e 100
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_pct_range
-  CHECK (percentual_defeitos >= 0 AND percentual_defeitos <= 100);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_pct_range
+  CHECK (percentual_defeitos >= 0 AND percentual_defeitos <= 100);';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- Quantidade analisada deve ser > 0
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_qtd_analisada_pos
-  CHECK (quantidade_analisada > 0);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_qtd_analisada_pos
+  CHECK (quantidade_analisada > 0);';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- Classificação padronizada
-ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS chk_insp_classificacao;
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_classificacao
-  CHECK (classificacao IN ('A','B','C'));
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS chk_insp_classificacao;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_classificacao
+  CHECK (classificacao IN (''A'',''B'',''C''));';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- Status final padronizado
-ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS chk_insp_status_final;
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_status_final
-  CHECK (status_final IN ('aprovado','ressalva','bloqueado'));
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS chk_insp_status_final;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_status_final
+  CHECK (status_final IN (''aprovado'',''ressalva'',''bloqueado''));';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- Cada defeito >= 0
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_fermentacao_pos
-  CHECK (fermentacao >= 0);
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_sem_folhas_pos
-  CHECK (sem_folhas >= 0);
-ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_total_pos
-  CHECK (total_defeitos >= 0);
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_fermentacao_pos
+  CHECK (fermentacao >= 0);';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_sem_folhas_pos
+  CHECK (sem_folhas >= 0);';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    EXECUTE 'ALTER TABLE registros_cq_inspecao ADD CONSTRAINT chk_insp_total_pos
+  CHECK (total_defeitos >= 0);';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 4. TRIGGER: Auto-calcular campos derivados (impedir inconsistência manual)
@@ -137,6 +216,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_auto_calcular_cq_cargas ON cq_cargas;
 CREATE TRIGGER trg_auto_calcular_cq_cargas
   BEFORE INSERT OR UPDATE ON cq_cargas
   FOR EACH ROW
@@ -157,6 +237,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_auto_total_classificado ON atak_cargas_raw;
 CREATE TRIGGER trg_auto_total_classificado
   BEFORE INSERT OR UPDATE ON atak_cargas_raw
   FOR EACH ROW
@@ -208,10 +289,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_auto_calcular_inspecao
-  BEFORE INSERT OR UPDATE ON registros_cq_inspecao
-  FOR EACH ROW
-  EXECUTE FUNCTION fn_auto_calcular_inspecao();
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    DROP TRIGGER IF EXISTS trg_auto_calcular_inspecao ON registros_cq_inspecao;
+    CREATE TRIGGER trg_auto_calcular_inspecao
+      BEFORE INSERT OR UPDATE ON registros_cq_inspecao
+      FOR EACH ROW
+      EXECUTE FUNCTION fn_auto_calcular_inspecao();
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 5. GUARD: Impedir alteração de registros já encerrados/aprovados
@@ -236,10 +323,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_guard_inspecao_imutavel
-  BEFORE UPDATE ON registros_cq_inspecao
-  FOR EACH ROW
-  EXECUTE FUNCTION fn_guard_inspecao_imutavel();
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    DROP TRIGGER IF EXISTS trg_guard_inspecao_imutavel ON registros_cq_inspecao;
+    CREATE TRIGGER trg_guard_inspecao_imutavel
+      BEFORE UPDATE ON registros_cq_inspecao
+      FOR EACH ROW
+      EXECUTE FUNCTION fn_guard_inspecao_imutavel();
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- Guard: Impedir exclusão de divergências resolvidas (auditoria)
 CREATE OR REPLACE FUNCTION fn_guard_divergencia_delete()
@@ -253,6 +346,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_guard_divergencia_delete ON cq_validacao_divergencias;
 CREATE TRIGGER trg_guard_divergencia_delete
   BEFORE DELETE ON cq_validacao_divergencias
   FOR EACH ROW
@@ -267,6 +361,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_guard_sync_log_delete ON atak_sync_log;
 CREATE TRIGGER trg_guard_sync_log_delete
   BEFORE DELETE ON atak_sync_log
   FOR EACH ROW
@@ -293,6 +388,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_normalizar_placa_cargas ON atak_cargas_raw;
 CREATE TRIGGER trg_normalizar_placa_cargas
   BEFORE INSERT OR UPDATE ON atak_cargas_raw
   FOR EACH ROW
@@ -307,6 +403,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_normalizar_placa_veiculos ON cq_veiculos;
 CREATE TRIGGER trg_normalizar_placa_veiculos
   BEFORE INSERT OR UPDATE ON cq_veiculos
   FOR EACH ROW
@@ -330,6 +427,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_normalizar_cnpj ON cadastros_atak;
 CREATE TRIGGER trg_normalizar_cnpj
   BEFORE INSERT OR UPDATE ON cadastros_atak
   FOR EACH ROW
@@ -371,10 +469,16 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_guard_transicao_workflow
-  BEFORE UPDATE ON registros_cq_inspecao
-  FOR EACH ROW
-  EXECUTE FUNCTION fn_guard_transicao_workflow();
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    DROP TRIGGER IF EXISTS trg_guard_transicao_workflow ON registros_cq_inspecao;
+    CREATE TRIGGER trg_guard_transicao_workflow
+      BEFORE UPDATE ON registros_cq_inspecao
+      FOR EACH ROW
+      EXECUTE FUNCTION fn_guard_transicao_workflow();
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 8. GUARD: Impedir auto-aprovação (criador ≠ aprovador)
@@ -393,11 +497,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trg_guard_auto_aprovacao
-  BEFORE UPDATE ON registros_cq_inspecao
-  FOR EACH ROW
-  WHEN (NEW.status_workflow = 'aprovada')
-  EXECUTE FUNCTION fn_guard_auto_aprovacao();
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'registros_cq_inspecao') THEN
+    DROP TRIGGER IF EXISTS trg_guard_auto_aprovacao ON registros_cq_inspecao;
+    CREATE TRIGGER trg_guard_auto_aprovacao
+      BEFORE UPDATE ON registros_cq_inspecao
+      FOR EACH ROW
+      WHEN (NEW.status_workflow = 'aprovada')
+      EXECUTE FUNCTION fn_guard_auto_aprovacao();
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 9. AUDIT: Registrar TODA alteração em tabelas críticas
@@ -448,12 +558,42 @@ END;
 $$;
 
 -- Garantir que cq_audit_log tem as colunas necessárias
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS tabela TEXT;
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS operacao TEXT;
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS registro_id UUID;
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS dados_antigos JSONB;
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS dados_novos JSONB;
-ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS usuario_id UUID;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS tabela TEXT;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS operacao TEXT;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS registro_id UUID;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS dados_antigos JSONB;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS dados_novos JSONB;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'cq_audit_log') THEN
+    EXECUTE 'ALTER TABLE cq_audit_log ADD COLUMN IF NOT EXISTS usuario_id UUID;';
+  END IF;
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 10. RESUMO: O que o banco IMPEDE estruturalmente

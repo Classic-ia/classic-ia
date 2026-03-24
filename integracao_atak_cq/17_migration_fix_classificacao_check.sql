@@ -53,6 +53,15 @@ ALTER TABLE registros_cq_inspecao
 
 
 -- ══════════════════════════════════════════════════════════════════════════
+-- PART 1b: DROP FOREIGN KEY on usuario_id (points to cq_usuarios but
+--          frontend sends auth.uid() from Supabase Auth — different table)
+-- ══════════════════════════════════════════════════════════════════════════
+
+ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS registros_cq_inspecao_usuario_id_fkey;
+ALTER TABLE registros_cq_inspecao DROP CONSTRAINT IF EXISTS fk_insp_usuario;
+
+
+-- ══════════════════════════════════════════════════════════════════════════
 -- PART 2: DROP ALL RESTRICTIVE CHECK CONSTRAINTS
 -- ══════════════════════════════════════════════════════════════════════════
 

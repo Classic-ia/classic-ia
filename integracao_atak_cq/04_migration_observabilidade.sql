@@ -9,8 +9,8 @@
 
 ALTER TABLE atak_sync_log
   ADD COLUMN IF NOT EXISTS duracao_ms INTEGER GENERATED ALWAYS AS (
-    EXTRACT(EPOCH FROM (fim - inicio)) * 1000
-  )::INTEGER STORED;
+    (EXTRACT(EPOCH FROM (fim - inicio)) * 1000)::INTEGER
+  ) STORED;
 
 -- Caso GENERATED ALWAYS não funcione na versão do PG, usar trigger:
 -- (comentado — usar se a versão do Supabase não suportar generated columns)

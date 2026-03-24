@@ -57,15 +57,11 @@ CREATE POLICY cq_fornecedores_select ON cq_fornecedores
 
 DROP POLICY IF EXISTS cq_fornecedores_insert ON cq_fornecedores;
 CREATE POLICY cq_fornecedores_insert ON cq_fornecedores
-  FOR INSERT WITH CHECK (
-    EXISTS (SELECT 1 FROM cq_perfis_usuario WHERE user_id = auth.uid() AND perfil IN ('administrador'))
-  );
+  FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS cq_fornecedores_update ON cq_fornecedores;
 CREATE POLICY cq_fornecedores_update ON cq_fornecedores
-  FOR UPDATE USING (
-    EXISTS (SELECT 1 FROM cq_perfis_usuario WHERE user_id = auth.uid() AND perfil IN ('administrador'))
-  );
+  FOR UPDATE TO authenticated USING (true) WITH CHECK (true);
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 3. FUNÇÃO: NORMALIZAR FORNECEDOR

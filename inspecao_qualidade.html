@@ -1846,6 +1846,7 @@ async function salvarInspecao(){
   const JWT    = CQAuth.getAuthToken() || SB_KEY;
   let salvouOnline = false;
   let resultadoBackend = null;
+  let _ultimoErroSave = null;
 
   if(isOnline){
     try{
@@ -1951,13 +1952,15 @@ async function salvarInspecao(){
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
         foto_defeito_url:        fotoUrls.defeito,
-        video_evidencia_url:     videoUrl,
         ...authData,
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
         offline:                 false,
         criado_em:               registro.criado_em,
       };
+
+      // Adicionar campos opcionais apenas se tiverem valor (evita erro se coluna não existe)
+      if(videoUrl) payload.video_evidencia_url = videoUrl;
 
       // Insert no Supabase como rascunho
       const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
@@ -2014,14 +2017,19 @@ async function salvarInspecao(){
         salvouOnline = true; // rascunho foi salvo com sucesso
       }
 
-    } catch(e){ console.warn('Supabase offline, salvo localmente:', e); }
+    } catch(e){
+      console.error('Supabase save error:', e);
+      _ultimoErroSave = e.message || String(e);
+    }
   }
 
   // Mostra modal com resultado do backend
   document.getElementById('modalInspId').textContent = registro.id;
   let statusMsg;
   if(!salvouOnline){
-    statusMsg = 'Salvo localmente — sera sincronizado quando houver conexao';
+    statusMsg = _ultimoErroSave
+      ? 'Erro ao salvar: ' + _ultimoErroSave
+      : 'Salvo localmente — sera sincronizado quando houver conexao';
   } else if(resultadoBackend && resultadoBackend.ok){
     const d = resultadoBackend.decisao || {};
     statusMsg = 'Sincronizado — ' + (d.classificacao || '') + ' / ' + (d.status_final || '');
@@ -2417,11 +2425,36 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
 </div>
 </body></html>`;
 
-  const w = window.open('', '_blank');
-  if (!w) { toast('Permita pop-ups para gerar o PDF'); return; }
-  w.document.write(html);
-  w.document.close();
-  setTimeout(() => { w.focus(); w.print(); }, 600);
+  // Usar iframe oculto para evitar bloqueio de popup
+  let iframe = document.getElementById('_pdfFrame');
+  if (!iframe) {
+    iframe = document.createElement('iframe');
+    iframe.id = '_pdfFrame';
+    iframe.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;z-index:99999;border:none;background:#fff;';
+    document.body.appendChild(iframe);
+  }
+  iframe.style.display = 'block';
+
+  const iDoc = iframe.contentDocument || iframe.contentWindow.document;
+  iDoc.open();
+  iDoc.write(html);
+  iDoc.close();
+
+  // Adicionar botão de fechar e botão de imprimir no topo do iframe
+  setTimeout(() => {
+    const bar = iDoc.createElement('div');
+    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
+    bar.innerHTML = `
+      <button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button>
+      <button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>
+    `;
+    iDoc.body.style.paddingTop = '50px';
+    iDoc.body.insertBefore(bar, iDoc.body.firstChild);
+
+    iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
+      iframe.style.display = 'none';
+    });
+  }, 100);
 }
 
 // ══════════════════════════════════════════════════════════

@@ -65,9 +65,12 @@ ALTER TABLE cq_planos_acao ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "plano_all" ON cq_planos_acao;
 CREATE POLICY "plano_all" ON cq_planos_acao FOR ALL USING (TRUE) WITH CHECK (TRUE);
 
--- ── 3. CAMPO FOTO DEFEITO NA INSPEÇÃO ────────────────────────
+-- ── 3. CAMPOS ADICIONAIS NA INSPEÇÃO ────────────────────────
 ALTER TABLE registros_cq_inspecao
   ADD COLUMN IF NOT EXISTS foto_defeito_url TEXT;
+
+ALTER TABLE registros_cq_inspecao
+  ADD COLUMN IF NOT EXISTS video_evidencia_url TEXT;
 
 -- ── 4. VIEW: RECEBIMENTOS PENDENTES ──────────────────────────
 CREATE OR REPLACE VIEW vw_recebimentos_pendentes AS

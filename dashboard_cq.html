@@ -211,6 +211,18 @@ canvas.tall{max-height:320px;}
 .spark{display:flex;align-items:flex-end;gap:1px;height:28px;}
 .spark-bar{width:5px;border-radius:1px 1px 0 0;min-height:2px;}
 
+/* COMPARATIVO */
+.comp-row{cursor:pointer;transition:background .15s;}
+.comp-row:hover td{background:rgba(200,169,110,0.04)!important;}
+.comp-row.expanded td{border-bottom-color:var(--accent3);}
+.comp-sub{display:none;}
+.comp-sub.open{display:table-row;}
+.comp-sub td{padding:0!important;background:var(--s2)!important;}
+.comp-sub-inner{padding:10px 16px;max-height:300px;overflow-y:auto;}
+.comp-sub-inner table{width:100%;border-collapse:collapse;font-size:11px;}
+.comp-sub-inner th{font-size:9px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);padding:6px 8px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;}
+.comp-sub-inner td{padding:6px 8px;border-bottom:1px solid rgba(255,255,255,0.025);font-size:11px;}
+.comp-badge{display:inline-block;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;border-radius:2px;padding:2px 8px;font-family:'DM Mono',monospace;font-weight:500;}
 </style>
 </head>
 <body>
@@ -298,6 +310,7 @@ canvas.tall{max-height:320px;}
     <div class="tab" onclick="switchTab('tendencia',this)">Tendência</div>
     <div class="tab" onclick="switchTab('timeline',this)">Fornecedor / Tempo</div>
     <div class="tab" onclick="switchTab('analisadores',this)">Por Analisador</div>
+    <div class="tab" onclick="switchTab('comparativo',this)">Comparativo</div>
     <div class="tab" onclick="switchTab('registros',this)">Registros</div>
     <div class="tab" onclick="switchTab('workflow',this)">Workflow</div>
   </div>
@@ -519,6 +532,68 @@ canvas.tall{max-height:320px;}
             <th>% Médio Defeito</th><th>Classe A</th><th>Classe B</th><th>Classe C</th><th>Liberações</th>
           </tr></thead>
           <tbody id="tbodyAnalis"><tr><td colspan="8" class="empty">—</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: COMPARATIVO POR FORNECEDOR -->
+  <div class="tab-panel" id="tab-comparativo">
+    <div class="sec-hd">
+      <div class="sec-title">Tabela Consolidada — Comparativo por Fornecedor</div>
+      <button class="btn-hd primary" onclick="exportarCSVComparativo()">↓ Exportar CSV</button>
+    </div>
+
+    <!-- Filtros do comparativo -->
+    <div class="filter-bar" style="margin-bottom:16px;">
+      <label>Período</label>
+      <select class="fil" id="compPeriodo">
+        <option value="">Todo o período filtrado</option>
+      </select>
+      <div class="filter-sep"></div>
+      <label>Class. Desconto</label>
+      <select class="fil" id="compClassDesc">
+        <option value="">Todas</option>
+        <option value="Aprovado">Aprovado</option>
+        <option value="Aprovado c/ Ressalva">Ressalva</option>
+        <option value="Sujeito a Negociação">Negociação</option>
+        <option value="Reprovado">Reprovado</option>
+      </select>
+      <div class="filter-sep"></div>
+      <label>Ordenar por</label>
+      <select class="fil" id="compOrdem">
+        <option value="desc">% Desconto ↓</option>
+        <option value="corr">% Corretiva ↓</option>
+        <option value="nome">Nome A-Z</option>
+        <option value="lotes">Lotes ↓</option>
+      </select>
+      <button class="btn-hd primary" style="margin-left:4px;" onclick="renderComparativo()">Aplicar</button>
+    </div>
+
+    <!-- Cards resumo -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px;" id="compCards"></div>
+
+    <!-- Tabela consolidada -->
+    <div class="card">
+      <div class="table-wrap">
+        <table class="rank-table" id="tblComparativo">
+          <thead>
+            <tr>
+              <th rowspan="2">Fornecedor</th>
+              <th rowspan="2">Lotes</th>
+              <th rowspan="2">Peças</th>
+              <th colspan="2" style="background:rgba(254,249,195,0.08);color:#ca8a04;text-align:center;border-bottom:1px solid rgba(202,138,4,0.2);">💰 Desconto Financeiro</th>
+              <th colspan="2" style="background:rgba(224,242,254,0.06);color:#0ea5e9;text-align:center;border-bottom:1px solid rgba(14,165,233,0.2);">🔧 Ação Corretiva</th>
+              <th rowspan="2">Pior Lote</th>
+            </tr>
+            <tr>
+              <th style="background:rgba(254,249,195,0.04);color:#ca8a04;">% Médio</th>
+              <th style="background:rgba(254,249,195,0.04);color:#ca8a04;">Classificação</th>
+              <th style="background:rgba(224,242,254,0.03);color:#0ea5e9;">% Médio</th>
+              <th style="background:rgba(224,242,254,0.03);color:#0ea5e9;">Classificação</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyComparativo"><tr><td colspan="8" class="empty">Carregando…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -990,6 +1065,7 @@ function switchTab(id, el) {
   if (id==='tendencia') renderTendencia();
   if (id==='timeline') renderTimeline();
   if (id==='analisadores') renderAnalisadores();
+  if (id==='comparativo') renderComparativo();
   if (id==='workflow') renderWorkflow();
 }
 
@@ -1934,6 +2010,253 @@ async function renderWorkflow() {
   } catch (err) {
     document.getElementById('wf-kpis').innerHTML = `<div style="color:#e74c3c;">Erro: ${err.message}</div>`;
   }
+}
+
+// === COMPARATIVO POR FORNECEDOR ===
+const DEFEITOS_DESCONTO  = ['fermentacao','sem_folhas','folhas_arrebentadas','pedaco'];
+const DEFEITOS_CORRETIVA = ['rasgado','furado','sujo','corte_irregular','mau_cheiro','contaminacao','outro','outro_defeito'];
+
+// Mapeamento nome amigável → campo para registros tipo 'carga'/'legado'
+const DEFEITO_NOME_PARA_CATEGORIA = {
+  'Fermentação': 'desconto', 'Sem Folhas': 'desconto', 'Sem folha': 'desconto',
+  'Folhas Arrebentadas': 'desconto', 'Folha extra': 'desconto', 'Pedaço': 'desconto', 'Pedacos': 'desconto',
+  'Rasgado': 'corretiva', 'Rasgados': 'corretiva',
+  'Furado': 'corretiva', 'Furados': 'corretiva',
+  'Sujo / Despojo': 'corretiva', 'Sujos': 'corretiva', 'Sujo': 'corretiva',
+  'Corte Irregular': 'corretiva',
+  'Mau Cheiro': 'corretiva',
+  'Contaminação': 'corretiva',
+  'Outro Defeito': 'corretiva',
+  'Pelando': 'corretiva',
+};
+
+function calcDescCorr(row) {
+  const qtd = row.qtd_amostra || row.quantidade_analisada || 1;
+  let totalDesconto = 0;
+  let totalCorretiva = 0;
+
+  if (row._fonte === 'inspecao') {
+    // Usar colunas diretas
+    DEFEITOS_DESCONTO.forEach(key => { totalDesconto += ((row[key] || 0) / qtd) * 100; });
+    DEFEITOS_CORRETIVA.forEach(key => { totalCorretiva += ((row[key] || 0) / qtd) * 100; });
+  } else {
+    // Para carga/legado: mapear via nome do defeito
+    const defs = extrairTodosDefeitos(row);
+    defs.forEach(({tipo, qtd: dQtd}) => {
+      const cat = DEFEITO_NOME_PARA_CATEGORIA[tipo];
+      const pct = (dQtd / qtd) * 100;
+      if (cat === 'desconto') totalDesconto += pct;
+      else totalCorretiva += pct;
+    });
+  }
+
+  return { totalDesconto, totalCorretiva };
+}
+
+function classificarDescCorr(pct) {
+  if (pct <= 5)  return { label: 'Aprovado',             cor: '#16a34a' };
+  if (pct <= 15) return { label: 'Aprovado c/ Ressalva', cor: '#ca8a04' };
+  if (pct <= 30) return { label: 'Sujeito a Negociação', cor: '#ea580c' };
+  return            { label: 'Reprovado',                 cor: '#dc2626' };
+}
+
+function renderComparativo() {
+  const dados = dadosFiltrados;
+
+  // Populate period dropdown
+  const periodoSel = document.getElementById('compPeriodo');
+  const currentVal = periodoSel.value;
+  const meses = new Set();
+  dados.forEach(r => {
+    const d = r.data_entrada || r.data_inspecao || '';
+    if (d.length >= 7) meses.add(d.slice(0, 7));
+  });
+  const mesesArr = [...meses].sort().reverse();
+  periodoSel.innerHTML = '<option value="">Todo o período filtrado</option>';
+  mesesArr.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m; o.textContent = m;
+    periodoSel.appendChild(o);
+  });
+  periodoSel.value = currentVal;
+
+  // Apply local filters
+  const periodo = periodoSel.value;
+  const classDesc = document.getElementById('compClassDesc').value;
+  const ordem = document.getElementById('compOrdem').value;
+
+  let filtered = dados;
+  if (periodo) {
+    filtered = filtered.filter(r => {
+      const d = r.data_entrada || r.data_inspecao || '';
+      return d.startsWith(periodo);
+    });
+  }
+
+  // Group by supplier
+  const consolidado = {};
+  filtered.forEach(r => {
+    const key = r.fornecedor;
+    if (!key) return;
+    if (!consolidado[key]) consolidado[key] = { lotes: 0, pecas: 0, somaDesc: 0, somaCorr: 0, piorLote: null, piorPct: 0, registros: [] };
+    const { totalDesconto, totalCorretiva } = calcDescCorr(r);
+    const f = consolidado[key];
+    f.lotes++;
+    f.pecas += r.qtd_amostra || 0;
+    f.somaDesc += totalDesconto;
+    f.somaCorr += totalCorretiva;
+    f.registros.push(r);
+    if (totalDesconto > f.piorPct) {
+      f.piorPct = totalDesconto;
+      f.piorLote = r.lote_atak || r.lote || r.numero_requisicao || '—';
+    }
+  });
+
+  // Calc averages
+  let fornList = Object.entries(consolidado).map(([nome, f]) => ({
+    nome,
+    lotes: f.lotes,
+    pecas: f.pecas,
+    mediaDesc: f.somaDesc / f.lotes,
+    mediaCorr: f.somaCorr / f.lotes,
+    piorLote: f.piorLote || '—',
+    piorPct: f.piorPct,
+    registros: f.registros
+  }));
+
+  // Filter by classification
+  if (classDesc) {
+    fornList = fornList.filter(f => classificarDescCorr(f.mediaDesc).label === classDesc);
+  }
+
+  // Sort
+  if (ordem === 'desc') fornList.sort((a, b) => b.mediaDesc - a.mediaDesc);
+  else if (ordem === 'corr') fornList.sort((a, b) => b.mediaCorr - a.mediaCorr);
+  else if (ordem === 'nome') fornList.sort((a, b) => a.nome.localeCompare(b.nome));
+  else if (ordem === 'lotes') fornList.sort((a, b) => b.lotes - a.lotes);
+
+  // Cards
+  const totalForn = fornList.length;
+  const totalLotes = fornList.reduce((s, f) => s + f.lotes, 0);
+  const mediaGeralDesc = totalForn ? fornList.reduce((s, f) => s + f.mediaDesc, 0) / totalForn : 0;
+  const critico = [...fornList].sort((a, b) => b.mediaDesc - a.mediaDesc)[0];
+
+  document.getElementById('compCards').innerHTML = `
+    <div class="kpi k-forn"><div class="kpi-label">Total Fornecedores</div><div class="kpi-val">${totalForn}</div><div class="kpi-sub">no período</div></div>
+    <div class="kpi k-total"><div class="kpi-label">Total Lotes</div><div class="kpi-val">${totalLotes}</div><div class="kpi-sub">inspeções</div></div>
+    <div class="kpi k-pct"><div class="kpi-label">Média Geral % Desconto</div><div class="kpi-val" style="color:${classificarDescCorr(mediaGeralDesc).cor}">${mediaGeralDesc.toFixed(1)}%</div><div class="kpi-sub">${classificarDescCorr(mediaGeralDesc).label}</div></div>
+    <div class="kpi k-c"><div class="kpi-label">Fornecedor Crítico</div><div class="kpi-val" style="font-size:16px;line-height:1.3;color:var(--err2)">${critico ? critico.nome : '—'}</div><div class="kpi-sub">${critico ? critico.mediaDesc.toFixed(1) + '% desc.' : ''}</div></div>
+  `;
+
+  // Table
+  const tbody = document.getElementById('tbodyComparativo');
+  if (!fornList.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty">Nenhum fornecedor encontrado.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = fornList.map((f, i) => {
+    const clDesc = classificarDescCorr(f.mediaDesc);
+    const clCorr = classificarDescCorr(f.mediaCorr);
+    const rowId = 'comp-sub-' + i;
+
+    // Main row
+    const mainRow = `<tr class="comp-row" onclick="toggleCompSub('${rowId}', this)">
+      <td style="font-weight:500">${f.nome}</td>
+      <td class="mono">${f.lotes}</td>
+      <td class="mono">${f.pecas.toLocaleString('pt-BR')}</td>
+      <td class="mono" style="color:${clDesc.cor}">${f.mediaDesc.toFixed(1)}%</td>
+      <td><span class="comp-badge" style="background:${clDesc.cor}18;color:${clDesc.cor}">${clDesc.label}</span></td>
+      <td class="mono" style="color:${clCorr.cor}">${f.mediaCorr.toFixed(1)}%</td>
+      <td><span class="comp-badge" style="background:${clCorr.cor}18;color:${clCorr.cor}">${clCorr.label}</span></td>
+      <td class="mono" style="font-size:10px;">${f.piorLote} <span style="color:var(--err2)">(${f.piorPct.toFixed(1)}%)</span></td>
+    </tr>`;
+
+    // Sub-table with lot history
+    const subRows = f.registros
+      .sort((a, b) => (b.data_entrada || '').localeCompare(a.data_entrada || ''))
+      .map(r => {
+        const { totalDesconto, totalCorretiva } = calcDescCorr(r);
+        const dCl = classificarDescCorr(totalDesconto);
+        const cCl = classificarDescCorr(totalCorretiva);
+        return `<tr>
+          <td class="mono">${r.data_entrada || r.data_inspecao || '—'}</td>
+          <td class="mono">${r.lote_atak || r.lote || r.numero_requisicao || '—'}</td>
+          <td class="mono">${r.qtd_amostra || '—'}</td>
+          <td class="mono" style="color:${dCl.cor}">${totalDesconto.toFixed(1)}%</td>
+          <td class="mono" style="color:${cCl.cor}">${totalCorretiva.toFixed(1)}%</td>
+          <td style="font-size:11px;color:var(--muted)">${r.analisador || r.analizador || '—'}</td>
+        </tr>`;
+      }).join('');
+
+    const subRow = `<tr class="comp-sub" id="${rowId}"><td colspan="8"><div class="comp-sub-inner">
+      <table><thead><tr><th>Data</th><th>Lote</th><th>Qtd</th><th>% Desconto</th><th>% Corretiva</th><th>Analisador</th></tr></thead>
+      <tbody>${subRows}</tbody></table>
+    </div></td></tr>`;
+
+    return mainRow + subRow;
+  }).join('');
+}
+
+function toggleCompSub(id, rowEl) {
+  const sub = document.getElementById(id);
+  if (!sub) return;
+  const isOpen = sub.classList.contains('open');
+  // Close all
+  document.querySelectorAll('.comp-sub.open').forEach(s => s.classList.remove('open'));
+  document.querySelectorAll('.comp-row.expanded').forEach(r => r.classList.remove('expanded'));
+  if (!isOpen) {
+    sub.classList.add('open');
+    rowEl.classList.add('expanded');
+  }
+}
+
+function exportarCSVComparativo() {
+  const tbody = document.getElementById('tbodyComparativo');
+  if (!tbody || !tbody.children.length) return;
+
+  const dados = dadosFiltrados;
+  const periodo = document.getElementById('compPeriodo').value;
+
+  let filtered = dados;
+  if (periodo) {
+    filtered = filtered.filter(r => (r.data_entrada || r.data_inspecao || '').startsWith(periodo));
+  }
+
+  // Group
+  const consolidado = {};
+  filtered.forEach(r => {
+    const key = r.fornecedor;
+    if (!key) return;
+    if (!consolidado[key]) consolidado[key] = { lotes: 0, pecas: 0, somaDesc: 0, somaCorr: 0, piorLote: null, piorPct: 0 };
+    const { totalDesconto, totalCorretiva } = calcDescCorr(r);
+    const f = consolidado[key];
+    f.lotes++;
+    f.pecas += r.qtd_amostra || 0;
+    f.somaDesc += totalDesconto;
+    f.somaCorr += totalCorretiva;
+    if (totalDesconto > f.piorPct) {
+      f.piorPct = totalDesconto;
+      f.piorLote = r.lote_atak || r.lote || r.numero_requisicao || '';
+    }
+  });
+
+  const header = 'Fornecedor;Lotes;Peças;% Desc. Médio;Class. Desconto;% Corret. Médio;Class. Corretiva;Pior Lote;Pior % Desc.';
+  const rows = Object.entries(consolidado).map(([nome, f]) => {
+    const mDesc = f.somaDesc / f.lotes;
+    const mCorr = f.somaCorr / f.lotes;
+    return [
+      `"${nome}"`, f.lotes, f.pecas, mDesc.toFixed(1),
+      `"${classificarDescCorr(mDesc).label}"`, mCorr.toFixed(1),
+      `"${classificarDescCorr(mCorr).label}"`, `"${f.piorLote || ''}"`, f.piorPct.toFixed(1)
+    ].join(';');
+  });
+
+  const csv = '\uFEFF' + [header, ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `cq_comparativo_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.click();
 }
 </script>
 </body>

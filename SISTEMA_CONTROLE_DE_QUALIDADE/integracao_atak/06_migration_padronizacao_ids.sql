@@ -423,6 +423,11 @@ CREATE TRIGGER trg_resolver_ids_divergencia
 -- 5. BACKFILL: Popular _id para registros existentes
 -- ════════════════════════════════════════════════════════════════════════════
 
+-- Garantir que colunas texto de referência existam antes do backfill
+ALTER TABLE registros_cq_inspecao ADD COLUMN IF NOT EXISTS fornecedor_codigo TEXT;
+ALTER TABLE cq_recebimentos ADD COLUMN IF NOT EXISTS fornecedor_cod TEXT;
+ALTER TABLE cq_planos_acao ADD COLUMN IF NOT EXISTS fornecedor_cod TEXT;
+
 -- 5.1 registros_cq_inspecao
 UPDATE registros_cq_inspecao SET
   fornecedor_id = fn_resolver_fornecedor(fornecedor_codigo, fornecedor),

@@ -19,33 +19,28 @@ END $$;
 
 -- Funcao principal
 CREATE OR REPLACE FUNCTION public.rpc_criar_inspecao_completa(
-  -- Identificacao do lote
-  p_fornecedor_id       uuid,
-  p_produto_id          uuid,
-  p_numero_lote         text,
-  p_data_lote           date DEFAULT current_date,
-  -- Recebimento
-  p_quantidade_recebida numeric(14,3),
-  p_temperatura         numeric(5,1) DEFAULT NULL,
-  p_placa_caminhao      text DEFAULT NULL,
-  p_motorista           text DEFAULT NULL,
-  p_transportadora      text DEFAULT NULL,
-  p_nota_fiscal         text DEFAULT NULL,
-  -- Inspecao
+  -- Obrigatorios (sem default) — devem vir primeiro
+  p_fornecedor_id        uuid,
+  p_produto_id           uuid,
+  p_numero_lote          text,
+  p_quantidade_recebida  numeric(14,3),
   p_quantidade_analisada numeric(14,3),
+  -- Opcionais (com default) — devem vir depois
+  p_data_lote            date DEFAULT current_date,
+  p_temperatura          numeric(5,1) DEFAULT NULL,
+  p_placa_caminhao       text DEFAULT NULL,
+  p_motorista            text DEFAULT NULL,
+  p_transportadora       text DEFAULT NULL,
+  p_nota_fiscal          text DEFAULT NULL,
   p_observacoes          text DEFAULT NULL,
-  -- Defeitos (array de JSON: [{"defeito_id":"uuid","quantidade":14}, ...])
   p_defeitos             jsonb DEFAULT '[]'::jsonb,
-  -- Classificacao ABC (opcional)
   p_qtd_a                numeric(14,3) DEFAULT NULL,
   p_qtd_b                numeric(14,3) DEFAULT NULL,
   p_qtd_c                numeric(14,3) DEFAULT NULL,
-  -- Fotos/video
   p_foto_etiqueta_url    text DEFAULT NULL,
   p_foto_produto_url     text DEFAULT NULL,
   p_foto_defeito_url     text DEFAULT NULL,
   p_video_evidencia_url  text DEFAULT NULL,
-  -- Origem
   p_origem               text DEFAULT 'manual'
 )
 RETURNS jsonb

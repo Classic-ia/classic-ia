@@ -497,26 +497,34 @@ async function carregarContadores() {
     const SB_KEY = CQAuth.getSbKey();
     const JWT = CQAuth.getAuthToken() || SB_KEY;
 
-    // Tentar view primeiro, fallback para tabela direta
-    let r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
-      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
-    });
-    if (!r.ok) {
-      console.warn('Fila: view vw_inspecoes_workflow indisponível, usando tabela direta');
-      r = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao?select=status_workflow`, {
-        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
-      });
+    // Tentar view primeiro, depois tabela inspecao, depois tabela legada
+    let rows = [];
+    const tentativas = [
+      'vw_inspecoes_workflow?select=status_workflow',
+      'registros_cq_inspecao?select=status_workflow',
+      'registros_cq?select=id',
+    ];
+    for (const endpoint of tentativas) {
+      try {
+        const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
+          headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
+        });
+        if (r.ok) {
+          const data = await r.json();
+          if (data && data.length > 0) {
+            rows = data;
+            console.log(`Fila contadores: ${data.length} registros de ${endpoint.split('?')[0]}`);
+            break;
+          }
+        }
+      } catch(e) { console.warn('Fila: erro em', endpoint, e.message); }
     }
 
     let contagens = {};
-    let total = 0;
-    if (r.ok) {
-      const rows = await r.json();
-      total = rows.length;
-      for (const row of rows) {
-        const s = row.status_workflow || 'rascunho';
-        contagens[s] = (contagens[s] || 0) + 1;
-      }
+    let total = rows.length;
+    for (const row of rows) {
+      const s = row.status_workflow || 'rascunho';
+      contagens[s] = (contagens[s] || 0) + 1;
     }
 
     container.innerHTML = statusList.map(s => {
@@ -559,6 +567,48 @@ async function carregarLista() {
     const { dados } = await CQWorkflow.listarInspecoes(filtros, paginaAtual, POR_PAGINA);
 
     if (!dados || dados.length === 0) {
+      // Fallback: buscar direto das tabelas se a view estiver vazia
+      try {
+        const SB_URL = CQAuth.getSbUrl();
+        const SB_KEY = CQAuth.getSbKey();
+        const JWT = CQAuth.getAuthToken() || SB_KEY;
+
+        // Tentar tabela de inspecoes primeiro, depois tabela legada
+        const tabelas = [
+          { url: `${SB_URL}/rest/v1/registros_cq_inspecao?select=*&order=criado_em.desc&limit=50`, nome: 'inspecao' },
+          { url: `${SB_URL}/rest/v1/registros_cq?select=*&order=created_at.desc,data_entrada.desc&limit=50`, nome: 'legado' },
+        ];
+
+        for (const t of tabelas) {
+          const fbRes = await fetch(t.url, {
+            headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` }
+          });
+          if (fbRes.ok) {
+            const fbData = await fbRes.json();
+            if (fbData && fbData.length > 0) {
+              console.log(`Fila lista: ${fbData.length} registros de ${t.nome}`);
+              _dadosAtuais = fbData.map(r => ({
+                ...r,
+                id_inspecao: r.id_inspecao || r.numero_documento || r.id?.slice(0,8) || '',
+                status_workflow: r.status_workflow || 'rascunho',
+                usuario_nome: r.inspetor || r.analizador || r.usuario_email || '',
+                total_ncs: 0,
+                criado_em: r.criado_em || r.created_at || r.data_inspecao || r.data_entrada || '',
+                percentual_defeitos: r.percentual_defeitos || r.percentual_defeito || null,
+                fornecedor: r.fornecedor || r.frigorifico || '',
+                produto: r.produto || 'Omaso Bovino',
+                lote_atak: r.lote_atak || r.lote || '',
+              }));
+              container.innerHTML = _dadosAtuais.map(renderCard).join('');
+              document.getElementById('sel-todos').classList.add('show');
+              renderPaginacao(_dadosAtuais.length);
+              atualizarBarraSelecao();
+              return;
+            }
+          }
+        }
+      } catch(fbErr) { console.error('Fallback falhou:', fbErr); }
+
       container.innerHTML = `
         <div class="lista-vazia">
           <div class="lista-vazia-icon">📋</div>

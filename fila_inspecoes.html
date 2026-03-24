@@ -101,10 +101,74 @@ body {
   background: var(--bg2); border: 1px solid var(--border);
   border-radius: var(--radius); padding: 14px 16px;
   margin-bottom: 8px; cursor: pointer; transition: all .2s;
+  display: flex; align-items: flex-start; gap: 10px;
 }
 .insp-card:hover { border-color: var(--accent); transform: translateY(-1px); }
 .insp-card.reprovada { border-left: 3px solid #e74c3c; }
 .insp-card.aguardando { border-left: 3px solid #f39c12; }
+.insp-card.selecionado { border-color: var(--accent); background: var(--accent3); }
+
+/* ── CHECKBOX ───────────────────── */
+.insp-check {
+  flex-shrink: 0; width: 22px; height: 22px; margin-top: 2px;
+  accent-color: var(--accent); cursor: pointer;
+  border-radius: 4px;
+}
+
+.insp-content { flex: 1; min-width: 0; }
+
+/* ── SHARE INDIVIDUAL ───────────── */
+.insp-share-btn {
+  flex-shrink: 0; background: none; border: 1px solid var(--border2);
+  border-radius: 6px; padding: 4px 8px; cursor: pointer;
+  color: var(--muted); font-size: 14px; transition: all .15s;
+  align-self: center;
+}
+.insp-share-btn:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── BARRA FLUTUANTE ────────────── */
+.sel-bar {
+  position: fixed; bottom: 0; left: 0; right: 0;
+  background: var(--bg2); border-top: 2px solid var(--accent);
+  padding: 10px 16px; z-index: 200;
+  display: none; align-items: center; gap: 10px;
+  box-shadow: 0 -4px 20px rgba(0,0,0,.5);
+  animation: slideUp .25s ease;
+}
+.sel-bar.show { display: flex; }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+.sel-bar-count {
+  font-size: 13px; font-weight: 700; color: var(--accent);
+  white-space: nowrap;
+}
+.sel-bar-actions {
+  display: flex; gap: 8px; margin-left: auto; flex-wrap: wrap;
+  justify-content: flex-end;
+}
+.sel-bar-btn {
+  padding: 8px 16px; border-radius: 8px; border: 1px solid var(--border2);
+  background: var(--bg3); color: var(--text); font-size: 12px;
+  font-weight: 600; cursor: pointer; transition: all .15s;
+  display: flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.sel-bar-btn:hover { border-color: var(--accent); color: var(--accent); }
+.sel-bar-btn.whatsapp { background: rgba(37,211,102,.12); border-color: rgba(37,211,102,.4); color: #25d366; }
+.sel-bar-btn.whatsapp:hover { background: rgba(37,211,102,.25); }
+.sel-bar-btn.email { background: rgba(52,152,219,.12); border-color: rgba(52,152,219,.4); color: #3498db; }
+.sel-bar-btn.email:hover { background: rgba(52,152,219,.25); }
+.sel-bar-btn.cancelar { color: var(--muted); }
+
+/* ── SELECIONAR TODOS ───────────── */
+.sel-todos {
+  display: none; align-items: center; gap: 8px;
+  padding: 6px 0; margin-bottom: 4px;
+}
+.sel-todos.show { display: flex; }
+.sel-todos label {
+  font-size: 12px; color: var(--muted); cursor: pointer;
+  display: flex; align-items: center; gap: 6px;
+}
 
 .insp-top {
   display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
@@ -310,6 +374,14 @@ body {
     <div id="alertas-container"></div>
   </div>
 
+  <!-- SELECIONAR TODOS -->
+  <div class="sel-todos" id="sel-todos">
+    <label>
+      <input type="checkbox" class="insp-check" id="chk-todos" onchange="toggleTodos(this.checked)">
+      Selecionar todas
+    </label>
+  </div>
+
   <!-- LISTA -->
   <div id="lista-container">
     <div class="loading">
@@ -321,6 +393,22 @@ body {
   <!-- PAGINAÇÃO -->
   <div class="paginacao" id="paginacao"></div>
 
+</div>
+
+<!-- BARRA FLUTUANTE DE SELEÇÃO -->
+<div class="sel-bar" id="sel-bar">
+  <span class="sel-bar-count" id="sel-bar-count">0 selecionadas</span>
+  <div class="sel-bar-actions">
+    <button class="sel-bar-btn whatsapp" onclick="enviarWhatsApp()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+      WhatsApp
+    </button>
+    <button class="sel-bar-btn email" onclick="enviarEmail()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>
+      Email
+    </button>
+    <button class="sel-bar-btn cancelar" onclick="limparSelecao()">Cancelar</button>
+  </div>
 </div>
 
 <div class="toast-container" id="toasts"></div>
@@ -338,6 +426,8 @@ body {
 let paginaAtual = 1;
 const POR_PAGINA = 20;
 let filtroStatusAtivo = '';
+let _dadosAtuais = [];
+const _selecionados = new Map(); // id → dados da inspeção
 
 // ── INIT ──────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -471,11 +561,15 @@ async function carregarLista() {
           <div class="lista-vazia-msg">Nenhuma inspeção encontrada</div>
         </div>`;
       document.getElementById('paginacao').innerHTML = '';
+      document.getElementById('sel-todos').classList.remove('show');
       return;
     }
 
+    _dadosAtuais = dados;
     container.innerHTML = dados.map(renderCard).join('');
+    document.getElementById('sel-todos').classList.add('show');
     renderPaginacao(dados.length);
+    atualizarBarraSelecao();
   } catch (e) {
     container.innerHTML = `<div class="lista-vazia">
       <div class="lista-vazia-icon">⚠️</div>
@@ -499,38 +593,60 @@ function renderCard(insp) {
 
   const ncCount = insp.total_ncs || 0;
 
-  return `<div class="insp-card ${extraClass}" onclick="abrirInspecao('${insp.id}')">
-    <div class="insp-top">
-      <span class="insp-id">${insp.id_inspecao || insp.id?.slice(0,8) || '—'}</span>
-      ${CQWorkflow.renderStatusBadge(statusWf)}
-      ${insp.status_final ? CQWorkflow.renderStatusFinalBadge(insp.status_final) : ''}
-      <span class="insp-data">${CQWorkflow.formatarData(insp.criado_em)}</span>
-    </div>
-    <div class="insp-mid">
-      <div class="insp-field">
-        <span class="insp-field-label">Fornecedor: </span>
-        <span class="insp-field-value">${insp.fornecedor || '—'}</span>
+  const dataJson = encodeURIComponent(JSON.stringify({
+    id: insp.id,
+    id_inspecao: insp.id_inspecao,
+    fornecedor: insp.fornecedor,
+    produto: insp.produto,
+    lote_atak: insp.lote_atak,
+    etiqueta: insp.etiqueta,
+    classificacao: insp.classificacao,
+    status_final: insp.status_final,
+    percentual_defeitos: insp.percentual_defeitos,
+    total_defeitos: insp.total_defeitos,
+    data_inspecao: insp.data_inspecao,
+    inspetor: insp.inspetor || insp.usuario_nome,
+  }));
+
+  return `<div class="insp-card ${extraClass}" id="card-${insp.id}">
+    <input type="checkbox" class="insp-check" data-id="${insp.id}" data-insp="${dataJson}"
+      onclick="event.stopPropagation(); toggleSelecao('${insp.id}')" />
+    <div class="insp-content" onclick="abrirInspecao('${insp.id}')">
+      <div class="insp-top">
+        <span class="insp-id">${insp.id_inspecao || insp.id?.slice(0,8) || '—'}</span>
+        ${CQWorkflow.renderStatusBadge(statusWf)}
+        ${insp.status_final ? CQWorkflow.renderStatusFinalBadge(insp.status_final) : ''}
+        <span class="insp-data">${CQWorkflow.formatarData(insp.criado_em)}</span>
       </div>
-      <div class="insp-field">
-        <span class="insp-field-label">Produto: </span>
-        <span class="insp-field-value">${insp.produto || '—'}</span>
+      <div class="insp-mid">
+        <div class="insp-field">
+          <span class="insp-field-label">Fornecedor: </span>
+          <span class="insp-field-value">${insp.fornecedor || '—'}</span>
+        </div>
+        <div class="insp-field">
+          <span class="insp-field-label">Produto: </span>
+          <span class="insp-field-value">${insp.produto || '—'}</span>
+        </div>
+        <div class="insp-field">
+          <span class="insp-field-label">Lote: </span>
+          <span class="insp-field-value">${insp.lote_atak || '—'}</span>
+        </div>
+        ${insp.etiqueta ? `<div class="insp-field">
+          <span class="insp-field-label">Etiqueta: </span>
+          <span class="insp-field-value">${insp.etiqueta}</span>
+        </div>` : ''}
       </div>
-      <div class="insp-field">
-        <span class="insp-field-label">Lote: </span>
-        <span class="insp-field-value">${insp.lote_atak || '—'}</span>
+      <div class="insp-bottom">
+        <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
+          ${pctDefeitos} defeitos
+        </span>
+        ${ncCount > 0 ? `<span class="insp-nc-badge">NC: ${ncCount}</span>` : ''}
+        <span class="insp-inspetor">${insp.usuario_nome || '—'}</span>
       </div>
-      ${insp.etiqueta ? `<div class="insp-field">
-        <span class="insp-field-label">Etiqueta: </span>
-        <span class="insp-field-value">${insp.etiqueta}</span>
-      </div>` : ''}
     </div>
-    <div class="insp-bottom">
-      <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
-        ${pctDefeitos} defeitos
-      </span>
-      ${ncCount > 0 ? `<span class="insp-nc-badge">NC: ${ncCount}</span>` : ''}
-      <span class="insp-inspetor">${insp.usuario_nome || '—'}</span>
-    </div>
+    <button class="insp-share-btn" title="Enviar relatório" onclick="event.stopPropagation(); enviarUnico('${insp.id}')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+    </button>
   </div>`;
 }
 
@@ -672,6 +788,163 @@ async function resolverAlerta(id) {
   } catch (e) {
     toast('Erro ao resolver: ' + e.message, 'err');
   }
+}
+
+// ── SELEÇÃO E ENVIO ──────────────────────────────────────
+
+function toggleSelecao(id) {
+  const card = document.getElementById('card-' + id);
+  const chk = card?.querySelector('.insp-check');
+  if (!chk) return;
+
+  if (_selecionados.has(id)) {
+    _selecionados.delete(id);
+    card.classList.remove('selecionado');
+    chk.checked = false;
+  } else {
+    try {
+      const dados = JSON.parse(decodeURIComponent(chk.dataset.insp));
+      _selecionados.set(id, dados);
+      card.classList.add('selecionado');
+      chk.checked = true;
+    } catch(e) { console.warn('Erro ao parsear dados:', e); }
+  }
+  atualizarBarraSelecao();
+}
+
+function toggleTodos(checked) {
+  document.querySelectorAll('.insp-check[data-id]').forEach(chk => {
+    const id = chk.dataset.id;
+    if (checked && !_selecionados.has(id)) {
+      toggleSelecao(id);
+    } else if (!checked && _selecionados.has(id)) {
+      toggleSelecao(id);
+    }
+  });
+}
+
+function limparSelecao() {
+  _selecionados.clear();
+  document.querySelectorAll('.insp-card.selecionado').forEach(c => c.classList.remove('selecionado'));
+  document.querySelectorAll('.insp-check').forEach(c => c.checked = false);
+  atualizarBarraSelecao();
+}
+
+function atualizarBarraSelecao() {
+  const bar = document.getElementById('sel-bar');
+  const count = _selecionados.size;
+  if (count > 0) {
+    bar.classList.add('show');
+    document.getElementById('sel-bar-count').textContent =
+      count === 1 ? '1 selecionada' : count + ' selecionadas';
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+// ── Montar texto do relatório ─────────────────────────────
+function montarRelatorio(lista) {
+  const linhas = [];
+  linhas.push('*CLASSIC COUROS — Relatório de Inspeção CQ*');
+  linhas.push('Gerado: ' + new Date().toLocaleString('pt-BR'));
+  linhas.push('');
+
+  lista.forEach((insp, i) => {
+    if (lista.length > 1) linhas.push(`━━━ Inspeção ${i+1}/${lista.length} ━━━`);
+    linhas.push(`*Nº:* ${insp.id_inspecao || '—'}`);
+    linhas.push(`*Data:* ${insp.data_inspecao || '—'}`);
+    linhas.push(`*Fornecedor:* ${insp.fornecedor || '—'}`);
+    linhas.push(`*Produto:* ${insp.produto || '—'}`);
+    linhas.push(`*Lote:* ${insp.lote_atak || '—'}`);
+    if (insp.etiqueta) linhas.push(`*Etiqueta:* ${insp.etiqueta}`);
+    linhas.push(`*Defeitos:* ${insp.total_defeitos || 0} (${insp.percentual_defeitos != null ? parseFloat(insp.percentual_defeitos).toFixed(1) : '0'}%)`);
+    linhas.push(`*Classificação:* ${insp.classificacao || '—'}`);
+    linhas.push(`*Status:* ${(insp.status_final || '—').toUpperCase()}`);
+    linhas.push(`*Inspetor:* ${insp.inspetor || '—'}`);
+    linhas.push('');
+  });
+
+  return linhas.join('\n');
+}
+
+function montarRelatorioEmail(lista) {
+  const linhas = [];
+  linhas.push('CLASSIC COUROS - Relatório de Inspeção CQ');
+  linhas.push('Gerado: ' + new Date().toLocaleString('pt-BR'));
+  linhas.push('');
+
+  lista.forEach((insp, i) => {
+    if (lista.length > 1) linhas.push(`--- Inspeção ${i+1}/${lista.length} ---`);
+    linhas.push(`Nº: ${insp.id_inspecao || '—'}`);
+    linhas.push(`Data: ${insp.data_inspecao || '—'}`);
+    linhas.push(`Fornecedor: ${insp.fornecedor || '—'}`);
+    linhas.push(`Produto: ${insp.produto || '—'}`);
+    linhas.push(`Lote: ${insp.lote_atak || '—'}`);
+    if (insp.etiqueta) linhas.push(`Etiqueta: ${insp.etiqueta}`);
+    linhas.push(`Defeitos: ${insp.total_defeitos || 0} (${insp.percentual_defeitos != null ? parseFloat(insp.percentual_defeitos).toFixed(1) : '0'}%)`);
+    linhas.push(`Classificação: ${insp.classificacao || '—'}`);
+    linhas.push(`Status: ${(insp.status_final || '—').toUpperCase()}`);
+    linhas.push(`Inspetor: ${insp.inspetor || '—'}`);
+    linhas.push('');
+  });
+
+  return linhas.join('\n');
+}
+
+// ── Enviar individual (botão share no card) ──────────────
+function enviarUnico(id) {
+  const chk = document.querySelector(`.insp-check[data-id="${id}"]`);
+  if (!chk) return;
+  let dados;
+  try { dados = JSON.parse(decodeURIComponent(chk.dataset.insp)); } catch(e) { return; }
+
+  // Tentar Web Share API (melhor no celular)
+  const texto = montarRelatorio([dados]);
+  if (navigator.share) {
+    navigator.share({
+      title: 'Inspeção ' + (dados.id_inspecao || ''),
+      text: texto,
+    }).catch(() => {});
+  } else {
+    // Fallback: abrir opções WhatsApp/Email
+    _selecionados.clear();
+    _selecionados.set(id, dados);
+    atualizarBarraSelecao();
+    toast('Selecione WhatsApp ou Email na barra abaixo', 'ok');
+  }
+}
+
+// ── Enviar WhatsApp ──────────────────────────────────────
+function enviarWhatsApp() {
+  if (_selecionados.size === 0) { toast('Nenhuma inspeção selecionada', 'err'); return; }
+  const lista = Array.from(_selecionados.values());
+  const texto = montarRelatorio(lista);
+
+  // Tentar Web Share API primeiro (melhor UX no celular)
+  if (navigator.share) {
+    navigator.share({
+      title: 'Relatório CQ — ' + lista.length + ' inspeção(ões)',
+      text: texto,
+    }).catch(() => {
+      // Fallback para wa.me
+      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+    });
+  } else {
+    window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+  }
+}
+
+// ── Enviar Email ─────────────────────────────────────────
+function enviarEmail() {
+  if (_selecionados.size === 0) { toast('Nenhuma inspeção selecionada', 'err'); return; }
+  const lista = Array.from(_selecionados.values());
+  const corpo = montarRelatorioEmail(lista);
+
+  const assunto = lista.length === 1
+    ? 'Relatório Inspeção CQ - ' + (lista[0].id_inspecao || '')
+    : 'Relatório CQ - ' + lista.length + ' inspeções';
+
+  window.location.href = 'mailto:?subject=' + encodeURIComponent(assunto) + '&body=' + encodeURIComponent(corpo);
 }
 
 // ── TOAST ─────────────────────────────────────────────────

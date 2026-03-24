@@ -154,6 +154,15 @@ input, select, textarea, button { font-family: inherit; }
 .field-input[type="date"],
 .field-input[type="time"] { cursor: pointer; }
 select.field-input { cursor: pointer; }
+select.field-input option, select.field-input optgroup {
+  background: #1a1a1a; color: #e8e3da;
+}
+select.field-input option:checked {
+  background: var(--accent, #c8a96e); color: #1a1200;
+}
+select.field-input optgroup {
+  font-weight: 700; color: var(--accent, #c8a96e);
+}
 
 textarea.field-input {
   height: auto; min-height: 90px; padding: 12px 14px;
@@ -690,10 +699,10 @@ textarea.field-input {
           <div class="field-hint">Obrigatório para salvar</div>
         </div>
         <div class="field">
-          <label class="field-label">Nº Etiqueta <span class="req">*</span></label>
+          <label class="field-label">Nº Etiqueta</label>
           <div style="display:flex;gap:8px;align-items:stretch;">
             <input class="field-input scannable" type="text" id="f-etiqueta"
-              placeholder="Digite ou bipe com scanner" required
+              placeholder="Digite ou bipe com scanner"
               style="flex:1;" oninput="updateSaveStatus()">
             <button type="button" onclick="abrirOCR('etiqueta')" title="Fotografar etiqueta"
               style="background:var(--bg3);border:1.5px solid var(--border);border-radius:8px;
@@ -702,7 +711,7 @@ textarea.field-input {
               onmouseover="this.style.borderColor='var(--blue)'"
               onmouseout="this.style.borderColor='var(--border)'">Foto</button>
           </div>
-          <div class="field-hint">Obrigatório para salvar</div>
+          <div class="field-hint">Opcional</div>
         </div>
       </div>
 
@@ -740,11 +749,7 @@ textarea.field-input {
             <datalist id="dl-motoristas"></datalist>
           </div>
         </div>
-        <div class="field" style="margin-top:10px;">
-          <label class="field-label">Transportadora</label>
-          <input class="field-input" type="text" id="f-transportadora"
-            placeholder="Nome da transportadora" autocomplete="off">
-        </div>
+        <!-- Transportadora removido a pedido do usuário -->
       </div>
 
       <!-- Campos de auditoria ocultos (preenchidos pelo CQAuth) -->
@@ -1032,9 +1037,9 @@ textarea.field-input {
 <!-- Modal de sucesso -->
 <div class="modal-overlay" id="modalSucesso">
   <div class="modal-box">
-    <div class="modal-icon" style="font-size:32px;color:var(--aprovado,#4CAF50);">OK</div>
-    <div class="modal-title">Inspeção Salva!</div>
-    <div class="modal-sub">Registro criado com sucesso.<br>Número único gerado:</div>
+    <div class="modal-icon" style="font-size:32px;" id="modalIconStatus">OK</div>
+    <div class="modal-title" id="modalTitleStatus">Inspeção Salva!</div>
+    <div class="modal-sub" id="modalSubStatus">Registro criado com sucesso.<br>Número único gerado:</div>
     <div class="modal-id" id="modalInspId">—</div>
     <div class="modal-sub" style="margin-top:8px;font-size:10px;" id="modalOfflineNote"></div>
     <div class="modal-actions" style="margin-top:18px;flex-direction:column;gap:8px;">
@@ -1047,6 +1052,7 @@ textarea.field-input {
   </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
@@ -1587,6 +1593,9 @@ function abrirVideoSource(){
 function previewVideo(input){
   const file = input.files[0];
   if(!file) return;
+  // Fechar o picker se ainda estiver aberto
+  const picker = document.getElementById('_videoSourcePicker');
+  if(picker) picker.remove();
   // Limite de 50MB
   if(file.size > 50 * 1024 * 1024){
     toast('Video muito grande (max 50MB)', 'err');
@@ -1601,6 +1610,7 @@ function previewVideo(input){
   btn.classList.add('has-foto');
   const sizeMB = (file.size / 1024 / 1024).toFixed(1);
   label.textContent = file.name.slice(0,30) + ' (' + sizeMB + ' MB)';
+  toast('Video selecionado: ' + sizeMB + ' MB', 'ok');
 }
 
 function removerVideo(){
@@ -1677,7 +1687,6 @@ function getObrigatorios(){
     { id:'f-fornecedor',    nome:'Fornecedor' },   // hidden — preenchido pelo componente
     { id:'f-produto',       nome:'Produto' },
     { id:'f-lote-atak',     nome:'Lote ATAK' },
-    { id:'f-etiqueta',      nome:'Nº Etiqueta' },
     { id:'f-qtd-analisada', nome:'Qtd Analisada' },
   ];
 }
@@ -1885,6 +1894,8 @@ async function salvarInspecao(){
         try{
           const ext = videoEvidenciaFile.name.split('.').pop() || 'mp4';
           const vpath = `inspecao/${registro.id}/video_${Date.now()}.${ext}`;
+          const sizeMB = (videoEvidenciaFile.size / 1024 / 1024).toFixed(1);
+          console.log('Uploading video:', vpath, sizeMB + 'MB', videoEvidenciaFile.type);
           const vup = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${vpath}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${JWT}`, 'apikey': SB_KEY, 'Content-Type': videoEvidenciaFile.type || 'video/mp4', 'x-upsert': 'true' },
@@ -1893,11 +1904,15 @@ async function salvarInspecao(){
           if(vup.ok) {
             videoUrl = `${SB_URL}/storage/v1/object/public/cq-fotos/${vpath}`;
           } else {
-            toast('Aviso: Video nao foi enviado', 'warn');
+            const vErrTxt = await vup.text();
+            console.error('Video upload error:', vup.status, vErrTxt);
+            let vDetalhe = '';
+            try { const vj = JSON.parse(vErrTxt); vDetalhe = vj.message || vj.error || ''; } catch(_){}
+            toast('Video nao enviado (HTTP ' + vup.status + ')' + (vDetalhe ? ': ' + vDetalhe : ''), 'err');
           }
         } catch(e){
-          console.warn('Video upload falhou:', e);
-          toast('Aviso: Video nao foi enviado', 'warn');
+          console.error('Video upload falhou:', e);
+          toast('Video nao enviado: ' + (e.message || 'erro de rede'), 'err');
         }
       }
 
@@ -1940,36 +1955,75 @@ async function salvarInspecao(){
         obs_reprovado:           registro.obs_reprovado,
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
-        foto_defeito_url:        fotoUrls.defeito,
-        ...authData,
+        // Campos de autenticação — apenas os que existem na tabela
+        usuario_id:              authData.usuario_id,
+        usuario_email:           authData.usuario_email,
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
         offline:                 false,
         criado_em:               registro.criado_em,
       };
 
-      // Adicionar campos opcionais apenas se tiverem valor (evita erro se coluna não existe)
+      // Campos opcionais — só incluir se tiverem valor (evita erro se coluna não existe)
       if(videoUrl) payload.video_evidencia_url = videoUrl;
+      if(authData.latitude != null) payload.latitude = authData.latitude;
+      if(authData.longitude != null) payload.longitude = authData.longitude;
 
-      // Insert no Supabase como rascunho
-      const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SB_KEY,
-          'Authorization': `Bearer ${JWT}`,
-          'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(payload),
-      });
+      // Insert no Supabase como rascunho — com retry para colunas inexistentes
+      let insertedRows;
+      let tentativas = 0;
+      const maxTentativas = 10; // até 10 colunas podem ser removidas
+      while(tentativas < maxTentativas){
+        tentativas++;
+        const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SB_KEY,
+            'Authorization': `Bearer ${JWT}`,
+            'Prefer': 'return=representation',
+          },
+          body: JSON.stringify(payload),
+        });
 
-      if(!insertResp.ok){
+        if(insertResp.ok){
+          insertedRows = await insertResp.json();
+          break;
+        }
+
         const errTxt = await insertResp.text();
-        console.warn('Supabase insert error:', errTxt);
-        throw new Error('Falha ao salvar inspeção no servidor');
+        console.error('Supabase insert error (tentativa ' + tentativas + '):', insertResp.status, errTxt);
+
+        // Se o erro for coluna inexistente, remover e tentar novamente
+        // Regex robusto: aceita aspas simples, duplas, curvas ou sem aspas
+        const colMatch = errTxt.match(/Could not find the ['\u2018\u2019"]*(\w+)['\u2018\u2019"]* column/i);
+        if(colMatch && tentativas < maxTentativas){
+          const badCol = colMatch[1];
+          console.warn('Removendo coluna inexistente do payload:', badCol, '(tentativa ' + tentativas + ')');
+          delete payload[badCol];
+          continue;
+        }
+        // Fallback: tentar extrair nome de coluna de qualquer mensagem "column X"
+        const colMatch2 = !colMatch && errTxt.match(/column ['\u2018\u2019"]*(\w+)['\u2018\u2019"]*/i);
+        if(colMatch2 && tentativas < maxTentativas){
+          const badCol = colMatch2[1];
+          if(badCol !== 'of' && payload.hasOwnProperty(badCol)){
+            console.warn('Removendo coluna (fallback):', badCol);
+            delete payload[badCol];
+            continue;
+          }
+        }
+
+        // Outro erro — abortar
+        let detalhe = '';
+        try { const ej = JSON.parse(errTxt); detalhe = ej.message || ej.msg || ej.error || ''; } catch(_){}
+        throw new Error('Falha ao salvar inspeção (HTTP ' + insertResp.status + ')' + (detalhe ? ': ' + detalhe : ''));
       }
 
-      const insertedRows = await insertResp.json();
+      if(!insertedRows){
+        throw new Error('Falha ao salvar após ' + maxTentativas + ' tentativas');
+      }
+
       const inspecaoId = insertedRows[0]?.id;
 
       if(!inspecaoId){
@@ -2012,17 +2066,39 @@ async function salvarInspecao(){
     }
   }
 
-  // Mostra modal com resultado do backend
+  // Mostra modal com resultado do backend — reflete status real
   document.getElementById('modalInspId').textContent = registro.id;
+  const iconEl = document.getElementById('modalIconStatus');
+  const titleEl = document.getElementById('modalTitleStatus');
+  const subEl = document.getElementById('modalSubStatus');
   let statusMsg;
+
   if(!salvouOnline){
-    statusMsg = _ultimoErroSave
-      ? 'Erro ao salvar: ' + _ultimoErroSave
-      : 'Salvo localmente — sera sincronizado quando houver conexao';
+    if(_ultimoErroSave){
+      iconEl.textContent = '✗';
+      iconEl.style.color = '#ef5350';
+      titleEl.textContent = 'Erro ao Salvar';
+      subEl.innerHTML = 'Não foi possível salvar no servidor.<br>Salvo localmente para sincronização posterior.<br>Número:';
+      statusMsg = _ultimoErroSave;
+    } else {
+      iconEl.textContent = '⏳';
+      iconEl.style.color = '#FFA726';
+      titleEl.textContent = 'Salvo Localmente';
+      subEl.innerHTML = 'Sem conexão — será sincronizado quando houver internet.<br>Número:';
+      statusMsg = 'Salvo localmente — sera sincronizado quando houver conexao';
+    }
   } else if(resultadoBackend && resultadoBackend.ok){
+    iconEl.textContent = 'OK';
+    iconEl.style.color = 'var(--aprovado,#4CAF50)';
+    titleEl.textContent = 'Inspeção Salva!';
+    subEl.innerHTML = 'Registro criado com sucesso.<br>Número único gerado:';
     const d = resultadoBackend.decisao || {};
     statusMsg = 'Sincronizado — ' + (d.classificacao || '') + ' / ' + (d.status_final || '');
   } else {
+    iconEl.textContent = 'OK';
+    iconEl.style.color = 'var(--aprovado,#4CAF50)';
+    titleEl.textContent = 'Rascunho Salvo';
+    subEl.innerHTML = 'Rascunho salvo no servidor.<br>Número:';
     statusMsg = 'Rascunho salvo — submissao pendente de revisao dos dados';
   }
   document.getElementById('modalOfflineNote').textContent = statusMsg;
@@ -2214,33 +2290,70 @@ function processarOCR(input) {
   reader.onload = function(e) {
     // Mostrar preview da foto
     const prev = document.getElementById('ocrPreview');
-    prev.innerHTML = `<img src="${e.target.result}" style="width:100%;height:100%;object-fit:contain;">`;
+    prev.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:contain;">';
 
-    // Tentar extrair texto com a API do navegador (Web OCR via canvas)
+    // OCR via Tesseract.js
     const img = new Image();
     img.onload = function() {
-      // Usa Tesseract.js se disponível, senão pede digitação manual
+      document.getElementById('ocrResultado').style.display = 'block';
+      const statusEl = document.getElementById('ocrStatus');
+
       if (typeof Tesseract !== 'undefined') {
-        document.getElementById('ocrTexto').value = 'Processando...';
-        document.getElementById('ocrResultado').style.display = 'block';
-        Tesseract.recognize(e.target.result, 'eng', { logger: () => {} })
-          .then(({ data: { text } }) => {
-            // Extrai padrões de lote (ex: 0046) ou etiqueta (101-001-XXXXX)
-            let extraido = '';
-            if (ocrCampoAlvo === 'etiqueta') {
-              const m = text.match(/101[-\s]?001[-\s]?\d{5,6}/);
-              extraido = m ? m[0].replace(/\s/g,'') : text.replace(/[^0-9\-]/g,'').trim();
-            } else {
-              const m = text.match(/\d{4}/);
-              extraido = m ? m[0] : text.replace(/[^0-9]/g,'').trim().slice(0,8);
-            }
-            document.getElementById('ocrTexto').value = extraido;
-          });
-      } else {
-        // Sem Tesseract — pedir revisão manual com a foto como referência
         document.getElementById('ocrTexto').value = '';
-        document.getElementById('ocrResultado').style.display = 'block';
-        setTimeout(() => document.getElementById('ocrTexto').focus(), 100);
+        statusEl.textContent = 'Processando OCR...';
+
+        Tesseract.recognize(e.target.result, 'por', {
+          logger: function(m) {
+            if (m.status === 'recognizing text') {
+              statusEl.textContent = 'Lendo... ' + Math.round((m.progress || 0) * 100) + '%';
+            }
+          }
+        }).then(function(result) {
+          var text = result.data.text;
+          console.log('OCR texto bruto:', text);
+          statusEl.textContent = '';
+
+          var extraido = '';
+          if (ocrCampoAlvo === 'etiqueta') {
+            // Etiqueta: padrao 101-001-XXXXX
+            var m = text.match(/101[-\s]?001[-\s]?\d{5,6}/);
+            extraido = m ? m[0].replace(/\s/g, '') : text.replace(/[^0-9\-]/g, '').trim();
+          } else {
+            // Lote/Requisicao: procurar REQUISICAO nnnnn
+            var m = text.match(/REQUISI[CÇ][AÃ]O\s*[:\-
+]?\s*(\d{3,8})/i);
+            if (!m) m = text.match(/REQ[.\s]*[:\-]?\s*(\d{3,8})/i);
+            if (m) {
+              extraido = m[1];
+            } else {
+              // Fallback: maior numero com 4+ digitos
+              var nums = text.match(/\d{4,8}/g);
+              if (nums) {
+                nums.sort(function(a, b) { return b.length - a.length; });
+                extraido = nums[0];
+              } else {
+                extraido = text.replace(/[^0-9]/g, '').trim().slice(0, 8);
+              }
+            }
+          }
+          document.getElementById('ocrTexto').value = extraido;
+          if (extraido) toast('Numero identificado: ' + extraido, 'ok');
+        }).catch(function(err) {
+          console.error('OCR erro:', err);
+          statusEl.textContent = 'OCR falhou - digite manualmente';
+          document.getElementById('ocrTexto').value = '';
+          setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
+        });
+      } else {
+        // Sem Tesseract - carregar dinamicamente
+        statusEl.textContent = 'Carregando OCR...';
+        document.getElementById('ocrTexto').value = '';
+        var scr = document.createElement('script');
+        scr.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
+        scr.onload = function() { statusEl.textContent = 'OCR pronto - tire outra foto'; };
+        scr.onerror = function() { statusEl.textContent = 'OCR indisponivel - digite manualmente'; };
+        document.head.appendChild(scr);
+        setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
       }
     };
     img.src = e.target.result;
@@ -2414,7 +2527,10 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
 </div>
 </body></html>`;
 
-  // Usar iframe oculto para evitar bloqueio de popup
+  // Fechar o modal de sucesso para não ficar por cima
+  document.getElementById('modalSucesso').classList.remove('show');
+
+  // Usar iframe fullscreen (funciona em mobile sem popup blocker)
   let iframe = document.getElementById('_pdfFrame');
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -2429,21 +2545,32 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
   iDoc.write(html);
   iDoc.close();
 
-  // Adicionar botão de fechar e botão de imprimir no topo do iframe
   setTimeout(() => {
-    const bar = iDoc.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
-    bar.innerHTML = `
-      <button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button>
-      <button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>
-    `;
-    iDoc.body.style.paddingTop = '50px';
-    iDoc.body.insertBefore(bar, iDoc.body.firstChild);
+    try {
+      // Barra de ações no topo
+      const bar = iDoc.createElement('div');
+      bar.className = 'no-print';
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
+      bar.innerHTML = '<button id="_btnImprimir" style="background:#c8a96e;color:#1a1200;border:none;padding:10px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
 
-    iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
-      iframe.style.display = 'none';
-    });
-  }, 100);
+      // Esconder barra na impressão
+      const style = iDoc.createElement('style');
+      style.textContent = '@media print { .no-print { display: none !important; } body { padding-top: 0 !important; } }';
+      iDoc.head.appendChild(style);
+
+      iDoc.body.style.paddingTop = '52px';
+      iDoc.body.insertBefore(bar, iDoc.body.firstChild);
+
+      iDoc.getElementById('_btnImprimir').addEventListener('click', () => {
+        iframe.contentWindow.print();
+      });
+      iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
+        iframe.style.display = 'none';
+      });
+    } catch(e) {
+      console.error('Erro ao montar barra PDF:', e);
+    }
+  }, 200);
 }
 
 // ══════════════════════════════════════════════════════════

@@ -54,6 +54,7 @@ UPDATE cq_cargas SET sujos = 0 WHERE sujos < 0;
 UPDATE cq_cargas SET pedacos = 0 WHERE pedacos < 0;
 UPDATE cq_cargas SET total_problemas = 0 WHERE total_problemas < 0;
 UPDATE cq_cargas SET porcentagem = LEAST(GREATEST(porcentagem, 0), 100) WHERE porcentagem < 0 OR porcentagem > 100;
+UPDATE cq_cargas SET classificacao = NULL WHERE classificacao IS NOT NULL AND classificacao NOT IN ('A','B','C');
 
 DO $$ BEGIN
 ALTER TABLE cq_cargas ADD CONSTRAINT chk_cqcargas_qtd_frigo_pos CHECK (qtd_frigo >= 0);

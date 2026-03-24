@@ -657,8 +657,8 @@ SELECT
 
   -- Inspetor / Usuário
   i.usuario_id,
-  i.usuario_nome,
-  i.usuario_email,
+  u.raw_user_meta_data->>'nome' AS usuario_nome,
+  u.email AS usuario_email,
 
   -- Classificação
   i.classificacao,
@@ -690,6 +690,7 @@ LEFT JOIN cadastros_atak ca_m ON ca_m.id = i.motorista_id
 LEFT JOIN cq_veiculos veic ON veic.id = i.veiculo_id
 LEFT JOIN cq_transportadoras transp ON transp.id = i.transportadora_id
 LEFT JOIN cq_fornecedor_score fs ON fs.fornecedor_id = i.fornecedor_id
+LEFT JOIN auth.users u ON u.id = i.usuario_id
 ORDER BY i.criado_em DESC;
 
 

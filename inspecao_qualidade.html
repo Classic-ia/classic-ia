@@ -629,6 +629,37 @@ textarea.field-input {
 
 <div class="page" id="formPage">
 
+  <!-- ⓪ SELECIONAR LOTE PCR -->
+  <div class="card" id="sec-pcr" style="border-color:var(--blue);border-width:2px;">
+    <div class="card-header" style="background:rgba(46,107,138,.1);">
+      <span class="card-icon" style="color:var(--blue);"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14,2 14,8 20,8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+      <span class="card-title">Selecionar Lote (PCR importada)</span>
+    </div>
+    <div class="card-body">
+      <div class="field">
+        <label class="field-label">Buscar por lote ou fornecedor</label>
+        <input class="field-input" type="text" id="pcr-busca"
+          placeholder="Digite lote, fornecedor ou PCR..."
+          autocomplete="off"
+          oninput="filtrarPCRs(this.value)"
+          style="border-color:var(--blue);">
+      </div>
+      <div id="pcr-lista" style="max-height:300px;overflow-y:auto;margin-top:8px;display:none;"></div>
+      <div id="pcr-selecionado" style="display:none;margin-top:10px;padding:12px;background:var(--bg3);border-radius:8px;border:1px solid var(--blue);">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <div style="font-weight:700;color:var(--blue);font-size:14px;" id="pcr-sel-titulo"></div>
+            <div style="font-size:12px;color:var(--muted);margin-top:2px;" id="pcr-sel-detalhe"></div>
+          </div>
+          <button onclick="limparSelecaoPCR()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:11px;cursor:pointer;padding:4px 10px;">Trocar</button>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:6px;">
+        Selecione um lote da PCR para preencher automaticamente fornecedor, produto e quantidade.
+      </div>
+    </div>
+  </div>
+
   <!-- ① IDENTIFICAÇÃO -->
   <div class="card" id="sec-identificacao">
     <div class="card-header">
@@ -1247,6 +1278,9 @@ function initFornecedores(){
   // ── VEÍCULOS E MOTORISTAS (autocomplete) ──────────────────
   try { carregarVeiculosMotoristas(); } catch(e) { console.warn('carregarVeiculosMotoristas falhou:', e); }
 
+  // ── CARREGAR PCRs DISPONÍVEIS ──────────────────────────────
+  try { carregarPCRsDisponiveis(); } catch(e) { console.warn('carregarPCRsDisponiveis falhou:', e); }
+
   // ── MODO VIEW/EDIT (Bloco 5) ──────────────────────────────
   CQWorkflow.injetarCSS();
   const urlParams = new URLSearchParams(window.location.search);
@@ -1360,6 +1394,156 @@ function gerarId(){
   return id;
 }
 function getId(){ return document.getElementById('inspecaoId').textContent; }
+
+// ══════════════════════════════════════════════════════════
+// PCR — CARREGAR LOTES DISPONÍVEIS
+// ══════════════════════════════════════════════════════════
+let _pcrsDisponiveis = [];
+
+async function carregarPCRsDisponiveis() {
+  const SB_URL = CQAuth.getSbUrl();
+  const SB_KEY = CQAuth.getSbKey();
+  const jwt = CQAuth.getAuthToken() || SB_KEY;
+  try {
+    const res = await fetch(
+      `${SB_URL}/rest/v1/cq_recebimentos?select=id,id_recebimento,lote_atak,fornecedor,fornecedor_cod,produto,quantidade_lote,data_recebimento,status,criado_em,placa_caminhao,motorista&order=criado_em.desc&limit=500`,
+      { headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${jwt}` } }
+    );
+    if (!res.ok) return;
+    _pcrsDisponiveis = await res.json();
+    console.log('PCRs carregadas:', _pcrsDisponiveis.length);
+  } catch(e) { console.warn('Erro ao carregar PCRs:', e); }
+}
+
+function filtrarPCRs(termo) {
+  const lista = document.getElementById('pcr-lista');
+  if (!termo || termo.length < 2) { lista.style.display = 'none'; return; }
+
+  const t = termo.toLowerCase();
+  const filtrados = _pcrsDisponiveis.filter(r =>
+    (r.lote_atak || '').toLowerCase().includes(t) ||
+    (r.fornecedor || '').toLowerCase().includes(t) ||
+    (r.id_recebimento || '').toLowerCase().includes(t) ||
+    (r.produto || '').toLowerCase().includes(t)
+  );
+
+  // Agrupar por lote_atak (um lote pode ter múltiplos produtos)
+  const lotes = {};
+  filtrados.forEach(r => {
+    const key = r.lote_atak || r.id;
+    if (!lotes[key]) lotes[key] = { lote: r.lote_atak, fornecedor: r.fornecedor, produtos: [], total_pecas: 0, data: r.data_recebimento || r.criado_em, placa: r.placa_caminhao, motorista: r.motorista, registros: [] };
+    lotes[key].produtos.push(r.produto);
+    lotes[key].total_pecas += (r.quantidade_lote || 0);
+    lotes[key].registros.push(r);
+  });
+
+  const items = Object.values(lotes).slice(0, 20);
+  if (!items.length) {
+    lista.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;">Nenhum lote encontrado</div>';
+    lista.style.display = 'block';
+    return;
+  }
+
+  lista.innerHTML = items.map(l => {
+    const dt = l.data ? new Date(l.data).toLocaleDateString('pt-BR') : '';
+    const prods = [...new Set(l.produtos)].slice(0, 3).join(', ');
+    return `<div onclick="selecionarPCR('${l.lote}')" style="
+      padding:10px 12px;border-bottom:1px solid var(--border);cursor:pointer;
+      transition:background .15s;" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='transparent'">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;color:var(--blue);font-size:13px;">Lote ${l.lote}</span>
+        <span style="font-size:11px;color:var(--muted);">${dt}</span>
+      </div>
+      <div style="font-size:12px;color:var(--text);margin-top:2px;">${l.fornecedor || ''}</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:1px;">${prods} | ${l.total_pecas.toLocaleString('pt-BR')} pcs</div>
+    </div>`;
+  }).join('');
+  lista.style.display = 'block';
+}
+
+function selecionarPCR(loteAtak) {
+  const registros = _pcrsDisponiveis.filter(r => r.lote_atak === loteAtak);
+  if (!registros.length) return;
+
+  const primeiro = registros[0];
+  const produtos = [...new Set(registros.map(r => r.produto))];
+  const totalPecas = registros.reduce((s, r) => s + (r.quantidade_lote || 0), 0);
+
+  // Preencher campos do formulário
+  document.getElementById('f-lote-atak').value = loteAtak;
+
+  // Fornecedor
+  const fornNome = primeiro.fornecedor || '';
+  document.getElementById('f-fornecedor-nome').value = fornNome;
+  document.getElementById('f-fornecedor').value = primeiro.fornecedor_cod || fornNome;
+  // Tentar atualizar o componente de fornecedores visualmente
+  const fornInput = document.querySelector('#forn-container input[type="text"]');
+  if (fornInput) fornInput.value = fornNome;
+
+  // Produto — selecionar o primeiro produto que bate no select
+  const selProd = document.getElementById('f-produto');
+  const produtoNorm = (produtos[0] || '').toUpperCase();
+  let matched = false;
+  for (const opt of selProd.options) {
+    if (opt.value && produtoNorm.includes(opt.value.toUpperCase().split(' ')[0])) {
+      selProd.value = opt.value;
+      matched = true;
+      break;
+    }
+  }
+  // Se não achou no select, tentar match parcial
+  if (!matched) {
+    for (const opt of selProd.options) {
+      if (opt.value && (produtoNorm.includes('OMASO') && opt.value.includes('Omaso'))) {
+        selProd.value = opt.value; matched = true; break;
+      }
+      if (opt.value && produtoNorm.includes('VERGALHO') && opt.value.includes('Vergalho')) {
+        selProd.value = opt.value; matched = true; break;
+      }
+      if (opt.value && produtoNorm.includes('AORTA') && opt.value.includes('Aorta')) {
+        selProd.value = opt.value; matched = true; break;
+      }
+      if (opt.value && produtoNorm.includes('TEND') && opt.value.includes('Tend')) {
+        selProd.value = opt.value; matched = true; break;
+      }
+    }
+  }
+
+  // Quantidade do lote
+  document.getElementById('f-qtd-lote').value = totalPecas;
+
+  // Placa e motorista (se disponíveis na PCR)
+  if (primeiro.placa_caminhao) document.getElementById('f-placa').value = primeiro.placa_caminhao;
+  if (primeiro.motorista) document.getElementById('f-motorista').value = primeiro.motorista;
+
+  // Atualizar UI
+  document.getElementById('pcr-lista').style.display = 'none';
+  document.getElementById('pcr-busca').style.display = 'none';
+  document.getElementById('pcr-selecionado').style.display = 'block';
+  document.getElementById('pcr-sel-titulo').textContent = `Lote ${loteAtak} — ${fornNome}`;
+  document.getElementById('pcr-sel-detalhe').textContent =
+    `${produtos.join(', ')} | ${totalPecas.toLocaleString('pt-BR')} pcs | ${registros.length} produto(s)`;
+
+  // Disparar cálculos
+  if (typeof updateSaveStatus === 'function') updateSaveStatus();
+  if (typeof calcResultado === 'function') calcResultado();
+}
+
+function limparSelecaoPCR() {
+  document.getElementById('pcr-busca').style.display = '';
+  document.getElementById('pcr-busca').value = '';
+  document.getElementById('pcr-selecionado').style.display = 'none';
+  document.getElementById('pcr-lista').style.display = 'none';
+}
+
+// Fechar lista de PCR ao clicar fora
+document.addEventListener('click', function(e) {
+  const lista = document.getElementById('pcr-lista');
+  const busca = document.getElementById('pcr-busca');
+  if (lista && busca && !lista.contains(e.target) && e.target !== busca) {
+    lista.style.display = 'none';
+  }
+});
 
 // ══════════════════════════════════════════════════════════
 // DEFEITOS

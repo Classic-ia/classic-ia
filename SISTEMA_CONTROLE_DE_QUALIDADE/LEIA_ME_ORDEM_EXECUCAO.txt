@@ -1,0 +1,111 @@
+================================================================
+  SISTEMA CONTROLE DE QUALIDADE - Classic-ia CQ
+  Guia de Implantacao no Supabase
+================================================================
+
+LOCAL WINDOWS:
+  C:\Users\Janaina\OneDrive\1.1 DASH E SISTEMAS\SISTEMA CONTROLE DE QUALIDADE
+
+================================================================
+  ORDEM DE EXECUCAO NO SUPABASE SQL EDITOR
+================================================================
+
+  Execute na ordem abaixo, um por vez.
+  Cada arquivo e idempotente (pode rodar novamente sem erro).
+
+  PASSO  ARQUIVO                                   O QUE FAZ
+  -----  ----------------------------------------  ----------------------------------
+  1      01_migration_novo_modelo_cq.sql            Cria TODAS as tabelas CQ
+                                                    (lotes, recebimentos, inspecoes,
+                                                     defeitos, classificacoes, etc.)
+                                                    + triggers de calculo automatico
+
+  2      02_seed_dados_mestres_cq.sql               Insere dados mestres:
+                                                    - 11 tipos de defeito padrao
+                                                    - Produtos base (bucho, omaso, etc.)
+
+  3      03_migration_fornecedores_depara.sql       Cria tabela unificada de fornecedores
+                                                    com de-para e aliases
+
+  4      04_importar_fornecedores_cq.sql            Importa 381 fornecedores ATAK
+                                                    (codigo, nome, estado)
+
+  5      05_rpc_criar_inspecao_completa.sql          *** PRINCIPAL ***
+                                                    RPC transacional que cria:
+                                                    lote + recebimento + inspecao + defeitos
+                                                    TUDO em uma unica transacao.
+                                                    Rollback total se falhar.
+
+  ---- OPCIONAIS (analytics e complementos) ----
+
+  6      06_fase3_qualidade_por_estado.sql           Views de qualidade por UF/Fornecedor
+
+  7      07_sql_alertas_qualidade.sql                Sistema de alertas de qualidade
+
+  8      08_fase5_cq_cargas.sql                      Tabela de fechamento de cargas
+
+
+================================================================
+  INTEGRACAO ATAK (pasta integracao_atak/)
+================================================================
+
+  Executar DEPOIS dos 5 primeiros passos, na ordem numerica:
+
+  00_migration_integracao.sql          Infraestrutura de sync ATAK
+  01_migration_cadastros.sql           Sync de cadastros mestres
+  02_migration_guards.sql              Guards e validacoes
+  03_migration_sla_notif_historico.sql SLA, notificacoes, historico
+  04_migration_observabilidade.sql     Observabilidade/monitoramento
+  05_migration_ranking_qualidade.sql   Ranking de qualidade (31 produtos, 9 defeitos)
+  06_migration_padronizacao_ids.sql    Padronizacao de IDs
+  07_migration_cadastros_mestres.sql   Cadastros complementares
+  08_migration_eventos_validacoes.sql  Eventos e validacoes
+  09_migration_backup_recuperacao.sql  Backup e recuperacao
+  10_migration_merge_estrutura.sql     Merge de estruturas
+  11_migration_dashboard_decisao.sql   Dashboard de decisao
+  12_migration_qualidade_4_dimensoes.sql  Views 4 dimensoes qualidade
+  13_migration_motor_decisao_iqf.sql   Motor de decisao IQF
+  14_migration_scan_etiqueta.sql       Scan de etiqueta
+  15_migration_correcoes_qualidade.sql Correcoes de qualidade
+
+
+================================================================
+  COMO CHAMAR A RPC NO FRONTEND (Supabase JS)
+================================================================
+
+  const { data, error } = await supabase.rpc('rpc_criar_inspecao_completa', {
+    p_fornecedor_id: 'uuid-do-fornecedor',
+    p_produto_id: 'uuid-do-produto',
+    p_numero_lote: 'LOTE-001',
+    p_quantidade_recebida: 200,
+    p_quantidade_analisada: 200,
+    p_placa_caminhao: 'ABC1234',
+    p_motorista: 'NOME DO MOTORISTA',
+    p_defeitos: [
+      { defeito_id: 'uuid-fermentacao', quantidade: 10 },
+      { defeito_id: 'uuid-rasgado', quantidade: 5 }
+    ]
+  });
+
+  // Retorno:
+  // {
+  //   sucesso: true,
+  //   inspecao_id: 'uuid',
+  //   classificacao_abc: 'A',
+  //   status_final: 'aprovado',
+  //   total_defeitos: 15,
+  //   perc_defeitos: 7.5
+  // }
+
+
+================================================================
+  REGRAS DE NEGOCIO (backend - nao depende do frontend)
+================================================================
+
+  - Toda inspecao e criada em TRANSACAO UNICA (atomica)
+  - Se qualquer etapa falhar = rollback total
+  - Zero dados orfaos possiveis
+  - Calculos (%, ABC, status) sao feitos por triggers no banco
+  - Frontend so envia dados e recebe resultado final
+
+================================================================

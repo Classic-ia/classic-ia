@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS cq_cargas (
   numero_pcr      TEXT UNIQUE,   -- PCR do lote (evita duplicatas)
 
   -- Metadata
-  importado_por   UUID REFERENCES cq_usuarios(id),
+  importado_por   UUID,
   criado_em       TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -55,12 +55,15 @@ CREATE INDEX IF NOT EXISTS idx_cq_cargas_classificacao ON cq_cargas(classificaca
 -- RLS
 ALTER TABLE cq_cargas ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "cq_cargas_select" ON cq_cargas;
 CREATE POLICY "cq_cargas_select" ON cq_cargas
   FOR SELECT USING (true);
 
+DROP POLICY IF EXISTS "cq_cargas_insert" ON cq_cargas;
 CREATE POLICY "cq_cargas_insert" ON cq_cargas
   FOR INSERT WITH CHECK (true);
 
+DROP POLICY IF EXISTS "cq_cargas_update" ON cq_cargas;
 CREATE POLICY "cq_cargas_update" ON cq_cargas
   FOR UPDATE USING (true);
 

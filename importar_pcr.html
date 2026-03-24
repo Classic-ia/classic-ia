@@ -612,7 +612,54 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
   totalDocsEncontrados = docsSet.size;
 
   if (registros.length === 0) {
-    mostrarAlerta('warn', `Nenhum registro de produto encontrado na planilha (${rowCount} linhas lidas). Verifique se o arquivo e um WRMVE500 valido.`);
+    // Diagnostico: mostrar amostra das primeiras linhas para entender o formato
+    let diag = `Nenhum registro encontrado (${rowCount} linhas lidas na aba "${nomeAba}").\n`;
+    diag += 'Amostra das primeiras 15 linhas (colunas A-H):\n';
+    for (let d = 0; d < Math.min(15, rowCount); d++) {
+      const r = raw[d];
+      if (!r) { diag += `  Linha ${d+1}: (vazia)\n`; continue; }
+      const cols = [];
+      for (let c = 0; c < Math.min(8, r.length); c++) {
+        cols.push(r[c] != null ? String(r[c]).substring(0, 30) : '');
+      }
+      diag += `  Linha ${d+1}: [${cols.join(' | ')}]\n`;
+    }
+    // Procurar DOCUMENTO em qualquer coluna
+    let docFound = false;
+    for (let d = 0; d < rowCount && !docFound; d++) {
+      const r = raw[d];
+      if (!r) continue;
+      for (let c = 0; c < r.length; c++) {
+        const v = r[c] != null ? String(r[c]).toUpperCase() : '';
+        if (v.indexOf('DOCUMENTO') !== -1) {
+          diag += `\n"DOCUMENTO" encontrado na linha ${d+1}, coluna ${c} (${String.fromCharCode(65+c)}): "${String(r[c]).substring(0,50)}"`;
+          docFound = true;
+          break;
+        }
+      }
+    }
+    if (!docFound) {
+      diag += '\n"DOCUMENTO" NAO encontrado em nenhuma celula da planilha.';
+      // Procurar outros campos-chave
+      const keywords = ['PCR', 'MOTORISTA', 'PARTICIPANTE', 'PLACA', 'RECEB'];
+      for (const kw of keywords) {
+        for (let d = 0; d < Math.min(50, rowCount); d++) {
+          const r = raw[d];
+          if (!r) continue;
+          for (let c = 0; c < r.length; c++) {
+            const v = r[c] != null ? String(r[c]).toUpperCase() : '';
+            if (v.indexOf(kw) !== -1) {
+              diag += `\n"${kw}" encontrado na linha ${d+1}, coluna ${c}: "${String(r[c]).substring(0,50)}"`;
+              d = rowCount; // break outer
+              break;
+            }
+          }
+        }
+      }
+    }
+    mostrarAlerta('warn', diag);
+    console.log('DIAGNOSTICO PCR PARSER:', diag);
+    console.log('RAW primeiras 20 linhas:', raw.slice(0, 20));
     return;
   }
 

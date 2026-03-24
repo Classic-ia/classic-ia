@@ -660,6 +660,8 @@ textarea.field-input {
         <div id="forn-container"></div>
         <input type="hidden" id="f-fornecedor">
         <input type="hidden" id="f-fornecedor-nome">
+        <input type="hidden" id="f-fornecedor-uf">
+        <input type="hidden" id="f-fornecedor-cidade">
       </div>
 
       <div class="field">
@@ -1102,6 +1104,10 @@ function initFornecedores(){
       CQFornecedores.renderizar('forn-container', function(f){
         document.getElementById('f-fornecedor').value      = f.codigo;
         document.getElementById('f-fornecedor-nome').value = f.nome;
+        document.getElementById('f-fornecedor-uf').value   = f.uf || '';
+        // Extrair cidade do apelido se disponível (formato: "NOME - CIDADE")
+        var cidadeMatch = (f.apelido || '').match(/[-–]\s*([^-–]+?)(?:\s*[-–]\s*[A-Z]{2})?$/);
+        document.getElementById('f-fornecedor-cidade').value = cidadeMatch ? cidadeMatch[1].trim() : '';
         updateSaveStatus();
       });
     } else {
@@ -1773,6 +1779,8 @@ function montarRegistro(){
     inspetor:             document.getElementById('f-inspetor').value,
     fornecedor:           document.getElementById('f-fornecedor-nome').value || document.getElementById('f-fornecedor').value,
     fornecedor_cod:       document.getElementById('f-fornecedor').value,
+    fornecedor_uf:        document.getElementById('f-fornecedor-uf').value || '',
+    fornecedor_cidade:    document.getElementById('f-fornecedor-cidade').value || '',
     produto:              document.getElementById('f-produto').value,
     lote_atak:            document.getElementById('f-lote-atak').value.toUpperCase(),
     etiqueta:             document.getElementById('f-etiqueta').value,
@@ -1951,6 +1959,8 @@ async function salvarInspecao(){
         inspetor:                registro.inspetor,
         fornecedor:              registro.fornecedor,
         fornecedor_codigo:       document.getElementById('f-fornecedor')?.value || null,
+        fornecedor_uf:           document.getElementById('f-fornecedor-uf')?.value || null,
+        fornecedor_cidade:       document.getElementById('f-fornecedor-cidade')?.value || null,
         produto:                 registro.produto,
         lote_atak:               registro.lote_atak,
         etiqueta:                registro.etiqueta,
@@ -2159,6 +2169,8 @@ function limparForm(){
   });
   // Limpa componente de fornecedor
   CQFornecedores.limpar('forn-container');
+  document.getElementById('f-fornecedor-uf').value = '';
+  document.getElementById('f-fornecedor-cidade').value = '';
   const outroDesc = document.getElementById('f-outro-defeito-tipo');
   if (outroDesc) outroDesc.value = '';
   ['f-temperatura','f-placa','f-motorista'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
@@ -2489,10 +2501,17 @@ function gerarPDFInspecao() {
   };
 
   // Ler campos diretamente se registro não disponível
-  const fv = id => { const e = document.getElementById(id); return e ? e.value : ''; };
-  const pct   = parseFloat(fv('resultPct') || '0');
-  const cls   = fv('resultClass') || CQRegras.motorDecisaoLocal(pct).classificacao;
+  const fv = id => { const e = document.getElementById(id); return e ? (e.value !== undefined && e.value !== '' ? e.value : e.textContent) : ''; };
+
+  // Calcular total e percentual diretamente dos campos de defeito (fonte confiável)
+  let totalDefPdf = 0;
   const qtdA  = parseInt(fv('f-qtd-analisada')) || 0;
+  Object.keys(DEF_LABELS).forEach(k => {
+    const el = document.getElementById('df-' + k);
+    totalDefPdf += el ? (parseInt(el.value) || 0) : 0;
+  });
+  const pct = qtdA > 0 ? (totalDefPdf / qtdA * 100) : 0;
+  const cls = CQRegras.motorDecisaoLocal(pct).classificacao;
   const hoje  = new Date().toLocaleDateString('pt-BR');
   const hora  = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
 
@@ -2500,7 +2519,9 @@ function gerarPDFInspecao() {
     ? 'Aprovado (0-5%)'
     : cls==='B'
     ? 'Aprovado com Ressalva (5-15%)'
-    : 'Bloqueado — Sujeito a Negociacao (>15%)';
+    : pct > 30
+    ? 'Reprovado (>30%)'
+    : 'Sujeito a Negociação (15-30%)';
 
   const clsCor = cls==='A'?'#155724':cls==='B'?'#856404':'#721c24';
   const clsBg  = cls==='A'?'#d4edda':cls==='B'?'#fff3cd':'#f8d7da';
@@ -2548,7 +2569,7 @@ function gerarPDFInspecao() {
   <tr><td>Nº da Inspeção</td><td>${fv('inspecaoId') || document.getElementById('inspecaoId')?.textContent || '—'}</td></tr>
   <tr><td>Data / Hora</td><td>${fv('f-data')} / ${fv('f-hora')}</td></tr>
   <tr><td>Inspetor</td><td>${fv('f-inspetor')}</td></tr>
-  <tr><td>Fornecedor</td><td>${fv('f-fornecedor-nome') || fv('f-fornecedor')}</td></tr>
+  <tr><td>Fornecedor</td><td>${fv('f-fornecedor-nome') || fv('f-fornecedor')}${fv('f-fornecedor-cidade')||fv('f-fornecedor-uf') ? ' — '+(fv('f-fornecedor-cidade') ? fv('f-fornecedor-cidade')+'/':'')+(fv('f-fornecedor-uf')||'') : ''}</td></tr>
   <tr><td>Produto</td><td>${fv('f-produto')}</td></tr>
   <tr><td>Lote ATAK / Etiqueta</td><td>${fv('f-lote-atak')} / ${fv('f-etiqueta')}</td></tr>
   <tr><td>Qtd. Lote / Analisada</td><td>${fv('f-qtd-lote')} / ${fv('f-qtd-analisada')} peças</td></tr>
@@ -2562,7 +2583,7 @@ function gerarPDFInspecao() {
 <tbody>${defRows}</tbody>
 <tfoot><tr style="background:#1a3a52;color:white">
   <td style="padding:6px 8px;font-weight:700">TOTAL</td>
-  <td style="padding:6px 8px;text-align:right;font-family:monospace">${document.getElementById('resultDef')?.textContent || '—'}</td>
+  <td style="padding:6px 8px;text-align:right;font-family:monospace">${totalDefPdf}</td>
   <td style="padding:6px 8px;text-align:right;font-family:monospace">${pct.toFixed(1)}%</td>
 </tr></tfoot></table>
 

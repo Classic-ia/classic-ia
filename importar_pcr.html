@@ -505,38 +505,69 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
   }
 
   // Helper: scan nearby rows for a field (WRMVE500 spreads header across multiple rows)
+  // If col is -1, scan ALL columns in each row
   function scanField(startRow, maxOffset, col, prefix) {
     for (let offset = 0; offset <= maxOffset; offset++) {
       const r = raw[startRow + offset];
       if (!r) continue;
-      const v = cell(r, col);
-      if (v && v.toUpperCase().indexOf(prefix.toUpperCase()) !== -1) {
-        return extrairCampo(v, prefix);
+      if (col === -1) {
+        // Scan all columns
+        for (let c = 0; c < r.length; c++) {
+          const v = cell(r, c);
+          if (v && v.toUpperCase().indexOf(prefix.toUpperCase()) !== -1) {
+            return extrairCampo(v, prefix);
+          }
+        }
+      } else {
+        const v = cell(r, col);
+        if (v && v.toUpperCase().indexOf(prefix.toUpperCase()) !== -1) {
+          return extrairCampo(v, prefix);
+        }
       }
     }
     return '';
   }
 
+  // Formato real WRMVE500: todos os campos do cabeçalho na MESMA linha
+  // Col A(0): DOCUMENTO: nnn | Col B(1): OBS: | Col C(2): DATA PCR: dd/mm/yyyy
+  // Col D(3): TIPO DE MOVIMENTAÇÃO | Col E(4): MOTORISTA: nome | Col F(5): PARTICIPANTE: cod nome
+  // Col G(6): ORIGEM: cidade | Col H(7): PLACA: xxx
+  // Linhas de produto: Col A(0)=código, Col B(1)=descrição, Col C(2)=qtd recebida, Col D(3)=qtd pedida, Col E(4)=diferença
+  // Linhas de defeito: Col A(0) contém "PERC", "Sebo/", etc. — pular
+
   for (let i = 0; i < rowCount; i++) {
     const row = raw[i];
     if (!row) continue;
 
-    // Data is in col B (index 1) — col A (index 0) is empty in WRMVE500
-    const colB = cell(row, 1);
+    const colA = cell(row, 0);
+    const colAup = colA.toUpperCase();
 
-    // Detect DOCUMENTO row in col B
-    if (colB.toUpperCase().indexOf('DOCUMENTO:') !== -1) {
-      const docMatch = colB.match(/DOCUMENTO:\s*(\d+)/i);
+    // Detect DOCUMENTO row — can be in col A or col B
+    if (colAup.indexOf('DOCUMENTO:') !== -1 || cell(row, 1).toUpperCase().indexOf('DOCUMENTO:') !== -1) {
+      // Find which column has DOCUMENTO
+      const docCol = colAup.indexOf('DOCUMENTO:') !== -1 ? 0 : 1;
+      const docMatch = cell(row, docCol).match(/DOCUMENTO:\s*(\d+)/i);
       const documento = docMatch ? docMatch[1] : '';
 
-      // Scan nearby rows (within +8) for other header fields
-      // DATA PCR is in col 27, MOTORISTA in col 20, PARTICIPANTE in col 1, ORIGEM in col 1, PLACA in col 20
-      const dataPcrRaw = scanField(i, 8, 27, 'DATA PCR');
+      // All header fields on the same row — scan all columns for known prefixes
+      let dataPcrRaw = '', motorista = '', participanteRaw = '', origem = '', placa = '';
+      for (let c = 0; c < row.length; c++) {
+        const v = cell(row, c);
+        const vUp = v.toUpperCase();
+        if (vUp.indexOf('DATA PCR') !== -1) dataPcrRaw = extrairCampo(v, 'DATA PCR');
+        else if (vUp.indexOf('MOTORISTA') !== -1) motorista = extrairCampo(v, 'MOTORISTA');
+        else if (vUp.indexOf('PARTICIPANTE') !== -1) participanteRaw = extrairCampo(v, 'PARTICIPANTE');
+        else if (vUp.indexOf('ORIGEM') !== -1 && vUp.indexOf('TIPO') === -1) origem = extrairCampo(v, 'ORIGEM');
+        else if (vUp.indexOf('PLACA') !== -1) placa = extrairCampo(v, 'PLACA');
+      }
+      // Also scan nearby rows in case some fields are on the next row
+      if (!dataPcrRaw) dataPcrRaw = scanField(i, 4, -1, 'DATA PCR');
+      if (!motorista) motorista = scanField(i, 4, -1, 'MOTORISTA');
+      if (!participanteRaw) participanteRaw = scanField(i, 4, -1, 'PARTICIPANTE');
+      if (!origem) origem = scanField(i, 4, -1, 'ORIGEM');
+      if (!placa) placa = scanField(i, 4, -1, 'PLACA');
+
       const dataPcr = parseDataPCR(dataPcrRaw);
-      const motorista = scanField(i, 8, 20, 'MOTORISTA');
-      const participanteRaw = scanField(i, 8, 1, 'PARTICIPANTE');
-      const origem = scanField(i, 8, 1, 'ORIGEM');
-      const placa = scanField(i, 8, 20, 'PLACA');
 
       let fornecedorCodigo = '';
       let fornecedorNome = '';
@@ -556,25 +587,39 @@ function parsePlanilha(arrayBuffer, nomeArquivo) {
       continue;
     }
 
-    // Product rows: col B (1) = product code (digits), col G (6) = description
-    // Quantities: col V (21) = qtd recebida, col AA (26) = qtd pedida, col AH (33) = diferença
+    // Product rows: col A(0) = product code (digits), col B(1) = description
+    // Quantities: col C(2) = qtd recebida, col D(3) = qtd pedida, col E(4) = diferença
     if (currentDoc) {
-      // Skip defect/header rows
-      if (colB.indexOf('PERC') !== -1 || colB.indexOf('Sebo/') !== -1 || colB.indexOf('Carne/') !== -1 ||
-          colB.indexOf('Orelha') !== -1 || colB.indexOf('Rasgado') !== -1 || colB.indexOf('Furado') !== -1 ||
-          colB.indexOf('Pelando') !== -1 || colB.indexOf('Folha') !== -1 || colB.indexOf('gua no') !== -1 ||
-          colB.toUpperCase().indexOf('PRODUTO') !== -1 || colB.toUpperCase().indexOf('TIPO DE') !== -1) continue;
+      // Skip defect rows: they contain "PERC" or "PERC:" patterns (e.g. "Sebo/Corte Incorreto: PERC :")
+      // Also skip header-like rows (PRODUTO, TIPO DE, OBS)
+      // But do NOT skip product rows like "ORELHA BOVINA" which are valid products
+      const rowTextAll = (colA + ' ' + cell(row, 1) + ' ' + cell(row, 2)).toUpperCase();
+      if (rowTextAll.indexOf('PERC') !== -1) continue; // Defect row always has PERC
+      if (colAup.indexOf('PRODUTO') !== -1 || colAup.indexOf('TIPO DE') !== -1 ||
+          colAup.indexOf('OBS:') !== -1 || colAup.indexOf('DOCUMENTO') !== -1) continue;
 
-      const prodCode = colB;
+      // Product code can be in col A (index 0) or col B (index 1)
+      let prodCode = colA;
+      let descCol = 1;
+      let qtdRecCol = 2, qtdPedCol = 3, difCol = 4;
+      if (!(/^\d{3,}$/.test(prodCode))) {
+        // Try col B as product code (old format)
+        prodCode = cell(row, 1);
+        descCol = 6;
+        qtdRecCol = 21;
+        qtdPedCol = 26;
+        difCol = 33;
+      }
+
       if (prodCode && /^\d{3,}$/.test(prodCode)) {
         const idRecebimento = `PCR-${currentDoc.documento}-${prodCode}`;
         if (idsVistos.has(idRecebimento)) continue;
         idsVistos.add(idRecebimento);
 
-        const prodDescricao = cell(row, 6);
-        const qtdRecebida = num(row[21]);
-        const qtdPedida = num(row[26]);
-        const diferenca = num(row[33]);
+        const prodDescricao = cell(row, descCol);
+        const qtdRecebida = num(row[qtdRecCol]);
+        const qtdPedida = num(row[qtdPedCol]);
+        const diferenca = num(row[difCol]);
         const dataPcrFormatada = formatarDataBR(currentDoc.dataPcr);
         const obs = `WRMVE500 \u00B7 PCR ${dataPcrFormatada} \u00B7 Motorista: ${currentDoc.motorista}`;
 

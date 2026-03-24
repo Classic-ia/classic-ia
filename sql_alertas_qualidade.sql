@@ -47,6 +47,9 @@ CREATE INDEX IF NOT EXISTS idx_alertas_qual_criado ON cq_alertas_qualidade(criad
 
 -- RLS
 ALTER TABLE cq_alertas_qualidade ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth read alertas" ON cq_alertas_qualidade;
 CREATE POLICY "auth read alertas" ON cq_alertas_qualidade FOR SELECT TO authenticated USING (true);
+DROP POLICY IF EXISTS "auth insert alertas" ON cq_alertas_qualidade;
 CREATE POLICY "auth insert alertas" ON cq_alertas_qualidade FOR INSERT TO authenticated WITH CHECK (true);
+DROP POLICY IF EXISTS "auth update alertas" ON cq_alertas_qualidade;
 CREATE POLICY "auth update alertas" ON cq_alertas_qualidade FOR UPDATE TO authenticated USING (true);

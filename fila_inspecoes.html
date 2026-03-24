@@ -497,12 +497,16 @@ async function carregarContadores() {
     const SB_KEY = CQAuth.getSbKey();
     const JWT = CQAuth.getAuthToken() || SB_KEY;
 
-    const r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': `Bearer ${JWT}`,
-      },
+    // Tentar view primeiro, fallback para tabela direta
+    let r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
     });
+    if (!r.ok) {
+      console.warn('Fila: view vw_inspecoes_workflow indisponível, usando tabela direta');
+      r = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao?select=status_workflow`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
+      });
+    }
 
     let contagens = {};
     let total = 0;

@@ -818,6 +818,6 @@ BEGIN
   RAISE NOTICE '         vw_ranking_defeitos_fornecedor';
   RAISE NOTICE '         vw_ranking_tendencia_30d';
   RAISE NOTICE '         vw_ranking_alertas';
-  RAISE NOTICE '  Triggers: auto-cálculo ABC/%/defeitos, consolidação lote';
+  RAISE NOTICE '  Triggers: auto-cálculo ABC/%%/defeitos, consolidação lote';
   RAISE NOTICE '═══════════════════════════════════════════════════════════';
 END $$;

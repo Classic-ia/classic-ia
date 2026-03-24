@@ -1794,7 +1794,6 @@ function montarRegistro(){
     temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
     placa_caminhao:          document.getElementById('f-placa')?.value.trim().toUpperCase() || null,
     motorista:               document.getElementById('f-motorista')?.value.trim() || null,
-    transportadora:          document.getElementById('f-transportadora')?.value.trim() || null,
     obs_reprovado:        document.getElementById('f-obs-reprovado').value || null,
     foto_etiqueta:        fotoEtiquetaData ? '[foto]' : null,
     foto_produto:         fotoProdutoData  ? '[foto]' : null,
@@ -1961,7 +1960,6 @@ async function salvarInspecao(){
         temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
         placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
         motorista:               document.getElementById('f-motorista')?.value || null,
-        transportadora:          document.getElementById('f-transportadora')?.value || null,
         // Defeitos (dados brutos — backend calcula total e %)
         fermentacao:             parseInt(document.getElementById('df-fermentacao')?.value)||0,
         sem_folhas:              parseInt(document.getElementById('df-sem_folhas')?.value)||0,
@@ -2151,7 +2149,7 @@ function limparForm(){
   CQFornecedores.limpar('forn-container');
   const outroDesc = document.getElementById('f-outro-defeito-tipo');
   if (outroDesc) outroDesc.value = '';
-  ['f-temperatura','f-placa','f-motorista','f-transportadora'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['f-temperatura','f-placa','f-motorista'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const tempAlert = document.getElementById('f-temp-alerta'); if(tempAlert) tempAlert.style.display='none';
   const outroWrap = document.getElementById('outro-desc-wrap');
   if (outroWrap) outroWrap.style.display = 'none';
@@ -2468,7 +2466,7 @@ function checkTemperatura() {
 // ══════════════════════════════════════════════════════════════
 function gerarPDFInspecao() {
   // Coletar dados atuais do formulário
-  const reg = coletarRegistro ? coletarRegistro() : null;
+  const reg = typeof montarRegistro === 'function' ? montarRegistro() : null;
 
   const DEF_LABELS = {
     fermentacao:'Fermentação', sem_folhas:'Sem Folhas',
@@ -2544,7 +2542,7 @@ function gerarPDFInspecao() {
   <tr><td>Qtd. Lote / Analisada</td><td>${fv('f-qtd-lote')} / ${fv('f-qtd-analisada')} peças</td></tr>
   <tr><td>Tipo de Amostragem</td><td>${fv('f-tipo-amostragem') || '—'}</td></tr>
   <tr><td>Temperatura Recebimento</td><td>${fv('f-temperatura') ? fv('f-temperatura') + '°C' : '—'}</td></tr>
-  ${fv('f-placa') ? `<tr><td>Placa / Motorista</td><td>${fv('f-placa')} — ${fv('f-motorista')} (${fv('f-transportadora')})</td></tr>` : ''}
+  ${fv('f-placa') ? `<tr><td>Placa / Motorista</td><td>${fv('f-placa')} — ${fv('f-motorista')}</td></tr>` : ''}
 </tbody></table>
 
 <h2>2. Defeitos Identificados</h2>
@@ -2753,7 +2751,6 @@ function preencherCamposVisualizacao(insp) {
     'f-temperatura':    insp.temperatura_recebimento,
     'f-placa':          insp.placa_caminhao,
     'f-motorista':      insp.motorista,
-    'f-transportadora': insp.transportadora,
   };
   for (const [id, val] of Object.entries(mapa)) {
     const el = document.getElementById(id);
@@ -2823,7 +2820,6 @@ async function atualizarInspecaoExistente(id) {
     temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
     placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
     motorista:               document.getElementById('f-motorista')?.value || null,
-    transportadora:          document.getElementById('f-transportadora')?.value || null,
   };
 
   try {

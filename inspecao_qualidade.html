@@ -1967,7 +1967,7 @@ async function salvarInspecao(){
       // Insert no Supabase como rascunho — com retry para colunas inexistentes
       let insertedRows;
       let tentativas = 0;
-      const maxTentativas = 5;
+      const maxTentativas = 10; // até 10 colunas podem ser removidas
       while(tentativas < maxTentativas){
         tentativas++;
         const insertResp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
@@ -1990,12 +1990,23 @@ async function salvarInspecao(){
         console.error('Supabase insert error (tentativa ' + tentativas + '):', insertResp.status, errTxt);
 
         // Se o erro for coluna inexistente, remover e tentar novamente
-        const colMatch = errTxt.match(/Could not find the '(\w+)' column/);
+        // Regex robusto: aceita aspas simples, duplas, curvas ou sem aspas
+        const colMatch = errTxt.match(/Could not find the ['\u2018\u2019"]*(\w+)['\u2018\u2019"]* column/i);
         if(colMatch && tentativas < maxTentativas){
           const badCol = colMatch[1];
-          console.warn('Removendo coluna inexistente do payload:', badCol);
+          console.warn('Removendo coluna inexistente do payload:', badCol, '(tentativa ' + tentativas + ')');
           delete payload[badCol];
           continue;
+        }
+        // Fallback: tentar extrair nome de coluna de qualquer mensagem "column X"
+        const colMatch2 = !colMatch && errTxt.match(/column ['\u2018\u2019"]*(\w+)['\u2018\u2019"]*/i);
+        if(colMatch2 && tentativas < maxTentativas){
+          const badCol = colMatch2[1];
+          if(badCol !== 'of' && payload.hasOwnProperty(badCol)){
+            console.warn('Removendo coluna (fallback):', badCol);
+            delete payload[badCol];
+            continue;
+          }
         }
 
         // Outro erro — abortar

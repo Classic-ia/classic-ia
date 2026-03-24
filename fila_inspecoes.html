@@ -601,7 +601,27 @@ async function carregarLista() {
                 produto: r.produto || 'Omaso Bovino',
                 lote_atak: r.lote_atak || r.lote || '',
               }));
-              container.innerHTML = _dadosAtuais.map(renderCard).join('');
+              try {
+                container.innerHTML = _dadosAtuais.map(r => {
+                  try { return renderCard(r); }
+                  catch(cardErr) { console.error('renderCard falhou:', cardErr, r); return ''; }
+                }).join('');
+              } catch(renderErr) {
+                console.error('Render lista falhou:', renderErr);
+                container.innerHTML = _dadosAtuais.map(r => `
+                  <div class="insp-card" style="cursor:pointer;">
+                    <div class="insp-top">
+                      <span class="insp-id">${r.id_inspecao || r.id_recebimento || r.id?.slice(0,8) || ''}</span>
+                      <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(200,169,110,.15);color:var(--accent);">PCR</span>
+                      <span class="insp-data">${r.criado_em ? new Date(r.criado_em).toLocaleDateString('pt-BR') : ''}</span>
+                    </div>
+                    <div class="insp-mid">
+                      <div class="insp-field"><span class="insp-field-label">Fornecedor: </span><span class="insp-field-value">${r.fornecedor || ''}</span></div>
+                      <div class="insp-field"><span class="insp-field-label">Produto: </span><span class="insp-field-value">${r.produto || ''}</span></div>
+                      <div class="insp-field"><span class="insp-field-label">Lote: </span><span class="insp-field-value">${r.lote_atak || ''}</span></div>
+                    </div>
+                  </div>`).join('');
+              }
               document.getElementById('sel-todos').classList.add('show');
               renderPaginacao(_dadosAtuais.length);
               atualizarBarraSelecao();

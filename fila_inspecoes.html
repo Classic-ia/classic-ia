@@ -274,8 +274,11 @@ body {
       <option value="encerrada">Encerrada</option>
       <option value="cancelada">Cancelada</option>
     </select>
-    <input type="text" class="filtro-input" id="filtro-fornecedor" placeholder="Fornecedor...">
+    <div id="filtro-forn-container" style="flex:1;min-width:180px;"></div>
+    <input type="hidden" id="filtro-fornecedor" value="">
     <input type="text" class="filtro-input" id="filtro-produto" placeholder="Produto...">
+    <input type="text" class="filtro-input" id="filtro-lote" placeholder="Lote (requisição)...">
+    <input type="text" class="filtro-input" id="filtro-etiqueta" placeholder="Etiqueta...">
     <input type="date" class="filtro-input" id="filtro-data-inicio" style="min-width:130px;">
     <input type="date" class="filtro-input" id="filtro-data-fim" style="min-width:130px;">
     <button class="filtro-input" id="btn-filtrar" style="
@@ -326,6 +329,7 @@ body {
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
 <script src="cq_workflow.js"></script>
+<script src="cq_fornecedores.js"></script>
 <script>
 // ══════════════════════════════════════════════════════════
 // FILA DE INSPEÇÕES — Classic CQ
@@ -349,10 +353,33 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('btn-nova').style.display = 'inline-block';
   }
 
+  // Fornecedor dropdown (seleção via componente CQFornecedores)
+  if (typeof CQFornecedores !== 'undefined') {
+    CQFornecedores.renderizar('filtro-forn-container', function(f) {
+      document.getElementById('filtro-fornecedor').value = f.nome || f.codigo || '';
+    });
+    // Ajustar estilo do input gerado pelo componente
+    setTimeout(() => {
+      const fi = document.querySelector('#filtro-forn-container input');
+      if (fi) {
+        fi.classList.add('filtro-input');
+        fi.placeholder = 'Fornecedor...';
+        fi.style.width = '100%';
+      }
+    }, 50);
+  }
+
   // Eventos
   document.getElementById('btn-filtrar').onclick = () => { paginaAtual = 1; carregarLista(); };
   document.getElementById('btn-limpar').onclick = limparFiltros;
   document.getElementById('filtro-status').onchange = () => { paginaAtual = 1; carregarLista(); };
+
+  // Enter para filtrar em campos de texto
+  ['filtro-produto','filtro-lote','filtro-etiqueta'].forEach(id => {
+    document.getElementById(id).addEventListener('keydown', e => {
+      if (e.key === 'Enter') { paginaAtual = 1; carregarLista(); }
+    });
+  });
 
   // Carregar
   await carregarAlertasQualidade();
@@ -428,6 +455,8 @@ async function carregarLista() {
     status:     document.getElementById('filtro-status').value || undefined,
     fornecedor: document.getElementById('filtro-fornecedor').value || undefined,
     produto:    document.getElementById('filtro-produto').value || undefined,
+    lote:       document.getElementById('filtro-lote').value || undefined,
+    etiqueta:   document.getElementById('filtro-etiqueta').value || undefined,
     dataInicio: document.getElementById('filtro-data-inicio').value || undefined,
     dataFim:    document.getElementById('filtro-data-fim').value || undefined,
   };
@@ -490,6 +519,10 @@ function renderCard(insp) {
         <span class="insp-field-label">Lote: </span>
         <span class="insp-field-value">${insp.lote_atak || '—'}</span>
       </div>
+      ${insp.etiqueta ? `<div class="insp-field">
+        <span class="insp-field-label">Etiqueta: </span>
+        <span class="insp-field-value">${insp.etiqueta}</span>
+      </div>` : ''}
     </div>
     <div class="insp-bottom">
       <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
@@ -532,8 +565,16 @@ function limparFiltros() {
   document.getElementById('filtro-status').value = '';
   document.getElementById('filtro-fornecedor').value = '';
   document.getElementById('filtro-produto').value = '';
+  document.getElementById('filtro-lote').value = '';
+  document.getElementById('filtro-etiqueta').value = '';
   document.getElementById('filtro-data-inicio').value = '';
   document.getElementById('filtro-data-fim').value = '';
+  if (typeof CQFornecedores !== 'undefined') {
+    CQFornecedores.limpar('filtro-forn-container');
+    CQFornecedores.renderizar('filtro-forn-container', function(f) {
+      document.getElementById('filtro-fornecedor').value = f.nome || f.codigo || '';
+    });
+  }
   filtroStatusAtivo = '';
   paginaAtual = 1;
   carregarContadores();

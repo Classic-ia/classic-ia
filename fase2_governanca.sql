@@ -422,6 +422,7 @@ SELECT
   i.fornecedor,
   i.produto,
   i.lote_atak,
+  i.etiqueta,
   i.classificacao,
   i.status_final,
   i.status_workflow,

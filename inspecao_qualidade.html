@@ -1587,6 +1587,9 @@ function abrirVideoSource(){
 function previewVideo(input){
   const file = input.files[0];
   if(!file) return;
+  // Fechar o picker se ainda estiver aberto
+  const picker = document.getElementById('_videoSourcePicker');
+  if(picker) picker.remove();
   // Limite de 50MB
   if(file.size > 50 * 1024 * 1024){
     toast('Video muito grande (max 50MB)', 'err');
@@ -1601,6 +1604,7 @@ function previewVideo(input){
   btn.classList.add('has-foto');
   const sizeMB = (file.size / 1024 / 1024).toFixed(1);
   label.textContent = file.name.slice(0,30) + ' (' + sizeMB + ' MB)';
+  toast('Video selecionado: ' + sizeMB + ' MB', 'ok');
 }
 
 function removerVideo(){
@@ -1946,7 +1950,6 @@ async function salvarInspecao(){
         obs_reprovado:           registro.obs_reprovado,
         foto_etiqueta_url:       fotoUrls.etiqueta,
         foto_produto_url:        fotoUrls.produto,
-        foto_defeito_url:        fotoUrls.defeito,
         ...authData,
         status_workflow:         'rascunho',
         criador_id:              authData.usuario_id,
@@ -2445,38 +2448,10 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
 </div>
 </body></html>`;
 
-  // Abrir em nova janela (funciona melhor em mobile e evita bloqueio de iframe)
-  try {
-    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    const blobUrl = URL.createObjectURL(blob);
+  // Fechar o modal de sucesso para não ficar por cima
+  document.getElementById('modalSucesso').classList.remove('show');
 
-    // Tentar abrir nova janela
-    const win = window.open(blobUrl, '_blank');
-    if (win) {
-      // Nova janela abriu — adicionar botão de imprimir após carregamento
-      win.addEventListener('load', () => {
-        try {
-          const bar = win.document.createElement('div');
-          bar.style.cssText = 'position:sticky;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;print-color-adjust:exact;';
-          bar.innerHTML = '<button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button onclick="window.close()" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
-          bar.className = 'no-print';
-          // Adicionar style para esconder barra na impressão
-          const style = win.document.createElement('style');
-          style.textContent = '@media print { .no-print { display: none !important; } body { padding-top: 0 !important; } }';
-          win.document.head.appendChild(style);
-          win.document.body.style.paddingTop = '50px';
-          win.document.body.insertBefore(bar, win.document.body.firstChild);
-        } catch(_){}
-      });
-      // Limpar URL após um tempo
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
-      return;
-    }
-  } catch(e) {
-    console.warn('Blob URL falhou:', e);
-  }
-
-  // Fallback: iframe (caso popup bloqueado)
+  // Usar iframe fullscreen (funciona em mobile sem popup blocker)
   let iframe = document.getElementById('_pdfFrame');
   if (!iframe) {
     iframe = document.createElement('iframe');
@@ -2492,13 +2467,31 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
   iDoc.close();
 
   setTimeout(() => {
-    const bar = iDoc.createElement('div');
-    bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:8px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
-    bar.innerHTML = '<button onclick="window.print()" style="background:#c8a96e;color:#1a1200;border:none;padding:8px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:8px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
-    iDoc.body.style.paddingTop = '50px';
-    iDoc.body.insertBefore(bar, iDoc.body.firstChild);
-    iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => { iframe.style.display = 'none'; });
-  }, 100);
+    try {
+      // Barra de ações no topo
+      const bar = iDoc.createElement('div');
+      bar.className = 'no-print';
+      bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
+      bar.innerHTML = '<button id="_btnImprimir" style="background:#c8a96e;color:#1a1200;border:none;padding:10px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
+
+      // Esconder barra na impressão
+      const style = iDoc.createElement('style');
+      style.textContent = '@media print { .no-print { display: none !important; } body { padding-top: 0 !important; } }';
+      iDoc.head.appendChild(style);
+
+      iDoc.body.style.paddingTop = '52px';
+      iDoc.body.insertBefore(bar, iDoc.body.firstChild);
+
+      iDoc.getElementById('_btnImprimir').addEventListener('click', () => {
+        iframe.contentWindow.print();
+      });
+      iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
+        iframe.style.display = 'none';
+      });
+    } catch(e) {
+      console.error('Erro ao montar barra PDF:', e);
+    }
+  }, 200);
 }
 
 // ══════════════════════════════════════════════════════════

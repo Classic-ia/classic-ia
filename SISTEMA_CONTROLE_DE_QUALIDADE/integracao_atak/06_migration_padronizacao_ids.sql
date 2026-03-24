@@ -630,25 +630,25 @@ SELECT
 
   -- Fornecedor (por ID)
   i.fornecedor_id,
-  COALESCE(ca_f.apelido, ca_f.nome, i.fornecedor) AS fornecedor_nome,
-  COALESCE(ca_f.codigo, i.fornecedor_codigo) AS fornecedor_codigo,
+  COALESCE(ca_f.apelido, ca_f.nome) AS fornecedor_nome,
+  ca_f.codigo AS fornecedor_codigo,
   ca_f.uf AS fornecedor_uf,
   ca_f.cnpj AS fornecedor_cnpj,
 
   -- Produto (por ID)
   i.produto_id,
-  COALESCE(prod.nome, i.produto) AS produto_nome,
+  prod.nome AS produto_nome,
   prod.codigo AS produto_codigo_ref,
   prod.grupo AS produto_grupo,
 
   -- Motorista (por ID)
   i.motorista_id,
-  COALESCE(ca_m.nome, i.motorista) AS motorista_nome,
+  ca_m.nome AS motorista_nome,
   ca_m.cnh AS motorista_cnh,
 
   -- Veículo (por ID)
   i.veiculo_id,
-  COALESCE(veic.placa, i.placa_caminhao) AS veiculo_placa,
+  veic.placa AS veiculo_placa,
   veic.tipo_veiculo,
 
   -- Transportadora (por ID)
@@ -662,19 +662,6 @@ SELECT
 
   -- Classificação
   i.classificacao,
-  i.status_final,
-  i.total_defeitos,
-  i.percentual_defeitos,
-
-  -- Quantidades
-  i.quantidade_lote,
-  i.quantidade_analisada,
-  i.temperatura_recebimento,
-
-  -- Defeitos individuais
-  i.fermentacao, i.sem_folhas, i.folhas_arrebentadas, i.pedaco,
-  i.sujo, i.rasgado, i.corte_irregular, i.furado,
-  i.mau_cheiro, i.contaminacao, i.outro_defeito,
 
   -- Score do fornecedor (JOIN por ID)
   fs.score AS fornecedor_score,

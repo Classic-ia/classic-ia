@@ -634,76 +634,118 @@ async function carregarLista() {
   }
 }
 
-// ── RENDER CARD ───────────────────────────────────────────
+// ── RENDER CARD (universal — funciona com qualquer fonte de dados) ────
 function renderCard(insp) {
-  const statusWf = insp.status_workflow || 'rascunho';
-  const extraClass = statusWf === 'reprovada' ? 'reprovada' : statusWf === 'aguardando_revisao' ? 'aguardando' : '';
+  try {
+    const statusWf = insp.status_workflow || insp.status || 'pendente_inspecao';
+    const extraClass = statusWf === 'reprovada' ? 'reprovada' : (statusWf === 'aguardando_revisao' || statusWf === 'pendente_inspecao') ? 'aguardando' : '';
 
-  const pctDefeitos = insp.percentual_defeitos != null
-    ? parseFloat(insp.percentual_defeitos).toFixed(1) + '%'
-    : '—';
+    const pctDefeitos = insp.percentual_defeitos != null
+      ? parseFloat(insp.percentual_defeitos).toFixed(1) + '%'
+      : '—';
 
-  const pctCor = insp.percentual_defeitos > 15 ? '#e74c3c'
-    : insp.percentual_defeitos > 5 ? '#f39c12'
-    : '#27ae60';
+    const pctCor = insp.percentual_defeitos > 15 ? '#e74c3c'
+      : insp.percentual_defeitos > 5 ? '#f39c12'
+      : '#27ae60';
 
-  const ncCount = insp.total_ncs || 0;
+    const ncCount = insp.total_ncs || 0;
 
-  const dataJson = encodeURIComponent(JSON.stringify({
-    id: insp.id,
-    id_inspecao: insp.id_inspecao,
-    fornecedor: insp.fornecedor,
-    produto: insp.produto,
-    lote_atak: insp.lote_atak,
-    etiqueta: insp.etiqueta,
-    classificacao: insp.classificacao,
-    status_final: insp.status_final,
-    percentual_defeitos: insp.percentual_defeitos,
-    total_defeitos: insp.total_defeitos,
-    data_inspecao: insp.data_inspecao,
-    inspetor: insp.inspetor || insp.usuario_nome,
-  }));
+    // Status badge — seguro para qualquer fonte
+    let statusBadge = '';
+    try { statusBadge = CQWorkflow.renderStatusBadge(statusWf); }
+    catch(e) {
+      const cores = { pendente_inspecao:'#f39c12', importado_atak:'#3498db', rascunho:'#5d7f95', aprovada:'#27ae60', reprovada:'#e74c3c' };
+      const labels = { pendente_inspecao:'Aguardando', importado_atak:'PCR Importada', rascunho:'Rascunho', aprovada:'Aprovada', reprovada:'Reprovada' };
+      const c = cores[statusWf] || '#5d7f95';
+      statusBadge = `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${c}22;color:${c};border:1px solid ${c}40;font-weight:600;">${labels[statusWf] || statusWf}</span>`;
+    }
 
-  return `<div class="insp-card ${extraClass}" id="card-${insp.id}">
-    <input type="checkbox" class="insp-check" data-id="${insp.id}" data-insp="${dataJson}"
-      onclick="event.stopPropagation(); toggleSelecao('${insp.id}')" />
-    <div class="insp-content" onclick="abrirInspecao('${insp.id}')">
-      <div class="insp-top">
-        <span class="insp-id">${insp.id_inspecao || insp.id?.slice(0,8) || '—'}</span>
-        ${CQWorkflow.renderStatusBadge(statusWf)}
-        ${insp.status_final ? CQWorkflow.renderStatusFinalBadge(insp.status_final) : ''}
-        <span class="insp-data">${CQWorkflow.formatarData(insp.criado_em)}</span>
-      </div>
-      <div class="insp-mid">
-        <div class="insp-field">
-          <span class="insp-field-label">Fornecedor: </span>
-          <span class="insp-field-value">${insp.fornecedor || '—'}</span>
+    let statusFinalBadge = '';
+    try { if (insp.status_final) statusFinalBadge = CQWorkflow.renderStatusFinalBadge(insp.status_final); } catch(e) {}
+
+    // Data formatada — seguro
+    const dataRaw = insp.criado_em || insp.created_at || insp.data_inspecao || insp.data_recebimento || insp.data_entrada || '';
+    let dataFmt = '';
+    try { dataFmt = CQWorkflow.formatarData(dataRaw); }
+    catch(e) { dataFmt = dataRaw ? new Date(dataRaw).toLocaleDateString('pt-BR') : ''; }
+
+    // Lote — ao clicar, abrir inspecao pre-preenchida
+    const lote = insp.lote_atak || insp.lote || '';
+    const fornecedor = insp.fornecedor || insp.frigorifico || '';
+    const produto = insp.produto || '';
+    const qtd = insp.quantidade_lote || insp.quantidade_analisada || insp.qtd_amostra || '';
+    const etiqueta = insp.etiqueta || '';
+
+    // Se tem id de inspecao, abre a inspecao existente. Se nao, abre nova com dados pre-preenchidos
+    const hasInspecaoId = insp.id && insp.id_inspecao;
+    const onclickAction = hasInspecaoId
+      ? `abrirInspecao('${insp.id}')`
+      : `window.location.href='inspecao_qualidade.html?lote=${encodeURIComponent(lote)}&fornecedor=${encodeURIComponent(fornecedor)}&produto=${encodeURIComponent(produto)}&qtd=${encodeURIComponent(qtd)}&etiqueta=${encodeURIComponent(etiqueta)}'`;
+
+    const dataJson = encodeURIComponent(JSON.stringify({
+      id: insp.id, id_inspecao: insp.id_inspecao || insp.id_recebimento || '',
+      fornecedor, produto, lote_atak: lote, etiqueta,
+      percentual_defeitos: insp.percentual_defeitos, total_defeitos: insp.total_defeitos,
+    }));
+
+    return `<div class="insp-card ${extraClass}" id="card-${insp.id}">
+      <input type="checkbox" class="insp-check" data-id="${insp.id}" data-insp="${dataJson}"
+        onclick="event.stopPropagation(); toggleSelecao('${insp.id}')" />
+      <div class="insp-content" onclick="${onclickAction}">
+        <div class="insp-top">
+          <span class="insp-id">${insp.id_inspecao || insp.id_recebimento || insp.numero_documento || insp.id?.slice(0,8) || ''}</span>
+          ${statusBadge}
+          ${statusFinalBadge}
+          <span class="insp-data">${dataFmt}</span>
         </div>
-        <div class="insp-field">
-          <span class="insp-field-label">Produto: </span>
-          <span class="insp-field-value">${insp.produto || '—'}</span>
-        </div>
-        <div class="insp-field">
-          <span class="insp-field-label">Lote: </span>
-          <span class="insp-field-value">${insp.lote_atak || '—'}</span>
-        </div>
-        ${insp.etiqueta ? `<div class="insp-field">
-          <span class="insp-field-label">Etiqueta: </span>
-          <span class="insp-field-value">${insp.etiqueta}</span>
-        </div>` : ''}
+        <div class="insp-mid">
+          <div class="insp-field">
+            <span class="insp-field-label">Fornecedor: </span>
+            <span class="insp-field-value">${fornecedor || '—'}</span>
+          </div>
+          <div class="insp-field">
+            <span class="insp-field-label">Produto: </span>
+            <span class="insp-field-value">${produto || '—'}</span>
+          </div>
+          <div class="insp-field">
+            <span class="insp-field-label">Lote: </span>
+            <span class="insp-field-value">${lote || '—'}</span>
+          </div>
+          ${etiqueta ? `<div class="insp-field">
+            <span class="insp-field-label">Etiqueta: </span>
+            <span class="insp-field-value">${etiqueta}</span>
+          </div>` : ''}
       </div>
       <div class="insp-bottom">
         <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
-          ${pctDefeitos} defeitos
+          ${pctDefeitos === '—' ? (qtd ? qtd + ' pcs' : 'Aguardando') : pctDefeitos + ' defeitos'}
         </span>
         ${ncCount > 0 ? `<span class="insp-nc-badge">NC: ${ncCount}</span>` : ''}
-        <span class="insp-inspetor">${insp.usuario_nome || '—'}</span>
+        <span class="insp-inspetor">${insp.usuario_nome || insp.inspetor || insp.analizador || ''}</span>
       </div>
     </div>
     <button class="insp-share-btn" title="Enviar relatório" onclick="event.stopPropagation(); enviarUnico('${insp.id}')">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
     </button>
   </div>`;
+  } catch(cardErr) {
+    console.error('renderCard erro:', cardErr, insp);
+    const lote = insp.lote_atak || insp.lote || '';
+    const forn = insp.fornecedor || '';
+    return `<div class="insp-card aguardando" onclick="window.location.href='inspecao_qualidade.html?lote=${encodeURIComponent(lote)}&fornecedor=${encodeURIComponent(forn)}'">
+      <div class="insp-content">
+        <div class="insp-top">
+          <span class="insp-id">${insp.id_recebimento || insp.id?.slice(0,8) || ''}</span>
+          <span style="font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(243,156,18,.15);color:#f39c12;border:1px solid rgba(243,156,18,.3);font-weight:600;">Aguardando</span>
+        </div>
+        <div class="insp-mid">
+          <div class="insp-field"><span class="insp-field-label">Fornecedor: </span><span class="insp-field-value">${forn}</span></div>
+          <div class="insp-field"><span class="insp-field-label">Produto: </span><span class="insp-field-value">${insp.produto || ''}</span></div>
+          <div class="insp-field"><span class="insp-field-label">Lote: </span><span class="insp-field-value">${lote}</span></div>
+        </div>
+      </div>
+    </div>`;
+  }
 }
 
 // ── PAGINAÇÃO ─────────────────────────────────────────────

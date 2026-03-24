@@ -2037,6 +2037,18 @@ async function salvarInspecao(){
             continue;
           }
         }
+        // Fallback: trigger error "has no field" (PostgreSQL PL/pgSQL)
+        const fieldMatch = !colMatch && !colMatch2 && errTxt.match(/has no field ['\u2018\u2019"]*(\w+)['\u2018\u2019"]*/i);
+        if(fieldMatch && tentativas < maxTentativas){
+          const badField = fieldMatch[1];
+          if(payload.hasOwnProperty(badField)){
+            console.warn('Removendo campo (trigger error):', badField);
+            delete payload[badField];
+            continue;
+          }
+          // Field is in a trigger but not in payload — cannot fix client-side, abort
+          console.warn('Trigger references missing DB column:', badField, '— requires DB migration');
+        }
 
         // Outro erro — abortar
         let detalhe = '';

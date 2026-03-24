@@ -1239,22 +1239,85 @@ function initFornecedores(){
     const fornCod   = p.get('fornecedor');
     const produto   = p.get('produto');
     const qtd       = p.get('qtd');
-    if (lote)     { const el=document.getElementById('f-lote-atak'); if(el) el.value=lote.toUpperCase(); }
+
+    if (lote) {
+      const el = document.getElementById('f-lote-atak');
+      if (el) el.value = lote.toUpperCase();
+
+      // Tentar preencher via PCR (busca completa dos dados do recebimento)
+      // Aguardar PCRs carregarem e auto-selecionar
+      const tentarPCR = setInterval(() => {
+        if (_pcrsDisponiveis && _pcrsDisponiveis.length > 0) {
+          clearInterval(tentarPCR);
+          const pcrMatch = _pcrsDisponiveis.find(r => r.lote_atak === lote);
+          if (pcrMatch) {
+            selecionarPCR(lote);
+            console.log('PCR auto-selecionada para lote', lote);
+            return;
+          }
+        }
+      }, 300);
+      // Timeout: parar de esperar PCRs após 5s
+      setTimeout(() => clearInterval(tentarPCR), 5000);
+    }
+
     if (etiqueta) { const el=document.getElementById('f-etiqueta');  if(el) el.value=etiqueta; }
-    if (produto)  { const el=document.getElementById('f-produto');   if(el) el.value=produto; }
-    if (qtd)      { const el=document.getElementById('f-qtd-lote');  if(el) el.value=qtd; }
-    if (fornCod && typeof CQFornecedores !== 'undefined') {
-      const f = CQFornecedores.porCodigo(fornCod);
-      if (f) {
-        document.getElementById('f-fornecedor').value      = f.codigo;
-        document.getElementById('f-fornecedor-nome').value = f.nome;
-        CQFornecedores.renderizar('forn-container', function(sel){
-          document.getElementById('f-fornecedor').value      = sel.codigo;
-          document.getElementById('f-fornecedor-nome').value = sel.nome;
-          updateSaveStatus();
-        }, f);
+
+    // Produto: match parcial (PCR envia "ORELHA BOVINA" mas select tem "Omaso Bovino — Salgado")
+    if (produto) {
+      const selProd = document.getElementById('f-produto');
+      const prodUp = produto.toUpperCase();
+      let matched = false;
+      // Primeiro tentar match exato
+      for (const opt of selProd.options) {
+        if (opt.value && opt.value === produto) { selProd.value = opt.value; matched = true; break; }
+      }
+      // Depois match parcial
+      if (!matched) {
+        const mapa = {
+          'OMASO': 'Omaso', 'VERGALHO': 'Vergalho', 'AORTA': 'Aorta',
+          'TEND': 'Tend', 'RUMEN': 'men', 'ESOFAGO': 'Outro',
+          'ORELHA': 'Outro', 'TRAQUEIA': 'Outro', 'SEBO': 'Outro',
+        };
+        for (const [key, val] of Object.entries(mapa)) {
+          if (prodUp.includes(key)) {
+            for (const opt of selProd.options) {
+              if (opt.value && opt.value.includes(val)) { selProd.value = opt.value; matched = true; break; }
+            }
+            if (matched) break;
+          }
+        }
       }
     }
+
+    if (qtd) { const el=document.getElementById('f-qtd-lote'); if(el) el.value=qtd; }
+
+    // Fornecedor: tentar por código ATAK, depois por nome direto
+    if (fornCod) {
+      let fornPreenchido = false;
+      if (typeof CQFornecedores !== 'undefined') {
+        const f = CQFornecedores.porCodigo(fornCod);
+        if (f) {
+          document.getElementById('f-fornecedor').value      = f.codigo;
+          document.getElementById('f-fornecedor-nome').value = f.nome;
+          CQFornecedores.renderizar('forn-container', function(sel){
+            document.getElementById('f-fornecedor').value      = sel.codigo;
+            document.getElementById('f-fornecedor-nome').value = sel.nome;
+            updateSaveStatus();
+          }, f);
+          fornPreenchido = true;
+        }
+      }
+      // Fallback: usar o valor como nome diretamente
+      if (!fornPreenchido) {
+        const nome = decodeURIComponent(fornCod);
+        document.getElementById('f-fornecedor-nome').value = nome;
+        document.getElementById('f-fornecedor').value = nome;
+        const inp = document.querySelector('#forn-container input[type="text"]');
+        if (inp) inp.value = nome;
+      }
+    }
+
     if (lote || fornCod) updateSaveStatus();
   })();
 

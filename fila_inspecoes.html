@@ -502,6 +502,7 @@ async function carregarContadores() {
     const tentativas = [
       'vw_inspecoes_workflow?select=status_workflow',
       'registros_cq_inspecao?select=status_workflow',
+      'cq_recebimentos?select=id,status',
       'registros_cq?select=id',
     ];
     for (const endpoint of tentativas) {
@@ -573,10 +574,11 @@ async function carregarLista() {
         const SB_KEY = CQAuth.getSbKey();
         const JWT = CQAuth.getAuthToken() || SB_KEY;
 
-        // Tentar tabela de inspecoes primeiro, depois tabela legada
+        // Tentar 3 tabelas: inspecoes CQ, recebimentos PCR, registros legados
         const tabelas = [
           { url: `${SB_URL}/rest/v1/registros_cq_inspecao?select=*&order=criado_em.desc&limit=50`, nome: 'inspecao' },
-          { url: `${SB_URL}/rest/v1/registros_cq?select=*&order=created_at.desc,data_entrada.desc&limit=50`, nome: 'legado' },
+          { url: `${SB_URL}/rest/v1/cq_recebimentos?select=*&order=criado_em.desc&limit=50`, nome: 'recebimentos' },
+          { url: `${SB_URL}/rest/v1/registros_cq?select=*&order=data_entrada.desc&limit=50`, nome: 'legado' },
         ];
 
         for (const t of tabelas) {

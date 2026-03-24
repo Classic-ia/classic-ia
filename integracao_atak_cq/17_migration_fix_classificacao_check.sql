@@ -1,31 +1,53 @@
 -- ════════════════════════════════════════════════════════════════════════════
--- Migration 17: Fix classificacao CHECK constraint to allow NULL (drafts)
+-- Migration 17: Fix ALL CHECK constraints on registros_cq_inspecao
 -- ════════════════════════════════════════════════════════════════════════════
--- Problem: The CHECK constraint on registros_cq_inspecao.classificacao only
--- allows 'A','B','C' but does NOT allow NULL. When the frontend saves a
--- draft (rascunho) without classification (backend calculates it later),
--- the INSERT fails with:
---   "violates check constraint registros_cq_inspecao_classificacao_check"
+-- Multiple CHECK constraints are too restrictive for the draft workflow:
+--   - classificacao: only A/B/C, no NULL (drafts need NULL)
+--   - status_final: only specific values, no NULL
+--   - tipo_amostragem: restricted values don't match frontend options
+--   - quantidade_analisada: CHECK > 0 fails for drafts with 0
 --
--- Fix: Drop and recreate constraint to allow NULL values.
+-- Fix: Make all constraints permissive for the draft-then-validate workflow.
 -- ════════════════════════════════════════════════════════════════════════════
 
--- Drop existing constraints (may have different names)
+-- ── classificacao ──────────────────────────────────────────────────────────
 ALTER TABLE registros_cq_inspecao
   DROP CONSTRAINT IF EXISTS registros_cq_inspecao_classificacao_check;
-
 ALTER TABLE registros_cq_inspecao
   DROP CONSTRAINT IF EXISTS chk_insp_classificacao;
 
--- Recreate allowing NULL (drafts that haven't been classified yet)
 ALTER TABLE registros_cq_inspecao
   ADD CONSTRAINT registros_cq_inspecao_classificacao_check
   CHECK (classificacao IS NULL OR classificacao IN ('A','B','C'));
 
--- Same fix for status_final (may also fail for drafts)
+-- ── status_final ───────────────────────────────────────────────────────────
 ALTER TABLE registros_cq_inspecao
   DROP CONSTRAINT IF EXISTS registros_cq_inspecao_status_final_check;
 
 ALTER TABLE registros_cq_inspecao
   ADD CONSTRAINT registros_cq_inspecao_status_final_check
   CHECK (status_final IS NULL OR status_final IN ('aprovado','ressalva','bloqueado'));
+
+-- ── tipo_amostragem ────────────────────────────────────────────────────────
+-- Frontend sends: "Aleatória simples", "100% do lote", "Sistemática",
+--                 "Por palete", "Conveniente"
+-- Drop restrictive constraint — allow any text value (free-form field)
+ALTER TABLE registros_cq_inspecao
+  DROP CONSTRAINT IF EXISTS registros_cq_inspecao_tipo_amostragem_check;
+
+-- ── quantidade_analisada ───────────────────────────────────────────────────
+-- Drafts may start with 0; backend validates before submission
+ALTER TABLE registros_cq_inspecao
+  DROP CONSTRAINT IF EXISTS registros_cq_inspecao_quantidade_analisada_check;
+
+ALTER TABLE registros_cq_inspecao
+  ADD CONSTRAINT registros_cq_inspecao_quantidade_analisada_check
+  CHECK (quantidade_analisada IS NULL OR quantidade_analisada >= 0);
+
+-- ── Ensure columns needed by frontend exist ────────────────────────────────
+ALTER TABLE registros_cq_inspecao
+  ADD COLUMN IF NOT EXISTS status_workflow TEXT DEFAULT 'rascunho';
+ALTER TABLE registros_cq_inspecao
+  ADD COLUMN IF NOT EXISTS criador_id UUID;
+ALTER TABLE registros_cq_inspecao
+  ADD COLUMN IF NOT EXISTS video_evidencia_url TEXT;

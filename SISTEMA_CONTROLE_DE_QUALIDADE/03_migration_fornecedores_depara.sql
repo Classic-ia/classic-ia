@@ -35,6 +35,10 @@ ALTER TABLE cq_fornecedores ADD COLUMN IF NOT EXISTS nome_oficial TEXT;
 ALTER TABLE cq_fornecedores ADD COLUMN IF NOT EXISTS apelido TEXT;
 ALTER TABLE cq_fornecedores ADD COLUMN IF NOT EXISTS aliases TEXT[] NOT NULL DEFAULT '{}';
 
+-- Remover unique constraint de nome_normalizado (fornecedores diferentes podem ter mesmo nome)
+-- codigo_atak UNIQUE ja garante unicidade real
+DROP INDEX IF EXISTS uq_cq_fornecedores_nome_normalizado;
+
 CREATE INDEX IF NOT EXISTS idx_cq_fornecedores_codigo ON cq_fornecedores(codigo_atak);
 CREATE INDEX IF NOT EXISTS idx_cq_fornecedores_apelido ON cq_fornecedores(apelido);
 CREATE INDEX IF NOT EXISTS idx_cq_fornecedores_aliases ON cq_fornecedores USING GIN(aliases);

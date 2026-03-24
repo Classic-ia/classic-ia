@@ -147,6 +147,22 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   .rel-btns{flex-direction:column;}
   .lote-header{grid-template-columns:1fr;}
 }
+
+/* LOTES RECENTES */
+.filtro-lote-btn{padding:5px 12px;border-radius:16px;border:1px solid var(--border);background:transparent;
+  color:var(--muted);cursor:pointer;font-size:11px;font-family:'DM Mono',monospace;transition:all .2s;}
+.filtro-lote-btn:hover{border-color:var(--blue);color:var(--text);}
+.filtro-lote-btn.ativo{background:rgba(200,169,110,.1);border-color:var(--gold);color:var(--gold);}
+.lote-rec-card{display:flex;align-items:center;gap:12px;background:var(--bg2);border:1px solid var(--border);
+  border-radius:10px;padding:10px 14px;cursor:pointer;transition:border-color .2s;flex-wrap:wrap;}
+.lote-rec-card:hover{border-color:var(--gold);}
+.lote-rec-num{font-family:'Syne',sans-serif;font-weight:700;font-size:14px;color:var(--gold);min-width:90px;}
+.lote-rec-forn{font-size:12px;color:var(--text);flex:1;min-width:100px;}
+.lote-rec-meta{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;flex-wrap:wrap;}
+.lote-rec-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:4px;white-space:nowrap;}
+.lote-rec-ver{background:transparent;border:1px solid var(--gold);color:var(--gold);border-radius:6px;
+  padding:4px 12px;cursor:pointer;font-size:11px;font-family:'DM Mono',monospace;white-space:nowrap;transition:all .2s;}
+.lote-rec-ver:hover{background:rgba(200,169,110,.12);}
 </style>
 </head>
 <body>
@@ -173,7 +189,25 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
     <div class="spinner"></div><span>Carregando dados do lote...</span>
   </div>
 
-  <div id="emptyState" class="empty-state">
+  <!-- Lista de lotes recentes -->
+  <div id="lotesRecentesSection">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <div style="font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--gold);letter-spacing:0.1em;text-transform:uppercase;">
+        Lotes em Rastreamento
+      </div>
+      <div style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;" id="lotesRecentesCount"></div>
+    </div>
+    <div id="filtrosRastreamento" style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap;">
+      <button class="filtro-lote-btn ativo" onclick="filtrarLotesRecentes('todos',this)">Todos</button>
+      <button class="filtro-lote-btn" onclick="filtrarLotesRecentes('aprovado',this)">Aprovado</button>
+      <button class="filtro-lote-btn" onclick="filtrarLotesRecentes('ressalva',this)">Ressalva</button>
+      <button class="filtro-lote-btn" onclick="filtrarLotesRecentes('negociacao',this)">Negociacao</button>
+      <button class="filtro-lote-btn" onclick="filtrarLotesRecentes('reprovado',this)">Reprovado</button>
+    </div>
+    <div id="listaLotesRecentes" style="display:flex;flex-direction:column;gap:6px;max-height:55vh;overflow-y:auto;"></div>
+  </div>
+
+  <div id="emptyState" class="empty-state" style="display:none;">
     <div class="empty-icon">📦</div>
     <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Rastreabilidade do Lote</div>
     <div style="font-size:13px;">Digite o número do lote para visualizar o histórico completo de movimentações, inspeções, defeitos e destino.</div>
@@ -677,7 +711,7 @@ async function gerarRelatorio(tipo) {
 
 <h2>1. Identificação da Inspeção</h2>
 <table class="info-table"><tbody>
-  <tr><td>Empresa Fornecedora</td><td>${insp.fornecedor||'—'}</td></tr>
+  <tr><td>Empresa Fornecedora</td><td>${insp.fornecedor||'—'}${insp.fornecedor_cidade||insp.fornecedor_uf ? ' — '+(insp.fornecedor_cidade ? insp.fornecedor_cidade+'/':'')+(insp.fornecedor_uf||'') : ''}</td></tr>
   <tr><td>Produto</td><td>${insp.produto||'Omaso Bovino'}</td></tr>
   <tr><td>Lote / Etiqueta</td><td>${insp.lote_atak||'—'} / ${insp.etiqueta||'—'}</td></tr>
   <tr><td>Data / Hora</td><td>${data_fmt} ${hora_fmt}</td></tr>
@@ -766,7 +800,7 @@ ${insp.obs_reprovado ? `<h2>9. Observações CQ</h2><div class="obs-box">${insp.
 
 <h2>Identificação</h2>
 <table><tbody>
-  <tr><td style="font-weight:600;width:180px">Fornecedor</td><td>${insp.fornecedor||'—'}</td></tr>
+  <tr><td style="font-weight:600;width:180px">Fornecedor</td><td>${insp.fornecedor||'—'}${insp.fornecedor_cidade||insp.fornecedor_uf ? ' — '+(insp.fornecedor_cidade ? insp.fornecedor_cidade+'/':'')+(insp.fornecedor_uf||'') : ''}</td></tr>
   <tr><td style="font-weight:600">Produto</td><td>${insp.produto||'Omaso Bovino'}</td></tr>
   <tr><td style="font-weight:600">Lote</td><td>${insp.lote_atak||'—'}</td></tr>
   <tr><td style="font-weight:600">Data de Recebimento</td><td>${data_fmt}</td></tr>
@@ -843,6 +877,101 @@ function toast(msg) {
   toastTimer = setTimeout(() => el.classList.remove('show'), 3000);
 }
 
+// ══════════════════════════════════════════════════════════
+// LOTES RECENTES
+// ══════════════════════════════════════════════════════════
+const DEFEITOS_DESC_RASTR = ['fermentacao','sem_folhas','folhas_arrebentadas','pedaco'];
+let _todosLotesRecentes = [];
+
+function classificarLote(pct) {
+  if (pct <= 5)  return { label: 'Aprovado',   cor: '#27ae60', bg: 'rgba(39,174,96,.12)' };
+  if (pct <= 15) return { label: 'Ressalva',   cor: '#f39c12', bg: 'rgba(243,156,18,.12)' };
+  if (pct <= 30) return { label: 'Negociacao',  cor: '#ea580c', bg: 'rgba(234,88,12,.12)' };
+  return           { label: 'Reprovado',  cor: '#e74c3c', bg: 'rgba(231,76,60,.12)' };
+}
+
+async function carregarLotesRecentes() {
+  try {
+    const rows = await sbFetch('registros_cq_inspecao',
+      'select=id,lote_atak,fornecedor,produto,quantidade_analisada,data_inspecao,classificacao,inspetor,fermentacao,sem_folhas,folhas_arrebentadas,pedaco,percentual_defeitos&order=data_inspecao.desc&limit=50');
+
+    _todosLotesRecentes = (rows || []).map(r => {
+      const qtd = r.quantidade_analisada || 1;
+      const pctDesc = DEFEITOS_DESC_RASTR.reduce((s, k) => s + ((r[k] || 0) / qtd * 100), 0);
+      return { ...r, pctDesc, class: classificarLote(pctDesc) };
+    });
+
+    renderLotesRecentes(_todosLotesRecentes);
+  } catch (e) {
+    console.warn('Erro ao carregar lotes recentes:', e);
+  }
+}
+
+function renderLotesRecentes(lotes) {
+  const container = document.getElementById('listaLotesRecentes');
+  const countEl = document.getElementById('lotesRecentesCount');
+  countEl.textContent = lotes.length + ' lotes';
+
+  if (!lotes.length) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:30px;font-size:12px;">Nenhum lote encontrado.</div>';
+    return;
+  }
+
+  container.innerHTML = lotes.map(r => {
+    const dt = r.data_inspecao ? new Date(r.data_inspecao).toLocaleDateString('pt-BR') : '—';
+    const loteId = r.lote_atak || '—';
+    return `<div class="lote-rec-card" onclick="document.getElementById('inputLote').value='${loteId}';buscarLote();">
+      <div class="lote-rec-num">Lote ${loteId}</div>
+      <div class="lote-rec-forn">${r.fornecedor || '—'}</div>
+      <div class="lote-rec-meta">
+        <span>${r.quantidade_analisada || '—'} pc</span>
+        <span>${dt}</span>
+        <span class="lote-rec-badge" style="color:${r.class.cor};background:${r.class.bg}">
+          ${r.class.label} · ${r.pctDesc.toFixed(1)}%
+        </span>
+      </div>
+      <button class="lote-rec-ver" onclick="event.stopPropagation();document.getElementById('inputLote').value='${loteId}';buscarLote();">Ver →</button>
+    </div>`;
+  }).join('');
+}
+
+function filtrarLotesRecentes(tipo, btnEl) {
+  document.querySelectorAll('.filtro-lote-btn').forEach(b => b.classList.remove('ativo'));
+  if (btnEl) btnEl.classList.add('ativo');
+
+  const filtrados = tipo === 'todos' ? _todosLotesRecentes : _todosLotesRecentes.filter(r => {
+    if (tipo === 'aprovado')   return r.pctDesc <= 5;
+    if (tipo === 'ressalva')   return r.pctDesc > 5  && r.pctDesc <= 15;
+    if (tipo === 'negociacao') return r.pctDesc > 15 && r.pctDesc <= 30;
+    if (tipo === 'reprovado')  return r.pctDesc > 30;
+  });
+
+  renderLotesRecentes(filtrados);
+}
+
+// Busca em tempo real na lista carregada
+document.getElementById('inputLote').addEventListener('input', function() {
+  const termo = this.value.toLowerCase().trim();
+  if (!termo) {
+    renderLotesRecentes(_todosLotesRecentes);
+    document.getElementById('lotesRecentesSection').style.display = '';
+    return;
+  }
+  const filtrados = _todosLotesRecentes.filter(r =>
+    String(r.lote_atak || '').toLowerCase().includes(termo) ||
+    (r.fornecedor || '').toLowerCase().includes(termo)
+  );
+  renderLotesRecentes(filtrados);
+  document.getElementById('lotesRecentesSection').style.display = '';
+});
+
+// Esconder lista de recentes quando lote é exibido
+const _origBuscarLote = buscarLote;
+buscarLote = async function() {
+  document.getElementById('lotesRecentesSection').style.display = 'none';
+  await _origBuscarLote();
+};
+
 (function(){
   const s = localStorage.getItem('classic_logo');
   const el = document.getElementById('logoImg');
@@ -855,6 +984,9 @@ function toast(msg) {
     document.getElementById('inputLote').value = lote;
     buscarLote();
   }
+
+  // Carregar lotes recentes automaticamente
+  carregarLotesRecentes();
 })();
 </script>
 </body>

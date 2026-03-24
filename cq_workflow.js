@@ -98,10 +98,34 @@ const CQWorkflow = (function () {
     const offset = (pagina - 1) * porPagina;
     qs += `&order=criado_em.desc&limit=${porPagina}&offset=${offset}`;
 
-    const dados = await _fetch(`/rest/v1/vw_inspecoes_workflow?${qs}`, {
+    // Tentar a view enriquecida primeiro; fallback para tabela direta
+    try {
+      const dados = await _fetch(`/rest/v1/vw_inspecoes_workflow?${qs}`, {
+        extraHeaders: { 'Prefer': 'count=exact' },
+      });
+      return { dados, total: dados.length };
+    } catch (viewErr) {
+      console.warn('CQWorkflow: view vw_inspecoes_workflow falhou, usando tabela direta:', viewErr.message);
+    }
+
+    // Fallback: buscar direto de registros_cq_inspecao
+    // Remover filtro usuario_nome (não existe na tabela, só na view)
+    let qsFallback = 'select=*';
+    const paramsFb = [];
+    if (filtros.status)      paramsFb.push(`status_workflow=eq.${filtros.status}`);
+    if (filtros.fornecedor)  paramsFb.push(`fornecedor=ilike.*${filtros.fornecedor}*`);
+    if (filtros.produto)     paramsFb.push(`produto=ilike.*${filtros.produto}*`);
+    if (filtros.lote)        paramsFb.push(`lote_atak=ilike.*${filtros.lote}*`);
+    if (filtros.etiqueta)    paramsFb.push(`etiqueta=ilike.*${filtros.etiqueta}*`);
+    if (filtros.inspetor)    paramsFb.push(`inspetor=ilike.*${filtros.inspetor}*`);
+    if (filtros.dataInicio)  paramsFb.push(`criado_em=gte.${filtros.dataInicio}`);
+    if (filtros.dataFim)     paramsFb.push(`criado_em=lte.${filtros.dataFim}T23:59:59`);
+    if (paramsFb.length) qsFallback += '&' + paramsFb.join('&');
+    qsFallback += `&order=criado_em.desc&limit=${porPagina}&offset=${offset}`;
+
+    const dados = await _fetch(`/rest/v1/registros_cq_inspecao?${qsFallback}`, {
       extraHeaders: { 'Prefer': 'count=exact' },
     });
-
     return { dados, total: dados.length };
   }
 

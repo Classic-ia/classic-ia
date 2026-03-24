@@ -497,12 +497,16 @@ async function carregarContadores() {
     const SB_KEY = CQAuth.getSbKey();
     const JWT = CQAuth.getAuthToken() || SB_KEY;
 
-    const r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
-      headers: {
-        'apikey': SB_KEY,
-        'Authorization': `Bearer ${JWT}`,
-      },
+    // Tentar view primeiro, fallback para tabela direta
+    let r = await fetch(`${SB_URL}/rest/v1/vw_inspecoes_workflow?select=status_workflow`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
     });
+    if (!r.ok) {
+      console.warn('Fila: view vw_inspecoes_workflow indisponível, usando tabela direta');
+      r = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao?select=status_workflow`, {
+        headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
+      });
+    }
 
     let contagens = {};
     let total = 0;
@@ -853,7 +857,8 @@ function montarRelatorio(lista) {
     if (lista.length > 1) linhas.push(`━━━ Inspeção ${i+1}/${lista.length} ━━━`);
     linhas.push(`*Nº:* ${insp.id_inspecao || '—'}`);
     linhas.push(`*Data:* ${insp.data_inspecao || '—'}`);
-    linhas.push(`*Fornecedor:* ${insp.fornecedor || '—'}`);
+    const localForn = [insp.fornecedor_cidade, insp.fornecedor_uf].filter(Boolean).join('/');
+    linhas.push(`*Fornecedor:* ${insp.fornecedor || '—'}${localForn ? ' — '+localForn : ''}`);
     linhas.push(`*Produto:* ${insp.produto || '—'}`);
     linhas.push(`*Lote:* ${insp.lote_atak || '—'}`);
     if (insp.etiqueta) linhas.push(`*Etiqueta:* ${insp.etiqueta}`);
@@ -874,10 +879,11 @@ function montarRelatorioEmail(lista) {
   linhas.push('');
 
   lista.forEach((insp, i) => {
+    const localForn = [insp.fornecedor_cidade, insp.fornecedor_uf].filter(Boolean).join('/');
     if (lista.length > 1) linhas.push(`--- Inspeção ${i+1}/${lista.length} ---`);
     linhas.push(`Nº: ${insp.id_inspecao || '—'}`);
     linhas.push(`Data: ${insp.data_inspecao || '—'}`);
-    linhas.push(`Fornecedor: ${insp.fornecedor || '—'}`);
+    linhas.push(`Fornecedor: ${insp.fornecedor || '—'}${localForn ? ' — '+localForn : ''}`);
     linhas.push(`Produto: ${insp.produto || '—'}`);
     linhas.push(`Lote: ${insp.lote_atak || '—'}`);
     if (insp.etiqueta) linhas.push(`Etiqueta: ${insp.etiqueta}`);

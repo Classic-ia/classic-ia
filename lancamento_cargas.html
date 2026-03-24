@@ -75,6 +75,7 @@ main{max-width:1000px;margin:0 auto;padding:28px 20px;}
 .btn-secondary{background:transparent;border:1px solid var(--border);border-radius:2px;color:var(--muted);font-family:'DM Sans',sans-serif;font-size:12px;padding:11px 20px;cursor:pointer;}
 .btn-primary:hover{background:var(--accent2);}
 .btn-row{display:flex;gap:10px;align-items:center;margin-top:20px;}
+.desc-val{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--text);}
 
 /* ALERTS */
 .alert{padding:12px 16px;border-radius:2px;font-size:12px;margin-bottom:14px;}
@@ -210,6 +211,91 @@ tr:hover td{background:rgba(255,255,255,0.02);}
         <button class="btn-primary" onclick="salvarRegistro()">💾 Salvar Registro</button>
         <button class="btn-secondary" onclick="limparForm()">Limpar</button>
         <span id="save-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+
+    <!-- PAINEL DE DECISÃO DE DESCONTO -->
+    <div id="painel-desconto" class="form-card" style="display:none;border-color:var(--accent);border-left:3px solid var(--accent);">
+      <div class="form-section" style="margin-top:0;">💰 Decisão de Desconto</div>
+
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;padding:10px 14px;background:var(--surface2);border-radius:2px;">
+        <span style="font-size:11px;color:var(--muted);">Responsável por este fornecedor:</span>
+        <strong id="desc-responsavel" style="color:var(--accent);font-family:'Syne',sans-serif;font-size:14px;">—</strong>
+      </div>
+
+      <!-- Desconto por quantidade -->
+      <div style="margin-bottom:16px;padding:12px 14px;background:rgba(92,184,92,0.05);border:1px solid rgba(92,184,92,0.2);border-radius:2px;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.1em;color:var(--muted);margin-bottom:8px;">Desconto por falta de quantidade</div>
+        <div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+          <div>
+            <span style="font-size:11px;color:var(--muted);">Previsto (NF):</span>
+            <span class="desc-val" id="desc-previsto">—</span>
+          </div>
+          <div>
+            <span style="font-size:11px;color:var(--muted);">Recebido:</span>
+            <span class="desc-val" id="desc-recebido">—</span>
+          </div>
+          <div>
+            <span style="font-size:11px;color:var(--muted);">Diferença:</span>
+            <span class="desc-val" id="desc-diferenca" style="font-weight:700;">—</span>
+          </div>
+          <div>
+            <span style="font-size:11px;color:var(--muted);">Valor desc. qtd:</span>
+            <strong id="desc-valor-qtd" style="color:var(--error);font-family:'Syne',sans-serif;">R$ 0,00</strong>
+          </div>
+        </div>
+        <div id="desc-detalhe-qtd" style="font-size:11px;color:var(--muted);margin-top:6px;"></div>
+      </div>
+
+      <!-- Desconto por qualidade -->
+      <div style="margin-bottom:16px;">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="fg">
+            <label>Decisão de qualidade</label>
+            <select id="desc-tipo-qualidade" onchange="toggleDescQualidade()">
+              <option value="">— Selecione —</option>
+              <option value="nao_descontar">Não descontar</option>
+              <option value="valor_fixo">Valor fixo negociado</option>
+              <option value="percentual">Percentual sobre total</option>
+              <option value="proporcional">Proporcional (ex: PELANDO 2x1)</option>
+              <option value="proxima_nota">Descontar na próxima nota</option>
+            </select>
+          </div>
+          <div class="fg" id="desc-qual-valor-wrap" style="display:none;">
+            <label>Valor desconto qualidade (R$)</label>
+            <input type="number" id="desc-valor-qualidade" min="0" step="0.01" placeholder="0,00" oninput="calcDescontoTotal()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Decisão final -->
+      <div class="form-grid" style="grid-template-columns:1fr 1fr;margin-bottom:16px;">
+        <div class="fg">
+          <label>Decisão final</label>
+          <select id="desc-decisao-final">
+            <option value="AGUARDANDO_DECISAO">Aguardando decisão</option>
+            <option value="PODE_PAGAR">Pode pagar (sem desconto)</option>
+            <option value="DESCONTAR_QUANTIDADE">Descontar falta de quantidade</option>
+            <option value="DESCONTAR_QUALIDADE">Descontar qualidade</option>
+            <option value="DESCONTAR_AMBOS">Descontar quantidade + qualidade</option>
+            <option value="NAO_DESCONTAR">Não descontar nada</option>
+            <option value="DESCONTAR_PROXIMA_NOTA">Descontar na próxima nota</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Valor total de desconto</label>
+          <div id="desc-total" style="font-family:'Syne',sans-serif;font-size:22px;font-weight:800;color:var(--error);padding-top:4px;">R$ 0,00</div>
+        </div>
+      </div>
+
+      <div class="fg full" style="margin-bottom:14px;">
+        <label>Observações do desconto</label>
+        <textarea id="desc-obs" rows="2" placeholder="Ex: Jean autorizou, descontar PELANDO 2x1..."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn-primary" onclick="confirmarDesconto()">✅ Confirmar Decisão de Desconto</button>
+        <span id="desc-status" style="font-size:12px;color:var(--muted);"></span>
       </div>
     </div>
   </div>
@@ -593,7 +679,11 @@ async function salvarRegistro() {
     if(!res.ok) throw new Error(data2.message||JSON.stringify(data2));
     showAlert('success','✅ Registro salvo com sucesso! Carga '+carga+' · '+frg+' · Classe '+cls);
     document.getElementById('save-status').textContent='';
-    limparForm();
+    // Exibir painel de desconto com o registro salvo
+    const registroId = Array.isArray(data2) ? data2[0]?.id : data2?.id;
+    if (registroId) {
+      exibirPainelDesconto(registroId, frg);
+    }
   } catch(e) {
     showAlert('error','Erro ao salvar: '+e.message);
     document.getElementById('save-status').textContent='';
@@ -957,6 +1047,151 @@ function showAlert(type, msg) {
   const area = document.getElementById('alert-area');
   area.innerHTML=`<div class="alert alert-${type}">${msg}</div>`;
   setTimeout(()=>area.innerHTML='',5000);
+}
+
+// ═══════════════════════════════════════════════════════════
+// DESCONTO — Lógica de cálculo e painel de decisão
+// ═══════════════════════════════════════════════════════════
+
+// Carteira de responsáveis por fornecedor (normalizado uppercase)
+const CARTEIRA_RESPONSAVEL = {};
+let _ultimoRegistroId = null;
+let _valorDescQtd = 0;
+let _valorDescQual = 0;
+
+// Carregar carteira de responsáveis do Supabase (se tabela existir)
+async function carregarCarteira() {
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/cq_fornecedores_carteira?select=fornecedor,responsavel`, {
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY }
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      rows.forEach(r => { if (r.fornecedor && r.responsavel) CARTEIRA_RESPONSAVEL[r.fornecedor.toUpperCase()] = r.responsavel; });
+    }
+  } catch (e) { console.warn('Carteira de responsáveis não disponível:', e.message); }
+}
+carregarCarteira();
+
+function calcDescontoQuantidade(previsto, recebido, precoUnitario) {
+  const diferenca = recebido - previsto;
+  if (diferenca >= 0) return { desconto: 0, diferenca, tipo: diferenca > 0 ? 'A_MAIS' : 'EXATO' };
+  return { desconto: Math.abs(diferenca) * (precoUnitario || 0), diferenca, tipo: 'FALTA' };
+}
+
+function exibirPainelDesconto(registroId, frg) {
+  _ultimoRegistroId = registroId;
+  const painel = document.getElementById('painel-desconto');
+  painel.style.display = 'block';
+
+  // Identificar responsável
+  const resp = CARTEIRA_RESPONSAVEL[frg.toUpperCase()] || '(não cadastrado)';
+  document.getElementById('desc-responsavel').textContent = resp;
+
+  // Calcular desconto por quantidade
+  const previsto = parseInt(document.getElementById('f-cnt-frigo').value) || 0;
+  const recebido = parseInt(document.getElementById('f-cnt-classic').value) || 0;
+  const diferenca = recebido - previsto;
+
+  document.getElementById('desc-previsto').textContent = previsto;
+  document.getElementById('desc-recebido').textContent = recebido;
+
+  const difEl = document.getElementById('desc-diferenca');
+  difEl.textContent = diferenca >= 0 ? `+${diferenca}` : `${diferenca}`;
+  difEl.style.color = diferenca < 0 ? 'var(--error)' : 'var(--success)';
+
+  // Sem preço unitário nesta tela — desconto por quantidade fica R$ 0 (a ser preenchido pelo financeiro)
+  _valorDescQtd = 0;
+  document.getElementById('desc-valor-qtd').textContent = diferenca < 0 ? `${Math.abs(diferenca)} peças a menos` : 'Sem falta';
+  document.getElementById('desc-detalhe-qtd').textContent = diferenca < 0
+    ? 'O valor monetário será calculado pelo financeiro com base no preço unitário do produto.'
+    : '';
+
+  _valorDescQual = 0;
+  calcDescontoTotal();
+
+  painel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function toggleDescQualidade() {
+  const tipo = document.getElementById('desc-tipo-qualidade').value;
+  const wrap = document.getElementById('desc-qual-valor-wrap');
+  wrap.style.display = ['valor_fixo', 'percentual', 'proporcional'].includes(tipo) ? '' : 'none';
+  if (tipo === 'nao_descontar' || tipo === 'proxima_nota' || !tipo) {
+    document.getElementById('desc-valor-qualidade').value = '';
+    _valorDescQual = 0;
+    calcDescontoTotal();
+  }
+}
+
+function calcDescontoTotal() {
+  _valorDescQual = parseFloat(document.getElementById('desc-valor-qualidade').value) || 0;
+  const total = _valorDescQtd + _valorDescQual;
+  document.getElementById('desc-total').textContent = total > 0
+    ? `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`
+    : 'R$ 0,00';
+}
+
+async function confirmarDesconto() {
+  if (!_ultimoRegistroId) { showAlert('error', 'Nenhum registro para vincular desconto'); return; }
+
+  const decisao = {
+    decisao_desconto:         document.getElementById('desc-decisao-final').value,
+    valor_desconto_quantidade: _valorDescQtd,
+    valor_desconto_qualidade:  _valorDescQual,
+    valor_desconto_total:      _valorDescQtd + _valorDescQual,
+    responsavel_desconto:      document.getElementById('desc-responsavel').textContent,
+    obs_desconto:              document.getElementById('desc-obs').value.trim() || null,
+    desconto_confirmado_em:    new Date().toISOString(),
+    desconto_executado_por:    (usuarioAtual && (usuarioAtual.nome || usuarioAtual.email)) || null,
+  };
+
+  document.getElementById('desc-status').textContent = 'Salvando...';
+  try {
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/registros_carga?id=eq.${_ultimoRegistroId}`, {
+      method: 'PATCH',
+      headers: { 'apikey': SUPABASE_KEY, 'Authorization': 'Bearer ' + SUPABASE_KEY, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+      body: JSON.stringify(decisao)
+    });
+    if (!res.ok) {
+      const d = await res.json().catch(() => ({}));
+      throw new Error(d.message || 'Erro HTTP ' + res.status);
+    }
+    showAlert('success', '✅ Decisão de desconto registrada com sucesso!');
+    document.getElementById('desc-status').textContent = '';
+    document.getElementById('painel-desconto').style.display = 'none';
+  } catch (e) {
+    showAlert('error', 'Erro ao salvar desconto: ' + e.message);
+    document.getElementById('desc-status').textContent = '';
+  }
+}
+
+// Parsing de defeitos do campo qualidade (texto livre)
+function parseQualidadeOmaso(texto) {
+  if (!texto) return {};
+  const mapa = {
+    pelando:      ['pelando', 'fermentacao', 'fermentação'],
+    sem_folha:    ['sem folha', 's.folha', 'sfolha', 'semfolha'],
+    folha_estour: ['folha e', 'f.e', 'fe:', 'folha estourada'],
+    pedaco:       ['pedaco', 'pedaço', 'pedaços', 'pedacos'],
+    rasgado:      ['rasgado'],
+    furado:       ['furado', 'furando'],
+    sujo:         ['sujo', 'despojo', 'sujos'],
+    corte_incorr: ['c.i', 'ci:', 'corte i', 'corte incorreto', 'sebo'],
+  };
+  const resultado = {};
+  const textoNorm = texto.toLowerCase().replace(/[_]/g, ' ');
+  for (const [chave, aliases] of Object.entries(mapa)) {
+    for (const alias of aliases) {
+      const regex = new RegExp(alias.replace('.', '\\.') + '[:\\s]+([\\d.]+)', 'i');
+      const match = textoNorm.match(regex);
+      if (match) {
+        resultado[chave] = (resultado[chave] || 0) + parseFloat(match[1]);
+        break;
+      }
+    }
+  }
+  return resultado;
 }
 </script>
 </body>

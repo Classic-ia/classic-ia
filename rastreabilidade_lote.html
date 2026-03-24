@@ -142,6 +142,13 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
   transition:all .3s;pointer-events:none;}
 .toast.show{transform:translateY(0);opacity:1;}
 
+.lote-list-card {
+  display:flex;align-items:center;justify-content:space-between;
+  background:var(--bg2);border:1px solid var(--border);border-radius:10px;
+  padding:12px 16px;cursor:pointer;transition:border-color .2s;flex-wrap:wrap;gap:8px;
+}
+.lote-list-card:hover { border-color:var(--gold); }
+
 @media(max-width:600px){
   .search-bar{flex-wrap:wrap;}
   .rel-btns{flex-direction:column;}
@@ -168,6 +175,18 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
       onkeydown="if(event.key==='Enter') buscarLote()">
     <button class="btn-buscar" onclick="buscarLote()">🔍 Buscar</button>
   </div>
+
+  <!-- FILTROS DE CLASSIFICAÇÃO -->
+  <div id="filtros-rastreamento" style="display:none;margin-bottom:16px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn-filtro-cls active" onclick="filtrarLotesCls('todos')" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:rgba(200,169,110,.1);border-color:var(--gold);color:var(--gold);cursor:pointer;font-size:12px;">Todos</button>
+      <button class="btn-filtro-cls" onclick="filtrarLotesCls('aprovado')" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;">🟢 Aprovado</button>
+      <button class="btn-filtro-cls" onclick="filtrarLotesCls('ressalva')" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;">🟡 Ressalva</button>
+      <button class="btn-filtro-cls" onclick="filtrarLotesCls('negociacao')" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;">🟠 Negociação</button>
+      <button class="btn-filtro-cls" onclick="filtrarLotesCls('reprovado')" style="padding:5px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-size:12px;">🔴 Reprovado</button>
+    </div>
+  </div>
+  <div id="lista-lotes" style="display:flex;flex-direction:column;gap:8px;max-height:60vh;overflow-y:auto;margin-bottom:20px;"></div>
 
   <div id="loadingState" class="loading" style="display:none;">
     <div class="spinner"></div><span>Carregando dados do lote...</span>
@@ -256,6 +275,7 @@ body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min
 (async()=>{
   const u = await CQAuth.init({ perfisPermitidos: ['administrador','qualidade','comercial','financeiro','logistica','industrial','diretoria'] });
   if(!u) return;
+  await carregarLotesRastreamento();
 })();
 
 // SUPABASE_URL and SUPABASE_KEY are provided by config.js
@@ -282,6 +302,95 @@ const ETAPAS_ORDEM = [
 
 let dadosLote = null;
 let inspecoesLote = [];
+let todosLotes = [];
+
+const DEFEITOS_DESCONTO = ['fermentacao','sem_folhas','folhas_arrebentadas','pedaco'];
+const DEFEITOS_CORRETIVA = ['rasgado','furado','sujo','corte_irregular','mau_cheiro','contaminacao','outro_defeito'];
+
+function classificarLote(pct) {
+  if (pct <= 5) return { label:'Aprovado', cor:'#27ae60', emoji:'🟢' };
+  if (pct <= 15) return { label:'Ressalva', cor:'#f39c12', emoji:'🟡' };
+  if (pct <= 30) return { label:'Negociação', cor:'#ea580c', emoji:'🟠' };
+  return { label:'Reprovado', cor:'#e74c3c', emoji:'🔴' };
+}
+
+async function carregarLotesRastreamento() {
+  try {
+    const r1 = await sbFetch('registros_cq_inspecao', 'order=data_inspecao.desc&limit=50');
+    const r2 = await sbFetch('registros_cq', 'order=data_entrada.desc&limit=50');
+    const todos = [...(r1||[]), ...(r2||[])];
+
+    todosLotes = todos.map(r => {
+      const qtd = r.quantidade_analisada || r.qtd_amostra || 1;
+      const pctDesc = DEFEITOS_DESCONTO.reduce((s, k) => s + ((r[k]||0)/qtd*100), 0);
+      return { ...r, pctDesconto: pctDesc, classificacao_calc: classificarLote(pctDesc) };
+    });
+
+    if (todosLotes.length > 0) {
+      document.getElementById('filtros-rastreamento').style.display = 'block';
+      renderizarListaLotes(todosLotes);
+    }
+  } catch(e) {
+    console.error('Erro ao carregar lotes:', e);
+  }
+}
+
+function renderizarListaLotes(lotes) {
+  const container = document.getElementById('lista-lotes');
+  if (!lotes || lotes.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:40px;">Nenhum lote encontrado.</div>';
+    return;
+  }
+  container.innerHTML = lotes.map(r => {
+    const cls = r.classificacao_calc;
+    const data = r.data_inspecao || r.data_entrada || '';
+    const dataFmt = data ? new Date(data).toLocaleDateString('pt-BR') : '—';
+    const lote = r.lote_atak || r.lote || '—';
+    return `<div class="lote-list-card" onclick="document.getElementById('inputLote').value='${lote}';buscarLote();">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-weight:600;color:var(--gold);font-size:14px;">Lote ${lote}</span>
+        <span style="font-size:13px;color:var(--text);">${r.fornecedor||'—'}</span>
+        <span style="font-size:12px;color:var(--muted);">${r.produto||''}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <span style="font-size:12px;color:var(--muted);">${r.quantidade_analisada||r.qtd_amostra||'—'} pç</span>
+        <span style="font-size:12px;color:var(--muted);">${dataFmt}</span>
+        <span style="color:${cls.cor};font-size:12px;font-weight:600;">${cls.emoji} ${cls.label}</span>
+        <span style="font-size:12px;color:var(--muted);">${r.pctDesconto.toFixed(1)}% desc.</span>
+        <span style="background:transparent;border:1px solid var(--gold);color:var(--gold);border-radius:6px;padding:4px 12px;font-size:12px;">Ver →</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function filtrarLotesCls(tipo) {
+  document.querySelectorAll('.btn-filtro-cls').forEach(b => {
+    b.style.background = 'transparent';
+    b.style.borderColor = 'var(--border)';
+    b.style.color = 'var(--muted)';
+  });
+  event.target.style.background = 'rgba(200,169,110,.1)';
+  event.target.style.borderColor = 'var(--gold)';
+  event.target.style.color = 'var(--gold)';
+
+  const filtrados = tipo === 'todos' ? todosLotes
+    : tipo === 'aprovado' ? todosLotes.filter(r => r.pctDesconto <= 5)
+    : tipo === 'ressalva' ? todosLotes.filter(r => r.pctDesconto > 5 && r.pctDesconto <= 15)
+    : tipo === 'negociacao' ? todosLotes.filter(r => r.pctDesconto > 15 && r.pctDesconto <= 30)
+    : todosLotes.filter(r => r.pctDesconto > 30);
+  renderizarListaLotes(filtrados);
+}
+
+// Filtro em tempo real no campo de busca
+document.getElementById('inputLote').addEventListener('input', function() {
+  const termo = this.value.toLowerCase().trim();
+  if (termo.length === 0) { renderizarListaLotes(todosLotes); return; }
+  const filtrados = todosLotes.filter(r =>
+    String(r.lote_atak||r.lote||'').toLowerCase().includes(termo) ||
+    (r.fornecedor||'').toLowerCase().includes(termo)
+  );
+  renderizarListaLotes(filtrados);
+});
 
 // ══════════════════════════════════════════════════════════
 // BUSCA

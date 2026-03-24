@@ -125,6 +125,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     <div class="tab" onclick="showTab('lista',this);loadLista()">📋 Registros</div>
     <div class="tab" onclick="showTab('scanner',this)">📷 Ler Ficha Manual</div>
     <div class="tab" onclick="showTab('importar',this)">📥 Importar CSV</div>
+    <div class="tab" onclick="showTab('descontos',this)">💰 Descontos</div>
   </div>
 
   <!-- ===== NOVO REGISTRO ===== -->
@@ -315,6 +316,84 @@ tr:hover td{background:rgba(255,255,255,0.02);}
     </div>
   </div>
 
+  <!-- ===== DESCONTOS ===== -->
+  <div id="tab-descontos" class="tab-pane">
+    <div class="form-card">
+      <div class="form-section">DECISAO DE DESCONTO</div>
+      <div id="desc-alert" class="alert alert-warn" style="display:none;"></div>
+
+      <div class="form-grid">
+        <div class="fg">
+          <label>Selecionar Carga/PCR</label>
+          <select id="desc-carga-select" onchange="carregarCargaDesconto()">
+            <option value="">— Selecione uma carga —</option>
+          </select>
+        </div>
+        <div class="fg">
+          <label>Responsavel pela Carteira</label>
+          <input type="text" id="desc-responsavel" readonly style="font-weight:700;color:var(--accent);">
+        </div>
+      </div>
+
+      <div id="desc-detalhes" style="display:none;">
+        <div class="form-section">DESCONTO POR QUANTIDADE</div>
+        <div id="desc-qtd-detalhes"></div>
+        <div style="margin-top:12px;padding:12px;background:var(--surface2);border-radius:2px;">
+          <span style="font-size:11px;color:var(--muted);">DESCONTO LIQUIDO QUANTIDADE:</span>
+          <strong id="desc-qtd-valor" style="font-size:16px;margin-left:8px;color:var(--accent);">R$ 0,00</strong>
+        </div>
+
+        <div class="form-section">DESCONTO POR QUALIDADE</div>
+        <div class="form-grid">
+          <div class="fg">
+            <label>Tipo de Desconto</label>
+            <select id="desc-qual-tipo" onchange="toggleDescontoQual()">
+              <option value="">— Selecione —</option>
+              <option value="nao_descontar">Nao descontar</option>
+              <option value="valor_fixo">Valor fixo negociado</option>
+              <option value="proporcional">Proporcional (ex: PELANDO 2x1)</option>
+              <option value="proxima_nota">Descontar na proxima nota</option>
+            </select>
+          </div>
+          <div class="fg" id="desc-qual-valor-box" style="display:none;">
+            <label>Valor em R$</label>
+            <input type="number" id="desc-qual-valor" step="0.01" oninput="calcularTotalDesconto()">
+          </div>
+        </div>
+
+        <div class="form-section">DECISAO FINAL</div>
+        <div class="form-grid">
+          <div class="fg">
+            <label>Decisao</label>
+            <select id="desc-decisao">
+              <option value="AGUARDANDO_DECISAO">Aguardando decisao</option>
+              <option value="PODE_PAGAR">Pode pagar (sem desconto)</option>
+              <option value="DESCONTAR_QUANTIDADE">Descontar falta de quantidade</option>
+              <option value="DESCONTAR_QUALIDADE">Descontar qualidade</option>
+              <option value="DESCONTAR_AMBOS">Descontar quantidade + qualidade</option>
+              <option value="NAO_DESCONTAR">Nao descontar nada</option>
+              <option value="DESCONTAR_PROXIMA_NOTA">Descontar na proxima nota</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:2px;">
+          <div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;">VALOR TOTAL DE DESCONTO</div>
+          <div id="desc-total" style="font-family:'Syne',sans-serif;font-size:28px;font-weight:800;color:var(--accent);margin-top:4px;">R$ 0,00</div>
+        </div>
+
+        <div class="fg full" style="margin-top:16px;">
+          <label>Observacoes</label>
+          <textarea id="desc-obs" placeholder="Ex: Jean autorizou, descontar PELANDO 2x1..."></textarea>
+        </div>
+
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn-primary" onclick="confirmarDesconto()">CONFIRMAR DECISAO</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- MODAL de detalhe -->
 <div class="modal-bg" id="modal-detail">
   <div class="modal">
@@ -473,6 +552,8 @@ function initForm() {
   }
   // Default today
   document.getElementById('f-data').value = new Date().toISOString().slice(0,10);
+  // Carregar lista de cargas para aba de descontos
+  carregarListaCargas();
 }
 
 // ---- TABS ----
@@ -949,6 +1030,141 @@ async function importarCSV() {
     loadLista();
   } else {
     status.textContent=`⚠ ${ok} importados, ${fail} com erro`;
+  }
+}
+
+// ---- DESCONTOS ----
+const CARTEIRA_RESPONSAVEL = {
+  'FRIGODASKO': 'DORLY', 'FLORAI': 'JEAN', 'FRIG. FLORAI': 'JEAN',
+  'MONTALFRIG': 'JEAN', 'GOLD CARNES': 'JEAN', 'M A FOOD': 'JEAN',
+  'CALIBRE': 'JEAN', 'FRICAL': 'DORLY', 'FRIGOL': 'DORLY',
+  'MARFRIG': 'DORLY', 'JBS': 'DORLY', 'MINERVA': 'JEAN',
+  'BRF': 'DORLY', 'AURORA': 'JEAN',
+};
+
+let cargaDescontoAtual = null;
+
+function calcularDescontoQuantidade(produtos) {
+  let descontoFalta = 0, creditoExcesso = 0;
+  const detalhes = [];
+  for (const p of produtos) {
+    const dif = p.recebida - p.prevista;
+    if (dif < 0) { descontoFalta += Math.abs(dif) * p.preco; detalhes.push({produto:p.nome, tipo:'FALTA', kg:Math.abs(dif), valor:Math.abs(dif)*p.preco}); }
+    else if (dif > 0) { creditoExcesso += dif * p.preco; detalhes.push({produto:p.nome, tipo:'A_MAIS', kg:dif, valor:dif*p.preco}); }
+  }
+  return { desconto_falta: descontoFalta, credito_excesso: creditoExcesso, desconto_liquido: descontoFalta - creditoExcesso, detalhes };
+}
+
+function parseQualidadeOmaso(texto) {
+  const mapa = {
+    pelando: ['pelando','fermentacao','fermentação'],
+    sem_folha: ['sem folha','s.folha','sfolha'],
+    folha_estour: ['folha e','f.e','fe:','folha estourada'],
+    pedaco: ['pedaco','pedaço','pedaços'],
+    rasgado: ['rasgado'],
+    furado: ['furado'],
+    sujo: ['sujo','despojo'],
+    corte_incorr: ['c.i','ci:','corte i','sebo'],
+  };
+  const resultado = {};
+  const textoNorm = texto.toLowerCase();
+  for (const [chave, aliases] of Object.entries(mapa)) {
+    for (const alias of aliases) {
+      const regex = new RegExp(alias + '[:\\s]+([\\d.]+)', 'i');
+      const match = textoNorm.match(regex);
+      if (match) { resultado[chave] = parseFloat(match[1]); break; }
+    }
+  }
+  return resultado;
+}
+
+async function carregarListaCargas() {
+  const SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : CQAuth?.getSbUrl?.() || '';
+  const SB_KEY = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : CQAuth?.getSbKey?.() || '';
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/registros_cq?order=data_entrada.desc&limit=50&select=id,numero_documento,fornecedor,data_entrada,lote_atak`, {
+      headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+    });
+    if (!res.ok) return;
+    const cargas = await res.json();
+    const sel = document.getElementById('desc-carga-select');
+    cargas.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c.id;
+      opt.textContent = `PCR ${c.numero_documento||'—'} · ${c.fornecedor||'—'} · ${c.data_entrada||''}`;
+      opt.dataset.fornecedor = c.fornecedor || '';
+      sel.appendChild(opt);
+    });
+  } catch(e) { console.error('Erro carregando cargas:', e); }
+}
+
+async function carregarCargaDesconto() {
+  const sel = document.getElementById('desc-carga-select');
+  const id = sel.value;
+  if (!id) { document.getElementById('desc-detalhes').style.display = 'none'; return; }
+
+  const forn = sel.options[sel.selectedIndex].dataset.fornecedor || '';
+
+  // Find responsible
+  const resp = Object.entries(CARTEIRA_RESPONSAVEL).find(([k]) => forn.toUpperCase().includes(k));
+  document.getElementById('desc-responsavel').value = resp ? resp[1] : 'NAO DEFINIDO';
+
+  document.getElementById('desc-detalhes').style.display = 'block';
+
+  // For now, show placeholder for quantity discount
+  document.getElementById('desc-qtd-detalhes').innerHTML = '<div style="color:var(--muted);font-size:12px;">Carregando dados de quantidade...</div>';
+  document.getElementById('desc-qtd-valor').textContent = 'R$ 0,00';
+}
+
+function toggleDescontoQual() {
+  const tipo = document.getElementById('desc-qual-tipo').value;
+  document.getElementById('desc-qual-valor-box').style.display =
+    (tipo === 'valor_fixo' || tipo === 'proporcional') ? 'flex' : 'none';
+  calcularTotalDesconto();
+}
+
+function calcularTotalDesconto() {
+  const qtdText = document.getElementById('desc-qtd-valor')?.textContent || '';
+  const qtdVal = parseFloat(qtdText.replace(/[^\d.,-]/g,'').replace(',','.') || '0');
+  const qualVal = parseFloat(document.getElementById('desc-qual-valor')?.value || '0');
+  const total = qtdVal + qualVal;
+  document.getElementById('desc-total').textContent = 'R$ ' + total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+async function confirmarDesconto() {
+  const sel = document.getElementById('desc-carga-select');
+  const id = sel.value;
+  if (!id) { alert('Selecione uma carga'); return; }
+
+  const user = typeof CQAuth !== 'undefined' ? CQAuth.getUser() : null;
+  const decisao = {
+    decisao_desconto: document.getElementById('desc-decisao').value,
+    valor_desconto_qualidade: parseFloat(document.getElementById('desc-qual-valor')?.value || '0'),
+    valor_desconto_total: parseFloat(document.getElementById('desc-total')?.textContent?.replace(/[^\d.,-]/g,'').replace(',','.') || '0'),
+    responsavel_carteira: document.getElementById('desc-responsavel').value,
+    obs_desconto: document.getElementById('desc-obs').value,
+    desconto_confirmado_em: new Date().toISOString(),
+    desconto_executado_por: user?.nome || user?.email || 'sistema',
+  };
+
+  const SB_URL = typeof SUPABASE_URL !== 'undefined' ? SUPABASE_URL : CQAuth?.getSbUrl?.() || '';
+  const SB_KEY = typeof SUPABASE_KEY !== 'undefined' ? SUPABASE_KEY : CQAuth?.getSbKey?.() || '';
+
+  try {
+    const res = await fetch(`${SB_URL}/rest/v1/registros_cq?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify(decisao)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    alert('Decisao de desconto registrada com sucesso!');
+  } catch(e) {
+    alert('Erro ao salvar decisao: ' + e.message);
   }
 }
 

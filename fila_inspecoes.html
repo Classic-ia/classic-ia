@@ -327,6 +327,18 @@ body {
 <script src="cq_auth.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
+// ── HELPER sbFetch ─────────────────────────────────────────
+async function sbFetch(tabela, query) {
+  const SB_URL = CQAuth.getSbUrl();
+  const SB_KEY = CQAuth.getSbKey();
+  const JWT = CQAuth.getAuthToken() || SB_KEY;
+  const res = await fetch(`${SB_URL}/rest/v1/${tabela}?${query}`, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + JWT }
+  });
+  if (!res.ok) return [];
+  return res.json();
+}
+
 // ══════════════════════════════════════════════════════════
 // FILA DE INSPEÇÕES — Classic CQ
 // ══════════════════════════════════════════════════════════
@@ -436,6 +448,18 @@ async function carregarLista() {
     const { dados } = await CQWorkflow.listarInspecoes(filtros, paginaAtual, POR_PAGINA);
 
     if (!dados || dados.length === 0) {
+      // Fallback: buscar direto da tabela
+      const fallback = await sbFetch('registros_cq_inspecao', 'order=criado_em.desc&limit=50');
+      if (fallback && fallback.length > 0) {
+        container.innerHTML = fallback.map(r => renderCard({
+          ...r,
+          status_workflow: r.status_workflow || 'rascunho',
+          usuario_nome: r.inspetor || r.usuario_email || '—',
+          total_ncs: 0
+        })).join('');
+        renderPaginacao(fallback.length);
+        return;
+      }
       container.innerHTML = `
         <div class="lista-vazia">
           <div class="lista-vazia-icon">📋</div>

@@ -650,9 +650,8 @@ textarea.field-input {
 
       <div class="field">
         <label class="field-label">Inspetor <span class="req">*</span></label>
-        <select class="field-input" id="f-inspetor" required>
-          <option value="">Selecione o inspetor</option>
-        </select>
+        <input class="field-input" type="text" id="f-inspetor" readonly
+          style="background:var(--bg3);cursor:default;">
       </div>
 
       <div class="field">
@@ -1097,14 +1096,53 @@ let isOnline          = navigator.onLine;
 // INIT FORNECEDORES
 // ══════════════════════════════════════════════════════════
 function initFornecedores(){
-  CQFornecedores.renderizar('forn-container', function(f){
-    document.getElementById('f-fornecedor').value      = f.codigo;
-    document.getElementById('f-fornecedor-nome').value = f.nome;
-    updateSaveStatus();
-  });
+  try {
+    if (typeof CQFornecedores !== 'undefined' && CQFornecedores.renderizar) {
+      CQFornecedores.renderizar('forn-container', function(f){
+        document.getElementById('f-fornecedor').value      = f.codigo;
+        document.getElementById('f-fornecedor-nome').value = f.nome;
+        updateSaveStatus();
+      });
+    } else {
+      throw new Error('CQFornecedores nao disponivel');
+    }
+  } catch(e) {
+    console.warn('Fallback fornecedor (texto livre):', e.message);
+    // Fallback: input de texto livre
+    var container = document.getElementById('forn-container');
+    if (container) {
+      container.innerHTML = '';
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = 'Digite o nome do fornecedor...';
+      inp.className = 'field-input';
+      inp.style.cssText = 'width:100%;box-sizing:border-box;';
+      inp.addEventListener('input', function() {
+        document.getElementById('f-fornecedor-nome').value = inp.value;
+        document.getElementById('f-fornecedor').value = inp.value;
+        updateSaveStatus();
+      });
+      container.appendChild(inp);
+    }
+  }
 }
 
 (async function init(){
+  // ═══ RENDERIZAR UI ESSENCIAL PRIMEIRO (antes de qualquer await) ═══
+  try {
+    renderDeleitos();
+    // Data/hora padrão agora
+    const now0 = new Date();
+    document.getElementById('f-data').value = now0.toISOString().slice(0,10);
+    document.getElementById('f-hora').value = now0.toTimeString().slice(0,5);
+    // Responsáveis
+    const dlResp0 = document.getElementById('resp-list');
+    if(dlResp0) RESPONSAVEIS.forEach(r=>{ const o=document.createElement('option'); o.value=r; dlResp0.appendChild(o); });
+    // Gera ID único
+    gerarId();
+  } catch(e) { console.error('Erro ao renderizar UI essencial:', e); }
+
+  // ═══ INICIALIZAÇÃO ASYNC (auth, permissões, etc.) ═══
   // Inicializar auth — bloqueia se não autenticado
   const usuario = await CQAuth.init({
     perfisPermitidos: ['administrador','qualidade'],
@@ -1133,12 +1171,15 @@ function initFornecedores(){
     CQPermissoes.aplicarNaPagina();
   }
 
-  // Preencher campos ocultos de auditoria
+  // Preencher inspetor com nome do usuário logado + campos ocultos de auditoria
   if (usuario) {
+    const nomeUsuario = usuario.nome || usuario.email || '';
+    const elInsp = document.getElementById('f-inspetor');
+    if (elInsp) elInsp.value = nomeUsuario;
     const el = document.getElementById('f-usuario-id');
     if (el) el.value = usuario.id || '';
     const el2 = document.getElementById('f-usuario-nome');
-    if (el2) el2.value = usuario.nome || usuario.email || '';
+    if (el2) el2.value = nomeUsuario;
   }
 
   // Geo → preencher campos ocultos quando chegar
@@ -1151,9 +1192,6 @@ function initFornecedores(){
     if (elLng) elLng.value = geo.longitude;
     if (elDen) elDen.value = geo.dentro_planta ? '1' : '0';
   };
-
-  // Gera ID único
-  gerarId();
 
   // Pré-preencher campos vindos do Recebimento (?lote=0046&fornecedor=60111&...)
   (function preencherDeURL(){
@@ -1182,20 +1220,7 @@ function initFornecedores(){
     if (lote || fornCod) updateSaveStatus();
   })();
 
-  // Data/hora padrão agora
-  const now = new Date();
-  document.getElementById('f-data').value = now.toISOString().slice(0,10);
-  document.getElementById('f-hora').value = now.toTimeString().slice(0,5);
-
-  // Popula selects
-  const selInsp = document.getElementById('f-inspetor');
-  INSPETORES.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; selInsp.appendChild(o); });
-
-  const dlResp = document.getElementById('resp-list');
-  RESPONSAVEIS.forEach(r=>{ const o=document.createElement('option'); o.value=r; dlResp.appendChild(o); });
-
-  // Renderiza defeitos
-  renderDeleitos();
+  // (Data/hora, responsáveis e defeitos já renderizados no topo do init)
 
   // Offline
   window.addEventListener('online',  ()=>{ isOnline=true;  document.getElementById('offlineBanner').classList.remove('show'); });
@@ -1210,10 +1235,10 @@ function initFornecedores(){
   updateSaveStatus();
 
   // Componente de busca de fornecedores (cq_fornecedores.js já carregado antes deste bloco)
-  initFornecedores();
+  try { initFornecedores(); } catch(e) { console.warn('initFornecedores falhou:', e); }
 
   // ── VEÍCULOS E MOTORISTAS (autocomplete) ──────────────────
-  carregarVeiculosMotoristas();
+  try { carregarVeiculosMotoristas(); } catch(e) { console.warn('carregarVeiculosMotoristas falhou:', e); }
 
   // ── MODO VIEW/EDIT (Bloco 5) ──────────────────────────────
   CQWorkflow.injetarCSS();

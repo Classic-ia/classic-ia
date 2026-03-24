@@ -1096,11 +1096,35 @@ let isOnline          = navigator.onLine;
 // INIT FORNECEDORES
 // ══════════════════════════════════════════════════════════
 function initFornecedores(){
-  CQFornecedores.renderizar('forn-container', function(f){
-    document.getElementById('f-fornecedor').value      = f.codigo;
-    document.getElementById('f-fornecedor-nome').value = f.nome;
-    updateSaveStatus();
-  });
+  try {
+    if (typeof CQFornecedores !== 'undefined' && CQFornecedores.renderizar) {
+      CQFornecedores.renderizar('forn-container', function(f){
+        document.getElementById('f-fornecedor').value      = f.codigo;
+        document.getElementById('f-fornecedor-nome').value = f.nome;
+        updateSaveStatus();
+      });
+    } else {
+      throw new Error('CQFornecedores nao disponivel');
+    }
+  } catch(e) {
+    console.warn('Fallback fornecedor (texto livre):', e.message);
+    // Fallback: input de texto livre
+    var container = document.getElementById('forn-container');
+    if (container) {
+      container.innerHTML = '';
+      var inp = document.createElement('input');
+      inp.type = 'text';
+      inp.placeholder = 'Digite o nome do fornecedor...';
+      inp.className = 'field-input';
+      inp.style.cssText = 'width:100%;box-sizing:border-box;';
+      inp.addEventListener('input', function() {
+        document.getElementById('f-fornecedor-nome').value = inp.value;
+        document.getElementById('f-fornecedor').value = inp.value;
+        updateSaveStatus();
+      });
+      container.appendChild(inp);
+    }
+  }
 }
 
 (async function init(){
@@ -1210,10 +1234,10 @@ function initFornecedores(){
   updateSaveStatus();
 
   // Componente de busca de fornecedores (cq_fornecedores.js já carregado antes deste bloco)
-  initFornecedores();
+  try { initFornecedores(); } catch(e) { console.warn('initFornecedores falhou:', e); }
 
   // ── VEÍCULOS E MOTORISTAS (autocomplete) ──────────────────
-  carregarVeiculosMotoristas();
+  try { carregarVeiculosMotoristas(); } catch(e) { console.warn('carregarVeiculosMotoristas falhou:', e); }
 
   // ── MODO VIEW/EDIT (Bloco 5) ──────────────────────────────
   CQWorkflow.injetarCSS();

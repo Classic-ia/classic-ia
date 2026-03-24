@@ -11,6 +11,7 @@
    VARIÁVEIS
 ────────────────────────────────────────────────── */
 :root {
+  color-scheme: dark;
   --bg:       #0e0e0e;
   --bg2:      #141414;
   --bg3:      #1a1a1a;
@@ -1793,7 +1794,6 @@ function montarRegistro(){
     temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
     placa_caminhao:          document.getElementById('f-placa')?.value.trim().toUpperCase() || null,
     motorista:               document.getElementById('f-motorista')?.value.trim() || null,
-    transportadora:          document.getElementById('f-transportadora')?.value.trim() || null,
     obs_reprovado:        document.getElementById('f-obs-reprovado').value || null,
     foto_etiqueta:        fotoEtiquetaData ? '[foto]' : null,
     foto_produto:         fotoProdutoData  ? '[foto]' : null,
@@ -1960,7 +1960,6 @@ async function salvarInspecao(){
         temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
         placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
         motorista:               document.getElementById('f-motorista')?.value || null,
-        transportadora:          document.getElementById('f-transportadora')?.value || null,
         // Defeitos (dados brutos — backend calcula total e %)
         fermentacao:             parseInt(document.getElementById('df-fermentacao')?.value)||0,
         sem_folhas:              parseInt(document.getElementById('df-sem_folhas')?.value)||0,
@@ -2150,7 +2149,7 @@ function limparForm(){
   CQFornecedores.limpar('forn-container');
   const outroDesc = document.getElementById('f-outro-defeito-tipo');
   if (outroDesc) outroDesc.value = '';
-  ['f-temperatura','f-placa','f-motorista','f-transportadora'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
+  ['f-temperatura','f-placa','f-motorista'].forEach(id=>{ const el=document.getElementById(id); if(el) el.value=''; });
   const tempAlert = document.getElementById('f-temp-alerta'); if(tempAlert) tempAlert.style.display='none';
   const outroWrap = document.getElementById('outro-desc-wrap');
   if (outroWrap) outroWrap.style.display = 'none';
@@ -2307,81 +2306,114 @@ function fecharOCR() {
   document.getElementById('ocrModal').style.display = 'none';
 }
 
+function executarOCR(imagemData) {
+  var statusEl = document.getElementById('ocrStatus');
+  document.getElementById('ocrTexto').value = '';
+  statusEl.textContent = 'Processando OCR...';
+
+  Tesseract.recognize(imagemData, 'por', {
+    logger: function(m) {
+      if (m.status === 'recognizing text') {
+        statusEl.textContent = 'Lendo... ' + Math.round((m.progress || 0) * 100) + '%';
+      }
+    }
+  }).then(function(result) {
+    var text = result.data.text;
+    console.log('OCR texto bruto:', text);
+    statusEl.textContent = '';
+
+    var extraido = extrairNumeroOCR(text, ocrCampoAlvo);
+    document.getElementById('ocrTexto').value = extraido;
+    if (extraido) toast('Numero identificado: ' + extraido, 'ok');
+    else { statusEl.textContent = 'Nao identificado - edite manualmente'; document.getElementById('ocrTexto').focus(); }
+  }).catch(function(err) {
+    console.error('OCR erro:', err);
+    statusEl.textContent = 'OCR falhou - digite manualmente';
+    document.getElementById('ocrTexto').value = '';
+    setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
+  });
+}
+
+function extrairNumeroOCR(text, campo) {
+  if (campo === 'etiqueta') {
+    // Padrão principal: 101-001-XXXXX (com variações de OCR)
+    var m = text.match(/1[0O][1l][-.\s]?[0O][0O][1l][-.\s]?\d{4,6}/i);
+    if (m) return m[0].replace(/[^0-9\-]/g, '').replace(/\s/g, '');
+    // Padrão alternativo: qualquer sequência NNN-NNN-NNNNN
+    m = text.match(/\d{2,3}[-.\s]\d{2,3}[-.\s]\d{4,6}/);
+    if (m) return m[0].replace(/\s/g, '');
+    // Fallback: maior sequência numérica com hífens
+    m = text.match(/[\d][\d\-.\s]{6,}/);
+    if (m) return m[0].replace(/[^0-9\-]/g, '').trim();
+    // Ultimo fallback: qualquer número com 4+ dígitos
+    var nums = text.match(/\d{4,}/g);
+    if (nums) { nums.sort(function(a,b){ return b.length - a.length; }); return nums[0]; }
+    return text.replace(/[^0-9\-]/g, '').trim().slice(0, 15);
+  } else {
+    // Lote/Requisição: múltiplos padrões
+    // 1. REQUISIÇÃO/REQUISICAO NNNNN
+    var m = text.match(/REQUISI[CÇcç][AÃaã][O0o]\s*[:\-.\n]?\s*(\d{3,8})/i);
+    if (m) return m[1];
+    // 2. REQ NNNNN ou REQ: NNNNN
+    if (!m) m = text.match(/REQ[UISI]*[CÇ]*[AÃ]*[O0]*[.\s:;\-]*(\d{3,8})/i);
+    if (m) return m[1];
+    // 3. Nº NNNNN ou N° NNNNN ou NUM NNNNN
+    if (!m) m = text.match(/N[º°]\s*[:\-]?\s*(\d{3,8})/i);
+    if (m) return m[1];
+    if (!m) m = text.match(/NUM[ERO]*\s*[:\-]?\s*(\d{3,8})/i);
+    if (m) return m[1];
+    // 4. LOTE seguido de número
+    if (!m) m = text.match(/LOTE\s*[:\-]?\s*(\d{3,8})/i);
+    if (m) return m[1];
+    // 5. Fallback: maior número com 4+ dígitos
+    var nums = text.match(/\d{4,8}/g);
+    if (nums) { nums.sort(function(a,b){ return b.length - a.length; }); return nums[0]; }
+    // 6. Ultimo fallback: qualquer dígito encontrado
+    return text.replace(/[^0-9]/g, '').trim().slice(0, 8);
+  }
+}
+
+let _ocrImagemPendente = null;
+
 function processarOCR(input) {
   const file = input.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = function(e) {
+    const imagemData = e.target.result;
+
     // Mostrar preview da foto
     const prev = document.getElementById('ocrPreview');
-    prev.innerHTML = '<img src="' + e.target.result + '" style="width:100%;height:100%;object-fit:contain;">';
+    prev.innerHTML = '<img src="' + imagemData + '" style="width:100%;height:100%;object-fit:contain;">';
 
     // OCR via Tesseract.js
     const img = new Image();
     img.onload = function() {
       document.getElementById('ocrResultado').style.display = 'block';
-      const statusEl = document.getElementById('ocrStatus');
 
       if (typeof Tesseract !== 'undefined') {
-        document.getElementById('ocrTexto').value = '';
-        statusEl.textContent = 'Processando OCR...';
-
-        Tesseract.recognize(e.target.result, 'por', {
-          logger: function(m) {
-            if (m.status === 'recognizing text') {
-              statusEl.textContent = 'Lendo... ' + Math.round((m.progress || 0) * 100) + '%';
-            }
-          }
-        }).then(function(result) {
-          var text = result.data.text;
-          console.log('OCR texto bruto:', text);
-          statusEl.textContent = '';
-
-          var extraido = '';
-          if (ocrCampoAlvo === 'etiqueta') {
-            // Etiqueta: padrao 101-001-XXXXX
-            var m = text.match(/101[-\s]?001[-\s]?\d{5,6}/);
-            extraido = m ? m[0].replace(/\s/g, '') : text.replace(/[^0-9\-]/g, '').trim();
-          } else {
-            // Lote/Requisicao: procurar REQUISICAO nnnnn
-            var m = text.match(/REQUISI[CÇ][AÃ]O\s*[:\-
-]?\s*(\d{3,8})/i);
-            if (!m) m = text.match(/REQ[.\s]*[:\-]?\s*(\d{3,8})/i);
-            if (m) {
-              extraido = m[1];
-            } else {
-              // Fallback: maior numero com 4+ digitos
-              var nums = text.match(/\d{4,8}/g);
-              if (nums) {
-                nums.sort(function(a, b) { return b.length - a.length; });
-                extraido = nums[0];
-              } else {
-                extraido = text.replace(/[^0-9]/g, '').trim().slice(0, 8);
-              }
-            }
-          }
-          document.getElementById('ocrTexto').value = extraido;
-          if (extraido) toast('Numero identificado: ' + extraido, 'ok');
-        }).catch(function(err) {
-          console.error('OCR erro:', err);
-          statusEl.textContent = 'OCR falhou - digite manualmente';
-          document.getElementById('ocrTexto').value = '';
-          setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
-        });
+        executarOCR(imagemData);
       } else {
-        // Sem Tesseract - carregar dinamicamente
+        // Sem Tesseract - carregar e processar automaticamente
+        var statusEl = document.getElementById('ocrStatus');
         statusEl.textContent = 'Carregando OCR...';
         document.getElementById('ocrTexto').value = '';
+        _ocrImagemPendente = imagemData;
         var scr = document.createElement('script');
         scr.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js';
-        scr.onload = function() { statusEl.textContent = 'OCR pronto - tire outra foto'; };
-        scr.onerror = function() { statusEl.textContent = 'OCR indisponivel - digite manualmente'; };
+        scr.onload = function() {
+          // Processar a foto pendente automaticamente
+          if (_ocrImagemPendente) {
+            executarOCR(_ocrImagemPendente);
+            _ocrImagemPendente = null;
+          }
+        };
+        scr.onerror = function() { statusEl.textContent = 'OCR indisponivel - digite manualmente'; document.getElementById('ocrTexto').focus(); };
         document.head.appendChild(scr);
-        setTimeout(function() { document.getElementById('ocrTexto').focus(); }, 100);
       }
     };
-    img.src = e.target.result;
+    img.src = imagemData;
   };
   reader.readAsDataURL(file);
 }
@@ -2434,7 +2466,7 @@ function checkTemperatura() {
 // ══════════════════════════════════════════════════════════════
 function gerarPDFInspecao() {
   // Coletar dados atuais do formulário
-  const reg = coletarRegistro ? coletarRegistro() : null;
+  const reg = typeof montarRegistro === 'function' ? montarRegistro() : null;
 
   const DEF_LABELS = {
     fermentacao:'Fermentação', sem_folhas:'Sem Folhas',
@@ -2510,7 +2542,7 @@ function gerarPDFInspecao() {
   <tr><td>Qtd. Lote / Analisada</td><td>${fv('f-qtd-lote')} / ${fv('f-qtd-analisada')} peças</td></tr>
   <tr><td>Tipo de Amostragem</td><td>${fv('f-tipo-amostragem') || '—'}</td></tr>
   <tr><td>Temperatura Recebimento</td><td>${fv('f-temperatura') ? fv('f-temperatura') + '°C' : '—'}</td></tr>
-  ${fv('f-placa') ? `<tr><td>Placa / Motorista</td><td>${fv('f-placa')} — ${fv('f-motorista')} (${fv('f-transportadora')})</td></tr>` : ''}
+  ${fv('f-placa') ? `<tr><td>Placa / Motorista</td><td>${fv('f-placa')} — ${fv('f-motorista')}</td></tr>` : ''}
 </tbody></table>
 
 <h2>2. Defeitos Identificados</h2>
@@ -2719,7 +2751,6 @@ function preencherCamposVisualizacao(insp) {
     'f-temperatura':    insp.temperatura_recebimento,
     'f-placa':          insp.placa_caminhao,
     'f-motorista':      insp.motorista,
-    'f-transportadora': insp.transportadora,
   };
   for (const [id, val] of Object.entries(mapa)) {
     const el = document.getElementById(id);
@@ -2789,7 +2820,6 @@ async function atualizarInspecaoExistente(id) {
     temperatura_recebimento: parseFloat(document.getElementById('f-temperatura')?.value) || null,
     placa_caminhao:          document.getElementById('f-placa')?.value?.toUpperCase() || null,
     motorista:               document.getElementById('f-motorista')?.value || null,
-    transportadora:          document.getElementById('f-transportadora')?.value || null,
   };
 
   try {

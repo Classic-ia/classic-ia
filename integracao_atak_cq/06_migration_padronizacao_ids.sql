@@ -34,7 +34,9 @@ CREATE TABLE IF NOT EXISTS cq_transportadoras (
 CREATE INDEX IF NOT EXISTS idx_transportadora_nome ON cq_transportadoras(nome);
 
 ALTER TABLE cq_transportadoras ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "auth_read_transportadoras" ON cq_transportadoras;
 CREATE POLICY "auth_read_transportadoras" ON cq_transportadoras FOR SELECT USING (true);
+DROP POLICY IF EXISTS "auth_all_transportadoras" ON cq_transportadoras;
 CREATE POLICY "auth_all_transportadoras" ON cq_transportadoras FOR ALL USING (true);
 
 -- 1.2 Frigoríficos (distintos de fornecedores genéricos)

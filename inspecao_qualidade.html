@@ -2757,33 +2757,61 @@ function gerarPDFInspecao() {
     const el = document.getElementById('df-' + k);
     totalDefPdf += el ? (parseInt(el.value) || 0) : 0;
   });
-  const pct = qtdA > 0 ? (totalDefPdf / qtdA * 100) : 0;
-  const cls = CQRegras.motorDecisaoLocal(pct).classificacao;
+  const pctTotal = qtdA > 0 ? (totalDefPdf / qtdA * 100) : 0;
+  // Classificação baseada nos defeitos de desconto (não no total)
+  // será recalculada após a separação por categoria
   const hoje  = new Date().toLocaleDateString('pt-BR');
   const hora  = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit',minute:'2-digit'});
 
-  const clsLabel = cls==='A'
-    ? 'Aprovado (0-5%)'
-    : cls==='B'
-    ? 'Aprovado com Ressalva (5-15%)'
-    : pct > 30
-    ? 'Reprovado (>30%)'
-    : 'Sujeito a Negociação (15-30%)';
+  // Categorias de defeitos
+  const DESC_KEYS = ['fermentacao','sem_folhas','folhas_arrebentadas','pedaco'];
+  const CORR_KEYS = ['rasgado','furado','sujo','corte_irregular','mau_cheiro','contaminacao','outro_defeito'];
 
+  let totalDesc = 0, totalCorr = 0;
+
+  // Linhas de defeitos com separação por categoria
+  const defRowsDesc = DESC_KEYS.map(k => {
+    const el = document.getElementById('df-' + k);
+    const v  = el ? parseInt(el.value) || 0 : 0;
+    totalDesc += v;
+    const p  = qtdA > 0 ? (v / qtdA * 100).toFixed(2) : '0.00';
+    return v > 0 ? `<tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:5px 8px">${DEF_LABELS[k]}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${v}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${p}%</td>
+    </tr>` : '';
+  }).join('');
+
+  const defRowsCorr = CORR_KEYS.map(k => {
+    const el = document.getElementById('df-' + k);
+    const v  = el ? parseInt(el.value) || 0 : 0;
+    totalCorr += v;
+    const p  = qtdA > 0 ? (v / qtdA * 100).toFixed(2) : '0.00';
+    return v > 0 ? `<tr style="border-bottom:1px solid #e5e7eb;">
+      <td style="padding:5px 8px">${DEF_LABELS[k]}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${v}</td>
+      <td style="padding:5px 8px;text-align:right;font-family:monospace">${p}%</td>
+    </tr>` : '';
+  }).join('');
+
+  const pctDesc = qtdA > 0 ? (totalDesc / qtdA * 100) : 0;
+  const pctCorr = qtdA > 0 ? (totalCorr / qtdA * 100) : 0;
+
+  // Classificação baseada nos defeitos de desconto
+  const pct = pctDesc; // classificação = % defeitos de desconto financeiro
+  const cls = pct <= 5 ? 'A' : pct <= 15 ? 'B' : 'C';
+  const clsLabel = pct <= 5 ? 'Aprovado (0-5%)'
+    : pct <= 15 ? 'Aprovado com Ressalva (5-15%)'
+    : pct > 30 ? 'Reprovado (>30%)'
+    : 'Sujeito a Negociacao (15-30%)';
   const clsCor = cls==='A'?'#155724':cls==='B'?'#856404':'#721c24';
   const clsBg  = cls==='A'?'#d4edda':cls==='B'?'#fff3cd':'#f8d7da';
 
-  // Linhas de defeitos
-  const defRows = Object.entries(DEF_LABELS).map(([k, label]) => {
-    const el = document.getElementById('df-' + k);
-    const v  = el ? parseInt(el.value) || 0 : 0;
-    const p  = qtdA > 0 ? (v / qtdA * 100).toFixed(2) : '0.00';
-    return `<tr style="border-bottom:1px solid #e5e7eb;">
-      <td style="padding:5px 8px">${label}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${v}</td>
-      <td style="padding:5px 8px;text-align:right;font-family:monospace">${p}%</td>
-    </tr>`;
-  }).join('');
+  const defRows = `
+    ${defRowsDesc ? `<tr style="background:#FEF9C3;"><td colspan="3" style="padding:6px 8px;font-weight:700;font-size:11px;color:#713F12;">DESCONTO FINANCEIRO</td></tr>${defRowsDesc}
+    <tr style="background:#FFFBEB;border-bottom:2px solid #d4a44a"><td style="padding:5px 8px;font-weight:700">Subtotal Desconto</td><td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:700">${totalDesc}</td><td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:700;color:#b45309">${pctDesc.toFixed(2)}%</td></tr>` : ''}
+    ${defRowsCorr ? `<tr style="background:#E0F2FE;"><td colspan="3" style="padding:6px 8px;font-weight:700;font-size:11px;color:#0C4A6E;">AÇÃO CORRETIVA</td></tr>${defRowsCorr}
+    <tr style="background:#F0F9FF;border-bottom:2px solid #2E6B8A"><td style="padding:5px 8px;font-weight:700">Subtotal Corretiva</td><td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:700">${totalCorr}</td><td style="padding:5px 8px;text-align:right;font-family:monospace;font-weight:700;color:#0369a1">${pctCorr.toFixed(2)}%</td></tr>` : ''}`;
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Relatório de Inspeção CQ</title>
@@ -2829,10 +2857,23 @@ function gerarPDFInspecao() {
 <table><thead><tr><th>Tipo de Defeito</th><th style="text-align:right">Quantidade</th><th style="text-align:right">% da Amostra</th></tr></thead>
 <tbody>${defRows}</tbody>
 <tfoot><tr style="background:#1a3a52;color:white">
-  <td style="padding:6px 8px;font-weight:700">TOTAL</td>
+  <td style="padding:6px 8px;font-weight:700">TOTAL GERAL</td>
   <td style="padding:6px 8px;text-align:right;font-family:monospace">${totalDefPdf}</td>
-  <td style="padding:6px 8px;text-align:right;font-family:monospace">${pct.toFixed(1)}%</td>
+  <td style="padding:6px 8px;text-align:right;font-family:monospace">${pctTotal.toFixed(1)}%</td>
 </tr></tfoot></table>
+
+<div style="display:flex;gap:12px;margin:8px 0 4px;">
+  <div style="flex:1;padding:8px 10px;background:#FEF9C3;border-radius:4px;border:1px solid #d4a44a;">
+    <div style="font-size:10px;color:#713F12;font-weight:700;">DESCONTO FINANCEIRO</div>
+    <div style="font-size:16px;font-weight:800;color:#b45309;">${pctDesc.toFixed(1)}%</div>
+    <div style="font-size:10px;color:#92400e;">${totalDesc} pcs de ${qtdA}</div>
+  </div>
+  <div style="flex:1;padding:8px 10px;background:#E0F2FE;border-radius:4px;border:1px solid #2E6B8A;">
+    <div style="font-size:10px;color:#0C4A6E;font-weight:700;">ACAO CORRETIVA</div>
+    <div style="font-size:16px;font-weight:800;color:#0369a1;">${pctCorr.toFixed(1)}%</div>
+    <div style="font-size:10px;color:#075985;">${totalCorr} pcs de ${qtdA}</div>
+  </div>
+</div>
 
 <h2>3. Classificação</h2>
 <div class="cls" style="background:${clsBg};color:${clsCor};border:1px solid ${clsCor}30">${clsLabel}</div>
@@ -2845,17 +2886,13 @@ function gerarPDFInspecao() {
   <tr><td>> 30%</td><td style="color:#b71c1c">Reprovado</td></tr>
 </tbody></table>
 
-<h2>4. Decisão</h2>
-<table class="info"><tbody>
-  <tr><td>Status Final</td><td><strong>${(fv('f-status') || '—').toUpperCase()}</strong></td></tr>
-  <tr><td>Responsável pela Decisão</td><td>${fv('f-responsavel') || '—'}</td></tr>
-</tbody></table>
-${fv('f-obs') ? `<div class="obs"><strong>Observações:</strong><br>${fv('f-obs')}</div>` : ''}
+<h2>4. Observações</h2>
+${fv('f-obs') ? `<div class="obs"><strong>Observações:</strong><br>${fv('f-obs')}</div>` : '<div style="color:#888;font-size:12px;">Nenhuma observação registrada.</div>'}
 ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong>Obs. Bloqueio:</strong><br>${fv('f-obs-reprovado')}</div>` : ''}
 
 <div class="ass">
-  <div class="ass-bloco"><div class="ass-linha">Inspetor Responsável<br>${fv('f-inspetor')}</div></div>
-  <div class="ass-bloco"><div class="ass-linha">Responsável pela Decisão<br>${fv('f-responsavel') || '________________'}</div></div>
+  <div class="ass-bloco"><div class="ass-linha">Inspetor Responsável<br><strong>${fv('f-inspetor')}</strong></div></div>
+  <div class="ass-bloco"><div class="ass-linha">Controle de Qualidade<br>Classic Couros</div></div>
 </div>
 
 <div class="footer">
@@ -2888,7 +2925,9 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
       const bar = iDoc.createElement('div');
       bar.className = 'no-print';
       bar.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a3a52;padding:10px 16px;display:flex;gap:12px;align-items:center;z-index:100;';
-      bar.innerHTML = '<button id="_btnImprimir" style="background:#c8a96e;color:#1a1200;border:none;padding:10px 20px;border-radius:4px;font-weight:700;cursor:pointer;font-size:14px;">Imprimir / Salvar PDF</button><button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:10px 20px;border-radius:4px;cursor:pointer;font-size:14px;">Fechar</button>';
+      bar.innerHTML = `<button id="_btnImprimir" style="background:#c8a96e;color:#1a1200;border:none;padding:12px 20px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;flex:1;max-width:200px;">Imprimir / PDF</button>
+        <button id="_btnCompartilhar" style="background:#27ae60;color:#fff;border:none;padding:12px 20px;border-radius:6px;font-weight:700;cursor:pointer;font-size:14px;flex:1;max-width:200px;">Compartilhar</button>
+        <button id="_btnFecharPdf" style="background:#555;color:#fff;border:none;padding:12px 20px;border-radius:6px;cursor:pointer;font-size:14px;">Fechar</button>`;
 
       // Esconder barra na impressão
       const style = iDoc.createElement('style');
@@ -2900,6 +2939,23 @@ ${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong
 
       iDoc.getElementById('_btnImprimir').addEventListener('click', () => {
         iframe.contentWindow.print();
+      });
+      iDoc.getElementById('_btnCompartilhar').addEventListener('click', async () => {
+        const texto = `CLASSIC COUROS — Relatorio de Inspecao CQ\n` +
+          `Nr: ${fv('inspecaoId') || document.getElementById('inspecaoId')?.textContent || ''}\n` +
+          `Fornecedor: ${fv('f-fornecedor-nome') || fv('f-fornecedor')}\n` +
+          `Produto: ${fv('f-produto')}\n` +
+          `Lote: ${fv('f-lote-atak')}\n` +
+          `Defeitos: ${totalDefPdf} (${pctTotal.toFixed(1)}%)\n` +
+          `Desconto: ${pctDesc.toFixed(1)}% | Corretiva: ${pctCorr.toFixed(1)}%\n` +
+          `Classificacao: ${clsLabel}\n` +
+          `Inspetor: ${fv('f-inspetor')}`;
+        if (navigator.share) {
+          try { await navigator.share({ title: 'Relatorio CQ', text: texto }); }
+          catch(e) { if (e.name !== 'AbortError') console.error(e); }
+        } else {
+          window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+        }
       });
       iDoc.getElementById('_btnFecharPdf').addEventListener('click', () => {
         iframe.style.display = 'none';

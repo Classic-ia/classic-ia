@@ -329,14 +329,14 @@ body {
   <div class="filtros">
     <select class="filtro-input" id="filtro-status" style="min-width:160px;">
       <option value="">Todos os status</option>
+      <option value="aguardando_inspecao">Aguardando Inspeção</option>
+      <option value="inspecionado">Inspecionado</option>
       <option value="rascunho">Rascunho</option>
       <option value="em_analise">Em Análise</option>
       <option value="aguardando_revisao">Aguardando Revisão</option>
-      <option value="revisada">Revisada</option>
-      <option value="reprovada">Reprovada</option>
       <option value="aprovada">Aprovada</option>
+      <option value="reprovada">Reprovada</option>
       <option value="encerrada">Encerrada</option>
-      <option value="cancelada">Cancelada</option>
     </select>
     <div id="filtro-forn-container" style="flex:1;min-width:180px;"></div>
     <input type="hidden" id="filtro-fornecedor" value="">
@@ -477,59 +477,104 @@ document.addEventListener('DOMContentLoaded', async () => {
   await carregarLista();
 });
 
+// ── HELPERS SUPABASE ──────────────────────────────────────
+function _sbHeaders() {
+  const SB_KEY = CQAuth.getSbKey();
+  const JWT = CQAuth.getAuthToken() || SB_KEY;
+  return { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` };
+}
+async function _sbGet(endpoint) {
+  const r = await fetch(`${CQAuth.getSbUrl()}/rest/v1/${endpoint}`, { headers: _sbHeaders() });
+  if (!r.ok) return [];
+  return await r.json();
+}
+
+// ── BUSCAR PCRs + CRUZAR COM INSPEÇÕES ──────────────────
+let _todosRecebimentos = [];
+let _inspecoesExistentes = {};
+
+async function carregarDadosFila() {
+  // 1. Buscar TODOS os recebimentos (PCRs importadas)
+  _todosRecebimentos = await _sbGet('cq_recebimentos?select=*&order=criado_em.desc&limit=500');
+
+  // 2. Buscar inspeções já feitas (por lote) para cruzar
+  const inspecoes = await _sbGet('registros_cq_inspecao?select=id,id_inspecao,lote_atak,fornecedor,produto,status_workflow,percentual_defeitos,total_defeitos,inspetor,criado_em&order=criado_em.desc&limit=500');
+  _inspecoesExistentes = {};
+  for (const insp of inspecoes) {
+    const key = (insp.lote_atak || '').trim();
+    if (key) _inspecoesExistentes[key] = insp;
+  }
+
+  // 3. Agrupar recebimentos por lote (um lote pode ter vários produtos)
+  const lotes = {};
+  for (const r of _todosRecebimentos) {
+    const lote = (r.lote || '').trim();
+    if (!lote) continue;
+    if (!lotes[lote]) {
+      lotes[lote] = {
+        lote,
+        fornecedor: r.fornecedor || '',
+        produtos: [],
+        qtd_total: 0,
+        data_recebimento: r.data_recebimento || r.criado_em || '',
+        id_primeiro: r.id,
+        numero_documento: r.numero_documento || '',
+      };
+    }
+    lotes[lote].produtos.push(r.produto || 'Omaso Bovino');
+    lotes[lote].qtd_total += parseFloat(r.qtd_recebida || r.qtd_prevista || 0);
+  }
+
+  // 4. Montar lista unificada: cada lote = 1 card
+  const listaUnificada = Object.values(lotes).map(l => {
+    const insp = _inspecoesExistentes[l.lote];
+    const produtosUnicos = [...new Set(l.produtos)];
+    return {
+      id: insp ? insp.id : l.id_primeiro,
+      id_inspecao: insp ? insp.id_inspecao : '',
+      id_recebimento: l.numero_documento || `PCR-${l.lote}`,
+      lote_atak: l.lote,
+      fornecedor: insp ? insp.fornecedor : l.fornecedor,
+      produto: produtosUnicos.join(', '),
+      qtd_total: Math.round(l.qtd_total),
+      data_recebimento: l.data_recebimento,
+      criado_em: insp ? insp.criado_em : l.data_recebimento,
+      status_workflow: insp ? (insp.status_workflow || 'inspecionado') : 'aguardando_inspecao',
+      percentual_defeitos: insp ? insp.percentual_defeitos : null,
+      total_defeitos: insp ? insp.total_defeitos : null,
+      inspetor: insp ? insp.inspetor : '',
+      _temInspecao: !!insp,
+    };
+  });
+
+  return listaUnificada;
+}
+
 // ── CONTADORES ────────────────────────────────────────────
 async function carregarContadores() {
   const container = document.getElementById('contadores');
   const statusList = [
-    { key: '',                     label: 'Todas',     cor: 'var(--accent)' },
-    { key: 'rascunho',             label: 'Rascunho',  cor: '#5d7f95' },
-    { key: 'em_analise',           label: 'Análise',   cor: '#3498db' },
-    { key: 'aguardando_revisao',   label: 'Revisão',   cor: '#f39c12' },
-    { key: 'revisada',             label: 'Revisada',  cor: '#8e44ad' },
-    { key: 'reprovada',            label: 'Reprovada', cor: '#e74c3c' },
-    { key: 'aprovada',             label: 'Aprovada',  cor: '#27ae60' },
-    { key: 'encerrada',            label: 'Encerrada', cor: '#2c3e50' },
+    { key: '',                     label: 'Todas',              cor: 'var(--accent)' },
+    { key: 'aguardando_inspecao',  label: 'Aguardando',         cor: '#f39c12' },
+    { key: 'inspecionado',         label: 'Inspecionado',       cor: '#27ae60' },
+    { key: 'aguardando_revisao',   label: 'Revisão',            cor: '#8e44ad' },
+    { key: 'reprovada',            label: 'Reprovada',          cor: '#e74c3c' },
+    { key: 'aprovada',             label: 'Aprovada',           cor: '#2ecc71' },
+    { key: 'encerrada',            label: 'Encerrada',          cor: '#2c3e50' },
   ];
 
   try {
-    // Buscar contagem por status da view
-    const SB_URL = CQAuth.getSbUrl();
-    const SB_KEY = CQAuth.getSbKey();
-    const JWT = CQAuth.getAuthToken() || SB_KEY;
-
-    // Tentar view primeiro, depois tabela inspecao, depois tabela legada
-    let rows = [];
-    const tentativas = [
-      'vw_inspecoes_workflow?select=status_workflow',
-      'registros_cq_inspecao?select=status_workflow',
-      'cq_recebimentos?select=id,status',
-      'registros_cq?select=id',
-    ];
-    for (const endpoint of tentativas) {
-      try {
-        const r = await fetch(`${SB_URL}/rest/v1/${endpoint}`, {
-          headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` },
-        });
-        if (r.ok) {
-          const data = await r.json();
-          if (data && data.length > 0) {
-            rows = data;
-            console.log(`Fila contadores: ${data.length} registros de ${endpoint.split('?')[0]}`);
-            break;
-          }
-        }
-      } catch(e) { console.warn('Fila: erro em', endpoint, e.message); }
-    }
+    const dados = await carregarDadosFila();
+    _dadosFila = dados;
 
     let contagens = {};
-    let total = rows.length;
-    for (const row of rows) {
-      const s = row.status_workflow || 'rascunho';
+    for (const r of dados) {
+      const s = r.status_workflow || 'aguardando_inspecao';
       contagens[s] = (contagens[s] || 0) + 1;
     }
 
     container.innerHTML = statusList.map(s => {
-      const count = s.key === '' ? total : (contagens[s.key] || 0);
+      const count = s.key === '' ? dados.length : (contagens[s.key] || 0);
       const active = filtroStatusAtivo === s.key ? 'active' : '';
       return `<div class="counter-card ${active}" data-status="${s.key}" onclick="filtrarPorStatus('${s.key}')">
         <div class="counter-num" style="color:${s.cor}">${count}</div>
@@ -537,6 +582,7 @@ async function carregarContadores() {
       </div>`;
     }).join('');
   } catch (e) {
+    console.error('Erro contadores:', e);
     container.innerHTML = '<div style="color:var(--muted);font-size:12px;">Erro ao carregar contadores</div>';
   }
 }
@@ -549,84 +595,67 @@ function filtrarPorStatus(status) {
   carregarLista();
 }
 
+// ── DADOS DA FILA ────────────────────────────────────────
+let _dadosFila = [];
+
 // ── CARREGAR LISTA ────────────────────────────────────────
 async function carregarLista() {
   const container = document.getElementById('lista-container');
   container.innerHTML = '<div class="loading"><div class="spinner"></div><div style="font-size:12px;color:var(--muted);">Carregando...</div></div>';
 
-  const filtros = {
-    status:     document.getElementById('filtro-status').value || undefined,
-    fornecedor: document.getElementById('filtro-fornecedor').value || undefined,
-    produto:    document.getElementById('filtro-produto').value || undefined,
-    lote:       document.getElementById('filtro-lote').value || undefined,
-    etiqueta:   document.getElementById('filtro-etiqueta').value || undefined,
-    dataInicio: document.getElementById('filtro-data-inicio').value || undefined,
-    dataFim:    document.getElementById('filtro-data-fim').value || undefined,
-  };
-
   try {
-    const { dados } = await CQWorkflow.listarInspecoes(filtros, paginaAtual, POR_PAGINA);
+    // Usar dados já carregados pelo carregarContadores, ou carregar agora
+    if (!_dadosFila || _dadosFila.length === 0) {
+      _dadosFila = await carregarDadosFila();
+    }
 
-    if (!dados || dados.length === 0) {
-      // Fallback: buscar direto das tabelas se a view estiver vazia
-      try {
-        const SB_URL = CQAuth.getSbUrl();
-        const SB_KEY = CQAuth.getSbKey();
-        const JWT = CQAuth.getAuthToken() || SB_KEY;
+    // Aplicar filtros locais
+    const fStatus     = document.getElementById('filtro-status').value;
+    const fFornecedor = (document.getElementById('filtro-fornecedor').value || '').toLowerCase().trim();
+    const fProduto    = (document.getElementById('filtro-produto').value || '').toLowerCase().trim();
+    const fLote       = (document.getElementById('filtro-lote').value || '').toLowerCase().trim();
+    const fEtiqueta   = (document.getElementById('filtro-etiqueta').value || '').toLowerCase().trim();
+    const fDataIni    = document.getElementById('filtro-data-inicio').value;
+    const fDataFim    = document.getElementById('filtro-data-fim').value;
 
-        // Tentar 3 tabelas: inspecoes CQ, recebimentos PCR, registros legados
-        const tabelas = [
-          { url: `${SB_URL}/rest/v1/registros_cq_inspecao?select=*&order=criado_em.desc&limit=50`, nome: 'inspecao' },
-          { url: `${SB_URL}/rest/v1/cq_recebimentos?select=*&order=criado_em.desc&limit=50`, nome: 'recebimentos' },
-          { url: `${SB_URL}/rest/v1/registros_cq?select=*&order=data_entrada.desc&limit=50`, nome: 'legado' },
-        ];
+    let filtrados = _dadosFila.filter(r => {
+      if (fStatus && r.status_workflow !== fStatus) return false;
+      if (fFornecedor && !(r.fornecedor || '').toLowerCase().includes(fFornecedor)) return false;
+      if (fProduto && !(r.produto || '').toLowerCase().includes(fProduto)) return false;
+      if (fLote && !(r.lote_atak || '').toLowerCase().includes(fLote)) return false;
+      if (fEtiqueta && !(r.etiqueta || '').toLowerCase().includes(fEtiqueta)) return false;
+      if (fDataIni) {
+        const d = (r.criado_em || r.data_recebimento || '').slice(0,10);
+        if (d < fDataIni) return false;
+      }
+      if (fDataFim) {
+        const d = (r.criado_em || r.data_recebimento || '').slice(0,10);
+        if (d > fDataFim) return false;
+      }
+      return true;
+    });
 
-        for (const t of tabelas) {
-          const fbRes = await fetch(t.url, {
-            headers: { 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}` }
-          });
-          if (fbRes.ok) {
-            const fbData = await fbRes.json();
-            if (fbData && fbData.length > 0) {
-              console.log(`Fila lista: ${fbData.length} registros de ${t.nome}`);
-              _dadosAtuais = fbData.map(r => ({
-                ...r,
-                id_inspecao: r.id_inspecao || r.numero_documento || r.id?.slice(0,8) || '',
-                status_workflow: r.status_workflow || 'rascunho',
-                usuario_nome: r.inspetor || r.analizador || r.usuario_email || '',
-                total_ncs: 0,
-                criado_em: r.criado_em || r.created_at || r.data_inspecao || r.data_entrada || '',
-                percentual_defeitos: r.percentual_defeitos || r.percentual_defeito || null,
-                fornecedor: r.fornecedor || r.frigorifico || '',
-                produto: r.produto || 'Omaso Bovino',
-                lote_atak: r.lote_atak || r.lote || '',
-              }));
-              container.innerHTML = _dadosAtuais.map(renderCard).join('');
-              document.getElementById('sel-todos').classList.add('show');
-              renderPaginacao(_dadosAtuais.length);
-              atualizarBarraSelecao();
-              return;
-            }
-          }
-        }
-      } catch(fbErr) { console.error('Fallback falhou:', fbErr); }
+    // Paginação
+    const inicio = (paginaAtual - 1) * POR_PAGINA;
+    const paginados = filtrados.slice(inicio, inicio + POR_PAGINA);
 
-      container.innerHTML = `
-        <div class="lista-vazia">
-          <div class="lista-vazia-icon">📋</div>
-          <div class="lista-vazia-msg">Nenhuma inspeção encontrada</div>
-        </div>`;
+    if (paginados.length === 0) {
+      container.innerHTML = `<div class="lista-vazia">
+        <div class="lista-vazia-icon">📋</div>
+        <div class="lista-vazia-msg">Nenhum lote encontrado${fStatus ? ' com este filtro' : ''}</div>
+      </div>`;
       document.getElementById('paginacao').innerHTML = '';
       document.getElementById('sel-todos').classList.remove('show');
       return;
     }
 
-    _dadosAtuais = dados;
-    container.innerHTML = dados.map(renderCard).join('');
+    _dadosAtuais = paginados;
+    container.innerHTML = paginados.map(renderCard).join('');
     document.getElementById('sel-todos').classList.add('show');
-    renderPaginacao(dados.length);
+    renderPaginacao(filtrados.length);
     atualizarBarraSelecao();
   } catch (e) {
+    console.error('Erro carregarLista:', e);
     container.innerHTML = `<div class="lista-vazia">
       <div class="lista-vazia-icon">⚠️</div>
       <div class="lista-vazia-msg">Erro ao carregar: ${e.message}</div>
@@ -650,15 +679,19 @@ function renderCard(insp) {
 
     const ncCount = insp.total_ncs || 0;
 
-    // Status badge — seguro para qualquer fonte
-    let statusBadge = '';
-    try { statusBadge = CQWorkflow.renderStatusBadge(statusWf); }
-    catch(e) {
-      const cores = { pendente_inspecao:'#f39c12', importado_atak:'#3498db', rascunho:'#5d7f95', aprovada:'#27ae60', reprovada:'#e74c3c' };
-      const labels = { pendente_inspecao:'Aguardando', importado_atak:'PCR Importada', rascunho:'Rascunho', aprovada:'Aprovada', reprovada:'Reprovada' };
-      const c = cores[statusWf] || '#5d7f95';
-      statusBadge = `<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${c}22;color:${c};border:1px solid ${c}40;font-weight:600;">${labels[statusWf] || statusWf}</span>`;
-    }
+    // Status badge
+    const statusCores = {
+      aguardando_inspecao:'#f39c12', inspecionado:'#27ae60', rascunho:'#5d7f95',
+      em_analise:'#3498db', aguardando_revisao:'#8e44ad', aprovada:'#2ecc71',
+      reprovada:'#e74c3c', encerrada:'#2c3e50'
+    };
+    const statusLabels = {
+      aguardando_inspecao:'Aguardando Inspeção', inspecionado:'Inspecionado',
+      rascunho:'Rascunho', em_analise:'Em Análise', aguardando_revisao:'Revisão',
+      aprovada:'Aprovada', reprovada:'Reprovada', encerrada:'Encerrada'
+    };
+    const sc = statusCores[statusWf] || '#5d7f95';
+    const statusBadge = `<span style="font-size:10px;padding:3px 10px;border-radius:4px;background:${sc}22;color:${sc};border:1px solid ${sc}40;font-weight:600;">${statusLabels[statusWf] || statusWf}</span>`;
 
     let statusFinalBadge = '';
     try { if (insp.status_final) statusFinalBadge = CQWorkflow.renderStatusFinalBadge(insp.status_final); } catch(e) {}
@@ -673,7 +706,7 @@ function renderCard(insp) {
     const lote = insp.lote_atak || insp.lote || '';
     const fornecedor = insp.fornecedor || insp.frigorifico || '';
     const produto = insp.produto || '';
-    const qtd = insp.quantidade_lote || insp.quantidade_analisada || insp.qtd_amostra || '';
+    const qtd = insp.qtd_total || insp.quantidade_lote || insp.quantidade_analisada || insp.qtd_amostra || '';
     const etiqueta = insp.etiqueta || '';
 
     // Se tem id de inspecao, abre a inspecao existente. Se nao, abre nova com dados pre-preenchidos
@@ -718,7 +751,7 @@ function renderCard(insp) {
       </div>
       <div class="insp-bottom">
         <span class="insp-defeito" style="background:${pctCor}18;color:${pctCor};border:1px solid ${pctCor}40;">
-          ${pctDefeitos === '—' ? (qtd ? qtd + ' pcs' : 'Aguardando') : pctDefeitos + ' defeitos'}
+          ${insp._temInspecao ? pctDefeitos + ' defeitos' : (qtd ? qtd + ' kg recebidos' : 'Aguardando inspeção')}
         </span>
         ${ncCount > 0 ? `<span class="insp-nc-badge">NC: ${ncCount}</span>` : ''}
         <span class="insp-inspetor">${insp.usuario_nome || insp.inspetor || insp.analizador || ''}</span>

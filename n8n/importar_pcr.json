@@ -1,0 +1,205 @@
+{
+  "name": "Importar PCR — ATAK → Staging → Base Final",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "hours", "hoursInterval": 6 }]
+        }
+      },
+      "id": "trigger-schedule",
+      "name": "Schedule (6h)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [220, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/staging_pcr_importacao",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=representation" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "arquivo_nome", "value": "=n8n_auto_{{ $now.format('yyyy-MM-dd_HHmm') }}" },
+            { "name": "importado_por", "value": "n8n-automatico" },
+            { "name": "status", "value": "pendente" }
+          ]
+        }
+      },
+      "id": "criar-importacao",
+      "name": "1. Criar Importação",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.ATAK_API_URL }}/wrmve500",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "=Bearer {{ $env.ATAK_API_TOKEN }}" }
+          ]
+        },
+        "options": {
+          "response": { "response": { "responseFormat": "json" } }
+        }
+      },
+      "id": "buscar-atak",
+      "name": "2. Buscar WRMVE500 do ATAK",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [660, 300],
+      "notes": "Se ATAK não tem API, substituir por nó de leitura de arquivo Excel da pasta compartilhada"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Parsear dados do WRMVE500 para formato staging\nconst importacaoId = $('1. Criar Importação').first().json.id;\nconst dados = $input.all();\nconst linhas = [];\nlet linhaNum = 0;\n\nfor (const item of dados) {\n  const row = item.json;\n  \n  // Detectar linha de cabeçalho (DOCUMENTO:)\n  if (row.col_a && String(row.col_a).includes('DOCUMENTO:')) {\n    // Extrair campos do cabeçalho\n    const docMatch = String(row.col_a).match(/DOCUMENTO:\\s*(\\d+)/);\n    const dataMatch = String(row.col_c || '').match(/DATA PCR:\\s*([\\d/]+)/);\n    const motMatch = String(row.col_e || '').match(/MOTORISTA\\s*:\\s*(.+)/);\n    const partMatch = String(row.col_f || '').match(/PARTICIPANTE\\s*:\\s*(.+)/);\n    const origMatch = String(row.col_g || '').match(/ORIGEM\\s*:\\s*(.+)/);\n    const placaMatch = String(row.col_h || '').match(/PLACA\\s*:\\s*(.+)/);\n    \n    // Guardar contexto do documento atual\n    this.currentDoc = {\n      numero_documento: docMatch ? docMatch[1] : '',\n      data_pcr: dataMatch ? dataMatch[1] : '',\n      motorista: motMatch ? motMatch[1].trim() : '',\n      participante: partMatch ? partMatch[1].trim() : '',\n      origem: origMatch ? origMatch[1].trim() : '',\n      placa: placaMatch ? placaMatch[1].trim() : '',\n    };\n    continue;\n  }\n  \n  // Detectar linha de produto (código numérico na col A)\n  const codigo = String(row.col_a || '').trim();\n  if (/^\\d{4,5}$/.test(codigo) && this.currentDoc) {\n    linhaNum++;\n    linhas.push({\n      importacao_id: importacaoId,\n      linha_numero: linhaNum,\n      numero_documento: this.currentDoc.numero_documento,\n      data_pcr: this.currentDoc.data_pcr,\n      motorista: this.currentDoc.motorista,\n      participante: this.currentDoc.participante,\n      origem: this.currentDoc.origem,\n      placa: this.currentDoc.placa,\n      codigo_produto: codigo,\n      descricao_produto: String(row.col_b || '').trim(),\n      qtd_prevista: parseFloat(String(row.col_c || '0').replace(',', '.')) || 0,\n      qtd_recebida: parseFloat(String(row.col_d || '0').replace(',', '.')) || 0,\n      diferenca: parseFloat(String(row.col_e || '0').replace(',', '.')) || 0,\n      status: 'pendente',\n    });\n  }\n  \n  // Detectar linha de qualidade (contém PERC)\n  if (String(row.col_a || '').includes('PERC') && linhas.length > 0) {\n    // Concatenar texto de qualidade à última linha de produto\n    const qualTexto = [row.col_a, row.col_b, row.col_c, row.col_d, row.col_e, row.col_f, row.col_g, row.col_h]\n      .filter(Boolean).join(' ');\n    linhas[linhas.length - 1].qualidade_texto = qualTexto;\n  }\n}\n\nreturn linhas.map(l => ({ json: l }));"
+      },
+      "id": "parsear-dados",
+      "name": "3. Parsear WRMVE500",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [880, 300]
+    },
+    {
+      "parameters": {
+        "batchSize": 50,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "4. Split em Lotes",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [1100, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/staging_pcr_linhas",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" },
+            { "name": "Prefer", "value": "return=minimal" }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($input.all().map(i => i.json)) }}"
+      },
+      "id": "inserir-staging",
+      "name": "5. Inserir no Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/fn_validar_staging_pcr",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "p_importacao_id", "value": "={{ $('1. Criar Importação').first().json.id }}" }
+          ]
+        }
+      },
+      "id": "validar-staging",
+      "name": "6. Validar Staging",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1540, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/rpc/fn_promover_staging_pcr",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "p_importacao_id", "value": "={{ $('1. Criar Importação').first().json.id }}" }
+          ]
+        }
+      },
+      "id": "promover-base",
+      "name": "7. Promover para Base Final",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1760, 300]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ $env.SUPABASE_URL }}/rest/v1/staging_pcr_importacao?id=eq.{{ $('1. Criar Importação').first().json.id }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "apikey", "value": "={{ $env.SUPABASE_KEY }}" },
+            { "name": "Authorization", "value": "=Bearer {{ $env.SUPABASE_KEY }}" },
+            { "name": "Content-Type", "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            { "name": "status", "value": "importada" },
+            { "name": "total_linhas", "value": "={{ $('3. Parsear WRMVE500').all().length }}" },
+            { "name": "total_documentos", "value": "={{ [...new Set($('3. Parsear WRMVE500').all().map(i => i.json.numero_documento))].length }}" }
+          ]
+        }
+      },
+      "id": "atualizar-status",
+      "name": "8. Atualizar Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1980, 300]
+    }
+  ],
+  "connections": {
+    "Schedule (6h)": { "main": [[{ "node": "1. Criar Importação", "type": "main", "index": 0 }]] },
+    "1. Criar Importação": { "main": [[{ "node": "2. Buscar WRMVE500 do ATAK", "type": "main", "index": 0 }]] },
+    "2. Buscar WRMVE500 do ATAK": { "main": [[{ "node": "3. Parsear WRMVE500", "type": "main", "index": 0 }]] },
+    "3. Parsear WRMVE500": { "main": [[{ "node": "4. Split em Lotes", "type": "main", "index": 0 }]] },
+    "4. Split em Lotes": { "main": [[{ "node": "5. Inserir no Staging", "type": "main", "index": 0 }]] },
+    "5. Inserir no Staging": { "main": [[{ "node": "6. Validar Staging", "type": "main", "index": 0 }]] },
+    "6. Validar Staging": { "main": [[{ "node": "7. Promover para Base Final", "type": "main", "index": 0 }]] },
+    "7. Promover para Base Final": { "main": [[{ "node": "8. Atualizar Status", "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "tags": [
+    { "name": "PCR" },
+    { "name": "ATAK" },
+    { "name": "Classic CQ" }
+  ]
+}

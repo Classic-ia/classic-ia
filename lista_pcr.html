@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e0e0e">
+<title>Lista de PCRs — Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0e0e0e;
+  --bg2:      #141414;
+  --bg3:      #1a1a1a;
+  --bg4:      #222;
+  --border:   #2a2a2a;
+  --border2:  #333;
+  --accent:   #c8a96e;
+  --accent2:  #e2c98a;
+  --accent3:  rgba(200,169,110,.1);
+  --text:     #e8e3da;
+  --muted:    #7a7468;
+  --muted2:   #4a4540;
+  --radius:   14px;
+  --radius-sm:10px;
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size: 16px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* -- HEADER -------------------------------- */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  padding: 0 16px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-info { flex: 1; }
+.header-title { font-size: 13px; font-weight: 700; color: var(--accent); font-family: 'Syne', sans-serif; }
+.header-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.back-link {
+  font-size: 10px; color: var(--muted); text-decoration: none;
+  border: 1px solid var(--border2); border-radius: 6px;
+  padding: 5px 10px; transition: all .15s;
+}
+.back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* -- PAGE --------------------------------- */
+.page { max-width: 900px; margin: 0 auto; padding: 16px 12px; }
+
+/* -- STATUS COUNTERS ---------------------- */
+.counters {
+  display: flex; gap: 8px; overflow-x: auto;
+  padding: 4px 0 12px; scrollbar-width: none;
+}
+.counters::-webkit-scrollbar { display: none; }
+.counter-card {
+  flex-shrink: 0; min-width: 100px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 14px;
+  cursor: pointer; transition: all .2s; text-align: center;
+}
+.counter-card:hover, .counter-card.active {
+  border-color: var(--accent); background: var(--accent3);
+}
+.counter-num { font-size: 22px; font-weight: 800; font-family: 'Syne', sans-serif; }
+.counter-label { font-size: 10px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: .03em; }
+
+/* -- FILTROS ------------------------------ */
+.filtros {
+  display: flex; flex-wrap: wrap; gap: 8px;
+  padding: 8px 0 16px;
+}
+.filtro-input {
+  flex: 1; min-width: 140px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 12px;
+  color: var(--text); font-size: 13px; outline: none;
+  font-family: 'DM Sans', sans-serif;
+  transition: border-color .2s;
+}
+.filtro-input:focus { border-color: var(--accent); }
+.filtro-input::placeholder { color: var(--muted2); }
+
+/* -- PCR CARDS ----------------------------- */
+.lista-vazia {
+  text-align: center; padding: 60px 20px; color: var(--muted);
+}
+.lista-vazia-icon { font-size: 48px; margin-bottom: 12px; }
+.lista-vazia-msg { font-size: 14px; }
+
+.pcr-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 16px;
+  margin-bottom: 8px; cursor: pointer; transition: all .2s;
+  min-height: 48px;
+}
+.pcr-card:hover { border-color: var(--accent); transform: translateY(-1px); }
+.pcr-card:active { transform: translateY(0); }
+
+.pcr-top {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 8px; flex-wrap: wrap;
+}
+.pcr-numero {
+  font-size: 14px; font-weight: 700; font-family: 'Syne', sans-serif;
+  color: var(--accent);
+}
+.pcr-status {
+  font-size: 9px; padding: 3px 10px; border-radius: 4px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+  white-space: nowrap;
+}
+.pcr-status.importada        { background: rgba(52,152,219,.15);  color: #3498db; border: 1px solid rgba(52,152,219,.3); }
+.pcr-status.em_apuracao      { background: rgba(243,156,18,.15);  color: #f39c12; border: 1px solid rgba(243,156,18,.3); }
+.pcr-status.aguardando_decisao { background: rgba(231,76,60,.15); color: #e74c3c; border: 1px solid rgba(231,76,60,.3); }
+.pcr-status.decidida         { background: rgba(142,68,173,.15);  color: #8e44ad; border: 1px solid rgba(142,68,173,.3); }
+.pcr-status.executada        { background: rgba(39,174,96,.15);   color: #27ae60; border: 1px solid rgba(39,174,96,.3); }
+.pcr-status.encerrada        { background: rgba(44,62,80,.25);    color: #95a5a6; border: 1px solid rgba(44,62,80,.5); }
+
+.pcr-data { font-size: 11px; color: var(--muted); margin-left: auto; white-space: nowrap; }
+
+.pcr-mid {
+  display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 8px;
+}
+.pcr-field { font-size: 12px; }
+.pcr-field-label { color: var(--muted); }
+.pcr-field-value { color: var(--text); font-weight: 600; }
+
+.pcr-bottom {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+}
+.pcr-divergencia {
+  font-size: 12px; font-weight: 700; padding: 2px 8px;
+  border-radius: 4px; font-family: monospace;
+}
+.pcr-divergencia.negativa { background: rgba(231,76,60,.12); color: #e74c3c; }
+.pcr-divergencia.positiva { background: rgba(39,174,96,.12); color: #27ae60; }
+.pcr-divergencia.zero     { background: rgba(122,116,104,.12); color: var(--muted); }
+
+.pcr-responsavel {
+  font-size: 10px; padding: 2px 8px; border-radius: 4px;
+  font-weight: 700; text-transform: uppercase; letter-spacing: .04em;
+  margin-left: auto;
+}
+.pcr-responsavel.jean  { background: rgba(52,152,219,.12); color: #3498db; border: 1px solid rgba(52,152,219,.3); }
+.pcr-responsavel.dorly { background: rgba(142,68,173,.12); color: #8e44ad; border: 1px solid rgba(142,68,173,.3); }
+
+.pcr-classe {
+  font-size: 11px; font-weight: 800; padding: 2px 8px;
+  border-radius: 4px; font-family: 'Syne', sans-serif;
+}
+
+/* -- PAGINACAO ----------------------------- */
+.paginacao {
+  display: flex; justify-content: center; gap: 8px;
+  padding: 20px 0;
+}
+.pag-btn {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 14px;
+  color: var(--muted); font-size: 12px; cursor: pointer;
+  transition: all .2s; min-width: 48px; min-height: 48px;
+  display: flex; align-items: center; justify-content: center;
+}
+.pag-btn:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.pag-btn:disabled { opacity: .4; cursor: default; }
+.pag-btn.active { background: var(--accent3); border-color: var(--accent); color: var(--accent); }
+.pag-info { font-size: 11px; color: var(--muted); align-self: center; }
+
+/* -- LOADING ------------------------------ */
+.loading { text-align: center; padding: 40px; }
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* -- TOAST -------------------------------- */
+.toast-container {
+  position: fixed; top: 70px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+  font-size: 13px; min-width: 240px; max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  animation: slideIn .3s ease;
+}
+.toast.err { border-color: #e74c3c; color: #e74c3c; }
+.toast.ok  { border-color: #27ae60; color: #27ae60; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+
+/* -- RESPONSIVE --------------------------- */
+@media (max-width: 600px) {
+  .header { padding: 0 10px; }
+  .page { padding: 12px 8px; }
+  .filtros { gap: 6px; }
+  .filtro-input { min-width: 100%; }
+  .pcr-mid { gap: 4px 12px; }
+  .counter-card { min-width: 80px; padding: 8px 10px; }
+  .counter-num { font-size: 18px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="app.html" class="back-link">&larr; Menu</a>
+  <div class="header-info">
+    <div class="header-title">Lista de PCRs</div>
+    <div class="header-sub">Controle de Qualidade — Classic Couros</div>
+  </div>
+  <div id="cq-user-chip"></div>
+</div>
+
+<div class="page">
+
+  <!-- CONTADORES DE STATUS -->
+  <div class="counters" id="contadores"></div>
+
+  <!-- FILTROS -->
+  <div class="filtros">
+    <select class="filtro-input" id="filtro-status" style="min-width:160px;">
+      <option value="">Todos os status</option>
+      <option value="importada">Importada</option>
+      <option value="em_apuracao">Em Apura&ccedil;&atilde;o</option>
+      <option value="aguardando_decisao">Aguardando Decis&atilde;o</option>
+      <option value="decidida">Decidida</option>
+      <option value="executada">Executada</option>
+      <option value="encerrada">Encerrada</option>
+    </select>
+    <input type="text" class="filtro-input" id="filtro-fornecedor" placeholder="Fornecedor...">
+    <input type="text" class="filtro-input" id="filtro-lote" placeholder="Lote / NF...">
+    <select class="filtro-input" id="filtro-responsavel" style="min-width:140px;">
+      <option value="">Todos respons&aacute;veis</option>
+      <option value="JEAN">Jean</option>
+      <option value="DORLY">Dorly</option>
+    </select>
+    <input type="date" class="filtro-input" id="filtro-data-de" style="min-width:130px;">
+    <input type="date" class="filtro-input" id="filtro-data-ate" style="min-width:130px;">
+    <button class="filtro-input" id="btn-filtrar" style="
+      min-width:auto;flex:0;cursor:pointer;
+      background:var(--accent3);border-color:var(--accent);
+      color:var(--accent);font-weight:600;
+    ">Filtrar</button>
+    <button class="filtro-input" id="btn-limpar" style="
+      min-width:auto;flex:0;cursor:pointer;
+      color:var(--muted);font-weight:500;
+    ">Limpar</button>
+  </div>
+
+  <!-- LISTA DE PCRs -->
+  <div id="lista"></div>
+
+  <!-- PAGINACAO -->
+  <div class="paginacao" id="paginacao"></div>
+
+</div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<!-- SCRIPTS -->
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script src="js/pcr_engine.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  // ======== STATE ========
+  let pcrData = [];
+  let totalPCRs = 0;
+  let paginaAtual = 1;
+  const porPagina = 25;
+  let filtroStatusAtivo = '';
+
+  // Status config
+  const STATUS_CONFIG = {
+    importada:          { label: 'Importada',           cor: '#3498db' },
+    em_apuracao:        { label: 'Em Apuracao',         cor: '#f39c12' },
+    aguardando_decisao: { label: 'Aguardando Decisao',  cor: '#e74c3c' },
+    decidida:           { label: 'Decidida',            cor: '#8e44ad' },
+    executada:          { label: 'Executada',            cor: '#27ae60' },
+    encerrada:          { label: 'Encerrada',           cor: '#2c3e50' }
+  };
+
+  const STATUS_KEYS = Object.keys(STATUS_CONFIG);
+
+  // ======== DOM REFS ========
+  const $contadores   = document.getElementById('contadores');
+  const $lista        = document.getElementById('lista');
+  const $paginacao    = document.getElementById('paginacao');
+  const $filtroStatus = document.getElementById('filtro-status');
+  const $filtroForn   = document.getElementById('filtro-fornecedor');
+  const $filtroLote   = document.getElementById('filtro-lote');
+  const $filtroResp   = document.getElementById('filtro-responsavel');
+  const $filtroDe     = document.getElementById('filtro-data-de');
+  const $filtroAte    = document.getElementById('filtro-data-ate');
+  const $btnFiltrar   = document.getElementById('btn-filtrar');
+  const $btnLimpar    = document.getElementById('btn-limpar');
+
+  // ======== TOAST ========
+  function toast(msg, tipo) {
+    const c = document.getElementById('toast-container');
+    const t = document.createElement('div');
+    t.className = 'toast ' + (tipo || '');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(function () { t.remove(); }, 3500);
+  }
+
+  // ======== HELPERS ========
+  function formatDate(iso) {
+    if (typeof PCREngine !== 'undefined' && PCREngine.formatarData) {
+      return PCREngine.formatarData(iso);
+    }
+    if (!iso) return '\u2014';
+    try {
+      var d = new Date(iso);
+      return d.toLocaleDateString('pt-BR');
+    } catch (e) { return '\u2014'; }
+  }
+
+  function formatPeso(kg) {
+    if (typeof PCREngine !== 'undefined' && PCREngine.formatarPeso) {
+      return PCREngine.formatarPeso(kg);
+    }
+    var v = Number(kg) || 0;
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' kg';
+  }
+
+  function statusLabel(s) {
+    var cfg = STATUS_CONFIG[s];
+    return cfg ? cfg.label : (s || '\u2014');
+  }
+
+  function statusClass(s) {
+    return (s || '').replace(/\s+/g, '_').toLowerCase();
+  }
+
+  // ======== GET FILTERS ========
+  function getFiltros() {
+    var f = {};
+    var st = $filtroStatus.value || filtroStatusAtivo;
+    if (st) f.status = st;
+    var forn = $filtroForn.value.trim();
+    if (forn) f.fornecedor = forn;
+    var resp = $filtroResp.value;
+    if (resp) f.responsavel = resp;
+    var de = $filtroDe.value;
+    if (de) f.data_de = de;
+    var ate = $filtroAte.value;
+    if (ate) f.data_ate = ate;
+    return f;
+  }
+
+  // ======== RENDER COUNTERS ========
+  function renderContadores(contagens) {
+    var html = '';
+    // "Todas" counter
+    var totalAll = 0;
+    STATUS_KEYS.forEach(function (k) { totalAll += (contagens[k] || 0); });
+
+    html += '<div class="counter-card' + (filtroStatusAtivo === '' ? ' active' : '') + '" data-status="">';
+    html += '<div class="counter-num" style="color:var(--accent)">' + totalAll + '</div>';
+    html += '<div class="counter-label">Todas</div>';
+    html += '</div>';
+
+    STATUS_KEYS.forEach(function (k) {
+      var cfg = STATUS_CONFIG[k];
+      var n = contagens[k] || 0;
+      html += '<div class="counter-card' + (filtroStatusAtivo === k ? ' active' : '') + '" data-status="' + k + '">';
+      html += '<div class="counter-num" style="color:' + cfg.cor + '">' + n + '</div>';
+      html += '<div class="counter-label">' + cfg.label + '</div>';
+      html += '</div>';
+    });
+
+    $contadores.innerHTML = html;
+
+    // Click handlers
+    $contadores.querySelectorAll('.counter-card').forEach(function (card) {
+      card.addEventListener('click', function () {
+        filtroStatusAtivo = this.getAttribute('data-status') || '';
+        $filtroStatus.value = filtroStatusAtivo;
+        paginaAtual = 1;
+        carregarDados();
+      });
+    });
+  }
+
+  // ======== RENDER CARD ========
+  function renderCard(pcr) {
+    var st = statusClass(pcr.status);
+    var cfg = STATUS_CONFIG[st] || { label: pcr.status || '\u2014', cor: '#7a7468' };
+
+    // Fornecedor
+    var forn = pcr.fornecedor_nome || pcr.fornecedor || '\u2014';
+
+    // Products summary
+    var qtdProdutos = Number(pcr.qtd_produtos) || 0;
+    var totalKg = Number(pcr.total_kg) || Number(pcr.peso_total) || 0;
+
+    // Divergencia
+    var divQtd = Number(pcr.divergencia_kg) || Number(pcr.divergencia_quantidade) || 0;
+    var divClass = divQtd < 0 ? 'negativa' : (divQtd > 0 ? 'positiva' : 'zero');
+    var divText = divQtd > 0 ? ('+' + formatPeso(divQtd)) : formatPeso(divQtd);
+
+    // Responsavel
+    var resp = pcr.responsavel || '';
+    if (!resp && typeof PCREngine !== 'undefined' && PCREngine.getResponsavel) {
+      resp = PCREngine.getResponsavel(forn) || '';
+    }
+    var respClass = resp.toLowerCase();
+
+    // Classe
+    var classeHtml = '';
+    if (pcr.classe) {
+      var cl = (typeof PCREngine !== 'undefined' && PCREngine.classificar)
+        ? PCREngine.classificar(Number(pcr.pct_defeito) || 0)
+        : { classe: pcr.classe, cor: '#7a7468', bg: 'rgba(122,116,104,.12)' };
+      classeHtml = '<span class="pcr-classe" style="color:' + cl.cor + ';background:' + cl.bg + '">' + cl.classe + '</span>';
+    }
+
+    // Numero do documento
+    var numDoc = pcr.numero_documento || pcr.numero || pcr.id || '\u2014';
+
+    var card = document.createElement('div');
+    card.className = 'pcr-card';
+    card.setAttribute('data-id', pcr.id || '');
+
+    card.innerHTML =
+      '<div class="pcr-top">' +
+        '<span class="pcr-numero">' + numDoc + '</span>' +
+        '<span class="pcr-status ' + st + '">' + cfg.label + '</span>' +
+        classeHtml +
+        '<span class="pcr-data">' + formatDate(pcr.data_recebimento || pcr.created_at) + '</span>' +
+      '</div>' +
+      '<div class="pcr-mid">' +
+        '<span class="pcr-field"><span class="pcr-field-label">Fornecedor: </span><span class="pcr-field-value">' + forn + '</span></span>' +
+        '<span class="pcr-field"><span class="pcr-field-label">Produtos: </span><span class="pcr-field-value">' + qtdProdutos + '</span></span>' +
+        '<span class="pcr-field"><span class="pcr-field-label">Peso: </span><span class="pcr-field-value">' + formatPeso(totalKg) + '</span></span>' +
+      '</div>' +
+      '<div class="pcr-bottom">' +
+        (divQtd !== 0
+          ? '<span class="pcr-divergencia ' + divClass + '">Diverg: ' + divText + '</span>'
+          : '') +
+        (resp
+          ? '<span class="pcr-responsavel ' + respClass + '">' + resp + '</span>'
+          : '') +
+      '</div>';
+
+    card.addEventListener('click', function () {
+      var id = pcr.id;
+      if (id) window.location.href = 'detalhe_pcr.html?id=' + encodeURIComponent(id);
+    });
+
+    return card;
+  }
+
+  // ======== RENDER LIST ========
+  function renderLista(rows) {
+    $lista.innerHTML = '';
+
+    if (!rows || rows.length === 0) {
+      $lista.innerHTML =
+        '<div class="lista-vazia">' +
+          '<div class="lista-vazia-icon">&#128203;</div>' +
+          '<div class="lista-vazia-msg">Nenhuma PCR encontrada</div>' +
+        '</div>';
+      return;
+    }
+
+    var frag = document.createDocumentFragment();
+    rows.forEach(function (pcr) {
+      try {
+        frag.appendChild(renderCard(pcr));
+      } catch (err) {
+        console.error('[ListaPCR] Erro ao renderizar card:', err, pcr);
+      }
+    });
+    $lista.appendChild(frag);
+  }
+
+  // ======== RENDER PAGINATION ========
+  function renderPaginacao(total, pagAtual, pp) {
+    $paginacao.innerHTML = '';
+    var totalPags = Math.ceil(total / pp);
+    if (totalPags <= 1) return;
+
+    var html = '';
+
+    // Prev
+    html += '<button class="pag-btn" data-pag="' + (pagAtual - 1) + '"' + (pagAtual <= 1 ? ' disabled' : '') + '>&laquo; Ant</button>';
+
+    // Page numbers (show max 5 around current)
+    var start = Math.max(1, pagAtual - 2);
+    var end = Math.min(totalPags, start + 4);
+    if (end - start < 4) start = Math.max(1, end - 4);
+
+    for (var i = start; i <= end; i++) {
+      html += '<button class="pag-btn' + (i === pagAtual ? ' active' : '') + '" data-pag="' + i + '">' + i + '</button>';
+    }
+
+    // Next
+    html += '<button class="pag-btn" data-pag="' + (pagAtual + 1) + '"' + (pagAtual >= totalPags ? ' disabled' : '') + '>Prox &raquo;</button>';
+
+    // Info
+    html += '<span class="pag-info">' + pagAtual + '/' + totalPags + ' (' + total + ' PCRs)</span>';
+
+    $paginacao.innerHTML = html;
+
+    $paginacao.querySelectorAll('.pag-btn:not(:disabled)').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var p = parseInt(this.getAttribute('data-pag'), 10);
+        if (p >= 1 && p <= totalPags) {
+          paginaAtual = p;
+          carregarDados();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      });
+    });
+  }
+
+  // ======== LOADING STATE ========
+  function showLoading() {
+    $lista.innerHTML =
+      '<div class="loading">' +
+        '<div class="spinner"></div>' +
+        '<div style="color:var(--muted);font-size:13px">Carregando PCRs...</div>' +
+      '</div>';
+    $paginacao.innerHTML = '';
+  }
+
+  // ======== DATA LOADING ========
+  async function carregarDados() {
+    showLoading();
+    var filtros = getFiltros();
+
+    try {
+      var result = null;
+
+      // Try PCREngine first
+      if (typeof PCREngine !== 'undefined' && typeof PCREngine.listarPCRs === 'function') {
+        result = await PCREngine.listarPCRs(filtros, paginaAtual, porPagina);
+      }
+
+      // Fallback: direct Supabase REST
+      if (!result || !result.data) {
+        result = await fallbackCarregar(filtros, paginaAtual, porPagina);
+      }
+
+      pcrData = result.data || [];
+      totalPCRs = result.total || pcrData.length;
+
+      renderLista(pcrData);
+      renderPaginacao(totalPCRs, paginaAtual, porPagina);
+
+    } catch (err) {
+      console.error('[ListaPCR] Erro ao carregar:', err);
+      toast('Erro ao carregar PCRs', 'err');
+      $lista.innerHTML =
+        '<div class="lista-vazia">' +
+          '<div class="lista-vazia-icon">&#9888;&#65039;</div>' +
+          '<div class="lista-vazia-msg">Erro ao carregar. Tente novamente.</div>' +
+        '</div>';
+    }
+  }
+
+  // ======== FALLBACK: Direct Supabase REST ========
+  async function fallbackCarregar(filtros, pagina, pp) {
+    var sbUrl = (typeof CQ_CONFIG !== 'undefined' && CQ_CONFIG.SB_URL) || SB_URL || SUPABASE_URL;
+    var sbKey = (typeof CQ_CONFIG !== 'undefined' && CQ_CONFIG.SB_KEY) || SB_KEY || SUPABASE_KEY;
+
+    var authToken = sbKey;
+    if (typeof CQAuth !== 'undefined' && CQAuth.getAuthToken) {
+      authToken = CQAuth.getAuthToken() || sbKey;
+    }
+
+    var params = ['order=data_recebimento.desc', 'select=*'];
+    var f = filtros || {};
+    if (f.status)      params.push('status=eq.' + encodeURIComponent(f.status));
+    if (f.fornecedor)  params.push('fornecedor_nome=ilike.*' + encodeURIComponent(f.fornecedor) + '*');
+    if (f.responsavel) params.push('responsavel=eq.' + encodeURIComponent(f.responsavel));
+    if (f.data_de)     params.push('data_recebimento=gte.' + encodeURIComponent(f.data_de));
+    if (f.data_ate)    params.push('data_recebimento=lte.' + encodeURIComponent(f.data_ate));
+
+    var offset = (pagina - 1) * pp;
+    var rangeEnd = offset + pp - 1;
+
+    var url = sbUrl + '/rest/v1/pcr_documentos?' + params.join('&');
+
+    var resp = await fetch(url, {
+      headers: {
+        'Content-Type':  'application/json',
+        'apikey':        sbKey,
+        'Authorization': 'Bearer ' + authToken,
+        'Range':         offset + '-' + rangeEnd,
+        'Prefer':        'count=exact'
+      }
+    });
+
+    if (!resp.ok) {
+      console.error('[ListaPCR] Fallback REST erro:', resp.status);
+      return { data: [], total: 0 };
+    }
+
+    var data = await resp.json();
+
+    // Parse Content-Range for total
+    var total = data.length;
+    var cr = resp.headers.get('Content-Range');
+    if (cr) {
+      var m = cr.match(/\/(\d+)/);
+      if (m) total = parseInt(m[1], 10);
+    }
+
+    return { data: data || [], total: total };
+  }
+
+  // ======== LOAD COUNTERS ========
+  async function carregarContadores() {
+    var contagens = {};
+    STATUS_KEYS.forEach(function (k) { contagens[k] = 0; });
+
+    try {
+      var sbUrl = (typeof CQ_CONFIG !== 'undefined' && CQ_CONFIG.SB_URL) || SB_URL || SUPABASE_URL;
+      var sbKey = (typeof CQ_CONFIG !== 'undefined' && CQ_CONFIG.SB_KEY) || SB_KEY || SUPABASE_KEY;
+      var authToken = sbKey;
+      if (typeof CQAuth !== 'undefined' && CQAuth.getAuthToken) {
+        authToken = CQAuth.getAuthToken() || sbKey;
+      }
+
+      // Try view first, fallback to pcr_documentos
+      var tabela = 'vw_pcr_resumo';
+      var url = sbUrl + '/rest/v1/' + tabela + '?select=status';
+
+      var resp = await fetch(url, {
+        headers: {
+          'Content-Type':  'application/json',
+          'apikey':        sbKey,
+          'Authorization': 'Bearer ' + authToken
+        }
+      });
+
+      if (!resp.ok) {
+        // Fallback to pcr_documentos
+        tabela = 'pcr_documentos';
+        url = sbUrl + '/rest/v1/' + tabela + '?select=status';
+        resp = await fetch(url, {
+          headers: {
+            'Content-Type':  'application/json',
+            'apikey':        sbKey,
+            'Authorization': 'Bearer ' + authToken
+          }
+        });
+      }
+
+      if (resp.ok) {
+        var rows = await resp.json();
+        (rows || []).forEach(function (r) {
+          var s = (r.status || '').toLowerCase();
+          if (contagens.hasOwnProperty(s)) contagens[s]++;
+        });
+      }
+    } catch (err) {
+      console.error('[ListaPCR] Erro ao carregar contadores:', err);
+    }
+
+    renderContadores(contagens);
+  }
+
+  // ======== EVENTS ========
+  $btnFiltrar.addEventListener('click', function () {
+    paginaAtual = 1;
+    carregarDados();
+  });
+
+  $btnLimpar.addEventListener('click', function () {
+    $filtroStatus.value = '';
+    $filtroForn.value = '';
+    $filtroLote.value = '';
+    $filtroResp.value = '';
+    $filtroDe.value = '';
+    $filtroAte.value = '';
+    filtroStatusAtivo = '';
+    paginaAtual = 1;
+    carregarDados();
+    carregarContadores();
+  });
+
+  // Enter key on inputs triggers filter
+  [$filtroForn, $filtroLote].forEach(function (el) {
+    el.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') {
+        paginaAtual = 1;
+        carregarDados();
+      }
+    });
+  });
+
+  // Dropdown changes trigger filter
+  [$filtroStatus, $filtroResp].forEach(function (el) {
+    el.addEventListener('change', function () {
+      if (el === $filtroStatus) filtroStatusAtivo = el.value;
+      paginaAtual = 1;
+      carregarDados();
+      if (el === $filtroStatus) carregarContadores();
+    });
+  });
+
+  // ======== INIT ========
+  async function init() {
+    // Auth chip
+    if (typeof CQAuth !== 'undefined' && CQAuth.renderChip) {
+      CQAuth.renderChip('cq-user-chip');
+    }
+
+    // Load data
+    await Promise.all([
+      carregarContadores(),
+      carregarDados()
+    ]);
+  }
+
+  // Wait for auth if available
+  if (typeof CQAuth !== 'undefined' && CQAuth.onReady) {
+    CQAuth.onReady(init);
+  } else {
+    document.addEventListener('DOMContentLoaded', init);
+  }
+
+})();
+</script>
+
+</body>
+</html>

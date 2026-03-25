@@ -289,7 +289,8 @@ textarea.field-input {
 /* ──────────────────────────────────────────────────
    STATUS FINAL — SELETOR GRANDE
 ────────────────────────────────────────────────── */
-.status-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+/* Status grid removido — decisão está no módulo lancamento_cargas.html */
+.status-grid { display: none; }
 .status-opt {
   border: 2px solid var(--border2);
   border-radius: var(--radius-sm);
@@ -942,56 +943,9 @@ textarea.field-input {
   </div>
 
   <!-- ⑤ DECISÃO — Oculto no formulário (backend decide automaticamente via cq_motor_decisao) -->
-  <div class="card" id="sec-decisao" style="display:none;">
-    <div class="card-header">
-      <span class="card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></span>
-      <span class="card-title">Decisão</span>
-      <span class="card-num">05</span>
-    </div>
-    <div class="card-body">
+  <!-- Seção Decisão removida — decisão financeira é feita no módulo lancamento_cargas.html -->
 
-      <div class="field">
-        <label class="field-label">Status Final</label>
-        <div class="status-grid" id="statusGrid">
-          <label class="status-opt" data-status="aprovado" onclick="selectStatus(this,'aprovado')">
-            <input type="radio" name="status_final" value="aprovado">
-            <span class="so-icon" style="color:var(--aprovado,#4CAF50);">A</span>
-            <span class="so-label">APROVADO</span>
-          </label>
-          <label class="status-opt" data-status="ressalva" onclick="selectStatus(this,'ressalva')">
-            <input type="radio" name="status_final" value="ressalva">
-            <span class="so-icon" style="color:var(--ressalva,#FFA726);">R</span>
-            <span class="so-label">COM RESSALVA</span>
-          </label>
-          <label class="status-opt" data-status="bloqueado" onclick="selectStatus(this,'bloqueado')">
-            <input type="radio" name="status_final" value="bloqueado">
-            <span class="so-icon" style="color:var(--reprovado,#ef5350);">B</span>
-            <span class="so-label">BLOQUEADO</span>
-          </label>
-        </div>
-      </div>
-
-      <!-- Condicional: reprovado -->
-      <div class="conditional-block" id="blk-bloqueado">
-        <div class="field">
-          <label class="field-label" style="color:var(--reprovado);">Observacao Obrigatoria <span class="req">*</span></label>
-          <textarea class="field-input" id="f-obs-reprovado"
-            placeholder="Descreva a razão da reprovação e ação tomada (devolução, negociação, descarte)..."
-            style="min-height:110px; border-color:var(--reprovado-bd);"></textarea>
-        </div>
-      </div>
-
-      <div class="field">
-        <label class="field-label">Responsável pela Decisão</label>
-        <input class="field-input" type="text" id="f-responsavel"
-          placeholder="Nome do responsável" list="resp-list">
-        <datalist id="resp-list"></datalist>
-      </div>
-
-    </div>
-  </div>
-
-  <!-- ⑥ EVIDÊNCIAS -->
+  <!-- ⑤ EVIDÊNCIAS -->
   <div class="card" id="sec-evidencias">
     <div class="card-header">
       <span class="card-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
@@ -2038,10 +1992,7 @@ function montarRegistro(){
     total_defeitos:       totalDef,
     percentual_defeitos:  pct,
     classificacao:        cls,
-    status_final:         statusSelecionado || null,
-    valor_desconto_pct:   null,
-    desconto_justificativa: null,
-    responsavel_decisao:  document.getElementById('f-responsavel').value,
+    // status_final e responsavel_decisao são preenchidos no módulo lancamento_cargas.html
     observacoes:          document.getElementById('f-obs').value,
     outro_defeito_tipo:    document.getElementById('f-outro-defeito-tipo')?.value || null,
     // Auditoria automática via CQAuth
@@ -2886,9 +2837,14 @@ function gerarPDFInspecao() {
   <tr><td>> 30%</td><td style="color:#b71c1c">Reprovado</td></tr>
 </tbody></table>
 
-<h2>4. Observações</h2>
-${fv('f-obs') ? `<div class="obs"><strong>Observações:</strong><br>${fv('f-obs')}</div>` : '<div style="color:#888;font-size:12px;">Nenhuma observação registrada.</div>'}
-${fv('f-obs-reprovado') ? `<div class="obs" style="border-color:#e74c3c"><strong>Obs. Bloqueio:</strong><br>${fv('f-obs-reprovado')}</div>` : ''}
+<h2>4. Resultado Tecnico</h2>
+<div style="background:${clsBg};color:${clsCor};padding:12px 16px;border-radius:6px;font-weight:700;font-size:15px;margin-bottom:8px;">
+  ${cls === 'A' ? 'Classe A — Aprovado (0-5%)' : cls === 'B' ? 'Classe B — Aprovado com Ressalva (5-15%)' : 'Classe C — Bloqueado · Aguarda decisao do gestor (>15%)'}
+</div>
+<p style="color:#555;font-size:12px;margin-bottom:10px;">
+  Decisao financeira (desconto / liberacao / bloqueio) registrada no modulo de Lancamento de Cargas.
+</p>
+${fv('f-obs') ? `<div class="obs"><strong>Observacoes:</strong><br>${fv('f-obs')}</div>` : ''}
 
 <div class="ass">
   <div class="ass-bloco"><div class="ass-linha">Inspetor Responsável<br><strong>${fv('f-inspetor')}</strong></div></div>

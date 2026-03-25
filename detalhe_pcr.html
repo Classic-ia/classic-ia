@@ -1,0 +1,1280 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#0e0e0e">
+<title>Detalhe PCR — Classic CQ</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:       #0e0e0e;
+  --bg2:      #141414;
+  --bg3:      #1a1a1a;
+  --bg4:      #222;
+  --border:   #2a2a2a;
+  --border2:  #333;
+  --accent:   #c8a96e;
+  --accent2:  #e2c98a;
+  --accent3:  rgba(200,169,110,.1);
+  --text:     #e8e3da;
+  --muted:    #7a7468;
+  --muted2:   #4a4540;
+  --radius:   14px;
+  --radius-sm:10px;
+  --green:    #4ade80;
+  --green-bg: rgba(42,122,74,0.15);
+  --yellow:   #fbbf24;
+  --yellow-bg:rgba(122,96,32,0.15);
+  --red:      #f87171;
+  --red-bg:   rgba(122,42,42,0.15);
+  --blue:     #60a5fa;
+  --blue-bg:  rgba(42,74,122,0.15);
+}
+
+*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html { font-size: 16px; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'DM Sans', -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── HEADER ──────────────────────────── */
+.header {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 100;
+  padding: 0 16px; height: 56px;
+  display: flex; align-items: center; gap: 12px;
+}
+.header-logo { height: 34px; width: auto; border-radius: 6px; }
+.header-info { flex: 1; }
+.header-title { font-size: 13px; font-weight: 700; color: var(--accent); font-family: 'Syne', sans-serif; }
+.header-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.back-link {
+  font-size: 10px; color: var(--muted); text-decoration: none;
+  border: 1px solid var(--border2); border-radius: 6px;
+  padding: 5px 10px; transition: all .15s; white-space: nowrap;
+}
+.back-link:hover { color: var(--accent); border-color: var(--accent); }
+
+/* ── LAYOUT ──────────────────────────── */
+.page-wrap {
+  max-width: 1200px; margin: 0 auto; padding: 16px 12px;
+  display: grid; grid-template-columns: 1fr; gap: 16px;
+}
+.main-col { display: flex; flex-direction: column; gap: 12px; }
+.side-col { display: flex; flex-direction: column; gap: 12px; }
+
+@media (min-width: 900px) {
+  .page-wrap { grid-template-columns: 1fr 320px; }
+}
+
+/* ── ACCORDION CARD ──────────────────── */
+.section-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-color .2s;
+}
+.section-card:hover { border-color: var(--border2); }
+.section-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px; cursor: pointer; user-select: none;
+  transition: background .15s;
+}
+.section-header:hover { background: var(--bg3); }
+.section-num {
+  width: 26px; height: 26px; border-radius: 50%;
+  background: var(--accent3); border: 1px solid var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 800; color: var(--accent);
+  font-family: 'Syne', sans-serif; flex-shrink: 0;
+}
+.section-title {
+  flex: 1; font-size: 13px; font-weight: 700;
+  font-family: 'Syne', sans-serif; color: var(--text);
+}
+.section-arrow {
+  font-size: 12px; color: var(--muted); transition: transform .2s;
+}
+.section-card.open .section-arrow { transform: rotate(180deg); }
+.section-body {
+  max-height: 0; overflow: hidden;
+  transition: max-height .35s ease, padding .2s;
+}
+.section-card.open .section-body {
+  max-height: 4000px; padding: 0 16px 16px;
+}
+.section-card.locked {
+  opacity: .5; pointer-events: none;
+}
+.section-card.hidden-section { display: none; }
+
+/* ── STATUS BADGES ───────────────────── */
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 700; padding: 3px 10px;
+  border-radius: 6px; text-transform: uppercase; letter-spacing: .04em;
+  white-space: nowrap;
+}
+.badge-pendente   { background: var(--yellow-bg); color: var(--yellow); border: 1px solid rgba(251,191,36,.3); }
+.badge-em_analise { background: var(--blue-bg);   color: var(--blue);   border: 1px solid rgba(96,165,250,.3); }
+.badge-decidida   { background: rgba(168,85,247,.12); color: #a855f7; border: 1px solid rgba(168,85,247,.3); }
+.badge-executada  { background: var(--green-bg);  color: var(--green);  border: 1px solid rgba(74,222,128,.3); }
+.badge-cancelada  { background: var(--red-bg);    color: var(--red);    border: 1px solid rgba(248,113,113,.3); }
+.badge-responsavel {
+  background: rgba(200,169,110,.08); color: var(--accent);
+  border: 1px solid rgba(200,169,110,.25);
+}
+.badge-classe {
+  font-size: 14px; font-weight: 800; font-family: 'Syne', sans-serif;
+  padding: 4px 14px; border-radius: 8px;
+}
+
+/* ── FORM FIELDS ─────────────────────── */
+.field-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 12px;
+}
+.field-group { display: flex; flex-direction: column; gap: 4px; }
+.field-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; font-weight: 600;
+}
+.field-value {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  min-height: 38px; display: flex; align-items: center;
+}
+.field-input {
+  font-size: 13px; color: var(--text);
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 12px;
+  outline: none; width: 100%; font-family: inherit;
+  transition: border-color .2s;
+}
+.field-input:focus { border-color: var(--accent); }
+.field-input::placeholder { color: var(--muted2); }
+select.field-input { cursor: pointer; appearance: auto; }
+textarea.field-input { resize: vertical; min-height: 60px; }
+.field-input:disabled, .field-input[readonly] {
+  opacity: .6; cursor: not-allowed;
+}
+
+/* ── PRODUCTS TABLE ──────────────────── */
+.tbl-wrap { overflow-x: auto; margin-top: 8px; }
+.tbl {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px;
+}
+.tbl th {
+  text-align: left; padding: 8px 10px;
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .04em; border-bottom: 1px solid var(--border);
+  white-space: nowrap; font-weight: 600;
+}
+.tbl td {
+  padding: 8px 10px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tbl tr:last-child td { border-bottom: none; }
+.tbl .num { text-align: right; font-family: monospace; font-weight: 600; }
+.tbl .diff-neg { color: var(--red); }
+.tbl .diff-pos { color: var(--green); }
+.tbl .diff-zero { color: var(--muted); }
+.tbl .total-row td {
+  border-top: 2px solid var(--border2); font-weight: 700;
+  padding-top: 10px;
+}
+.tbl .price-input {
+  width: 90px; text-align: right; font-family: monospace;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 4px 8px; color: var(--text);
+  font-size: 12px; outline: none;
+}
+.tbl .price-input:focus { border-color: var(--accent); }
+
+/* ── QUALITY DEFECTS ─────────────────── */
+.defect-section-title {
+  font-size: 11px; font-weight: 700; padding: 6px 12px;
+  border-radius: 6px; margin: 12px 0 8px; display: flex;
+  align-items: center; gap: 8px;
+  font-family: 'Syne', sans-serif; letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.defect-section-title.desconto {
+  background: rgba(251,191,36,.1); color: var(--yellow);
+  border: 1px solid rgba(251,191,36,.25);
+}
+.defect-section-title.corretiva {
+  background: rgba(96,165,250,.1); color: var(--blue);
+  border: 1px solid rgba(96,165,250,.25);
+}
+.defect-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px;
+}
+.defect-item {
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 8px 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.defect-name {
+  flex: 1; font-size: 11px; font-weight: 600;
+  text-transform: capitalize;
+}
+.defect-input {
+  width: 60px; text-align: center; font-family: monospace;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 6px; padding: 5px 6px; color: var(--text);
+  font-size: 13px; font-weight: 700; outline: none;
+}
+.defect-input:focus { border-color: var(--accent); }
+.defect-pct {
+  font-size: 10px; color: var(--muted); font-family: monospace;
+  min-width: 42px; text-align: right;
+}
+.quality-summary {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 14px; margin-top: 12px;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); flex-wrap: wrap;
+}
+.quality-stat { display: flex; flex-direction: column; gap: 2px; }
+.quality-stat-label { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.quality-stat-value { font-size: 16px; font-weight: 800; font-family: 'Syne', sans-serif; }
+
+/* ── DECISION SECTION ────────────────── */
+.decision-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+}
+.decision-total {
+  grid-column: 1 / -1;
+  background: var(--bg3); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 14px;
+  text-align: center;
+}
+.decision-total-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 4px; }
+.decision-total-value {
+  font-size: 28px; font-weight: 800; font-family: 'Syne', sans-serif;
+  color: var(--accent);
+}
+
+/* ── BUTTONS ─────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 20px; border-radius: 8px; font-size: 13px;
+  font-weight: 700; cursor: pointer; transition: all .2s;
+  border: 1px solid transparent; font-family: inherit;
+}
+.btn-primary {
+  background: var(--accent); color: var(--bg); border-color: var(--accent);
+}
+.btn-primary:hover { background: var(--accent2); }
+.btn-primary:disabled { opacity: .4; cursor: not-allowed; }
+.btn-secondary {
+  background: var(--bg3); color: var(--text); border-color: var(--border2);
+}
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-success {
+  background: rgba(39,174,96,.15); color: #27ae60;
+  border-color: rgba(39,174,96,.4);
+}
+.btn-success:hover { background: rgba(39,174,96,.25); }
+.btn-row {
+  display: flex; gap: 10px; margin-top: 14px; flex-wrap: wrap;
+}
+
+/* ── TIMELINE ────────────────────────── */
+.timeline { display: flex; flex-direction: column; gap: 0; }
+.tl-item {
+  display: flex; gap: 12px; padding: 12px 0;
+  border-left: 2px solid var(--border); margin-left: 8px;
+  padding-left: 20px; position: relative;
+}
+.tl-item::before {
+  content: ''; position: absolute; left: -5px; top: 16px;
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--border2); border: 2px solid var(--bg2);
+}
+.tl-item.tl-active::before { background: var(--accent); }
+.tl-item.tl-success::before { background: var(--green); }
+.tl-body { flex: 1; }
+.tl-action {
+  font-size: 12px; font-weight: 600; color: var(--text);
+  margin-bottom: 2px;
+}
+.tl-meta {
+  font-size: 10px; color: var(--muted);
+  display: flex; gap: 10px; flex-wrap: wrap;
+}
+.tl-detail {
+  font-size: 11px; color: var(--muted); margin-top: 4px;
+  background: var(--bg3); border-radius: 6px; padding: 6px 10px;
+}
+
+/* ── LOADING / TOAST ─────────────────── */
+.loading { text-align: center; padding: 60px 20px; }
+.spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; margin: 0 auto 12px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.toast-container {
+  position: fixed; top: 70px; right: 16px; z-index: 9999;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.toast {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 12px 16px;
+  font-size: 13px; min-width: 240px; max-width: 360px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.4);
+  animation: slideIn .3s ease;
+}
+.toast.err { border-color: #e74c3c; color: #e74c3c; }
+.toast.ok  { border-color: #27ae60; color: #27ae60; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+
+/* ── RESPONSIVE ──────────────────────── */
+@media (max-width: 600px) {
+  .page-wrap { padding: 10px 8px; }
+  .field-grid { grid-template-columns: 1fr 1fr; }
+  .defect-grid { grid-template-columns: 1fr; }
+  .decision-grid { grid-template-columns: 1fr; }
+  .tbl { font-size: 11px; }
+  .tbl th, .tbl td { padding: 6px 6px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <a href="fila_inspecoes.html?tipo=pcr" class="back-link">&#8592; Fila PCR</a>
+  <div class="header-info">
+    <div class="header-title">Detalhe PCR</div>
+    <div class="header-sub" id="header-sub">Controle de Qualidade — Classic Couros</div>
+  </div>
+  <div id="cq-user-chip"></div>
+</div>
+
+<!-- TOAST -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- LOADING -->
+<div class="loading" id="loading">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--muted)">Carregando PCR...</div>
+</div>
+
+<!-- MAIN CONTENT (hidden until loaded) -->
+<div class="page-wrap" id="page-wrap" style="display:none">
+<div class="main-col">
+
+  <!-- ══════════════ SECTION 1 — IDENTIFICACAO ══════════════ -->
+  <div class="section-card open" id="sec-ident">
+    <div class="section-header" onclick="toggleSection('sec-ident')">
+      <div class="section-num">1</div>
+      <div class="section-title">Identificacao da PCR</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+        <span class="badge" id="badge-status">—</span>
+        <span class="badge badge-responsavel" id="badge-responsavel">—</span>
+      </div>
+      <div class="field-grid" id="fields-ident">
+        <!-- populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ SECTION 2 — PRODUTOS ══════════════ -->
+  <div class="section-card open" id="sec-produtos">
+    <div class="section-header" onclick="toggleSection('sec-produtos')">
+      <div class="section-num">2</div>
+      <div class="section-title">Produtos Recebidos</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="tbl-wrap">
+        <table class="tbl" id="tbl-produtos">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Descricao</th>
+              <th class="num">Qtd Prevista</th>
+              <th class="num">Qtd Recebida</th>
+              <th class="num">Diferenca</th>
+              <th class="num">Preco Unit.</th>
+              <th class="num">Valor Dif.</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-produtos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ SECTION 3 — QUALIDADE ══════════════ -->
+  <div class="section-card open" id="sec-qualidade">
+    <div class="section-header" onclick="toggleSection('sec-qualidade')">
+      <div class="section-num">3</div>
+      <div class="section-title">Qualidade (Defeitos)</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="field-group" style="max-width:240px;margin-bottom:8px">
+        <label class="field-label">Quantidade Analisada</label>
+        <input type="number" class="field-input" id="qtd-analisada" min="0" placeholder="0"
+               oninput="recalcQualidade()">
+      </div>
+
+      <div class="defect-section-title desconto">Desconto Financeiro</div>
+      <div class="defect-grid" id="defects-desconto"></div>
+
+      <div class="defect-section-title corretiva">Acao Corretiva</div>
+      <div class="defect-grid" id="defects-corretiva"></div>
+
+      <div class="quality-summary" id="quality-summary">
+        <div class="quality-stat">
+          <div class="quality-stat-label">% Desconto</div>
+          <div class="quality-stat-value" id="qs-pct-desc" style="color:var(--yellow)">0%</div>
+        </div>
+        <div class="quality-stat">
+          <div class="quality-stat-label">% Corretiva</div>
+          <div class="quality-stat-value" id="qs-pct-corr" style="color:var(--blue)">0%</div>
+        </div>
+        <div class="quality-stat">
+          <div class="quality-stat-label">% Total</div>
+          <div class="quality-stat-value" id="qs-pct-total">0%</div>
+        </div>
+        <div class="quality-stat" style="margin-left:auto">
+          <div class="quality-stat-label">Classificacao</div>
+          <div class="badge badge-classe" id="qs-classe">—</div>
+        </div>
+      </div>
+
+      <div class="btn-row" id="btn-row-qualidade">
+        <button class="btn btn-primary" onclick="salvarQualidade()">Salvar Qualidade</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ SECTION 4 — DECISAO ══════════════ -->
+  <div class="section-card" id="sec-decisao">
+    <div class="section-header" onclick="toggleSection('sec-decisao')">
+      <div class="section-num">4</div>
+      <div class="section-title">Decisao de Desconto</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="field-group" style="margin-bottom:12px">
+        <label class="field-label">Responsavel</label>
+        <div class="field-value" id="dec-responsavel">—</div>
+      </div>
+
+      <div class="decision-grid">
+        <div class="field-group">
+          <label class="field-label">Desconto por Quantidade</label>
+          <div class="field-value" id="dec-qtd-val" style="font-family:monospace">R$ 0,00</div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Desconto por Qualidade</label>
+          <select class="field-input" id="dec-qual-tipo" onchange="recalcDecisao()">
+            <option value="">Nao descontar</option>
+            <option value="valor_fixo">Valor Fixo</option>
+            <option value="proporcional">Proporcional</option>
+            <option value="proxima_nota">Proxima Nota</option>
+          </select>
+        </div>
+        <div class="field-group" id="dec-qual-val-wrap" style="display:none">
+          <label class="field-label">Valor do Desconto Qualidade</label>
+          <input type="number" class="field-input" id="dec-qual-val" min="0" step="0.01"
+                 placeholder="0,00" oninput="recalcDecisao()">
+        </div>
+        <div class="field-group">
+          <label class="field-label">Decisao Final</label>
+          <select class="field-input" id="dec-final" onchange="recalcDecisao()">
+            <option value="pode_pagar">Pode Pagar</option>
+            <option value="descontar_quantidade">Descontar Quantidade</option>
+            <option value="descontar_qualidade">Descontar Qualidade</option>
+            <option value="descontar_ambos">Descontar Ambos</option>
+            <option value="nao_descontar">Nao Descontar</option>
+            <option value="descontar_proxima_nota">Descontar Proxima Nota</option>
+          </select>
+        </div>
+        <div class="decision-total">
+          <div class="decision-total-label">Valor Total Desconto</div>
+          <div class="decision-total-value" id="dec-total">R$ 0,00</div>
+        </div>
+      </div>
+
+      <div class="field-group" style="margin-top:12px">
+        <label class="field-label">Observacoes</label>
+        <textarea class="field-input" id="dec-obs" rows="3" placeholder="Observacoes sobre a decisao..."></textarea>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="salvarDecisao()">Confirmar Decisao</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════════════ SECTION 5 — EXECUCAO ══════════════ -->
+  <div class="section-card" id="sec-execucao">
+    <div class="section-header" onclick="toggleSection('sec-execucao')">
+      <div class="section-num">5</div>
+      <div class="section-title">Execucao Financeira</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="field-grid">
+        <div class="field-group">
+          <label class="field-label">Executado por</label>
+          <div class="field-value" id="exec-user">—</div>
+        </div>
+        <div class="field-group">
+          <label class="field-label">Numero da Nota de Desconto</label>
+          <input type="text" class="field-input" id="exec-nota" placeholder="Opcional">
+        </div>
+      </div>
+      <div class="field-group" style="margin-top:12px">
+        <label class="field-label">Observacoes</label>
+        <textarea class="field-input" id="exec-obs" rows="3" placeholder="Observacoes da execucao..."></textarea>
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-success" onclick="salvarExecucao()">Confirmar Execucao</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-col -->
+
+<!-- ══════════════ SIDEBAR — TIMELINE ══════════════ -->
+<div class="side-col">
+  <div class="section-card open" id="sec-timeline">
+    <div class="section-header" onclick="toggleSection('sec-timeline')">
+      <div class="section-title">Historico / Auditoria</div>
+      <div class="section-arrow">&#9660;</div>
+    </div>
+    <div class="section-body">
+      <div class="timeline" id="timeline">
+        <div style="font-size:12px;color:var(--muted)">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</div><!-- /page-wrap -->
+
+<!-- SCRIPTS -->
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script src="js/pcr_engine.js"></script>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════════════════════
+let PCR_ID   = null;
+let PCR_DATA = null;   // { documento, produtos, qualidade, decisao, execucoes }
+let USER     = null;
+
+const DEFECT_LABELS = {
+  fermentacao:          'Fermentacao',
+  sem_folhas:           'Sem Folhas',
+  folhas_arrebentadas:  'Folhas Arrebentadas',
+  pedaco:               'Pedaco',
+  rasgado:              'Rasgado',
+  furado:               'Furado',
+  sujo:                 'Sujo',
+  corte_irregular:      'Corte Irregular',
+  mau_cheiro:           'Mau Cheiro',
+  contaminacao:         'Contaminacao',
+  outro:                'Outro'
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', async () => {
+  USER = await CQAuth.init();
+  if (!USER) return;
+
+  const params = new URLSearchParams(window.location.search);
+  PCR_ID = params.get('id');
+  if (!PCR_ID) {
+    showToast('ID da PCR nao informado na URL', 'err');
+    return;
+  }
+
+  await loadPCR();
+});
+
+async function loadPCR() {
+  try {
+    PCR_DATA = await PCREngine.carregarPCR(PCR_ID);
+    if (!PCR_DATA || !PCR_DATA.documento) {
+      document.getElementById('loading').innerHTML =
+        '<div style="font-size:14px;color:var(--red)">PCR nao encontrada.</div>';
+      return;
+    }
+
+    renderIdent();
+    renderProdutos();
+    renderQualidade();
+    renderDecisao();
+    renderExecucao();
+    applyPermissions();
+    loadTimeline();
+
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('page-wrap').style.display = 'grid';
+
+    // Update header subtitle
+    const doc = PCR_DATA.documento;
+    document.getElementById('header-sub').textContent =
+      'PCR #' + (doc.numero || doc.id?.slice(0,8) || '') + ' — Classic Couros';
+
+  } catch (err) {
+    console.error('[DetalhePCR] Erro ao carregar:', err);
+    showToast('Erro ao carregar PCR: ' + err.message, 'err');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SECTION 1 — IDENTIFICACAO
+// ═══════════════════════════════════════════════════════════════════
+function renderIdent() {
+  const doc = PCR_DATA.documento;
+  const status = doc.status || 'pendente';
+  const resp = PCREngine.getResponsavel(doc.fornecedor_nome || doc.motorista || '') || doc.responsavel || '—';
+
+  // Status badge
+  const badgeEl = document.getElementById('badge-status');
+  badgeEl.className = 'badge badge-' + status;
+  badgeEl.textContent = statusLabel(status);
+
+  // Responsavel badge
+  document.getElementById('badge-responsavel').textContent = 'Resp: ' + resp;
+
+  // Fields
+  const fields = [
+    { label: 'Numero PCR',    value: doc.numero || doc.id?.slice(0,8) || '—' },
+    { label: 'Data',           value: PCREngine.formatarData(doc.data_recebimento || doc.created_at) },
+    { label: 'Fornecedor',     value: doc.fornecedor_nome || '—' },
+    { label: 'Motorista',      value: doc.motorista || '—' },
+    { label: 'Participante',   value: doc.participante || '—' },
+    { label: 'Origem',         value: doc.origem || '—' },
+    { label: 'Placa',          value: doc.placa || '—' },
+    { label: 'Nota Fiscal',    value: doc.nota_fiscal || '—' },
+  ];
+
+  document.getElementById('fields-ident').innerHTML = fields.map(f =>
+    '<div class="field-group">' +
+      '<div class="field-label">' + f.label + '</div>' +
+      '<div class="field-value">' + f.value + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function statusLabel(s) {
+  const map = {
+    pendente:   'Pendente',
+    em_analise: 'Em Analise',
+    decidida:   'Decidida',
+    executada:  'Executada',
+    cancelada:  'Cancelada',
+  };
+  return map[s] || s;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SECTION 2 — PRODUTOS
+// ═══════════════════════════════════════════════════════════════════
+function renderProdutos() {
+  const produtos = PCR_DATA.produtos || [];
+  const tbody = document.getElementById('tbody-produtos');
+  const canEditPrice = USER && (USER.perfil === 'administrador' || USER.perfil === 'qualidade');
+
+  let totalDifValor = 0;
+
+  let html = '';
+  produtos.forEach((p, i) => {
+    const prev = Number(p.qtd_prevista) || 0;
+    const rec  = Number(p.qtd_recebida) || 0;
+    const dif  = rec - prev;
+    const preco = Number(p.preco_unitario) || 0;
+    const valDif = dif * preco;
+    totalDifValor += valDif;
+
+    const difClass = dif < 0 ? 'diff-neg' : (dif > 0 ? 'diff-pos' : 'diff-zero');
+
+    const precoCell = canEditPrice
+      ? '<input type="number" class="price-input" value="' + preco.toFixed(2) + '" ' +
+        'data-idx="' + i + '" onchange="onPriceChange(this)" step="0.01" min="0">'
+      : PCREngine.formatarMoeda(preco);
+
+    html += '<tr>' +
+      '<td>' + (p.codigo || '—') + '</td>' +
+      '<td>' + (p.descricao || '—') + '</td>' +
+      '<td class="num">' + prev + '</td>' +
+      '<td class="num">' + rec + '</td>' +
+      '<td class="num ' + difClass + '">' + (dif > 0 ? '+' : '') + dif + '</td>' +
+      '<td class="num">' + precoCell + '</td>' +
+      '<td class="num ' + difClass + '">' + PCREngine.formatarMoeda(valDif) + '</td>' +
+    '</tr>';
+  });
+
+  // Total row
+  const totalClass = totalDifValor < 0 ? 'diff-neg' : (totalDifValor > 0 ? 'diff-pos' : 'diff-zero');
+  html += '<tr class="total-row">' +
+    '<td colspan="5"></td>' +
+    '<td class="num" style="font-size:11px;color:var(--muted)">TOTAL</td>' +
+    '<td class="num ' + totalClass + '">' + PCREngine.formatarMoeda(totalDifValor) + '</td>' +
+  '</tr>';
+
+  tbody.innerHTML = html;
+}
+
+function onPriceChange(el) {
+  const idx = Number(el.dataset.idx);
+  if (PCR_DATA.produtos[idx]) {
+    PCR_DATA.produtos[idx].preco_unitario = Number(el.value) || 0;
+  }
+  renderProdutos();
+  recalcDecisao();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SECTION 3 — QUALIDADE
+// ═══════════════════════════════════════════════════════════════════
+function renderQualidade() {
+  // Build existing defect values from saved data
+  const savedDefects = {};
+  let savedQtdAnalisada = 0;
+  (PCR_DATA.qualidade || []).forEach(q => {
+    if (q.defeito && q.qtd !== undefined) {
+      savedDefects[q.defeito] = Number(q.qtd) || 0;
+    }
+    if (q.qtd_analisada) savedQtdAnalisada = Number(q.qtd_analisada);
+  });
+
+  // If qualidade is a single object with defect fields
+  if (PCR_DATA.qualidade && PCR_DATA.qualidade.length === 1) {
+    const q = PCR_DATA.qualidade[0];
+    PCREngine.TODOS_DEFEITOS.forEach(d => {
+      if (q[d] !== undefined && q[d] !== null) {
+        savedDefects[d] = Number(q[d]) || 0;
+      }
+    });
+    if (q.qtd_analisada) savedQtdAnalisada = Number(q.qtd_analisada);
+  }
+
+  document.getElementById('qtd-analisada').value = savedQtdAnalisada || '';
+
+  // Render DESCONTO defects
+  document.getElementById('defects-desconto').innerHTML = PCREngine.DEFEITOS_DESCONTO.map(d =>
+    '<div class="defect-item">' +
+      '<div class="defect-name">' + (DEFECT_LABELS[d] || d) + '</div>' +
+      '<input type="number" class="defect-input" id="def-' + d + '" min="0" ' +
+        'value="' + (savedDefects[d] || '') + '" oninput="recalcQualidade()" placeholder="0">' +
+      '<div class="defect-pct" id="pct-' + d + '">—</div>' +
+    '</div>'
+  ).join('');
+
+  // Render CORRETIVA defects
+  document.getElementById('defects-corretiva').innerHTML = PCREngine.DEFEITOS_CORRETIVA.map(d =>
+    '<div class="defect-item">' +
+      '<div class="defect-name">' + (DEFECT_LABELS[d] || d) + '</div>' +
+      '<input type="number" class="defect-input" id="def-' + d + '" min="0" ' +
+        'value="' + (savedDefects[d] || '') + '" oninput="recalcQualidade()" placeholder="0">' +
+      '<div class="defect-pct" id="pct-' + d + '">—</div>' +
+    '</div>'
+  ).join('');
+
+  recalcQualidade();
+}
+
+function getDefectValues() {
+  const defeitos = {};
+  PCREngine.TODOS_DEFEITOS.forEach(d => {
+    const el = document.getElementById('def-' + d);
+    if (el) {
+      const v = Number(el.value) || 0;
+      if (v > 0) defeitos[d] = v;
+    }
+  });
+  return defeitos;
+}
+
+function recalcQualidade() {
+  const qa = Number(document.getElementById('qtd-analisada').value) || 0;
+  const defeitos = getDefectValues();
+  const result = PCREngine.calcularQualidade(defeitos, qa || 1);
+
+  // Update individual pct
+  result.detalhes.forEach(d => {
+    const el = document.getElementById('pct-' + d.defeito);
+    if (el) el.textContent = d.pct.toFixed(1) + '%';
+  });
+
+  // Clear pct for zero defects
+  PCREngine.TODOS_DEFEITOS.forEach(d => {
+    if (!defeitos[d]) {
+      const el = document.getElementById('pct-' + d);
+      if (el) el.textContent = '—';
+    }
+  });
+
+  // Summary
+  document.getElementById('qs-pct-desc').textContent = result.pct_desconto.toFixed(1) + '%';
+  document.getElementById('qs-pct-corr').textContent = result.pct_corretiva.toFixed(1) + '%';
+
+  const pctTotal = result.pct_desconto + result.pct_corretiva;
+  document.getElementById('qs-pct-total').textContent = pctTotal.toFixed(1) + '%';
+
+  // Classification badge
+  const cl = result.classificacao;
+  const clEl = document.getElementById('qs-classe');
+  clEl.textContent = cl.classe + ' — ' + cl.label;
+  clEl.style.background = cl.bg;
+  clEl.style.color = cl.cor;
+  clEl.style.border = '1px solid ' + cl.cor;
+}
+
+async function salvarQualidade() {
+  const qa = Number(document.getElementById('qtd-analisada').value) || 0;
+  if (qa <= 0) {
+    showToast('Informe a quantidade analisada', 'err');
+    return;
+  }
+
+  const defeitos = getDefectValues();
+  const payload = {
+    pcr_id: PCR_ID,
+    qtd_analisada: qa,
+    ...defeitos,
+    updated_at: new Date().toISOString(),
+    ...CQAuth.dadosRegistro()
+  };
+
+  try {
+    // Try PATCH first (update existing)
+    const existing = PCR_DATA.qualidade && PCR_DATA.qualidade.length > 0;
+    let ok = false;
+
+    if (existing) {
+      const r = await fetch(CQAuth.getSbUrl() + '/rest/v1/pcr_qualidade?pcr_id=eq.' + encodeURIComponent(PCR_ID), {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': CQAuth.getSbKey(),
+          'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey()),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
+      });
+      ok = r.ok;
+    } else {
+      const r = await fetch(CQAuth.getSbUrl() + '/rest/v1/pcr_qualidade', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': CQAuth.getSbKey(),
+          'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey()),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
+      });
+      ok = r.ok;
+    }
+
+    if (ok) {
+      showToast('Qualidade salva com sucesso', 'ok');
+      await CQAuth.log('pcr_qualidade_salva', { pcr_id: PCR_ID });
+      // Update status to em_analise if still pendente
+      if (PCR_DATA.documento.status === 'pendente') {
+        await PCREngine.atualizarStatus(PCR_ID, 'em_analise');
+      }
+      await loadPCR();
+    } else {
+      showToast('Erro ao salvar qualidade', 'err');
+    }
+  } catch (err) {
+    console.error('[DetalhePCR] salvarQualidade:', err);
+    showToast('Erro: ' + err.message, 'err');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SECTION 4 — DECISAO
+// ═══════════════════════════════════════════════════════════════════
+function renderDecisao() {
+  const doc = PCR_DATA.documento;
+  const resp = PCREngine.getResponsavel(doc.fornecedor_nome || '') || doc.responsavel || '—';
+  document.getElementById('dec-responsavel').textContent = resp;
+
+  // Desconto por quantidade
+  const descontoQtd = PCREngine.calcularDescontoQuantidade(PCR_DATA.produtos || []);
+  document.getElementById('dec-qtd-val').textContent = PCREngine.formatarMoeda(descontoQtd.desconto_liquido);
+
+  // Load existing decision
+  const dec = PCR_DATA.decisao;
+  if (dec) {
+    if (dec.tipo_desconto_qualidade) {
+      document.getElementById('dec-qual-tipo').value = dec.tipo_desconto_qualidade;
+    }
+    if (dec.valor_desconto_qualidade) {
+      document.getElementById('dec-qual-val').value = dec.valor_desconto_qualidade;
+      document.getElementById('dec-qual-val-wrap').style.display = '';
+    }
+    if (dec.decisao_final) {
+      document.getElementById('dec-final').value = dec.decisao_final;
+    }
+    if (dec.observacao) {
+      document.getElementById('dec-obs').value = dec.observacao;
+    }
+  }
+
+  recalcDecisao();
+}
+
+function recalcDecisao() {
+  const tipoQual = document.getElementById('dec-qual-tipo').value;
+
+  // Show/hide valor input based on tipo
+  const valWrap = document.getElementById('dec-qual-val-wrap');
+  valWrap.style.display = (tipoQual === 'valor_fixo' || tipoQual === 'proporcional') ? '' : 'none';
+
+  const descontoQtd = PCREngine.calcularDescontoQuantidade(PCR_DATA.produtos || []);
+  const valQtd = descontoQtd.desconto_liquido > 0 ? descontoQtd.desconto_liquido : 0;
+
+  let valQual = 0;
+  if (tipoQual === 'valor_fixo') {
+    valQual = Number(document.getElementById('dec-qual-val').value) || 0;
+  } else if (tipoQual === 'proporcional') {
+    valQual = Number(document.getElementById('dec-qual-val').value) || 0;
+  }
+
+  const decisao = document.getElementById('dec-final').value;
+  let total = 0;
+  switch (decisao) {
+    case 'descontar_quantidade':    total = valQtd; break;
+    case 'descontar_qualidade':     total = valQual; break;
+    case 'descontar_ambos':         total = valQtd + valQual; break;
+    case 'descontar_proxima_nota':  total = valQtd + valQual; break;
+    case 'pode_pagar':              total = 0; break;
+    case 'nao_descontar':           total = 0; break;
+    default: total = 0;
+  }
+
+  document.getElementById('dec-total').textContent = PCREngine.formatarMoeda(total);
+}
+
+async function salvarDecisao() {
+  const descontoQtd = PCREngine.calcularDescontoQuantidade(PCR_DATA.produtos || []);
+  const payload = {
+    pcr_id: PCR_ID,
+    tipo_desconto_qualidade: document.getElementById('dec-qual-tipo').value || null,
+    valor_desconto_qualidade: Number(document.getElementById('dec-qual-val').value) || 0,
+    decisao_final: document.getElementById('dec-final').value,
+    valor_desconto_quantidade: descontoQtd.desconto_liquido > 0 ? descontoQtd.desconto_liquido : 0,
+    valor_total_desconto: parseFloat(document.getElementById('dec-total').textContent.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0,
+    observacao: document.getElementById('dec-obs').value || null,
+    updated_at: new Date().toISOString(),
+    ...CQAuth.dadosRegistro()
+  };
+
+  try {
+    const existing = !!PCR_DATA.decisao;
+    let ok = false;
+
+    if (existing) {
+      ok = await PCREngine.salvarDecisao(PCR_ID, payload);
+    } else {
+      const r = await fetch(CQAuth.getSbUrl() + '/rest/v1/pcr_decisoes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': CQAuth.getSbKey(),
+          'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey()),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
+      });
+      ok = r.ok;
+    }
+
+    if (ok) {
+      showToast('Decisao confirmada com sucesso', 'ok');
+      await CQAuth.log('pcr_decisao_salva', { pcr_id: PCR_ID, decisao: payload.decisao_final });
+      await PCREngine.atualizarStatus(PCR_ID, 'decidida');
+      await loadPCR();
+    } else {
+      showToast('Erro ao salvar decisao', 'err');
+    }
+  } catch (err) {
+    console.error('[DetalhePCR] salvarDecisao:', err);
+    showToast('Erro: ' + err.message, 'err');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  SECTION 5 — EXECUCAO
+// ═══════════════════════════════════════════════════════════════════
+function renderExecucao() {
+  const userName = USER ? (USER.nome || USER.email) : '—';
+  document.getElementById('exec-user').textContent = userName;
+
+  // Load existing execution data
+  if (PCR_DATA.execucoes && PCR_DATA.execucoes.length > 0) {
+    const exec = PCR_DATA.execucoes[0];
+    if (exec.numero_nota) document.getElementById('exec-nota').value = exec.numero_nota;
+    if (exec.observacao) document.getElementById('exec-obs').value = exec.observacao;
+    if (exec.executor) document.getElementById('exec-user').textContent = exec.executor;
+  }
+}
+
+async function salvarExecucao() {
+  const payload = {
+    pcr_id: PCR_ID,
+    executor: USER ? (USER.nome || USER.email) : '',
+    numero_nota: document.getElementById('exec-nota').value || null,
+    observacao: document.getElementById('exec-obs').value || null,
+    data_execucao: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...CQAuth.dadosRegistro()
+  };
+
+  try {
+    const existing = PCR_DATA.execucoes && PCR_DATA.execucoes.length > 0;
+    let ok = false;
+
+    if (existing) {
+      ok = await PCREngine.salvarExecucao(PCR_ID, payload);
+    } else {
+      const r = await fetch(CQAuth.getSbUrl() + '/rest/v1/pcr_execucoes', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'apikey': CQAuth.getSbKey(),
+          'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey()),
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify(payload)
+      });
+      ok = r.ok;
+    }
+
+    if (ok) {
+      showToast('Execucao confirmada com sucesso', 'ok');
+      await CQAuth.log('pcr_execucao_salva', { pcr_id: PCR_ID });
+      await PCREngine.atualizarStatus(PCR_ID, 'executada');
+      await loadPCR();
+    } else {
+      showToast('Erro ao salvar execucao', 'err');
+    }
+  } catch (err) {
+    console.error('[DetalhePCR] salvarExecucao:', err);
+    showToast('Erro: ' + err.message, 'err');
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  PERMISSIONS
+// ═══════════════════════════════════════════════════════════════════
+function applyPermissions() {
+  const perfil = USER ? USER.perfil : '';
+  const doc = PCR_DATA.documento;
+  const resp = PCREngine.getResponsavel(doc.fornecedor_nome || '') || doc.responsavel || '';
+  const userName = USER ? (USER.nome || '').toUpperCase() : '';
+
+  // Section 3 (quality): qualidade or administrador
+  const canQuality = perfil === 'qualidade' || perfil === 'administrador';
+  if (!canQuality) {
+    document.getElementById('sec-qualidade').classList.add('locked');
+    document.getElementById('btn-row-qualidade').style.display = 'none';
+  }
+
+  // Section 4 (decision): administrador or user matches responsavel
+  const canDecision = perfil === 'administrador' || userName === resp.toUpperCase();
+  if (!canDecision) {
+    document.getElementById('sec-decisao').classList.add('hidden-section');
+  } else {
+    document.getElementById('sec-decisao').classList.add('open');
+  }
+
+  // Section 5 (execution): financeiro or administrador
+  const canExec = perfil === 'financeiro' || perfil === 'administrador';
+  if (!canExec) {
+    document.getElementById('sec-execucao').classList.add('hidden-section');
+  } else {
+    document.getElementById('sec-execucao').classList.add('open');
+  }
+
+  // If status is executada, lock all editing
+  if (doc.status === 'executada') {
+    document.querySelectorAll('.btn-primary, .btn-success').forEach(b => {
+      b.disabled = true;
+      b.title = 'PCR ja executada';
+    });
+    document.querySelectorAll('.field-input:not([readonly]), .defect-input, .price-input').forEach(el => {
+      el.disabled = true;
+    });
+  }
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  TIMELINE
+// ═══════════════════════════════════════════════════════════════════
+async function loadTimeline() {
+  try {
+    const url = CQAuth.getSbUrl() + '/rest/v1/pcr_auditoria?pcr_id=eq.' +
+      encodeURIComponent(PCR_ID) + '&order=created_at.desc&select=*';
+    const r = await fetch(url, {
+      headers: {
+        'apikey': CQAuth.getSbKey(),
+        'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey())
+      }
+    });
+
+    let items = [];
+    if (r.ok) {
+      items = await r.json();
+    }
+
+    // Build timeline from audit + document status changes
+    const tlEl = document.getElementById('timeline');
+
+    if (!items || items.length === 0) {
+      // Build basic timeline from PCR data
+      items = buildBasicTimeline();
+    }
+
+    if (items.length === 0) {
+      tlEl.innerHTML = '<div style="font-size:12px;color:var(--muted)">Nenhum registro de auditoria.</div>';
+      return;
+    }
+
+    tlEl.innerHTML = items.map((item, i) => {
+      const isActive = i === 0;
+      const isSuccess = item.acao === 'executada' || item.acao === 'execucao';
+      const cls = isSuccess ? 'tl-success' : (isActive ? 'tl-active' : '');
+
+      return '<div class="tl-item ' + cls + '">' +
+        '<div class="tl-body">' +
+          '<div class="tl-action">' + (item.descricao || item.acao || '—') + '</div>' +
+          '<div class="tl-meta">' +
+            '<span>' + (item.usuario_nome || item.usuario || '—') + '</span>' +
+            '<span>' + formatDateTime(item.created_at || item.data) + '</span>' +
+          '</div>' +
+          (item.detalhes ? '<div class="tl-detail">' + item.detalhes + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+
+  } catch (err) {
+    console.error('[DetalhePCR] loadTimeline:', err);
+    document.getElementById('timeline').innerHTML =
+      '<div style="font-size:12px;color:var(--muted)">Erro ao carregar auditoria.</div>';
+  }
+}
+
+function buildBasicTimeline() {
+  const items = [];
+  const doc = PCR_DATA.documento;
+
+  if (doc.created_at) {
+    items.push({
+      acao: 'criacao',
+      descricao: 'PCR criada',
+      usuario_nome: doc.criado_por || '—',
+      created_at: doc.created_at
+    });
+  }
+
+  if (PCR_DATA.qualidade && PCR_DATA.qualidade.length > 0) {
+    const q = PCR_DATA.qualidade[0];
+    items.push({
+      acao: 'qualidade',
+      descricao: 'Qualidade registrada',
+      usuario_nome: q.usuario_nome || '—',
+      created_at: q.updated_at || q.created_at || doc.updated_at
+    });
+  }
+
+  if (PCR_DATA.decisao) {
+    items.push({
+      acao: 'decisao',
+      descricao: 'Decisao: ' + (PCR_DATA.decisao.decisao_final || '—'),
+      usuario_nome: PCR_DATA.decisao.usuario_nome || '—',
+      created_at: PCR_DATA.decisao.updated_at || PCR_DATA.decisao.created_at
+    });
+  }
+
+  if (PCR_DATA.execucoes && PCR_DATA.execucoes.length > 0) {
+    const exec = PCR_DATA.execucoes[0];
+    items.push({
+      acao: 'execucao',
+      descricao: 'Execucao financeira confirmada',
+      usuario_nome: exec.executor || exec.usuario_nome || '—',
+      created_at: exec.data_execucao || exec.created_at
+    });
+  }
+
+  // Sort descending
+  items.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0));
+  return items;
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+//  HELPERS
+// ═══════════════════════════════════════════════════════════════════
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  if (el && !el.classList.contains('locked')) {
+    el.classList.toggle('open');
+  }
+}
+
+function formatDateTime(iso) {
+  if (!iso) return '—';
+  try {
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '—';
+    return d.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric' }) +
+      ' ' + d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  } catch { return '—'; }
+}
+
+function showToast(msg, type) {
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type || '');
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(() => { t.style.opacity = '0'; setTimeout(() => t.remove(), 300); }, 4000);
+}
+</script>
+</body>
+</html>

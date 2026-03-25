@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic CQ — Dashboard PCR</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<script src="js/pcr_engine.js"></script>
+<style>
+:root {
+  --bg: #0e0e0e;
+  --bg2: #141414;
+  --s1: #101010;
+  --s2: #161616;
+  --s3: #1e1e1e;
+  --border: #242424;
+  --border2: #2e2e2e;
+  --accent: #c8a96e;
+  --accent2: #e8c98e;
+  --accent3: #a07840;
+  --text: #e8e3da;
+  --muted: #7a7468;
+  --muted2: #444;
+  --ok: #4a9966;
+  --ok2: #27ae60;
+  --warn: #b87a28;
+  --warn2: #f39c12;
+  --err: #9e3535;
+  --err2: #e74c3c;
+  --info: #2a6090;
+  --info2: #4a9ed0;
+  --purple: #8e44ad;
+  --gold: #c8a96e;
+  --dark-blue: #1a3a52;
+}
+*{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;overflow-x:hidden;}
+
+/* HEADER */
+.hd{position:sticky;top:0;z-index:200;background:rgba(14,14,14,0.96);backdrop-filter:blur(12px);border-bottom:1px solid var(--border);padding:0 28px;display:flex;align-items:center;justify-content:space-between;height:56px;}
+.hd-left{display:flex;align-items:center;gap:16px;}
+.hd-back{color:var(--muted);font-size:11px;text-decoration:none;letter-spacing:0.12em;font-family:'DM Mono',monospace;transition:color .2s;}
+.hd-back:hover{color:var(--accent);}
+.hd-sep{width:1px;height:20px;background:var(--border2);}
+.hd-title{font-family:'Syne',sans-serif;font-size:12px;font-weight:700;letter-spacing:0.18em;color:var(--accent);text-transform:uppercase;}
+.hd-right{display:flex;align-items:center;gap:10px;}
+#huser{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;}
+.btn-hd{background:transparent;border:1px solid var(--border2);border-radius:2px;color:var(--muted);font-size:10px;font-family:'DM Mono',monospace;padding:6px 12px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;transition:all .2s;}
+.btn-hd:hover{border-color:var(--accent);color:var(--accent);}
+.btn-hd.primary{border-color:var(--accent3);color:var(--accent);background:rgba(200,169,110,0.06);}
+.btn-hd.primary:hover{background:rgba(200,169,110,0.12);}
+
+/* LAYOUT */
+main{max-width:1400px;margin:0 auto;padding:28px 24px 60px;}
+.page-header{margin-bottom:28px;}
+.page-title{font-family:'Syne',sans-serif;font-size:28px;font-weight:800;letter-spacing:-0.02em;margin-bottom:4px;}
+.page-sub{font-size:12px;color:var(--muted);font-family:'DM Mono',monospace;}
+.page-sub span{color:var(--accent);}
+
+/* FILTROS */
+.filter-bar{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:14px 18px;margin-bottom:24px;display:flex;flex-wrap:wrap;align-items:center;gap:12px;}
+.filter-bar label{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);font-family:'DM Mono',monospace;}
+select.fil{background:var(--s2);border:1px solid var(--border2);border-radius:2px;color:var(--text);font-family:'DM Mono',monospace;font-size:12px;padding:7px 10px;outline:none;transition:border-color .2s;cursor:pointer;}
+select.fil:focus{border-color:var(--accent);}
+select.fil option{background:var(--s2);}
+.filter-sep{width:1px;height:28px;background:var(--border2);}
+
+/* KPI GRID */
+.kpi-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+@media(max-width:900px){.kpi-row{grid-template-columns:repeat(2,1fr);}}
+@media(max-width:500px){.kpi-row{grid-template-columns:1fr;}}
+.kpi{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:18px 16px;position:relative;overflow:hidden;transition:border-color .2s;}
+.kpi:hover{border-color:var(--border2);}
+.kpi::after{content:'';position:absolute;right:-10px;bottom:-10px;width:60px;height:60px;border-radius:50%;opacity:.04;background:currentColor;}
+.kpi-label{font-size:9px;letter-spacing:0.18em;text-transform:uppercase;color:var(--muted);margin-bottom:10px;font-family:'DM Mono',monospace;}
+.kpi-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;line-height:1;}
+.kpi-sub{font-size:10px;color:var(--muted);margin-top:5px;font-family:'DM Mono',monospace;}
+
+/* TABS */
+.tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--border);padding-bottom:0;overflow-x:auto;}
+.tab{font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;transition:all .2s;white-space:nowrap;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* CARDS & CHARTS */
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+.charts-grid-wide{display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-bottom:20px;}
+@media(max-width:900px){.charts-grid,.charts-grid-wide{grid-template-columns:1fr;}}
+.card{background:var(--s1);border:1px solid var(--border);border-radius:3px;padding:20px;}
+.card-title{font-family:'Syne',sans-serif;font-size:10px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;}
+.card-sub{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;font-weight:normal;text-transform:none;letter-spacing:0;}
+canvas{max-height:300px;}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;}
+.data-table{width:100%;border-collapse:collapse;font-size:11px;}
+.data-table th{font-size:9px;letter-spacing:0.13em;text-transform:uppercase;color:var(--muted);padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);font-family:'DM Mono',monospace;font-weight:400;white-space:nowrap;}
+.data-table td{padding:9px 10px;border-bottom:1px solid rgba(255,255,255,0.025);vertical-align:middle;}
+.data-table tr:hover td{background:rgba(255,255,255,0.015);}
+.data-table tbody tr:last-child td{border-bottom:none;}
+.mono{font-family:'DM Mono',monospace;font-size:11px;}
+
+/* BADGES */
+.badge{display:inline-block;font-size:9px;letter-spacing:0.12em;text-transform:uppercase;border-radius:1px;padding:2px 7px;font-family:'DM Mono',monospace;}
+.badge-A{background:rgba(39,174,96,0.12);color:var(--ok2);}
+.badge-B{background:rgba(243,156,18,0.12);color:var(--warn2);}
+.badge-C{background:rgba(231,76,60,0.12);color:var(--err2);}
+
+/* PENDENCIA CARDS */
+.pend-list{display:flex;flex-direction:column;gap:8px;}
+.pend-card{background:var(--s2);border:1px solid var(--border);border-radius:3px;padding:14px 18px;display:flex;align-items:center;gap:16px;transition:border-color .2s;}
+.pend-card:hover{border-color:var(--border2);}
+.pend-card.pend-red{border-left:3px solid var(--err2);}
+.pend-card.pend-orange{border-left:3px solid var(--warn2);}
+.pend-card.pend-green{border-left:3px solid var(--ok2);}
+.pend-num{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;color:var(--accent);min-width:80px;}
+.pend-info{flex:1;min-width:0;}
+.pend-info-line{font-size:12px;margin-bottom:2px;}
+.pend-info-meta{font-size:10px;color:var(--muted);font-family:'DM Mono',monospace;}
+.pend-days{font-family:'Syne',sans-serif;font-size:20px;font-weight:800;min-width:60px;text-align:right;}
+.pend-days-label{font-size:9px;color:var(--muted);font-family:'DM Mono',monospace;text-align:right;}
+.days-red{color:var(--err2);}
+.days-orange{color:var(--warn2);}
+.days-green{color:var(--ok2);}
+
+/* LOADING */
+.loading-pulse{display:flex;align-items:center;justify-content:center;gap:6px;padding:40px;color:var(--muted);font-size:12px;font-family:'DM Mono',monospace;}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--accent);animation:pulse 1s ease-in-out infinite;}
+.dot:nth-child(2){animation-delay:.2s;}
+.dot:nth-child(3){animation-delay:.4s;}
+@keyframes pulse{0%,100%{opacity:.2;transform:scale(.8);}50%{opacity:1;transform:scale(1.1);}}
+.empty{text-align:center;color:var(--muted);padding:40px;font-size:12px;font-family:'DM Mono',monospace;}
+
+/* SEC HEADER */
+.sec-hd{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.sec-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);display:flex;align-items:center;gap:8px;}
+.sec-title::before{content:'';display:block;width:3px;height:14px;background:var(--accent);border-radius:1px;}
+
+/* PCT BAR */
+.pct-bar{display:flex;align-items:center;gap:8px;}
+.pct-track{flex:1;height:4px;background:var(--border);border-radius:2px;}
+.pct-fill{height:100%;border-radius:2px;}
+
+/* RESPONSIVE TWEAKS */
+@media(max-width:600px){
+  .hd{padding:0 12px;height:48px;}
+  main{padding:16px 12px 40px;}
+  .page-title{font-size:20px;}
+  .filter-bar{padding:10px 12px;}
+  .kpi-val{font-size:20px;}
+  .tab{padding:8px 10px;font-size:10px;}
+}
+</style>
+</head>
+<body>
+
+<header class="hd">
+  <div class="hd-left">
+    <a class="hd-back" href="app.html">&larr; MENU</a>
+    <div class="hd-sep"></div>
+    <div class="hd-title">Dashboard PCR</div>
+  </div>
+  <div class="hd-right">
+    <span id="huser"></span>
+    <button class="btn-hd" onclick="carregar()">&#8635; Atualizar</button>
+    <button class="btn-hd primary" onclick="exportarCSV()">&#8595; CSV</button>
+    <button class="btn-hd" onclick="fazerLogout()">Sair</button>
+  </div>
+</header>
+
+<main>
+  <div class="page-header">
+    <div class="page-title">Dashboard PCR</div>
+    <div class="page-sub" id="pageSub">Carregando dados... <span></span></div>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filter-bar">
+    <label>Periodo</label>
+    <select class="fil" id="filtMes"></select>
+    <div class="filter-sep"></div>
+    <label>Responsavel</label>
+    <select class="fil" id="filtResp">
+      <option value="">Todos</option>
+      <option value="JEAN">JEAN</option>
+      <option value="DORLY">DORLY</option>
+    </select>
+    <button class="btn-hd primary" style="margin-left:4px;" onclick="carregar()">Filtrar</button>
+    <button class="btn-hd" onclick="limparFiltro()">Limpar</button>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi"><div class="kpi-label">Total PCRs</div><div class="kpi-val" id="kTotal">--</div><div class="kpi-sub" id="kTotalSub">no periodo</div></div>
+    <div class="kpi" style="color:var(--warn2);"><div class="kpi-label">Valor Total Descontos</div><div class="kpi-val" id="kDesconto">--</div><div class="kpi-sub">acumulado</div></div>
+    <div class="kpi" style="color:var(--err2);"><div class="kpi-label">% Medio Desconto</div><div class="kpi-val" id="kPctDesc">--</div><div class="kpi-sub">financeiro</div></div>
+    <div class="kpi" style="color:var(--accent);"><div class="kpi-label">Fornecedor Critico</div><div class="kpi-val" id="kCritico" style="font-size:16px;line-height:1.4;">--</div><div class="kpi-sub" id="kCriticoSub">maior % desc medio</div></div>
+  </div>
+
+  <!-- TABS -->
+  <div class="tabs">
+    <div class="tab active" data-tab="fornecedor">Por Fornecedor</div>
+    <div class="tab" data-tab="responsavel">Por Responsavel</div>
+    <div class="tab" data-tab="tendencia">Tendencia</div>
+    <div class="tab" data-tab="pendencias">Pendencias</div>
+  </div>
+
+  <!-- TAB 1: POR FORNECEDOR -->
+  <div class="tab-panel active" id="tab-fornecedor">
+    <div class="card" style="margin-bottom:16px;">
+      <div class="card-title">% Desconto Medio por Fornecedor</div>
+      <canvas id="chartFornecedor" style="max-height:350px;"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-title">Ranking Fornecedores <span class="card-sub" id="fornCount"></span></div>
+      <div class="table-wrap">
+        <table class="data-table" id="tblForn">
+          <thead>
+            <tr>
+              <th>Fornecedor</th>
+              <th>PCRs</th>
+              <th>Kg Total</th>
+              <th>% Desc Medio</th>
+              <th>Class.</th>
+              <th>Pior PCR</th>
+              <th>Valor Desconto</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: POR RESPONSAVEL -->
+  <div class="tab-panel" id="tab-responsavel">
+    <div class="charts-grid" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-title">PCRs por Responsavel</div>
+        <canvas id="chartRespDonut" style="max-height:280px;"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">Valor Desconto por Responsavel</div>
+        <canvas id="chartRespBar" style="max-height:280px;"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Detalhamento por Responsavel</div>
+      <div class="table-wrap">
+        <table class="data-table" id="tblResp">
+          <thead>
+            <tr>
+              <th>Responsavel</th>
+              <th>PCRs</th>
+              <th>Fornecedores</th>
+              <th>Valor Total</th>
+              <th>% Desc Medio</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: TENDENCIA -->
+  <div class="tab-panel" id="tab-tendencia">
+    <div class="charts-grid" style="margin-bottom:16px;">
+      <div class="card">
+        <div class="card-title">% Desconto Mensal (12 meses)</div>
+        <canvas id="chartTrendLine" style="max-height:280px;"></canvas>
+      </div>
+      <div class="card">
+        <div class="card-title">PCRs Mensais por Status</div>
+        <canvas id="chartTrendBar" style="max-height:280px;"></canvas>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">Resumo Mensal</div>
+      <div class="table-wrap">
+        <table class="data-table" id="tblTrend">
+          <thead>
+            <tr>
+              <th>Mes</th>
+              <th>PCRs</th>
+              <th>% Desc</th>
+              <th>% Corretiva</th>
+              <th>Valor Desc</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 4: PENDENCIAS -->
+  <div class="tab-panel" id="tab-pendencias">
+    <div class="sec-hd">
+      <div class="sec-title">PCRs Aguardando Acao</div>
+      <span class="mono" id="pendCount" style="color:var(--muted);"></span>
+    </div>
+    <div class="pend-list" id="pendList">
+      <div class="loading-pulse"><div class="dot"></div><div class="dot"></div><div class="dot"></div> Carregando...</div>
+    </div>
+  </div>
+
+</main>
+
+<script>
+// =====================================================================
+//  GLOBALS
+// =====================================================================
+let ALL_PCRS = [];       // raw rows from pcr_documentos
+let ALL_DECISOES = [];   // raw rows from pcr_decisoes
+let ALL_QUALIDADE = [];  // raw rows from pcr_qualidade_defeitos
+let ALL_PRODUTOS = [];   // raw rows from pcr_produtos
+let ALL_EXECUCOES = [];  // raw rows from pcr_execucoes
+
+// Chart instances
+let chartFornecedor = null;
+let chartRespDonut = null;
+let chartRespBar = null;
+let chartTrendLine = null;
+let chartTrendBar = null;
+
+const COLORS = {
+  gold: '#c8a96e',
+  darkBlue: '#1a3a52',
+  green: '#27ae60',
+  red: '#e74c3c',
+  orange: '#f39c12',
+  purple: '#8e44ad',
+  teal: '#16a085',
+  blue: '#2980b9'
+};
+const CHART_PALETTE = [COLORS.gold, COLORS.darkBlue, COLORS.green, COLORS.red, COLORS.orange, COLORS.purple, COLORS.teal, COLORS.blue];
+
+// =====================================================================
+//  INIT
+// =====================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  // Auth
+  try {
+    const user = await CQAuth.init({ perfisPermitidos: ['administrador', 'qualidade', 'gerencia'] });
+    if (user && user.nome) document.getElementById('huser').textContent = user.nome;
+  } catch (e) {
+    console.warn('[Dashboard PCR] Auth:', e);
+  }
+
+  // Populate month filter
+  populateMeses();
+
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById('tab-' + t.dataset.tab).classList.add('active');
+    });
+  });
+
+  await carregar();
+});
+
+function populateMeses() {
+  const sel = document.getElementById('filtMes');
+  sel.innerHTML = '<option value="">Todos (12 meses)</option>';
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const val = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    const label = d.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    sel.innerHTML += `<option value="${val}">${label}</option>`;
+  }
+}
+
+function limparFiltro() {
+  document.getElementById('filtMes').value = '';
+  document.getElementById('filtResp').value = '';
+  carregar();
+}
+
+// =====================================================================
+//  DATA LOADING — Direct Supabase REST
+// =====================================================================
+function _headers() {
+  return {
+    'Content-Type': 'application/json',
+    'apikey': CQAuth.getSbKey(),
+    'Authorization': 'Bearer ' + (CQAuth.getAuthToken() || CQAuth.getSbKey())
+  };
+}
+
+function _url(table) {
+  return CQAuth.getSbUrl() + '/rest/v1/' + table;
+}
+
+async function _fetch(table, qs) {
+  try {
+    const sep = qs ? '?' + qs : '';
+    const r = await fetch(_url(table) + sep, { headers: _headers() });
+    if (!r.ok) { console.error('[DashPCR] GET', table, r.status); return []; }
+    return await r.json();
+  } catch (e) {
+    console.error('[DashPCR] fetch error:', e);
+    return [];
+  }
+}
+
+async function carregar() {
+  document.getElementById('pageSub').innerHTML = 'Carregando dados... <span></span>';
+
+  // Build date range from filter
+  const mesVal = document.getElementById('filtMes').value;
+  let dateDe = '', dateAte = '';
+  if (mesVal) {
+    const [y, m] = mesVal.split('-');
+    dateDe = `${y}-${m}-01`;
+    const lastDay = new Date(Number(y), Number(m), 0).getDate();
+    dateAte = `${y}-${m}-${String(lastDay).padStart(2, '0')}`;
+  } else {
+    // Last 12 months
+    const now = new Date();
+    const from = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    dateDe = from.toISOString().slice(0, 10);
+    dateAte = now.toISOString().slice(0, 10);
+  }
+
+  // Parallel fetch all tables
+  const dateFilter = `data_recebimento=gte.${dateDe}&data_recebimento=lte.${dateAte}`;
+  const [pcrs, decisoes, qualidade, produtos, execucoes] = await Promise.all([
+    _fetch('pcr_documentos', `select=*&${dateFilter}&order=data_recebimento.desc&limit=1000`),
+    _fetch('pcr_decisoes', 'select=*&limit=2000'),
+    _fetch('pcr_qualidade_defeitos', 'select=*&limit=5000'),
+    _fetch('pcr_produtos', 'select=*&limit=5000'),
+    _fetch('pcr_execucoes', 'select=*&limit=2000')
+  ]);
+
+  ALL_PCRS = pcrs || [];
+  ALL_DECISOES = decisoes || [];
+  ALL_QUALIDADE = qualidade || [];
+  ALL_PRODUTOS = produtos || [];
+  ALL_EXECUCOES = execucoes || [];
+
+  // Apply responsavel filter
+  const respFilter = document.getElementById('filtResp').value;
+  let filtered = ALL_PCRS;
+  if (respFilter) {
+    filtered = ALL_PCRS.filter(p => {
+      const resp = PCREngine.getResponsavel(p.fornecedor_nome || p.fornecedor || '');
+      return resp === respFilter;
+    });
+  }
+
+  renderKPIs(filtered);
+  renderFornecedor(filtered);
+  renderResponsavel(filtered);
+  renderTendencia(ALL_PCRS); // always show full 12m for trend
+  renderPendencias();
+
+  const total = filtered.length;
+  document.getElementById('pageSub').innerHTML = `<span>${total}</span> PCRs no periodo selecionado`;
+}
+
+// =====================================================================
+//  HELPERS
+// =====================================================================
+function getDecisao(pcrId) {
+  return ALL_DECISOES.find(d => String(d.pcr_id) === String(pcrId)) || null;
+}
+
+function getQualidade(pcrId) {
+  return ALL_QUALIDADE.filter(q => String(q.pcr_id) === String(pcrId));
+}
+
+function getProdutos(pcrId) {
+  return ALL_PRODUTOS.filter(p => String(p.pcr_id) === String(pcrId));
+}
+
+function getExecucao(pcrId) {
+  return ALL_EXECUCOES.find(e => String(e.pcr_id) === String(pcrId)) || null;
+}
+
+function getPctDesconto(pcr) {
+  // Try from pcr fields first
+  if (pcr.pct_defeito != null) return Number(pcr.pct_defeito) || 0;
+  if (pcr.pct_desconto != null) return Number(pcr.pct_desconto) || 0;
+  // Calculate from qualidade
+  const quals = getQualidade(pcr.id);
+  if (!quals.length) return 0;
+  let total = 0;
+  quals.forEach(q => { total += Number(q.quantidade) || 0; });
+  const analisada = Number(pcr.qtd_analisada) || Number(pcr.peso_total) || 1;
+  return Math.round((total / analisada) * 10000) / 100;
+}
+
+function getValorDesconto(pcr) {
+  const dec = getDecisao(pcr.id);
+  if (dec && dec.valor_desconto != null) return Number(dec.valor_desconto) || 0;
+  if (pcr.valor_desconto != null) return Number(pcr.valor_desconto) || 0;
+  return 0;
+}
+
+function getKgTotal(pcr) {
+  if (pcr.peso_total) return Number(pcr.peso_total) || 0;
+  const prods = getProdutos(pcr.id);
+  let total = 0;
+  prods.forEach(p => { total += Number(p.qtd_recebida) || Number(p.qtd_prevista) || 0; });
+  return total;
+}
+
+function getClasse(pcr) {
+  if (pcr.classe) return pcr.classe.toUpperCase();
+  const pct = getPctDesconto(pcr);
+  return PCREngine.classificar(pct).classe;
+}
+
+function fmtMoeda(v) { return PCREngine.formatarMoeda(v); }
+function fmtPeso(v) { return PCREngine.formatarPeso(v); }
+function fmtPct(v) { return (Number(v) || 0).toFixed(2) + '%'; }
+
+function daysDiff(dateStr) {
+  if (!dateStr) return 999;
+  const d = new Date(dateStr);
+  const now = new Date();
+  return Math.floor((now - d) / (1000 * 60 * 60 * 24));
+}
+
+// =====================================================================
+//  KPIs
+// =====================================================================
+function renderKPIs(pcrs) {
+  // Total
+  document.getElementById('kTotal').textContent = pcrs.length;
+
+  // Valor total descontos
+  let totalDesc = 0;
+  pcrs.forEach(p => { totalDesc += getValorDesconto(p); });
+  document.getElementById('kDesconto').textContent = fmtMoeda(totalDesc);
+
+  // % medio desconto
+  let somaPct = 0;
+  pcrs.forEach(p => { somaPct += getPctDesconto(p); });
+  const mediaPct = pcrs.length ? (somaPct / pcrs.length) : 0;
+  document.getElementById('kPctDesc').textContent = fmtPct(mediaPct);
+
+  // Fornecedor critico
+  const fornMap = {};
+  pcrs.forEach(p => {
+    const nome = p.fornecedor_nome || p.fornecedor || 'DESCONHECIDO';
+    if (!fornMap[nome]) fornMap[nome] = { soma: 0, count: 0 };
+    fornMap[nome].soma += getPctDesconto(p);
+    fornMap[nome].count++;
+  });
+
+  let critNome = '--', critPct = 0;
+  Object.entries(fornMap).forEach(([nome, d]) => {
+    const avg = d.soma / d.count;
+    if (avg > critPct && d.count >= 1) { critPct = avg; critNome = nome; }
+  });
+  document.getElementById('kCritico').textContent = critNome;
+  document.getElementById('kCriticoSub').textContent = critPct > 0 ? fmtPct(critPct) + ' medio' : 'maior % desc medio';
+}
+
+// =====================================================================
+//  TAB 1: POR FORNECEDOR
+// =====================================================================
+function renderFornecedor(pcrs) {
+  // Aggregate by supplier
+  const map = {};
+  pcrs.forEach(p => {
+    const nome = p.fornecedor_nome || p.fornecedor || 'DESCONHECIDO';
+    if (!map[nome]) map[nome] = { nome, pcrs: [], somaPct: 0, somaKg: 0, somaDesc: 0, piorPct: 0, piorId: '' };
+    const g = map[nome];
+    g.pcrs.push(p);
+    const pct = getPctDesconto(p);
+    g.somaPct += pct;
+    g.somaKg += getKgTotal(p);
+    g.somaDesc += getValorDesconto(p);
+    if (pct > g.piorPct) { g.piorPct = pct; g.piorId = p.numero_pcr || p.id; }
+  });
+
+  const fornArr = Object.values(map).map(g => ({
+    nome: g.nome,
+    totalPcrs: g.pcrs.length,
+    kgTotal: g.somaKg,
+    pctMedio: g.somaPct / g.pcrs.length,
+    classe: PCREngine.classificar(g.somaPct / g.pcrs.length).classe,
+    piorPcr: g.piorId,
+    valorDesc: g.somaDesc
+  })).sort((a, b) => b.pctMedio - a.pctMedio);
+
+  document.getElementById('fornCount').textContent = fornArr.length + ' fornecedores';
+
+  // Chart
+  if (chartFornecedor) chartFornecedor.destroy();
+  const labels = fornArr.map(f => f.nome.length > 20 ? f.nome.slice(0, 20) + '...' : f.nome);
+  const data = fornArr.map(f => f.pctMedio);
+  const bgColors = fornArr.map(f => {
+    if (f.pctMedio > 15) return COLORS.red;
+    if (f.pctMedio > 5) return COLORS.orange;
+    return COLORS.green;
+  });
+
+  chartFornecedor = new Chart(document.getElementById('chartFornecedor'), {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: '% Desc Medio',
+        data,
+        backgroundColor: bgColors,
+        borderRadius: 2,
+        barThickness: 18
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 } } },
+        y: { grid: { display: false }, ticks: { color: '#e8e3da', font: { family: "'DM Sans', sans-serif", size: 11 } } }
+      }
+    }
+  });
+
+  // Table
+  const tbody = document.querySelector('#tblForn tbody');
+  tbody.innerHTML = '';
+  fornArr.forEach(f => {
+    const badgeCls = 'badge badge-' + f.classe;
+    tbody.innerHTML += `<tr>
+      <td>${f.nome}</td>
+      <td class="mono">${f.totalPcrs}</td>
+      <td class="mono">${fmtPeso(f.kgTotal)}</td>
+      <td class="mono" style="color:${f.pctMedio > 15 ? 'var(--err2)' : f.pctMedio > 5 ? 'var(--warn2)' : 'var(--ok2)'}">${fmtPct(f.pctMedio)}</td>
+      <td><span class="${badgeCls}">${f.classe}</span></td>
+      <td class="mono">${f.piorPcr || '--'}</td>
+      <td class="mono">${fmtMoeda(f.valorDesc)}</td>
+    </tr>`;
+  });
+}
+
+// =====================================================================
+//  TAB 2: POR RESPONSAVEL
+// =====================================================================
+function renderResponsavel(pcrs) {
+  const map = {};
+  pcrs.forEach(p => {
+    const resp = PCREngine.getResponsavel(p.fornecedor_nome || p.fornecedor || '') || 'SEM CARTEIRA';
+    if (!map[resp]) map[resp] = { resp, count: 0, somaDesc: 0, somaPct: 0, decisoes: 0, somaTempoDecisao: 0, tempoCount: 0 };
+    const g = map[resp];
+    g.count++;
+    g.somaDesc += getValorDesconto(p);
+    g.somaPct += getPctDesconto(p);
+
+    const dec = getDecisao(p.id);
+    if (dec) {
+      g.decisoes++;
+      if (dec.created_at && p.data_recebimento) {
+        const diff = daysDiff(p.data_recebimento) - daysDiff(dec.created_at);
+        if (diff >= 0) { g.somaTempoDecisao += diff; g.tempoCount++; }
+      }
+    }
+  });
+
+  const respArr = Object.values(map);
+
+  // Donut
+  if (chartRespDonut) chartRespDonut.destroy();
+  chartRespDonut = new Chart(document.getElementById('chartRespDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: respArr.map(r => r.resp),
+      datasets: [{
+        data: respArr.map(r => r.count),
+        backgroundColor: [COLORS.gold, COLORS.darkBlue, COLORS.purple, COLORS.green],
+        borderWidth: 0
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      cutout: '65%',
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#e8e3da', font: { family: "'DM Sans', sans-serif", size: 11 }, padding: 16 } }
+      }
+    }
+  });
+
+  // Bar
+  if (chartRespBar) chartRespBar.destroy();
+  chartRespBar = new Chart(document.getElementById('chartRespBar'), {
+    type: 'bar',
+    data: {
+      labels: respArr.map(r => r.resp),
+      datasets: [{
+        label: 'Valor Desconto (R$)',
+        data: respArr.map(r => r.somaDesc),
+        backgroundColor: [COLORS.gold, COLORS.darkBlue, COLORS.purple, COLORS.green],
+        borderRadius: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false }, ticks: { color: '#e8e3da', font: { family: "'DM Sans', sans-serif", size: 11 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 }, callback: v => 'R$ ' + v.toLocaleString('pt-BR') } }
+      }
+    }
+  });
+
+  // Table
+  const tbody = document.querySelector('#tblResp tbody');
+  tbody.innerHTML = '';
+  respArr.forEach(r => {
+    const tempoMedio = r.tempoCount ? (r.somaTempoDecisao / r.tempoCount).toFixed(1) : '--';
+    tbody.innerHTML += `<tr>
+      <td style="font-weight:600;">${r.resp}</td>
+      <td class="mono">${r.count}</td>
+      <td class="mono">${r.decisoes}</td>
+      <td class="mono">${fmtMoeda(r.somaDesc)}</td>
+      <td class="mono">${r.count ? fmtPct(r.somaPct / r.count) : '--'}</td>
+    </tr>`;
+  });
+}
+
+// =====================================================================
+//  TAB 3: TENDENCIA
+// =====================================================================
+function renderTendencia(pcrs) {
+  // Group by month
+  const monthMap = {};
+  const now = new Date();
+
+  // Init last 12 months
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+    monthMap[key] = { key, label: d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), pcrs: 0, somaPct: 0, somaPctCorr: 0, somaDesc: 0, pendente: 0, decidida: 0, concluida: 0 };
+  }
+
+  pcrs.forEach(p => {
+    if (!p.data_recebimento) return;
+    const dt = new Date(p.data_recebimento);
+    const key = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    if (!monthMap[key]) return;
+    const g = monthMap[key];
+    g.pcrs++;
+    g.somaPct += getPctDesconto(p);
+    g.somaDesc += getValorDesconto(p);
+
+    const status = (p.status || '').toLowerCase();
+    if (status.includes('conclu') || status.includes('execut')) g.concluida++;
+    else if (status.includes('decid')) g.decidida++;
+    else g.pendente++;
+
+    // Corretiva %
+    const quals = getQualidade(p.id);
+    let corrCount = 0;
+    quals.forEach(q => {
+      if (PCREngine.DEFEITOS_CORRETIVA.includes(q.defeito || q.tipo_defeito)) corrCount += Number(q.quantidade) || 0;
+    });
+    const analisada = Number(p.qtd_analisada) || Number(p.peso_total) || 1;
+    g.somaPctCorr += (corrCount / analisada) * 100;
+  });
+
+  const months = Object.values(monthMap);
+
+  // Line chart: monthly discount %
+  if (chartTrendLine) chartTrendLine.destroy();
+  chartTrendLine = new Chart(document.getElementById('chartTrendLine'), {
+    type: 'line',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: '% Desconto Medio',
+        data: months.map(m => m.pcrs ? Math.round((m.somaPct / m.pcrs) * 100) / 100 : 0),
+        borderColor: COLORS.gold,
+        backgroundColor: 'rgba(200,169,110,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 4,
+        pointBackgroundColor: COLORS.gold
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 } } },
+        y: { grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 }, callback: v => v + '%' } }
+      }
+    }
+  });
+
+  // Stacked bar: monthly PCR count by status
+  if (chartTrendBar) chartTrendBar.destroy();
+  chartTrendBar = new Chart(document.getElementById('chartTrendBar'), {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [
+        { label: 'Pendente', data: months.map(m => m.pendente), backgroundColor: COLORS.orange, borderRadius: 2 },
+        { label: 'Decidida', data: months.map(m => m.decidida), backgroundColor: COLORS.darkBlue, borderRadius: 2 },
+        { label: 'Concluida', data: months.map(m => m.concluida), backgroundColor: COLORS.green, borderRadius: 2 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { color: '#e8e3da', font: { family: "'DM Sans', sans-serif", size: 10 }, padding: 12, usePointStyle: true, pointStyle: 'circle' } }
+      },
+      scales: {
+        x: { stacked: true, grid: { display: false }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 } } },
+        y: { stacked: true, grid: { color: 'rgba(255,255,255,0.03)' }, ticks: { color: '#7a7468', font: { family: "'DM Mono', monospace", size: 10 } } }
+      }
+    }
+  });
+
+  // Table
+  const tbody = document.querySelector('#tblTrend tbody');
+  tbody.innerHTML = '';
+  months.forEach(m => {
+    const avgPct = m.pcrs ? (m.somaPct / m.pcrs) : 0;
+    const avgCorr = m.pcrs ? (m.somaPctCorr / m.pcrs) : 0;
+    tbody.innerHTML += `<tr>
+      <td style="font-weight:600;">${m.label}</td>
+      <td class="mono">${m.pcrs}</td>
+      <td class="mono" style="color:${avgPct > 15 ? 'var(--err2)' : avgPct > 5 ? 'var(--warn2)' : 'var(--ok2)'}">${fmtPct(avgPct)}</td>
+      <td class="mono">${fmtPct(avgCorr)}</td>
+      <td class="mono">${fmtMoeda(m.somaDesc)}</td>
+    </tr>`;
+  });
+}
+
+// =====================================================================
+//  TAB 4: PENDENCIAS
+// =====================================================================
+function renderPendencias() {
+  const container = document.getElementById('pendList');
+
+  // Find pending PCRs: status contains 'pendente' or 'aguardando' or decided but not executed
+  const pending = ALL_PCRS.filter(p => {
+    const status = (p.status || '').toLowerCase();
+    if (status.includes('pendente') || status.includes('aguardando')) return true;
+    // Decided but not yet executed
+    if (status.includes('decid')) {
+      const exec = getExecucao(p.id);
+      if (!exec || !exec.data_execucao) return true;
+    }
+    return false;
+  });
+
+  // Sort by days waiting (oldest first)
+  pending.sort((a, b) => {
+    const daysA = daysDiff(a.data_recebimento || a.created_at);
+    const daysB = daysDiff(b.data_recebimento || b.created_at);
+    return daysB - daysA;
+  });
+
+  document.getElementById('pendCount').textContent = pending.length + ' pendencia(s)';
+
+  if (!pending.length) {
+    container.innerHTML = '<div class="empty">Nenhuma pendencia encontrada.</div>';
+    return;
+  }
+
+  container.innerHTML = '';
+  pending.forEach(p => {
+    const days = daysDiff(p.data_recebimento || p.created_at);
+    let colorClass = 'pend-green';
+    let daysClass = 'days-green';
+    if (days > 7) { colorClass = 'pend-red'; daysClass = 'days-red'; }
+    else if (days > 3) { colorClass = 'pend-orange'; daysClass = 'days-orange'; }
+
+    const resp = PCREngine.getResponsavel(p.fornecedor_nome || p.fornecedor || '') || '--';
+    const valor = getValorDesconto(p);
+    const fornecedor = p.fornecedor_nome || p.fornecedor || 'DESCONHECIDO';
+    const numero = p.numero_pcr || '#' + p.id;
+    const status = p.status || 'pendente';
+
+    container.innerHTML += `
+    <div class="pend-card ${colorClass}">
+      <div class="pend-num">${numero}</div>
+      <div class="pend-info">
+        <div class="pend-info-line"><strong>${fornecedor}</strong></div>
+        <div class="pend-info-meta">Resp: ${resp} &middot; Status: ${status} &middot; Valor: ${fmtMoeda(valor)}</div>
+      </div>
+      <div style="text-align:right;">
+        <div class="pend-days ${daysClass}">${days}d</div>
+        <div class="pend-days-label">aguardando</div>
+      </div>
+    </div>`;
+  });
+}
+
+// =====================================================================
+//  CSV EXPORT
+// =====================================================================
+function exportarCSV() {
+  if (!ALL_PCRS.length) { alert('Nenhum dado para exportar.'); return; }
+
+  const respFilter = document.getElementById('filtResp').value;
+  let pcrs = ALL_PCRS;
+  if (respFilter) {
+    pcrs = ALL_PCRS.filter(p => PCREngine.getResponsavel(p.fornecedor_nome || p.fornecedor || '') === respFilter);
+  }
+
+  const header = ['Numero PCR', 'Data Recebimento', 'Fornecedor', 'Responsavel', 'Peso Total (kg)', '% Desconto', 'Classe', 'Valor Desconto', 'Status'];
+  const rows = pcrs.map(p => {
+    const resp = PCREngine.getResponsavel(p.fornecedor_nome || p.fornecedor || '') || '';
+    return [
+      p.numero_pcr || p.id,
+      p.data_recebimento || '',
+      (p.fornecedor_nome || p.fornecedor || '').replace(/,/g, ' '),
+      resp,
+      getKgTotal(p).toFixed(1),
+      getPctDesconto(p).toFixed(2),
+      getClasse(p),
+      getValorDesconto(p).toFixed(2),
+      p.status || ''
+    ].join(';');
+  });
+
+  const csv = '\uFEFF' + header.join(';') + '\n' + rows.join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'dashboard_pcr_' + new Date().toISOString().slice(0, 10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// =====================================================================
+//  LOGOUT
+// =====================================================================
+function fazerLogout() {
+  if (typeof CQAuth !== 'undefined' && CQAuth.logout) CQAuth.logout();
+  else window.location.href = 'login.html';
+}
+</script>
+</body>
+</html>

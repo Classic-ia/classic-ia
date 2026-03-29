@@ -145,7 +145,7 @@ tbody tr:last-child{border-bottom:none;}
 <div class="container">
 
   <div class="page-hd">
-    <div class="page-title">Usuarios do Sistema</div>
+    <div class="page-title">Usuários do Sistema</div>
     <button class="btn btn-primary" onclick="abrirModal()">+ Novo Usuário</button>
   </div>
 
@@ -293,7 +293,7 @@ tbody tr:last-child{border-bottom:none;}
   </div>
 </div>
 
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
 <script>
 // SB_URL and SB_KEY are provided by config.js
@@ -364,7 +364,7 @@ async function carregarUsuarios() {
   rows.forEach(u => { if (contagem[u.perfil] !== undefined) contagem[u.perfil]++; });
 
   document.getElementById('perfilGrid').innerHTML = Object.entries(PERFIS).map(([k, p]) => `
-    <div class="perfil-card" onclick="filtrarPorPerfil('${k}')">
+    <div class="perfil-card" onclick="filtrarPorPerfil('${k}', this)">
       <div class="perfil-icon" style="font-size:14px;font-weight:800;color:${p.cor};font-family:'DM Mono',monospace;">${p.icon}</div>
       <div class="perfil-nome">${p.label}</div>
       <div class="perfil-count">${contagem[k] || 0}</div>
@@ -427,11 +427,11 @@ function filtrarUsuarios() {
   renderTabela(filtrado);
 }
 
-function filtrarPorPerfil(perfil) {
+function filtrarPorPerfil(perfil, el) {
   document.getElementById('filterPerfil').value = perfil;
   filtrarUsuarios();
   document.querySelectorAll('.perfil-card').forEach(c => c.classList.remove('active'));
-  event.currentTarget.classList.add('active');
+  if (el) el.classList.add('active');
 }
 
 // ── MODAL ─────────────────────────────────────────────────────
@@ -537,7 +537,12 @@ async function carregarAudit() {
   document.getElementById('tbodyAudit').innerHTML =
     '<tr><td colspan="5"><div class="loading"><div class="spinner"></div><span>Carregando...</span></div></td></tr>';
 
-  const rows = await sbGet('cq_audit_log', 'order=criado_em.desc&limit=200');
+  let rows;
+  try { rows = await sbGet('cq_audit_log', 'order=criado_em.desc&limit=200'); } catch(e) { rows = null; }
+  if (!Array.isArray(rows)) {
+    document.getElementById('tbodyAudit').innerHTML = '<tr><td colspan="5" class="empty">Erro ao carregar log de auditoria.</td></tr>';
+    return;
+  }
   auditCarregado = true;
 
   const ACAO_ICON = {
@@ -568,7 +573,12 @@ async function carregarSessoes() {
   document.getElementById('tbodySessoes').innerHTML =
     '<tr><td colspan="6"><div class="loading"><div class="spinner"></div><span>Carregando...</span></div></td></tr>';
 
-  const rows = await sbGet('cq_sessoes', 'ativa=eq.true&order=ultimo_acesso.desc');
+  let rows;
+  try { rows = await sbGet('cq_sessoes', 'ativa=eq.true&order=ultimo_acesso.desc'); } catch(e) { rows = null; }
+  if (!Array.isArray(rows)) {
+    document.getElementById('tbodySessoes').innerHTML = '<tr><td colspan="6" class="empty">Erro ao carregar sessões.</td></tr>';
+    return;
+  }
   sessoesCarregadas = true;
 
   document.getElementById('tbodySessoes').innerHTML = rows.length ? rows.map(r => {

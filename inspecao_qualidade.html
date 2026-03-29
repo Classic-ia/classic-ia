@@ -1019,7 +1019,7 @@ textarea.field-input {
 </div>
 
 <!-- Toast -->
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="alert" aria-live="assertive"></div>
 
 <!-- Modal de sucesso -->
 <div class="modal-overlay" id="modalSucesso">
@@ -1278,7 +1278,7 @@ function initFornecedores(){
   // (Data/hora, responsáveis e defeitos já renderizados no topo do init)
 
   // Offline
-  window.addEventListener('online',  ()=>{ isOnline=true;  document.getElementById('offlineBanner').classList.remove('show'); });
+  window.addEventListener('online',  ()=>{ isOnline=true;  document.getElementById('offlineBanner').classList.remove('show'); sincronizarPendentes(); });
   window.addEventListener('offline', ()=>{ isOnline=false; document.getElementById('offlineBanner').classList.add('show'); });
   if(!isOnline) document.getElementById('offlineBanner').classList.add('show');
 
@@ -1934,6 +1934,7 @@ function updateSaveStatus(){
 
   if(faltando.length){
     statusEl.textContent = `Falta: ${faltando.map(c=>c.nome).join(', ')}`;
+    statusEl.style.color = '';
     return;
   }
   // Regra 5
@@ -2009,6 +2010,121 @@ function montarRegistro(){
 }
 
 // ══════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════
+// CQIDB — IndexedDB para fotos offline (evita estouro do localStorage ~5MB)
+// ══════════════════════════════════════════════════════════
+const CQIDB = (() => {
+  const DB_NAME = 'cq_fotos_offline';
+  const STORE   = 'fotos';
+  let _db = null;
+
+  async function _open() {
+    if (_db) return _db;
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore(STORE);
+      req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function salvarFotos(id, fotos) {
+    const db = await _open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).put(fotos, id);
+      tx.oncomplete = resolve;
+      tx.onerror    = e => reject(e.target.error);
+    });
+  }
+
+  async function lerFotos(id) {
+    const db = await _open();
+    return new Promise((resolve, reject) => {
+      const tx  = db.transaction(STORE, 'readonly');
+      const req = tx.objectStore(STORE).get(id);
+      req.onsuccess = e => resolve(e.target.result || {});
+      req.onerror   = e => reject(e.target.error);
+    });
+  }
+
+  async function removerFotos(id) {
+    const db = await _open();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(STORE, 'readwrite');
+      tx.objectStore(STORE).delete(id);
+      tx.oncomplete = resolve;
+      tx.onerror    = e => reject(e.target.error);
+    });
+  }
+
+  return { salvarFotos, lerFotos, removerFotos };
+})();
+
+// ══════════════════════════════════════════════════════════
+// SINCRONIZAR PENDENTES — chamado ao voltar conexão
+// ══════════════════════════════════════════════════════════
+async function sincronizarPendentes() {
+  const pendentes = JSON.parse(localStorage.getItem('cq_pendentes') || '[]');
+  if (!pendentes.length || !isOnline) return;
+
+  const SB_URL = CQAuth.getSbUrl();
+  const SB_KEY = CQAuth.getSbKey();
+  const JWT    = CQAuth.getAuthToken() || SB_KEY;
+  const sincrIds = [];
+
+  for (const reg of pendentes) {
+    try {
+      // Recuperar fotos do IndexedDB se existirem
+      const fotos = reg._tem_fotos ? await CQIDB.lerFotos(reg.id).catch(()=>({})) : {};
+      const fotoUrls = {};
+
+      for (const [key, data] of Object.entries(fotos)) {
+        if (!data) continue;
+        try {
+          const parts = data.split(',');
+          const mime  = parts[0].match(/:(.*?);/)[1];
+          const bstr  = atob(parts[1]);
+          const u8    = new Uint8Array(bstr.length);
+          for (let i = 0; i < bstr.length; i++) u8[i] = bstr.charCodeAt(i);
+          const blob  = new Blob([u8], { type: mime });
+          const path  = `inspecao/${reg.id}/${key}_${Date.now()}.jpg`;
+          const up    = await fetch(`${SB_URL}/storage/v1/object/cq-fotos/${path}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${JWT}`, 'apikey': SB_KEY, 'Content-Type': blob.type, 'x-upsert': 'true' },
+            body: blob,
+          });
+          if (up.ok) fotoUrls[key] = `${SB_URL}/storage/v1/object/public/cq-fotos/${path}`;
+        } catch(e) { console.warn('[Sync] Foto falhou:', key, e); }
+      }
+
+      // Montar payload sem marcadores internos
+      const payload = Object.fromEntries(Object.entries(reg).filter(([k]) => !k.startsWith('_')));
+      if (fotoUrls.etiqueta) payload.foto_etiqueta_url = fotoUrls.etiqueta;
+      if (fotoUrls.produto)  payload.foto_produto_url  = fotoUrls.produto;
+      if (fotoUrls.defeito)  payload.foto_defeito_url  = fotoUrls.defeito;
+
+      const resp = await fetch(`${SB_URL}/rest/v1/registros_cq_inspecao`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': SB_KEY, 'Authorization': `Bearer ${JWT}`, 'Prefer': 'return=minimal' },
+        body: JSON.stringify(payload),
+      });
+
+      if (resp.ok || resp.status === 409) { // 409 = já existia, ok
+        sincrIds.push(reg.id);
+        CQIDB.removerFotos(reg.id).catch(()=>{});
+      }
+    } catch(e) { console.warn('[Sync] Falha ao sincronizar:', reg.id, e); }
+  }
+
+  if (sincrIds.length) {
+    const nova = pendentes.filter(r => !sincrIds.includes(r.id));
+    localStorage.setItem('cq_pendentes', JSON.stringify(nova));
+    toast(`${sincrIds.length} inspeção(ões) sincronizada(s) com sucesso`, 'ok');
+    console.log('[Sync] Sincronizados:', sincrIds.length, 'de', pendentes.length);
+  }
+}
+
 // SALVAR — Fluxo P1/P2: Frontend coleta → Backend decide
 //
 // 1. Validação leve de UX (campos obrigatórios na tela)
@@ -2027,6 +2143,10 @@ async function salvarInspecao(){
     toast('Preencha todos os campos obrigatórios', 'err');
     return;
   }
+
+  // Anti duplo-clique: desabilitar botão durante o save
+  const _btnSave = document.getElementById('btnSave');
+  if(_btnSave) { _btnSave.disabled = true; _btnSave.textContent = 'Salvando...'; }
 
   // P2: Verificar permissão antes de prosseguir
   if(typeof CQPermissoes !== 'undefined' && CQPermissoes.isCarregado()){
@@ -2067,7 +2187,11 @@ async function salvarInspecao(){
 
   // Salva localStorage (offline-first) — backup local
   const pendentes = JSON.parse(localStorage.getItem('cq_pendentes') || '[]');
-  pendentes.push({...registro, foto_etiqueta: fotoEtiquetaData, foto_produto: fotoProdutoData, foto_defeito: fotoDifeitoData});
+  const _temFotos = !!(fotoEtiquetaData || fotoProdutoData || fotoDifeitoData);
+  if(_temFotos){
+    CQIDB.salvarFotos(registro.id, {etiqueta: fotoEtiquetaData, produto: fotoProdutoData, defeito: fotoDifeitoData}).catch(e => console.warn('[IDB] Falha ao salvar fotos offline:', e));
+  }
+  pendentes.push({...registro, _tem_fotos: _temFotos});
   localStorage.setItem('cq_pendentes', JSON.stringify(pendentes));
 
   const SB_URL = CQAuth.getSbUrl();
@@ -2346,7 +2470,24 @@ async function salvarInspecao(){
     statusMsg = 'Rascunho salvo — submissao pendente de revisao dos dados';
   }
   document.getElementById('modalOfflineNote').textContent = statusMsg;
+
+  // Atualizar header com o ID gerado (para PDF funcionar offline também)
+  const headerIdEl = document.getElementById('inspecaoId');
+  if(headerIdEl) headerIdEl.textContent = registro.id;
+
+  // Limpar da fila offline se salvou online com sucesso
+  if(salvouOnline){
+    try{
+      const filaAtual = JSON.parse(localStorage.getItem('cq_pendentes') || '[]');
+      localStorage.setItem('cq_pendentes', JSON.stringify(filaAtual.filter(p => p.id !== registro.id)));
+      CQIDB.removerFotos(registro.id).catch(()=>{});
+    } catch(e){ /* não-crítico */ }
+  }
+
   document.getElementById('modalSucesso').classList.add('show');
+
+  // Reabilitar botão salvar
+  if(_btnSave){ _btnSave.disabled = false; _btnSave.textContent = 'Salvar Inspecao'; }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -2361,7 +2502,7 @@ function limparForm(){
   // Limpa campos
   ['f-inspetor','f-produto','f-lote-atak','f-etiqueta',
    'f-qtd-lote','f-qtd-analisada',
-   'f-responsavel','f-obs','f-obs-reprovado'].forEach(id=>{
+   'f-obs','f-obs-reprovado'].forEach(id=>{
     const el = document.getElementById(id);
     if(el) el.value = '';
   });

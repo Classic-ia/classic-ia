@@ -292,7 +292,12 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <div id="uploadPreview" style="display:none">
     <div class="preview-header">
       <div class="preview-title" id="previewCount"></div>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center">
+        <select class="filter-select" id="filtPreviewMap" onchange="filtrarPreview()" style="font-size:10px;padding:5px 10px">
+          <option value="todos">Todos</option>
+          <option value="mapeados">So mapeados</option>
+          <option value="nao-mapeados">So sem mapeamento</option>
+        </select>
         <button class="btn" onclick="limparPreview()">Limpar</button>
         <button class="btn btn-primary" id="btnImportar" onclick="executarImportacao()">Importar</button>
       </div>
@@ -762,17 +767,30 @@ async function processarArquivos(files) {
   toast(msg, erros && !novos ? 'error' : erros ? 'warn' : 'ok');
 }
 
+function filtrarPreview() { renderPreview(); }
+
 function renderPreview() {
+  const filtro = document.getElementById('filtPreviewMap')?.value || 'todos';
   const section = document.getElementById('uploadPreview');
   const cards = document.getElementById('previewCards');
   const count = document.getElementById('previewCount');
 
-  const naoMapeados = allParsedItens.filter(i => !i._mapped).length;
+  const mapeados = allParsedItens.filter(i => i._mapped).length;
+  const naoMapeados = allParsedItens.length - mapeados;
   count.innerHTML = `${allParsedItens.length} item(ns) em ${allParsedNFs.length} NF(s)` +
-    (naoMapeados ? ` &mdash; <span style="color:var(--warn)">${naoMapeados} sem mapeamento</span>` : '');
+    ` &mdash; <span style="color:var(--ok)">${mapeados} mapeados</span>` +
+    (naoMapeados ? `, <span style="color:var(--warn)">${naoMapeados} sem mapeamento</span>` : '');
 
   let html = '';
   for (const nf of allParsedNFs) {
+    // Filtrar itens desta NF
+    const itensFiltrados = nf.itens.filter(item => {
+      if (filtro === 'mapeados') return item._mapped;
+      if (filtro === 'nao-mapeados') return !item._mapped;
+      return true;
+    });
+    if (!itensFiltrados.length) continue; // pular NF sem itens no filtro
+
     html += `<div class="nf-info">
       <div><span>NF:</span> <strong>${nf.nNF}</strong></div>
       <div><span>Data:</span> <strong>${fmtData(nf.dataEmissao)}</strong></div>
@@ -787,7 +805,7 @@ function renderPreview() {
       <th style="text-align:right">Vlr Total</th><th>Categoria</th><th></th>
     </tr></thead><tbody>`;
 
-    for (const item of nf.itens) {
+    for (const item of itensFiltrados) {
       const catNome = item._mapped ? nomeCategoria(item.categoria_id) : '';
       const cls = item._mapped ? 'badge badge-ok' : 'badge badge-warn';
       const label = item._mapped ? catNome : 'SEM MAPEAMENTO';

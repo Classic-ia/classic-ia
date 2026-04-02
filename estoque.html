@@ -394,7 +394,32 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 
 <!-- ═══ TAB: DASHBOARD ═══════════════════════════════════════ -->
 <div id="tab-dashboard" class="tab-content">
+  <!-- Filtro de periodo -->
+  <div class="filters" style="margin-bottom:20px">
+    <div class="filter-group">
+      <span class="filter-label">Periodo</span>
+      <select class="filter-select" id="dashPeriodo" onchange="renderDashboard()">
+        <option value="">Todo periodo</option>
+        <option value="mes-atual">Mes atual</option>
+        <option value="mes-anterior">Mes anterior</option>
+        <option value="trimestre">Ultimo trimestre</option>
+        <option value="custom">Personalizado</option>
+      </select>
+    </div>
+    <div class="filter-group" id="dashCustomDatas" style="display:none">
+      <span class="filter-label">De</span>
+      <input type="date" class="filter-input" id="dashDe">
+    </div>
+    <div class="filter-group" id="dashCustomDatas2" style="display:none">
+      <span class="filter-label">Ate</span>
+      <input type="date" class="filter-input" id="dashAte">
+    </div>
+  </div>
+
   <div class="kpi-row" id="dashKpis"></div>
+
+  <!-- Alertas de estoque minimo -->
+  <div id="dashAlertas" style="display:none;margin-bottom:24px"></div>
 
   <div class="chart-row">
     <div class="chart-box">
@@ -407,24 +432,88 @@ tr:hover td{background:rgba(200,169,110,0.03)}
     </div>
   </div>
 
-  <div class="section-head">Posicao de Estoque</div>
+  <!-- Posicao de Estoque com CMP -->
+  <div class="section-head">Posicao de Estoque + Custo Medio Ponderado</div>
   <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
-          <th>Categoria</th><th>Unidade</th>
-          <th style="text-align:right">Saldo Inicial</th>
+          <th>Categoria</th><th>Und</th>
           <th style="text-align:right">Entradas</th>
           <th style="text-align:right">Saidas</th>
-          <th style="text-align:right">Saldo Atual</th>
+          <th style="text-align:right">Saldo</th>
           <th style="text-align:right">Vlr Entradas</th>
           <th style="text-align:right">Vlr Saidas</th>
+          <th style="text-align:right">CMP (R$)</th>
+          <th style="text-align:right">Vlr Estoque</th>
+          <th style="text-align:right">Est. Min</th>
           <th style="text-align:right">NFs</th>
         </tr>
       </thead>
       <tbody id="dashSaldoBody"></tbody>
     </table>
   </div>
+
+  <!-- Ranking Fornecedores -->
+  <div class="section-head" style="margin-top:32px">Ranking de Fornecedores</div>
+  <div class="filters">
+    <div class="filter-group">
+      <select class="filter-select" id="dashFornTipo" onchange="renderFornecedores()">
+        <option value="">Todos</option>
+        <option value="entrada">Fornecedores (Entrada)</option>
+        <option value="saida">Clientes (Saida)</option>
+      </select>
+    </div>
+  </div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Fornecedor/Cliente</th><th>CNPJ</th><th>Tipo</th>
+          <th style="text-align:right">NFs</th><th style="text-align:right">Itens</th>
+          <th style="text-align:right">Qtde Total</th><th style="text-align:right">Valor Total</th>
+          <th>Primeira NF</th><th>Ultima NF</th>
+        </tr>
+      </thead>
+      <tbody id="dashFornBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Historico de Precos -->
+  <div class="section-head" style="margin-top:32px">Historico de Precos</div>
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Categoria</span>
+      <select class="filter-select" id="dashPrecoCat" onchange="renderHistoricoPrecos()">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+  </div>
+  <div class="chart-box" style="margin-bottom:24px">
+    <div class="chart-title">Preco Medio por Mes</div>
+    <canvas id="chartPreco"></canvas>
+  </div>
+
+  <!-- Comparativo Mensal -->
+  <div class="section-head" style="margin-top:32px">Comparativo Mensal</div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Categoria</th><th>Mes Anterior</th><th>Mes Atual</th>
+          <th style="text-align:right">Ent. Ant.</th><th style="text-align:right">Ent. Atual</th>
+          <th style="text-align:right">Var %</th>
+          <th style="text-align:right">Sai. Ant.</th><th style="text-align:right">Sai. Atual</th>
+          <th style="text-align:right">Var %</th>
+        </tr>
+      </thead>
+      <tbody id="dashCompBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Duplicatas -->
+  <div class="section-head" style="margin-top:32px">Verificacao de Duplicatas</div>
+  <div id="dashDupBody"></div>
 </div>
 </main>
 
@@ -861,115 +950,249 @@ async function removerMapeamento(id) {
 }
 
 // ── Dashboard ───────────────────────────────────────────────────
-let chartSaldo = null, chartMensal = null;
+let chartSaldo = null, chartMensal = null, chartPreco = null;
+
+// Helper: periodo do filtro do dashboard
+function getDashPeriodo() {
+  const sel = document.getElementById('dashPeriodo')?.value || '';
+  const hoje = new Date();
+  const show = sel === 'custom';
+  const d1 = document.getElementById('dashCustomDatas');
+  const d2 = document.getElementById('dashCustomDatas2');
+  if (d1) d1.style.display = show ? '' : 'none';
+  if (d2) d2.style.display = show ? '' : 'none';
+  if (sel === 'mes-atual') return { de: `${hoje.getFullYear()}-${String(hoje.getMonth()+1).padStart(2,'0')}-01` };
+  if (sel === 'mes-anterior') {
+    const m = new Date(hoje.getFullYear(), hoje.getMonth()-1, 1);
+    const fim = new Date(hoje.getFullYear(), hoje.getMonth(), 0);
+    return { de: m.toISOString().slice(0,10), ate: fim.toISOString().slice(0,10) };
+  }
+  if (sel === 'trimestre') {
+    const m = new Date(hoje.getFullYear(), hoje.getMonth()-3, 1);
+    return { de: m.toISOString().slice(0,10) };
+  }
+  if (sel === 'custom') {
+    return { de: document.getElementById('dashDe')?.value, ate: document.getElementById('dashAte')?.value };
+  }
+  return {};
+}
+
+const chartOpts = {
+  grid: { color: 'rgba(255,255,255,0.05)' },
+  ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } }
+};
 
 async function renderDashboard() {
   try {
-    const { saldos, mensal } = await carregarDashboardData();
+    const periodo = getDashPeriodo();
+    const [saldos, mensal, alertas, movs, comparativo, dups] = await Promise.all([
+      carregarSaldos(), carregarEvolucaoMensal(), carregarAlertas(),
+      carregarMovimentacoes(periodo.de ? { dataInicio: periodo.de, dataFim: periodo.ate } : {}),
+      carregarComparativo(), carregarDuplicatas()
+    ]);
 
-    // KPIs
-    const totalEstoque = saldos.reduce((s, r) => s + Number(r.saldo_atual || 0), 0);
-    const valorEntradas = saldos.reduce((s, r) => s + Number(r.valor_entradas || 0), 0);
-    const valorSaidas = saldos.reduce((s, r) => s + Number(r.valor_saidas || 0), 0);
-    const totalNfs = saldos.reduce((s, r) => s + Number(r.total_nfs || 0), 0);
+    // ── KPIs ──
+    const totalEstoque = saldos.reduce((s,r) => s + Number(r.saldo_atual||0), 0);
+    const valorEntradas = saldos.reduce((s,r) => s + Number(r.valor_entradas||0), 0);
+    const valorSaidas = saldos.reduce((s,r) => s + Number(r.valor_saidas||0), 0);
+    const totalNfs = saldos.reduce((s,r) => s + Number(r.total_nfs||0), 0);
+    const totalCats = saldos.filter(s => Number(s.total_entrada) > 0 || Number(s.total_saida) > 0).length;
 
     document.getElementById('dashKpis').innerHTML = `
-      <div class="kpi"><div class="kpi-value">${fmtNum(totalEstoque, 0)}</div><div class="kpi-label">Saldo Total (Qtde)</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRL(valorEntradas)}</div><div class="kpi-label">Total Entradas (R$)</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRL(valorSaidas)}</div><div class="kpi-label">Total Saidas (R$)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtNum(totalEstoque,0)}</div><div class="kpi-label">Saldo Total (Qtde)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRL(valorEntradas)}</div><div class="kpi-label">Total Entradas</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRL(valorSaidas)}</div><div class="kpi-label">Total Saidas</div></div>
       <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs Processadas</div></div>
+      <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias Ativas</div></div>
     `;
 
-    // Tabela de saldos
+    // ── Alertas estoque minimo ──
+    const alertaDiv = document.getElementById('dashAlertas');
+    if (alertas.length) {
+      alertaDiv.style.display = 'block';
+      alertaDiv.innerHTML = alertas.map(a => {
+        const cor = a.status_alerta === 'CRITICO' ? 'var(--err)' : 'var(--warn)';
+        return `<div style="background:var(--surface);border-left:3px solid ${cor};padding:10px 16px;margin-bottom:8px;border-radius:2px;font-size:12px">
+          <strong style="color:${cor}">${a.status_alerta}</strong> — ${a.nome}: saldo ${fmtNum(a.saldo_atual,0)} ${a.unidade} (minimo: ${fmtNum(a.estoque_minimo,0)})
+        </div>`;
+      }).join('');
+    } else { alertaDiv.style.display = 'none'; }
+
+    // ── Tabela de saldos com CMP ──
     const body = document.getElementById('dashSaldoBody');
+    const catMovs = {};
+    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
+
     body.innerHTML = saldos.map(s => {
-      const sa = Number(s.saldo_atual || 0);
+      const sa = Number(s.saldo_atual||0);
       const cls = sa > 0 ? 'saldo-positivo' : sa < 0 ? 'saldo-negativo' : 'saldo-zero';
+      const cmp = catMovs[s.id] ? custoMedioPonderado(catMovs[s.id]) : 0;
+      const vlrEstoque = sa * cmp;
       return `<tr>
         <td>${s.nome}</td>
         <td class="td-center">${s.unidade}</td>
-        <td class="td-num">${fmtNum(s.saldo_inicial, 0)}</td>
-        <td class="td-num">${fmtNum(s.total_entrada, 0)}</td>
-        <td class="td-num">${fmtNum(s.total_saida, 0)}</td>
-        <td class="td-num ${cls}"><strong>${fmtNum(sa, 0)}</strong></td>
+        <td class="td-num">${fmtNum(s.total_entrada,0)}</td>
+        <td class="td-num">${fmtNum(s.total_saida,0)}</td>
+        <td class="td-num ${cls}"><strong>${fmtNum(sa,0)}</strong></td>
         <td class="td-num">${fmtBRL(s.valor_entradas)}</td>
         <td class="td-num">${fmtBRL(s.valor_saidas)}</td>
+        <td class="td-num">${cmp > 0 ? fmtBRL(cmp) : '—'}</td>
+        <td class="td-num">${vlrEstoque > 0 ? fmtBRL(vlrEstoque) : '—'}</td>
+        <td class="td-num">${s.estoque_minimo > 0 ? fmtNum(s.estoque_minimo,0) : '—'}</td>
         <td class="td-num">${s.total_nfs}</td>
       </tr>`;
     }).join('');
 
-    // Chart: Saldo por categoria (top 15)
-    const top15 = [...saldos].sort((a, b) => Math.abs(b.saldo_atual) - Math.abs(a.saldo_atual)).slice(0, 15);
+    // ── Chart: Saldo por categoria (top 15) ──
+    const top15 = [...saldos].sort((a,b) => Math.abs(b.saldo_atual) - Math.abs(a.saldo_atual)).slice(0,15);
     if (chartSaldo) chartSaldo.destroy();
     chartSaldo = new Chart(document.getElementById('chartSaldo'), {
       type: 'bar',
       data: {
-        labels: top15.map(s => s.nome.length > 18 ? s.nome.substring(0, 18) + '...' : s.nome),
-        datasets: [{
-          label: 'Saldo',
-          data: top15.map(s => Number(s.saldo_atual)),
-          backgroundColor: top15.map(s => Number(s.saldo_atual) >= 0 ? 'rgba(200,169,110,0.7)' : 'rgba(239,68,68,0.7)'),
-          borderRadius: 2,
-        }]
+        labels: top15.map(s => s.nome.length > 18 ? s.nome.substring(0,18)+'...' : s.nome),
+        datasets: [{ label:'Saldo', data:top15.map(s=>Number(s.saldo_atual)),
+          backgroundColor:top15.map(s=>Number(s.saldo_atual)>=0?'rgba(200,169,110,0.7)':'rgba(239,68,68,0.7)'), borderRadius:2 }]
       },
-      options: {
-        indexAxis: 'y',
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } },
-          y: { grid: { display: false }, ticks: { color: '#f0ede8', font: { family: 'DM Mono', size: 10 } } }
-        }
-      }
+      options: { indexAxis:'y', responsive:true, plugins:{legend:{display:false}},
+        scales:{ x:chartOpts, y:{grid:{display:false},ticks:{color:'#f0ede8',font:{family:'DM Mono',size:10}}} } }
     });
 
-    // Chart: Evolucao mensal
-    const meses = [...new Set(mensal.map(m => m.mes))].sort();
-    const entMes = meses.map(mes => {
-      const r = mensal.find(m => m.mes === mes && m.tipo === 'entrada');
-      return r ? Number(r.valor_total) : 0;
-    });
-    const saiMes = meses.map(mes => {
-      const r = mensal.find(m => m.mes === mes && m.tipo === 'saida');
-      return r ? Number(r.valor_total) : 0;
-    });
+    // ── Chart: Evolucao mensal ──
+    const meses = [...new Set(mensal.map(m=>m.mes))].sort();
+    const entMes = meses.map(mes => { const r=mensal.find(m=>m.mes===mes&&m.tipo==='entrada'); return r?Number(r.valor_total):0; });
+    const saiMes = meses.map(mes => { const r=mensal.find(m=>m.mes===mes&&m.tipo==='saida'); return r?Number(r.valor_total):0; });
 
     if (chartMensal) chartMensal.destroy();
     chartMensal = new Chart(document.getElementById('chartMensal'), {
-      type: 'line',
+      type:'line',
       data: {
-        labels: meses.map(m => {
-          const d = new Date(m);
-          return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-        }),
-        datasets: [
-          {
-            label: 'Entradas (R$)', data: entMes,
-            borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)',
-            fill: true, tension: 0.3, pointRadius: 3,
-          },
-          {
-            label: 'Saidas (R$)', data: saiMes,
-            borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)',
-            fill: true, tension: 0.3, pointRadius: 3,
-          }
+        labels:meses.map(m=>{ const d=new Date(m); return d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}); }),
+        datasets:[
+          {label:'Entradas (R$)',data:entMes,borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,0.1)',fill:true,tension:0.3,pointRadius:3},
+          {label:'Saidas (R$)',data:saiMes,borderColor:'#ef4444',backgroundColor:'rgba(239,68,68,0.1)',fill:true,tension:0.3,pointRadius:3}
         ]
       },
-      options: {
-        responsive: true,
-        plugins: {
-          legend: { labels: { color: '#888', font: { family: 'DM Mono', size: 10 } } }
-        },
-        scales: {
-          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } },
-          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } }
-        }
-      }
+      options:{responsive:true, plugins:{legend:{labels:{color:'#888',font:{family:'DM Mono',size:10}}}}, scales:{x:chartOpts,y:chartOpts}}
     });
+
+    // ── Populate preco select ──
+    const precoCatSel = document.getElementById('dashPrecoCat');
+    if (precoCatSel && precoCatSel.options.length <= 1) {
+      precoCatSel.innerHTML = '<option value="">Selecione...</option>' +
+        saldos.filter(s=>Number(s.total_entrada)>0).map(s=>`<option value="${s.id}">${s.nome}</option>`).join('');
+    }
+
+    // ── Fornecedores ──
+    renderFornecedores();
+
+    // ── Comparativo mensal ──
+    renderComparativo(comparativo);
+
+    // ── Duplicatas ──
+    renderDuplicatas(dups);
 
   } catch(e) {
     toast('Erro ao carregar dashboard: ' + e.message, 'error');
+    console.error(e);
   }
+}
+
+// ── Ranking Fornecedores ──
+async function renderFornecedores() {
+  try {
+    const tipo = document.getElementById('dashFornTipo')?.value || '';
+    const dados = await carregarFornecedores(tipo || undefined);
+    document.getElementById('dashFornBody').innerHTML = dados.slice(0,30).map((f,i) => `<tr>
+      <td class="td-center">${i+1}</td>
+      <td>${f.fornecedor_cliente}</td>
+      <td style="font-family:'DM Mono';font-size:11px">${f.cnpj||'—'}</td>
+      <td><span class="badge ${f.tipo==='entrada'?'badge-entrada':'badge-saida'}">${f.tipo}</span></td>
+      <td class="td-num">${f.total_nfs}</td>
+      <td class="td-num">${f.total_itens}</td>
+      <td class="td-num">${fmtNum(f.qtd_total,0)}</td>
+      <td class="td-num">${fmtBRL(f.valor_total)}</td>
+      <td>${fmtData(f.primeira_nf)}</td>
+      <td>${fmtData(f.ultima_nf)}</td>
+    </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhum dado</td></tr>';
+  } catch(e) { console.warn('Fornecedores:', e); }
+}
+
+// ── Historico de Precos ──
+async function renderHistoricoPrecos() {
+  const catId = document.getElementById('dashPrecoCat')?.value;
+  if (!catId) return;
+  try {
+    const dados = await carregarPrecoMedio(catId);
+    const entradas = dados.filter(d => d.tipo === 'entrada');
+    if (chartPreco) chartPreco.destroy();
+    chartPreco = new Chart(document.getElementById('chartPreco'), {
+      type:'line',
+      data:{
+        labels: entradas.map(d => { const dt=new Date(d.mes); return dt.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}); }),
+        datasets:[{
+          label:'Preco Medio (R$/un)', data:entradas.map(d=>Number(d.preco_medio)),
+          borderColor:'var(--accent)', backgroundColor:'rgba(200,169,110,0.1)',
+          fill:true, tension:0.3, pointRadius:4, pointBackgroundColor:'var(--accent)'
+        }]
+      },
+      options:{responsive:true, plugins:{legend:{display:false}}, scales:{x:chartOpts,y:chartOpts}}
+    });
+  } catch(e) { console.warn('Precos:', e); }
+}
+
+// ── Comparativo Mensal ──
+function renderComparativo(dados) {
+  if (!dados || !dados.length) { document.getElementById('dashCompBody').innerHTML = ''; return; }
+  const meses = [...new Set(dados.map(d=>d.mes))].sort();
+  if (meses.length < 2) {
+    document.getElementById('dashCompBody').innerHTML = '<tr><td colspan="9" class="empty">Necessario pelo menos 2 meses de dados</td></tr>';
+    return;
+  }
+  const mesAnt = meses[meses.length-2], mesAtual = meses[meses.length-1];
+  const fmtMes = m => { const d=new Date(m); return d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'}); };
+  const cats = [...new Set(dados.map(d=>d.categoria))].sort();
+
+  const pctVar = (ant,atual) => {
+    if (!ant || ant === 0) return atual > 0 ? '+100%' : '—';
+    const v = ((atual-ant)/ant*100);
+    const cls = v > 0 ? 'saldo-negativo' : v < 0 ? 'saldo-positivo' : '';
+    return `<span class="${cls}">${v>0?'+':''}${v.toFixed(1)}%</span>`;
+  };
+
+  document.getElementById('dashCompBody').innerHTML = cats.map(cat => {
+    const ant = dados.find(d=>d.categoria===cat && d.mes===mesAnt) || {};
+    const atu = dados.find(d=>d.categoria===cat && d.mes===mesAtual) || {};
+    const ea = Number(ant.qtd_entrada||0), ec = Number(atu.qtd_entrada||0);
+    const sa = Number(ant.qtd_saida||0), sc = Number(atu.qtd_saida||0);
+    if (!ea && !ec && !sa && !sc) return '';
+    return `<tr>
+      <td>${cat}</td>
+      <td class="td-center">${fmtMes(mesAnt)}</td>
+      <td class="td-center">${fmtMes(mesAtual)}</td>
+      <td class="td-num">${fmtNum(ea,0)}</td>
+      <td class="td-num">${fmtNum(ec,0)}</td>
+      <td class="td-num">${pctVar(ea,ec)}</td>
+      <td class="td-num">${fmtNum(sa,0)}</td>
+      <td class="td-num">${fmtNum(sc,0)}</td>
+      <td class="td-num">${pctVar(sa,sc)}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" class="empty">Sem dados comparativos</td></tr>';
+}
+
+// ── Duplicatas ──
+function renderDuplicatas(dups) {
+  const el = document.getElementById('dashDupBody');
+  if (!dups || !dups.length) {
+    el.innerHTML = '<div style="padding:16px;color:var(--ok);font-size:12px;background:var(--surface);border-radius:2px;border-left:3px solid var(--ok)">Nenhuma duplicata encontrada. Tudo OK!</div>';
+    return;
+  }
+  el.innerHTML = `<table><thead><tr><th>NF</th><th>Data</th><th>Tipo</th><th>Fornecedor</th><th style="text-align:right">Itens</th><th style="text-align:right">Valor</th></tr></thead><tbody>` +
+    dups.map(d => `<tr style="background:rgba(239,68,68,0.05)">
+      <td>${d.numero_nf}</td><td>${fmtData(d.data_emissao)}</td>
+      <td><span class="badge ${d.tipo==='entrada'?'badge-entrada':'badge-saida'}">${d.tipo}</span></td>
+      <td>${d.fornecedor_cliente}</td>
+      <td class="td-num">${d.total_itens}</td><td class="td-num">${fmtBRL(d.valor_total)}</td>
+    </tr>`).join('') + '</tbody></table>';
 }
 
 // ── Toast ────────────────────────────────────────────────────────

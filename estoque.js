@@ -283,6 +283,54 @@ async function verificarDuplicata(chaveNfe) {
   return r.length > 0;
 }
 
+// ── Novas Consultas (fornecedores, preços, comparativo, alertas, duplicatas) ──
+
+async function carregarFornecedores(tipo) {
+  let qs = 'vw_estoque_fornecedores?select=*&order=valor_total.desc';
+  if (tipo) qs += `&tipo=eq.${tipo}`;
+  return sbFetch(qs);
+}
+
+async function carregarPrecoMedio(categoriaId) {
+  let qs = 'vw_estoque_preco_medio?select=*&order=mes.asc';
+  if (categoriaId) qs += `&categoria_id=eq.${categoriaId}`;
+  return sbFetch(qs);
+}
+
+async function carregarComparativo() {
+  return sbFetch('vw_estoque_comparativo?select=*&order=categoria.asc,mes.asc');
+}
+
+async function carregarAlertas() {
+  return sbFetch('vw_estoque_alertas?select=*');
+}
+
+async function carregarDuplicatas() {
+  return sbFetch('vw_estoque_duplicatas?select=*&order=data_emissao.desc');
+}
+
+async function atualizarEstoqueMinimo(categoriaId, valor) {
+  return sbFetch(`estoque_categorias?id=eq.${categoriaId}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ estoque_minimo: valor })
+  });
+}
+
+function custoMedioPonderado(movs) {
+  let qtdAcum = 0, custoAcum = 0;
+  for (const m of movs.sort((a,b) => a.data_emissao.localeCompare(b.data_emissao))) {
+    if (m.tipo === 'entrada' && m.quantidade > 0) {
+      custoAcum += m.valor_total;
+      qtdAcum += m.quantidade;
+    } else if (m.tipo === 'saida' && qtdAcum > 0) {
+      const cmp = custoAcum / qtdAcum;
+      custoAcum -= cmp * Math.min(m.quantidade, qtdAcum);
+      qtdAcum = Math.max(0, qtdAcum - m.quantidade);
+    }
+  }
+  return qtdAcum > 0 ? custoAcum / qtdAcum : 0;
+}
+
 // ── Export Excel (SheetJS) ──────────────────────────────────────
 async function exportarExcel() {
   if (typeof XLSX === 'undefined') {

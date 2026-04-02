@@ -393,6 +393,13 @@ function fmtBRL(v) {
   return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+function fmtBRLCompacto(v) {
+  v = v || 0;
+  if (Math.abs(v) >= 1000000) return 'R$ ' + (v/1000000).toFixed(1).replace('.',',') + 'M';
+  if (Math.abs(v) >= 1000) return 'R$ ' + (v/1000).toFixed(1).replace('.',',') + 'K';
+  return 'R$ ' + v.toFixed(0);
+}
+
 function fmtData(d) {
   if (!d) return '—';
   const [y, m, dd] = d.split('-');

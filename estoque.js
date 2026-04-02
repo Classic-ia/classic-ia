@@ -2,6 +2,30 @@
 // Parser de NFe, API Supabase, Dashboard e Export Excel
 
 const CNPJ_CLASSIC = '08849964000110';
+
+// Normalização de unidades — agrupa variações em uma unidade padrão
+function normalizarUnidade(und) {
+  const u = (und || '').toUpperCase().trim();
+  const mapa = {
+    'UN':'UN', 'UND':'UN', 'UNID':'UN', 'UNIDADE':'UN', 'PCS':'UN', 'PÇ':'UN', 'PC':'PC',
+    'KG':'KG', 'kg':'KG', 'Kg':'KG', 'KGS':'KG', 'GR':'KG', 'G':'KG', '1':'UN',
+    'LT':'LT', 'L':'LT', 'ML':'ML', 'ML.':'ML',
+    'M2':'M2', 'M²':'M2',
+    'M3':'M3', 'M³':'M3',
+    'CX':'CX', 'CAIXA':'CX',
+    'SC':'SC', 'SACO':'SC', 'SAC':'SC',
+    'PCT':'PCT', 'PACOTE':'PCT',
+    'PR':'PR', 'PRS':'PR', 'PAR':'PR',
+    'FD':'FD', 'FARDO':'FD',
+    'GL':'GL', 'GALAO':'GL',
+    'RL':'RL', 'ROLO':'RL',
+    'TB':'TB', 'TUBO':'TB',
+    'FR':'FR', 'FRASCO':'FR',
+    'BB':'BB', 'BOBINA':'BB',
+    'MT':'MT', 'METRO':'MT', 'M':'MT',
+  };
+  return mapa[u] || u;
+}
 const CNPJS_CLASSIC = {
   '08849964000110': 'MATRIZ',
   '08849964000382': 'FILIAL SP',
@@ -155,7 +179,7 @@ function parseNFeXML(xmlString) {
       produto_xml: txt(prod, 'xProd'),
       ncm: txt(prod, 'NCM'),
       cfop: txt(prod, 'CFOP'),
-      unidade: txt(prod, 'uCom'),
+      unidade: normalizarUnidade(txt(prod, 'uCom')),
       quantidade: num(prod, 'qCom'),
       valor_unitario: num(prod, 'vUnCom'),
       valor_total: vProd,

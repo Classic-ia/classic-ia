@@ -2,6 +2,12 @@
 // Parser de NFe, API Supabase, Dashboard e Export Excel
 
 const CNPJ_CLASSIC = '08849964000110';
+const CNPJS_CLASSIC = {
+  '08849964000110': 'MATRIZ',
+  '08849964000382': 'FILIAL SP',
+  '08849964000200': 'FILIAL RS'
+};
+const RADICAL_CLASSIC = '08849964';
 
 // ── API Helpers ─────────────────────────────────────────────────
 function sbHeaders() {
@@ -70,15 +76,25 @@ function parseNFeXML(xmlString) {
   const destCNPJ = txt(dest, 'CNPJ');
   const destNome = txt(dest, 'xNome');
 
-  // Detectar tipo: se destinatário é Classic → entrada, se emitente é Classic → saída
+  // Detectar tipo e filial
+  const emitEhClassic = emitCNPJ.startsWith(RADICAL_CLASSIC);
+  const destEhClassic = destCNPJ.startsWith(RADICAL_CLASSIC);
+
   let tipo = 'entrada';
   let parceiro = emitNome;
   let parceiroCNPJ = emitCNPJ;
+  let filial = CNPJS_CLASSIC[destCNPJ] || 'MATRIZ';
 
-  if (emitCNPJ === CNPJ_CLASSIC) {
+  if (emitEhClassic && !destEhClassic) {
     tipo = 'saida';
     parceiro = destNome;
     parceiroCNPJ = destCNPJ;
+    filial = CNPJS_CLASSIC[emitCNPJ] || 'MATRIZ';
+  } else if (emitEhClassic && destEhClassic) {
+    tipo = 'entrada'; // transferência — será categorizada pelo CFOP
+    parceiro = emitNome + ' → ' + destNome;
+    parceiroCNPJ = emitCNPJ;
+    filial = 'TRANSFERENCIA';
   }
 
   // Itens (det)
@@ -140,12 +156,13 @@ function parseNFeXML(xmlString) {
       pis: vPIS,
       cofins: vCOFINS,
       compra_liquida: compraLiquida,
-      categoria_id: null, // será preenchido pelo mapeamento
+      filial,
+      categoria_id: null,
       _mapped: false
     });
   }
 
-  return { chaveNFe, nNF, dataEmissao, tipo, parceiro, parceiroCNPJ, itens };
+  return { chaveNFe, nNF, dataEmissao, tipo, parceiro, parceiroCNPJ, filial, itens };
 }
 
 // ── Mapeamento ──────────────────────────────────────────────────
@@ -258,7 +275,8 @@ async function importarItens(itens) {
     icms: i.icms,
     pis: i.pis,
     cofins: i.cofins,
-    compra_liquida: i.compra_liquida
+    compra_liquida: i.compra_liquida,
+    filial: i.filial || 'MATRIZ'
   }));
 
   return sbFetch('estoque_movimentacoes?on_conflict=chave_nfe,produto_xml', {

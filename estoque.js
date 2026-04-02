@@ -102,6 +102,7 @@ function parseNFeXML(xmlString) {
   const itens = [];
 
   for (const det of detEls) {
+    const nItem = parseInt(det.getAttribute('nItem') || '0');
     const prod = q(det, 'prod');
     if (!prod) continue;
 
@@ -141,6 +142,7 @@ function parseNFeXML(xmlString) {
     itens.push({
       chave_nfe: chaveNFe,
       numero_nf: nNF,
+      nitem: nItem,
       data_emissao: dataEmissao,
       tipo,
       fornecedor_cliente: parceiro,
@@ -260,6 +262,7 @@ async function importarItens(itens) {
   const payload = validos.map(i => ({
     chave_nfe: i.chave_nfe,
     numero_nf: i.numero_nf,
+    nitem: i.nitem || 1,
     data_emissao: i.data_emissao,
     tipo: i.tipo,
     fornecedor_cliente: i.fornecedor_cliente,
@@ -279,7 +282,7 @@ async function importarItens(itens) {
     filial: i.filial || 'MATRIZ'
   }));
 
-  return sbFetch('estoque_movimentacoes?on_conflict=chave_nfe,produto_xml', {
+  return sbFetch('estoque_movimentacoes?on_conflict=chave_nfe,nitem', {
     method: 'POST',
     headers: { ...sbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
     body: JSON.stringify(payload)

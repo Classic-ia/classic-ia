@@ -275,6 +275,7 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <div class="tab" data-tab="movimentacoes">Movimentacoes</div>
   <div class="tab" data-tab="mapeamento">Mapeamento</div>
   <div class="tab" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="apuracao">Apuracao Fiscal</div>
 </nav>
 
 <main>
@@ -514,6 +515,56 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <!-- Duplicatas -->
   <div class="section-head" style="margin-top:32px">Verificacao de Duplicatas</div>
   <div id="dashDupBody"></div>
+</div>
+
+<!-- ═══ TAB: APURACAO FISCAL ═════════════════════════════════ -->
+<div id="tab-apuracao" class="tab-content">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Mes/Ano</span>
+      <input type="month" class="filter-input" id="apuracaoMes">
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn btn-primary" onclick="renderApuracao()">Calcular</button>
+    </div>
+  </div>
+
+  <div id="apuracaoResultado" style="display:none">
+    <!-- KPIs resumo -->
+    <div class="kpi-row" id="apuracaoKpis"></div>
+
+    <!-- Tabela Apuracao por categoria -->
+    <div class="section-head">Apuracao por Categoria</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th>
+            <th style="text-align:right">Vlr Compras</th>
+            <th style="text-align:right">ICMS Compras</th>
+            <th style="text-align:right">PIS Compras</th>
+            <th style="text-align:right">COFINS Compras</th>
+            <th style="text-align:right">Compra Liquida</th>
+            <th style="text-align:right">Vlr Vendas</th>
+            <th style="text-align:right">ICMS Vendas</th>
+          </tr>
+        </thead>
+        <tbody id="apuracaoCatBody"></tbody>
+        <tfoot id="apuracaoCatFoot"></tfoot>
+      </table>
+    </div>
+
+    <!-- Apuracao Final PIS/COFINS/ICMS -->
+    <div class="section-head" style="margin-top:32px">Apuracao Final</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th></th><th style="text-align:right">PIS</th><th style="text-align:right">COFINS</th><th style="text-align:right">ICMS</th></tr>
+        </thead>
+        <tbody id="apuracaoFinalBody"></tbody>
+      </table>
+    </div>
+  </div>
 </div>
 </main>
 
@@ -1193,6 +1244,104 @@ function renderDuplicatas(dups) {
       <td>${d.fornecedor_cliente}</td>
       <td class="td-num">${d.total_itens}</td><td class="td-num">${fmtBRL(d.valor_total)}</td>
     </tr>`).join('') + '</tbody></table>';
+}
+
+// ── Apuracao Fiscal ──────────────────────────────────────────────
+async function renderApuracao() {
+  const mesInput = document.getElementById('apuracaoMes')?.value;
+  if (!mesInput) { toast('Selecione o mes/ano', 'warn'); return; }
+
+  const [ano, mes] = mesInput.split('-');
+  const dataInicio = `${ano}-${mes}-01`;
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  const dataFim = `${ano}-${mes}-${ultimoDia}`;
+
+  try {
+    const movs = await carregarMovimentacoes({ dataInicio, dataFim });
+    if (!movs.length) { toast('Nenhuma movimentacao neste periodo', 'warn'); return; }
+
+    document.getElementById('apuracaoResultado').style.display = 'block';
+
+    // Agrupar por categoria
+    const cats = {};
+    movs.forEach(m => {
+      const nome = m.estoque_categorias?.nome || 'Sem categoria';
+      if (!cats[nome]) cats[nome] = { vlrCompra:0, icmsCompra:0, pisCompra:0, cofinsCompra:0, liqCompra:0, vlrVenda:0, icmsVenda:0 };
+      if (m.tipo === 'entrada') {
+        cats[nome].vlrCompra += Number(m.valor_total||0);
+        cats[nome].icmsCompra += Number(m.icms||0);
+        cats[nome].pisCompra += Number(m.pis||0);
+        cats[nome].cofinsCompra += Number(m.cofins||0);
+        cats[nome].liqCompra += Number(m.compra_liquida||0);
+      } else {
+        cats[nome].vlrVenda += Number(m.valor_total||0);
+        cats[nome].icmsVenda += Number(m.icms||0);
+      }
+    });
+
+    // Totais
+    let tVlrC=0,tIcmsC=0,tPisC=0,tCofC=0,tLiqC=0,tVlrV=0,tIcmsV=0;
+    Object.values(cats).forEach(c => {
+      tVlrC+=c.vlrCompra; tIcmsC+=c.icmsCompra; tPisC+=c.pisCompra;
+      tCofC+=c.cofinsCompra; tLiqC+=c.liqCompra; tVlrV+=c.vlrVenda; tIcmsV+=c.icmsVenda;
+    });
+
+    // KPIs
+    document.getElementById('apuracaoKpis').innerHTML = `
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVlrC)}</div><div class="kpi-label">Total Compras</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVlrV)}</div><div class="kpi-label">Total Vendas</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tIcmsC)}</div><div class="kpi-label">ICMS Credito</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tIcmsV)}</div><div class="kpi-label">ICMS Debito</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tPisC)}</div><div class="kpi-label">PIS Credito</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tCofC)}</div><div class="kpi-label">COFINS Credito</div></div>
+    `;
+
+    // Tabela por categoria
+    document.getElementById('apuracaoCatBody').innerHTML = Object.entries(cats)
+      .sort((a,b) => b[1].vlrCompra - a[1].vlrCompra)
+      .map(([nome, c]) => `<tr>
+        <td>${nome}</td>
+        <td class="td-num">${fmtBRL(c.vlrCompra)}</td>
+        <td class="td-num">${fmtBRL(c.icmsCompra)}</td>
+        <td class="td-num">${fmtBRL(c.pisCompra)}</td>
+        <td class="td-num">${fmtBRL(c.cofinsCompra)}</td>
+        <td class="td-num">${fmtBRL(c.liqCompra)}</td>
+        <td class="td-num">${fmtBRL(c.vlrVenda)}</td>
+        <td class="td-num">${fmtBRL(c.icmsVenda)}</td>
+      </tr>`).join('');
+
+    document.getElementById('apuracaoCatFoot').innerHTML = `<tr style="font-weight:bold;border-top:2px solid var(--accent)">
+      <td>TOTAL</td>
+      <td class="td-num">${fmtBRL(tVlrC)}</td>
+      <td class="td-num">${fmtBRL(tIcmsC)}</td>
+      <td class="td-num">${fmtBRL(tPisC)}</td>
+      <td class="td-num">${fmtBRL(tCofC)}</td>
+      <td class="td-num">${fmtBRL(tLiqC)}</td>
+      <td class="td-num">${fmtBRL(tVlrV)}</td>
+      <td class="td-num">${fmtBRL(tIcmsV)}</td>
+    </tr>`;
+
+    // Apuracao Final (como na planilha da Susan)
+    const saldoIcms = tIcmsC - tIcmsV; // positivo = credito a favor
+    document.getElementById('apuracaoFinalBody').innerHTML = `
+      <tr><td><strong>Saldo Anterior</strong></td><td class="td-num">-</td><td class="td-num">-</td><td class="td-num">-</td></tr>
+      <tr><td>Creditos (compras)</td><td class="td-num">${fmtBRL(tPisC)}</td><td class="td-num">${fmtBRL(tCofC)}</td><td class="td-num">${fmtBRL(tIcmsC)}</td></tr>
+      <tr><td>Debitos (vendas)</td><td class="td-num">-</td><td class="td-num">-</td><td class="td-num">${fmtBRL(tIcmsV)}</td></tr>
+      <tr style="font-weight:bold;border-top:2px solid var(--accent)">
+        <td><strong>Saldo Final</strong></td>
+        <td class="td-num">${fmtBRL(tPisC)}</td>
+        <td class="td-num">${fmtBRL(tCofC)}</td>
+        <td class="td-num ${saldoIcms>=0?'saldo-positivo':'saldo-negativo'}">${fmtBRL(saldoIcms)}</td>
+      </tr>
+      <tr><td colspan="4" style="font-size:10px;color:var(--muted);padding-top:8px">
+        ${saldoIcms >= 0 ? 'ICMS: Credito acumulado a favor da empresa' : 'ICMS: Debito a recolher neste mes'}
+        | PIS: Vlr credito s/ compras | COFINS: Vlr credito s/ compras
+      </td></tr>
+    `;
+
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+  }
 }
 
 // ── Toast ────────────────────────────────────────────────────────

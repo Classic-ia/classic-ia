@@ -331,49 +331,107 @@ function custoMedioPonderado(movs) {
   return qtdAcum > 0 ? custoAcum / qtdAcum : 0;
 }
 
-// ── Export Excel (SheetJS) ──────────────────────────────────────
+// ── Export Excel (SheetJS) — padrão planilha Susan ──────────────
 async function exportarExcel() {
-  if (typeof XLSX === 'undefined') {
-    throw new Error('Biblioteca SheetJS não carregada.');
-  }
+  if (typeof XLSX === 'undefined') throw new Error('SheetJS não carregada.');
 
   const movs = await carregarMovimentacoes();
   const cats = await carregarCategorias();
   const wb = XLSX.utils.book_new();
 
-  for (const cat of cats) {
-    const catMovs = movs.filter(m => m.categoria_id === cat.id);
-    const header = ['Data', 'NF', 'Operação', 'Fornecedor/Cliente', 'Qtde Entrada',
-      'Vlr Unit', 'Vlr Total', 'ICMS', 'PIS', 'COFINS', 'Compra Líquida',
-      'Qtde Saída', 'Vlr NF Venda', 'Saldo'];
+  // Ordenar categorias alfabeticamente, nomes em CAIXA ALTA
+  const catsOrd = [...cats].sort((a, b) => a.nome.toUpperCase().localeCompare(b.nome.toUpperCase()));
 
-    const rows = [header];
+  // ── Aba por categoria (padrão Susan: Calibri, headers bold) ──
+  for (const cat of catsOrd) {
+    const catMovs = movs.filter(m => m.categoria_id === cat.id)
+      .sort((a, b) => a.data_emissao.localeCompare(b.data_emissao));
+
+    // Linha 1: Ficha de Controle + produto + unidade
+    const row1 = ['Ficha de Controle de Estoques:', '', '', cat.nome.toUpperCase(), cat.unidade || 'KG'];
+    // Linha 2: Headers (igual planilha Susan)
+    const header = ['Data', 'NF', 'Operação', 'Cliente / Fornecedor',
+      'Qtde Entrada', 'Qtde Entrada KG', 'Vlr Unit Entrada', 'Vlr Total Entrada',
+      'ICMS', 'Pis/Cofins (S/N)', 'PIS', 'COFINS', 'Compra Líquida',
+      'Qtde Saída', 'Vlr NF Venda', 'ICMS s/ Venda', 'Saldo ' + (cat.unidade || 'KG')];
+
+    const rows = [row1, header];
     let saldo = cat.saldo_inicial || 0;
-    rows.push(['', '', 'COM', 'Saldo Anterior', saldo, '', '', '', '', '', '', '', '', saldo]);
+    rows.push(['', '', '', 'Saldo Anterior', saldo, '', '', '', '', '', '', '', '', '', '', '', saldo]);
 
-    for (const m of catMovs.sort((a, b) => a.data_emissao.localeCompare(b.data_emissao))) {
+    let tVlrE=0, tIcmsE=0, tPisE=0, tCofE=0, tLiqE=0, tVlrS=0, tIcmsS=0;
+
+    for (const m of catMovs) {
+      const pisCof = (Number(m.pis||0) > 0 || Number(m.cofins||0) > 0) ? 'S' : 'N';
       if (m.tipo === 'entrada') {
         saldo += m.quantidade;
+        tVlrE += m.valor_total; tIcmsE += m.icms; tPisE += m.pis; tCofE += m.cofins; tLiqE += m.compra_liquida;
         rows.push([m.data_emissao, m.numero_nf, 'COM', m.fornecedor_cliente,
-          m.quantidade, m.valor_unitario, m.valor_total, m.icms, m.pis, m.cofins,
-          m.compra_liquida, '', '', saldo]);
+          m.quantidade, m.quantidade, m.valor_unitario, m.valor_total,
+          m.icms, pisCof, m.pis, m.cofins, m.compra_liquida,
+          '', '', '', saldo]);
       } else {
         saldo -= m.quantidade;
+        tVlrS += m.valor_total; tIcmsS += m.icms;
         rows.push([m.data_emissao, m.numero_nf, 'VEN', m.fornecedor_cliente,
-          '', '', '', '', '', '', '', m.quantidade, m.valor_total, saldo]);
+          '', '', '', '', '', '', '', '', '',
+          m.quantidade, m.valor_total, m.icms, saldo]);
       }
     }
 
+    // Linha TOTAL
+    rows.push([]);
+    rows.push(['', '', '', 'TOTAL', '', '', '', tVlrE, tIcmsE, '', tPisE, tCofE, tLiqE, '', tVlrS, tIcmsS, saldo]);
+
     const ws = XLSX.utils.aoa_to_sheet(rows);
-    // Larguras de coluna
     ws['!cols'] = [
-      { wch: 12 }, { wch: 10 }, { wch: 6 }, { wch: 35 }, { wch: 12 },
-      { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
-      { wch: 14 }, { wch: 12 }, { wch: 14 }, { wch: 12 }
+      {wch:12},{wch:10},{wch:6},{wch:32},{wch:12},{wch:12},{wch:14},{wch:16},
+      {wch:12},{wch:10},{wch:10},{wch:10},{wch:14},{wch:12},{wch:14},{wch:12},{wch:12}
     ];
-    const sheetName = cat.nome.substring(0, 31); // Excel limit
+    const sheetName = cat.nome.toUpperCase().substring(0, 31);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);
   }
+
+  // ── Aba ENCERRAMENTO (Apuração Final) ──
+  const encRows = [
+    ['CLASSIC IMP. E EXP. DE COUROS LTDA', '', '', '', '', '', '', '', '', '', '', 'Encerramento'],
+    [],
+    ['Estoques e Produção', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''],
+    [],
+    ['', '', '', '', 'Apuração Final'],
+    ['', '', '', 'PIS', 'COFINS', 'ICMS'],
+  ];
+
+  let gPis=0, gCof=0, gIcmsC=0, gIcmsD=0, gVlrC=0, gVlrV=0;
+  for (const cat of catsOrd) {
+    const catMovs = movs.filter(m => m.categoria_id === cat.id);
+    catMovs.forEach(m => {
+      if (m.tipo === 'entrada') {
+        gPis += Number(m.pis||0); gCof += Number(m.cofins||0);
+        gIcmsC += Number(m.icms||0); gVlrC += Number(m.valor_total||0);
+      } else {
+        gIcmsD += Number(m.icms||0); gVlrV += Number(m.valor_total||0);
+      }
+    });
+  }
+
+  encRows.push(['', '', '', '', '', '']);
+  encRows.push(['', 'Saldo Anterior', '', '-', '-', '-']);
+  encRows.push(['', 'Créditos', '', gPis, gCof, gIcmsC]);
+  encRows.push(['', 'Débitos', '', '-', '-', gIcmsD]);
+  encRows.push(['', 'Saldo Final', '', gPis, gCof, gIcmsC - gIcmsD]);
+  encRows.push([]);
+  encRows.push(['TOTAL', '', '', gVlrC, '', gVlrC + gVlrV]);
+  encRows.push([]);
+  encRows.push(['', 'VLR DA PIS S/ COMPRAS NESTE MES', '', gPis]);
+  encRows.push(['', 'VLR DA COFINS S/ COMPRAS NESTE MES', '', gCof]);
+  encRows.push(['', 'VLR REGULARIZACAO DO PIS NESTE MES', '', '-']);
+  encRows.push(['', 'VLR DA COFINS S/ VENDAS NESTE MES', '', '-']);
+  encRows.push(['', 'VLR REGULARIZACAO DA COFINS NESTE MES', '', '-']);
+
+  const wsEnc = XLSX.utils.aoa_to_sheet(encRows);
+  wsEnc['!cols'] = [{wch:35},{wch:40},{wch:5},{wch:16},{wch:16},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, wsEnc, 'ENCERRAMENTO');
 
   XLSX.writeFile(wb, `Controle_Estoque_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }

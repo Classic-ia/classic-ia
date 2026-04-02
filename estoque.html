@@ -800,7 +800,7 @@ function renderPreview() {
         <td class="td-num">${fmtNum(item.valor_unitario)}</td>
         <td class="td-num">${fmtNum(item.valor_total)}</td>
         <td><span class="${cls}">${label}</span></td>
-        <td>${!item._mapped ? `<button class="btn btn-sm" onclick="abrirModalMapear('${item.produto_xml.replace(/'/g,"\\'")}','${item.ncm||''}')">Mapear</button>` : ''}</td>
+        <td><button class="btn btn-sm" onclick="abrirModalMapear('${item.produto_xml.replace(/'/g,"\\'")}','${item.ncm||''}')">${item._mapped ? 'Alterar' : 'Mapear'}</button></td>
       </tr>`;
     }
     html += '</tbody></table>';
@@ -869,15 +869,17 @@ async function confirmarMapeamentoRapido() {
   if (!chave) { toast('Chave vazia', 'error'); return; }
 
   try {
+    // Tentar excluir mapeamento antigo se existir (para permitir alterar)
+    const existente = _mapeamentos.find(m => m.chave.toUpperCase() === chave.toUpperCase() && m.tipo_chave === tipoChave);
+    if (existente) await excluirMapeamento(existente.id);
+
     await criarMapeamento(chave, tipoChave, catId);
     await carregarMapeamentos();
 
-    // Re-resolver mapeamentos nos itens carregados
+    // Re-resolver TODOS os mapeamentos (incluindo os já mapeados)
     for (const item of allParsedItens) {
-      if (!item._mapped) {
-        item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
-        item._mapped = !!item.categoria_id;
-      }
+      item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+      item._mapped = !!item.categoria_id;
     }
 
     renderPreview();

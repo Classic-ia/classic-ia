@@ -286,13 +286,18 @@ function parseCTeXML(xmlString) {
   const infCarga = qc(infCte, 'infCarga');
   const proPred = infCarga ? txtc(infCarga, 'proPred') : 'FRETE';
 
-  // Classificar: remetente Classic = frete venda, destinatário Classic = frete compra
+  // Classificar pelo fluxo real:
+  // No CTe, dest = quem RECEBE a mercadoria
+  // Se dest é Classic → mercadoria veio PARA Classic = FRETE COMPRA
+  // Se rem é Classic e dest é terceiro → mercadoria SAIU da Classic = FRETE VENDA
   const remEhClassic = remCNPJ.startsWith(RADICAL_CLASSIC);
   const destEhClassic = destCNPJ.startsWith(RADICAL_CLASSIC);
 
-  let categoria = 'FRETES COMPRAS';
-  let tipo = 'entrada';
-  if (remEhClassic && !destEhClassic) {
+  let categoria, tipo;
+  if (destEhClassic) {
+    categoria = 'FRETES COMPRAS';
+    tipo = 'entrada';
+  } else {
     categoria = 'FRETES VENDAS';
     tipo = 'saida';
   }

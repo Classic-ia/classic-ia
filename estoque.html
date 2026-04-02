@@ -6,6 +6,7 @@
 <title>Classic BI — Controle de Estoque</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
 :root {
@@ -282,9 +283,9 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <div class="upload-zone" id="uploadZone">
     <div class="upload-zone-icon">&#128462;</div>
     <div class="upload-zone-text">
-      Arraste XMLs de <strong>NFe</strong> aqui ou <strong>clique para selecionar</strong>
+      Arraste <strong>XMLs</strong> ou <strong>ZIPs</strong> de NFe aqui ou <strong>clique para selecionar</strong>
     </div>
-    <input type="file" id="fileInput" accept=".xml" multiple hidden>
+    <input type="file" id="fileInput" accept=".xml,.zip" multiple hidden>
   </div>
 
   <div id="uploadPreview" style="display:none">
@@ -526,43 +527,70 @@ function setupUpload() {
 }
 
 async function processarArquivos(files) {
-  let novos = 0, dups = 0, erros = 0;
+  let novos = 0, dups = 0, erros = 0, zips = 0;
 
+  // Expandir ZIPs em XMLs individuais
+  const xmlFiles = [];
   for (const file of files) {
-    if (!file.name.toLowerCase().endsWith('.xml')) { erros++; continue; }
-    try {
+    const fname = file.name.toLowerCase();
+    if (fname.endsWith('.zip')) {
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const entries = Object.entries(zip.files);
+        for (const [name, entry] of entries) {
+          if (entry.dir || !name.toLowerCase().endsWith('.xml')) continue;
+          // Ignorar XMLs de evento (cancelamento, carta correção)
+          if (name.toLowerCase().includes('evento')) continue;
+          const content = await entry.async('string');
+          xmlFiles.push({ name: name.split('/').pop(), text: content });
+        }
+        zips++;
+      } catch(e) {
+        console.error('Erro ao descompactar:', file.name, e);
+        erros++;
+      }
+    } else if (fname.endsWith('.xml')) {
       const text = await file.text();
-      const nf = parseNFeXML(text);
+      xmlFiles.push({ name: file.name, text });
+    } else {
+      erros++;
+    }
+  }
+
+  if (zips) toast(`Descompactando ${zips} ZIP(s)... ${xmlFiles.length} XMLs encontrados`, 'ok');
+
+  // Processar cada XML
+  for (const xf of xmlFiles) {
+    try {
+      const nf = parseNFeXML(xf.text);
       if (!nf || !nf.itens.length) { erros++; continue; }
 
-      // Verificar duplicata local
       if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
 
-      // Verificar duplicata no Supabase
       const jaExiste = await verificarDuplicata(nf.chaveNFe);
       if (jaExiste) { dups++; continue; }
 
-      // Resolver mapeamentos
       for (const item of nf.itens) {
         item.categoria_id = resolverCategoria(item.produto_xml, item.ncm);
         item._mapped = !!item.categoria_id;
       }
 
-      nf._fileName = file.name;
+      nf._fileName = xf.name;
       allParsedNFs.push(nf);
       allParsedItens.push(...nf.itens);
       novos++;
     } catch(e) {
-      console.error('Erro ao processar:', file.name, e);
+      console.error('Erro ao processar:', xf.name, e);
       erros++;
     }
   }
 
   if (novos) renderPreview();
   let msg = `${novos} NF(s) carregada(s)`;
+  if (zips) msg += ` (de ${zips} ZIP)`;
   if (dups) msg += `, ${dups} duplicata(s)`;
   if (erros) msg += `, ${erros} erro(s)`;
-  toast(msg, erros ? 'warn' : 'ok');
+  toast(msg, erros && !novos ? 'error' : erros ? 'warn' : 'ok');
 }
 
 function renderPreview() {

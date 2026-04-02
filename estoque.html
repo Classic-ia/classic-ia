@@ -467,15 +467,21 @@ let _currentMapItem = null;
 
 // ── Init ────────────────────────────────────────────────────────
 async function init() {
-  if (typeof CQAuth !== 'undefined') {
-    try {
-      const user = await CQAuth.init({
-        perfisPermitidos: ['administrador','estoque']
-      });
-      document.getElementById('headerUser').textContent = user?.nome || user?.email || '';
-    } catch(e) {
-      console.warn('Auth:', e);
-    }
+  // Auth obrigatório — redireciona para login se não autenticado
+  if (typeof CQAuth === 'undefined') {
+    window.location.href = 'login.html';
+    return;
+  }
+  try {
+    const user = await CQAuth.init({
+      perfisPermitidos: ['administrador','estoque']
+    });
+    if (!user) { window.location.href = 'login.html'; return; }
+    document.getElementById('headerUser').textContent = user?.nome || user?.email || '';
+  } catch(e) {
+    console.warn('Auth redirect:', e);
+    window.location.href = 'login.html';
+    return;
   }
 
   setupTabs();

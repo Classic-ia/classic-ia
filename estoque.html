@@ -275,6 +275,7 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <div class="tab" data-tab="movimentacoes">Movimentacoes</div>
   <div class="tab" data-tab="mapeamento">Mapeamento</div>
   <div class="tab" data-tab="dashboard">Dashboard</div>
+  <div class="tab" data-tab="posicao">Posicao Estoque</div>
   <div class="tab" data-tab="apuracao">Apuracao Fiscal</div>
 </nav>
 
@@ -549,6 +550,81 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <!-- Duplicatas -->
   <div class="section-head" style="margin-top:32px">Verificacao de Duplicatas</div>
   <div id="dashDupBody"></div>
+</div>
+
+<!-- ═══ TAB: POSICAO ESTOQUE ══════════════════════════════════ -->
+<div id="tab-posicao" class="tab-content">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Posicao em</span>
+      <input type="date" class="filter-input" id="posicaoData">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Atalhos Trimestrais</span>
+      <select class="filter-select" id="posicaoTrimestre" onchange="selecionarTrimestre()">
+        <option value="">Selecione...</option>
+        <option value="2026-03-31">1T 2026 — 31/03/2026</option>
+        <option value="2026-06-30">2T 2026 — 30/06/2026</option>
+        <option value="2026-09-30">3T 2026 — 30/09/2026</option>
+        <option value="2026-12-31">4T 2026 — 31/12/2026</option>
+        <option value="2025-12-31">4T 2025 — 31/12/2025</option>
+        <option value="2025-09-30">3T 2025 — 30/09/2025</option>
+        <option value="2025-06-30">2T 2025 — 30/06/2025</option>
+        <option value="2025-03-31">1T 2025 — 31/03/2025</option>
+      </select>
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn btn-primary" onclick="calcularPosicao()">Calcular</button>
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn" onclick="exportarPosicao()">Exportar Excel</button>
+    </div>
+  </div>
+
+  <div id="posicaoResultado" style="display:none">
+    <div class="kpi-row" id="posicaoKpis"></div>
+
+    <div class="section-head">Posicao de Estoque — Revenda</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th><th>Und</th>
+            <th style="text-align:right">Saldo Ini (31/12/24)</th>
+            <th style="text-align:right">Entradas</th>
+            <th style="text-align:right">Saidas</th>
+            <th style="text-align:right">Saldo Final</th>
+            <th style="text-align:right">Vlr Unit Medio</th>
+            <th style="text-align:right">Vlr Estoque</th>
+          </tr>
+        </thead>
+        <tbody id="posicaoRevendaBody"></tbody>
+        <tfoot id="posicaoRevendaFoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="section-head" style="margin-top:24px">Posicao de Estoque — MP / Acabados</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Categoria</th><th>Und</th>
+            <th style="text-align:right">Saldo Ini (31/12/24)</th>
+            <th style="text-align:right">Entradas</th>
+            <th style="text-align:right">Saidas</th>
+            <th style="text-align:right">Saldo Final</th>
+            <th style="text-align:right">Vlr Unit Medio</th>
+            <th style="text-align:right">Vlr Estoque</th>
+          </tr>
+        </thead>
+        <tbody id="posicaoMPBody"></tbody>
+        <tfoot id="posicaoMPFoot"></tfoot>
+      </table>
+    </div>
+
+    <div class="section-head" style="margin-top:24px">Resumo Geral</div>
+    <div id="posicaoResumo"></div>
+  </div>
 </div>
 
 <!-- ═══ TAB: APURACAO FISCAL ═════════════════════════════════ -->
@@ -1363,6 +1439,195 @@ function renderDuplicatas(dups) {
       <td>${d.fornecedor_cliente}</td>
       <td class="td-num">${d.total_itens}</td><td class="td-num">${fmtBRL(d.valor_total)}</td>
     </tr>`).join('') + '</tbody></table>';
+}
+
+// ── Posicao Estoque ──────────────────────────────────────────────
+// Categorias de Revenda vs MP/Acabados (conforme inventario Susan)
+const CATS_MP = ['BUCHAO','BUCHO','BUCHO SUINO','ACABADO','SEMI','COURO VERDE','WET BLUE','SAL'];
+
+function selecionarTrimestre() {
+  const v = document.getElementById('posicaoTrimestre').value;
+  if (v) document.getElementById('posicaoData').value = v;
+}
+
+async function calcularPosicao() {
+  const dataFim = document.getElementById('posicaoData').value;
+  if (!dataFim) { toast('Selecione a data', 'warn'); return; }
+
+  try {
+    // Buscar movimentacoes ate a data selecionada
+    const movs = await carregarMovimentacoes({ dataInicio: '2025-01-01', dataFim });
+    const cats = await carregarCategorias();
+
+    document.getElementById('posicaoResultado').style.display = 'block';
+
+    // Agrupar por categoria + unidade
+    const posicao = {};
+    for (const c of cats) {
+      posicao[c.id] = {
+        nome: c.nome, unidade: c.unidade,
+        saldo_ini: Number(c.saldo_inicial || 0),
+        entradas: 0, saidas: 0, vlr_ent: 0, vlr_sai: 0
+      };
+    }
+
+    for (const m of movs) {
+      if (!m.categoria_id || !posicao[m.categoria_id]) continue;
+      const p = posicao[m.categoria_id];
+      if (m.tipo === 'entrada') {
+        p.entradas += Number(m.quantidade || 0);
+        p.vlr_ent += Number(m.valor_total || 0);
+      } else {
+        p.saidas += Number(m.quantidade || 0);
+        p.vlr_sai += Number(m.valor_total || 0);
+      }
+    }
+
+    // Calcular saldo final e valor
+    const lista = Object.values(posicao).filter(p => p.saldo_ini > 0 || p.entradas > 0 || p.saidas > 0);
+    lista.forEach(p => {
+      p.saldo_final = p.saldo_ini + p.entradas - p.saidas;
+      p.vlr_unit_medio = p.entradas > 0 ? p.vlr_ent / p.entradas : 0;
+      // Se nao teve entrada, usar valor de saida como referencia
+      if (p.vlr_unit_medio === 0 && p.saidas > 0) p.vlr_unit_medio = p.vlr_sai / p.saidas;
+      p.vlr_estoque = p.saldo_final * p.vlr_unit_medio;
+    });
+
+    const revenda = lista.filter(p => !CATS_MP.includes(p.nome)).sort((a,b) => a.nome.localeCompare(b.nome));
+    const mp = lista.filter(p => CATS_MP.includes(p.nome)).sort((a,b) => a.nome.localeCompare(b.nome));
+
+    const renderTabela = (items) => items.map(p => {
+      const cls = p.saldo_final > 0 ? 'saldo-positivo' : p.saldo_final < 0 ? 'saldo-negativo' : 'saldo-zero';
+      return `<tr>
+        <td>${p.nome}</td><td class="td-center">${p.unidade}</td>
+        <td class="td-num">${fmtNum(p.saldo_ini,2)}</td>
+        <td class="td-num">${fmtNum(p.entradas,2)}</td>
+        <td class="td-num">${fmtNum(p.saidas,2)}</td>
+        <td class="td-num ${cls}"><strong>${fmtNum(p.saldo_final,2)}</strong></td>
+        <td class="td-num">${p.vlr_unit_medio > 0 ? fmtNum(p.vlr_unit_medio,2) : '—'}</td>
+        <td class="td-num">${p.vlr_estoque > 0 ? fmtBRL(p.vlr_estoque) : '—'}</td>
+      </tr>`;
+    }).join('');
+
+    const renderFoot = (items, label) => {
+      const tIni = items.reduce((s,p) => s + p.saldo_ini, 0);
+      const tEnt = items.reduce((s,p) => s + p.entradas, 0);
+      const tSai = items.reduce((s,p) => s + p.saidas, 0);
+      const tFin = items.reduce((s,p) => s + p.saldo_final, 0);
+      const tVlr = items.reduce((s,p) => s + (p.vlr_estoque > 0 ? p.vlr_estoque : 0), 0);
+      return `<tr style="font-weight:bold;border-top:2px solid var(--accent)">
+        <td>${label}</td><td></td>
+        <td class="td-num">${fmtNum(tIni,0)}</td>
+        <td class="td-num">${fmtNum(tEnt,0)}</td>
+        <td class="td-num">${fmtNum(tSai,0)}</td>
+        <td class="td-num">${fmtNum(tFin,0)}</td>
+        <td></td>
+        <td class="td-num">${fmtBRL(tVlr)}</td>
+      </tr>`;
+    };
+
+    document.getElementById('posicaoRevendaBody').innerHTML = renderTabela(revenda);
+    document.getElementById('posicaoRevendaFoot').innerHTML = renderFoot(revenda, 'TOTAL REVENDA');
+    document.getElementById('posicaoMPBody').innerHTML = renderTabela(mp);
+    document.getElementById('posicaoMPFoot').innerHTML = renderFoot(mp, 'TOTAL MP/ACABADOS');
+
+    const vlrRevenda = revenda.reduce((s,p) => s + (p.vlr_estoque > 0 ? p.vlr_estoque : 0), 0);
+    const vlrMP = mp.reduce((s,p) => s + (p.vlr_estoque > 0 ? p.vlr_estoque : 0), 0);
+    const vlrTotal = vlrRevenda + vlrMP;
+
+    // KPIs
+    const dataFmt = dataFim.split('-').reverse().join('/');
+    document.getElementById('posicaoKpis').innerHTML = `
+      <div class="kpi"><div class="kpi-value">${dataFmt}</div><div class="kpi-label">Data de Referencia</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrRevenda)}</div><div class="kpi-label">Revenda</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrMP)}</div><div class="kpi-label">MP / Acabados</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrTotal)}</div><div class="kpi-label">Total Geral</div></div>
+    `;
+
+    // Resumo
+    document.getElementById('posicaoResumo').innerHTML = `
+      <table style="max-width:500px">
+        <tbody>
+          <tr><td>Materia Prima / Acabados</td><td class="td-num"><strong>${fmtBRL(vlrMP)}</strong></td></tr>
+          <tr><td>Mercadorias para Revenda</td><td class="td-num"><strong>${fmtBRL(vlrRevenda)}</strong></td></tr>
+          <tr style="border-top:2px solid var(--accent);font-weight:bold">
+            <td>TOTAL GERAL</td><td class="td-num" style="color:var(--accent)">${fmtBRL(vlrTotal)}</td>
+          </tr>
+        </tbody>
+      </table>
+    `;
+
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+async function exportarPosicao() {
+  const dataFim = document.getElementById('posicaoData').value;
+  if (!dataFim) { toast('Calcule a posicao primeiro', 'warn'); return; }
+
+  // Recalcular e exportar
+  const movs = await carregarMovimentacoes({ dataInicio: '2025-01-01', dataFim });
+  const cats = await carregarCategorias();
+  const wb = XLSX.utils.book_new();
+
+  const posicao = {};
+  for (const c of cats) {
+    posicao[c.id] = { nome: c.nome, unidade: c.unidade, saldo_ini: Number(c.saldo_inicial||0), entradas: 0, saidas: 0, vlr_ent: 0 };
+  }
+  for (const m of movs) {
+    if (!m.categoria_id || !posicao[m.categoria_id]) continue;
+    const p = posicao[m.categoria_id];
+    if (m.tipo === 'entrada') { p.entradas += Number(m.quantidade||0); p.vlr_ent += Number(m.valor_total||0); }
+    else { p.saidas += Number(m.quantidade||0); }
+  }
+
+  const lista = Object.values(posicao).filter(p => p.saldo_ini > 0 || p.entradas > 0 || p.saidas > 0);
+  lista.forEach(p => {
+    p.saldo_final = p.saldo_ini + p.entradas - p.saidas;
+    p.vlr_unit = p.entradas > 0 ? p.vlr_ent / p.entradas : 0;
+    p.vlr_estoque = p.saldo_final * p.vlr_unit;
+  });
+
+  const dataFmt = dataFim.split('-').reverse().join('/');
+  const rows = [
+    ['CLASSIC IMP. E EXP. DE COUROS LTDA'],
+    [],
+    [`POSICAO DE ESTOQUE EM ${dataFmt}`],
+    ['Descricao', 'Qtde', 'Unid', 'Unit', 'Total'],
+    ['REVENDA'],
+  ];
+
+  const revenda = lista.filter(p => !CATS_MP.includes(p.nome)).sort((a,b) => a.nome.localeCompare(b.nome));
+  const mp = lista.filter(p => CATS_MP.includes(p.nome)).sort((a,b) => a.nome.localeCompare(b.nome));
+  let tRev = 0, tMP = 0;
+
+  for (const p of revenda) {
+    rows.push([p.nome, p.saldo_final, p.unidade, p.vlr_unit, p.vlr_estoque]);
+    tRev += p.vlr_estoque > 0 ? p.vlr_estoque : 0;
+  }
+  rows.push(['', '', '', '', tRev]);
+  rows.push([]);
+  rows.push(['MP/ACABADOS']);
+
+  for (const p of mp) {
+    rows.push([p.nome, p.saldo_final, p.unidade, p.vlr_unit, p.vlr_estoque]);
+    tMP += p.vlr_estoque > 0 ? p.vlr_estoque : 0;
+  }
+  rows.push(['', '', '', '', tMP]);
+  rows.push([]);
+  rows.push(['TOTAL GERAL', '', '', '', tRev + tMP]);
+  rows.push([]);
+  rows.push(['Materia Prima', '', '', '', tMP]);
+  rows.push(['Mercadorias para revenda', '', '', '', tRev]);
+  rows.push(['TOTAL GERAL', '', '', '', tRev + tMP]);
+
+  const ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:30},{wch:14},{wch:6},{wch:12},{wch:16}];
+  XLSX.utils.book_append_sheet(wb, ws, 'POSICAO ESTOQUE');
+  XLSX.writeFile(wb, `Posicao_Estoque_${dataFim}.xlsx`);
+  toast('Excel exportado!');
 }
 
 // ── Apuracao Fiscal ──────────────────────────────────────────────

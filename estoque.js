@@ -162,7 +162,16 @@ async function carregarMapeamentos() {
   return _mapeamentos;
 }
 
-function resolverCategoria(produtoXml, ncm) {
+// CFOPs de transferência entre filiais
+const CFOPS_TRANSFERENCIA = ['5151','5152','6151','6152','5409','5949','1151','1152','5901','5902','6901','6902'];
+
+function resolverCategoria(produtoXml, ncm, cfop) {
+  // 0. Transferência entre filiais — detectar pelo CFOP
+  if (cfop && CFOPS_TRANSFERENCIA.includes(cfop)) {
+    const catTransf = _categorias.find(c => c.nome === 'TRANSFERENCIA');
+    if (catTransf) return catTransf.id;
+  }
+
   const prodUp = produtoXml.toUpperCase().trim();
   const descMaps = _mapeamentos.filter(x => x.tipo_chave === 'descricao');
 

@@ -196,6 +196,92 @@ function parseNFeXML(xmlString) {
   return { chaveNFe, nNF, dataEmissao, tipo, parceiro, parceiroCNPJ, filial, itens };
 }
 
+// ── Parser NF Stock (XLS/XLSX do sistema contábil) ──────────────
+function parseNFStockXLS(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  if (!rows.length) return [];
+
+  // Detectar header — procurar linha com "Número" ou "Descrição"
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const r = rows[i].map(c => String(c || '').toLowerCase());
+    if (r.some(c => c.includes('mero') || c.includes('descri'))) { headerIdx = i; break; }
+  }
+
+  const results = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    const nf = String(r[0]).trim();
+    if (nf.toLowerCase().includes('valor total') || nf.toLowerCase().includes('quantidade')) continue;
+
+    const cnpjFornec = String(r[1] || '').replace(/[.\-\/]/g, '').trim();
+    const fornecedor = String(r[2] || '').trim();
+    const dataRaw = r[3];
+    let dataEmissao = '';
+    if (dataRaw) {
+      const ds = String(dataRaw).trim();
+      if (ds.includes('/')) {
+        const [d, m, y] = ds.split('/');
+        dataEmissao = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+      } else if (ds.includes('-')) {
+        dataEmissao = ds.substring(0, 10);
+      }
+    }
+
+    const descricao = String(r[7] || '').trim();
+    const cfop = String(r[8] || '').trim();
+    const ncm = String(r[5] || '').trim();
+
+    let quantidade = 0, valorUnit = 0, valorTotal = 0;
+    let icms = 0, pis = 0, cofins = 0;
+
+    try { quantidade = parseFloat(String(r[9]).replace(/\./g,'').replace(',','.')) || 0; } catch {}
+    try { valorUnit = parseFloat(String(r[10]).replace(/\./g,'').replace(',','.')) || 0; } catch {}
+    try { valorTotal = parseFloat(String(r[19]).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0; } catch {}
+    try { icms = parseFloat(String(r[12]).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0; } catch {}
+    try { pis = parseFloat(String(r[15]).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0; } catch {}
+    try { cofins = parseFloat(String(r[17]).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0; } catch {}
+
+    // Detectar tipo pelo CNPJ
+    const emitEhClassic = cnpjFornec.startsWith(RADICAL_CLASSIC);
+    const tipo = 'entrada'; // relatório é de NFs recebidas
+    const filial = emitEhClassic ? (CNPJS_CLASSIC[cnpjFornec] || 'TRANSFERENCIA') : 'MATRIZ';
+
+    // Chave fake baseada no numero NF + nItem (não tem chave de acesso no XLS)
+    const chaveNfe = `STOCK_${nf}_${cnpjFornec}_${dataEmissao}`;
+    const nitem = i - headerIdx;
+
+    const compraLiquida = valorTotal - icms - pis - cofins;
+
+    results.push({
+      chave_nfe: chaveNfe,
+      numero_nf: nf,
+      nitem,
+      data_emissao: dataEmissao,
+      tipo,
+      fornecedor_cliente: fornecedor,
+      cnpj: cnpjFornec,
+      produto_xml: descricao,
+      ncm,
+      cfop,
+      unidade: normalizarUnidade('KG'), // Stock não traz unidade, default KG
+      quantidade,
+      valor_unitario: valorUnit,
+      valor_total: valorTotal,
+      icms, pis, cofins,
+      compra_liquida: compraLiquida,
+      filial,
+      categoria_id: null,
+      _mapped: false,
+      _source: 'stock'
+    });
+  }
+
+  return results;
+}
+
 // ── Mapeamento ──────────────────────────────────────────────────
 let _categorias = [];
 let _mapeamentos = [];

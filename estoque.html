@@ -284,9 +284,9 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   <div class="upload-zone" id="uploadZone">
     <div class="upload-zone-icon">&#128462;</div>
     <div class="upload-zone-text">
-      Arraste <strong>XMLs</strong> ou <strong>ZIPs</strong> de NFe aqui ou <strong>clique para selecionar</strong>
+      Arraste <strong>XMLs</strong>, <strong>ZIPs</strong> ou <strong>XLS do NF Stock</strong> aqui ou <strong>clique para selecionar</strong>
     </div>
-    <input type="file" id="fileInput" accept=".xml,.zip" multiple hidden>
+    <input type="file" id="fileInput" accept=".xml,.zip,.xls,.xlsx" multiple hidden>
   </div>
 
   <div id="uploadPreview" style="display:none">
@@ -726,6 +726,40 @@ async function processarArquivos(files) {
     } else if (fname.endsWith('.xml')) {
       const text = await file.text();
       xmlFiles.push({ name: file.name, text });
+    } else if (fname.endsWith('.xls') || fname.endsWith('.xlsx')) {
+      // NF Stock XLS — processar com SheetJS
+      try {
+        const data = await file.arrayBuffer();
+        const wb = XLSX.read(data);
+        const stockItens = parseNFStockXLS(wb);
+        if (stockItens.length) {
+          // Agrupar por NF para criar objetos nf
+          const byNF = {};
+          stockItens.forEach(item => {
+            if (!byNF[item.numero_nf]) byNF[item.numero_nf] = {
+              chaveNFe: item.chave_nfe.split('_').slice(0,3).join('_'),
+              nNF: item.numero_nf, dataEmissao: item.data_emissao,
+              tipo: item.tipo, parceiro: item.fornecedor_cliente,
+              parceiroCNPJ: item.cnpj, filial: item.filial,
+              itens: [], _fileName: file.name
+            };
+            item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+            item._mapped = !!item.categoria_id;
+            byNF[item.numero_nf].itens.push(item);
+          });
+
+          for (const nf of Object.values(byNF)) {
+            if (allParsedNFs.find(n => n.nNF === nf.nNF && n.dataEmissao === nf.dataEmissao)) { dups++; continue; }
+            allParsedNFs.push(nf);
+            allParsedItens.push(...nf.itens);
+            novos++;
+          }
+          toast(`NF Stock: ${stockItens.length} itens em ${Object.keys(byNF).length} NFs`, 'ok');
+        }
+      } catch(e) {
+        console.error('Erro ao ler XLS:', file.name, e);
+        erros++;
+      }
     } else {
       erros++;
     }

@@ -163,13 +163,23 @@ async function carregarMapeamentos() {
 }
 
 function resolverCategoria(produtoXml, ncm) {
+  const prodUp = produtoXml.toUpperCase().trim();
+  const descMaps = _mapeamentos.filter(x => x.tipo_chave === 'descricao');
+
   // 1. Match exato por descrição
-  let m = _mapeamentos.find(x => x.tipo_chave === 'descricao' && x.chave.toUpperCase() === produtoXml.toUpperCase());
+  let m = descMaps.find(x => x.chave.toUpperCase() === prodUp);
   if (m) return m.categoria_id;
 
-  // 2. Match parcial por descrição (contém)
-  m = _mapeamentos.find(x => x.tipo_chave === 'descricao' && produtoXml.toUpperCase().includes(x.chave.toUpperCase()));
-  if (m) return m.categoria_id;
+  // 2. Match parcial — produto COMEÇA com a chave (palavra completa)
+  //    Ordena por tamanho decrescente para priorizar matches mais específicos
+  const sorted = [...descMaps].sort((a, b) => b.chave.length - a.chave.length);
+  for (const s of sorted) {
+    const chUp = s.chave.toUpperCase();
+    // Produto começa com a chave seguida de espaço, hífen ou fim
+    if (prodUp.startsWith(chUp) && (prodUp.length === chUp.length || ' -.,/('.includes(prodUp[chUp.length]))) {
+      return s.categoria_id;
+    }
+  }
 
   // 3. Match por NCM
   if (ncm) {

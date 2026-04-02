@@ -84,6 +84,17 @@ function parseNFeXML(xmlString) {
     return v ? parseFloat(v) : 0;
   }
 
+  // Verificar cancelamento — cStat 101 ou 135 = NF cancelada
+  const protNFe = q(doc, 'protNFe');
+  if (protNFe) {
+    const cStat = txt(protNFe, 'cStat');
+    if (cStat === '101' || cStat === '135') return null; // cancelada
+  }
+
+  // Verificar se é XML de evento (cancelamento, carta correcao)
+  const evento = doc.getElementsByTagNameNS(ns, 'infEvento')[0] || doc.querySelector('infEvento');
+  if (evento) return null; // ignorar XMLs de evento
+
   const infNFe = q(doc, 'infNFe');
   if (!infNFe) return null;
 
@@ -92,6 +103,9 @@ function parseNFeXML(xmlString) {
   const dest = q(infNFe, 'dest');
 
   if (!ide || !emit || !dest) return null;
+
+  // Verificar finalidade — finNFe 4 = devolução
+  const finNFe = txt(ide, 'finNFe');
 
   // Chave de acesso (44 dígitos)
   const chaveNFe = (infNFe.getAttribute('Id') || '').replace('NFe', '');
@@ -124,6 +138,15 @@ function parseNFeXML(xmlString) {
     parceiro = emitNome + ' → ' + destNome;
     parceiroCNPJ = emitCNPJ;
     filial = 'TRANSFERENCIA';
+  }
+
+  // Devoluções: finNFe=4 ou natOp contendo "devolucao"
+  let isDevolucao = false;
+  const natOp = txt(ide, 'natOp').toUpperCase();
+  if (finNFe === '4' || natOp.includes('DEVOLUC') || natOp.includes('DEVOLUÇ')) {
+    isDevolucao = true;
+    // Devolução inverte: se terceiro devolveu para Classic = entrada, se Classic devolveu = saída
+    // Mas o efeito no estoque é inverso: devolução de venda = entrada, devolução de compra = saída
   }
 
   // Itens (det)
@@ -280,6 +303,90 @@ function parseNFStockXLS(workbook) {
   }
 
   return results;
+}
+
+// ── Parser CTe XLS (relatório de fretes) ────────────────────────
+function parseCTeXLS(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+  if (!rows.length) return [];
+
+  // Detectar header
+  let headerIdx = 0;
+  for (let i = 0; i < Math.min(rows.length, 5); i++) {
+    const r = rows[i].map(c => String(c || '').toLowerCase());
+    if (r.some(c => c.includes('modelo') || c.includes('chave'))) { headerIdx = i; break; }
+  }
+
+  const results = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    const modelo = String(r[0]).trim();
+    if (modelo !== '57' && modelo !== '67') continue; // só CTe
+
+    const nCTe = String(r[2] || '').trim();
+    const cnpjTransp = String(r[3] || '').replace(/[.\-\/]/g, '').trim();
+    const nomeTransp = String(r[4] || '').trim();
+    const cnpjDest = String(r[6] || '').replace(/[.\-\/]/g, '').trim();
+    const nomeDest = String(r[7] || '').trim();
+    const chave = String(r[8] || '').trim();
+    const status = String(r[10] || '').trim();
+    const dataRaw = String(r[11] || '').trim();
+
+    // Ignorar cancelados
+    if (status.toLowerCase().includes('cancelad')) continue;
+
+    let dataEmissao = '';
+    if (dataRaw.includes('/')) {
+      const [d, m, y] = dataRaw.split('/');
+      dataEmissao = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+
+    let vlrPrestacao = 0;
+    try { vlrPrestacao = parseFloat(String(r[13]).replace(/R\$\s*/g,'').replace(/\./g,'').replace(',','.')) || 0; } catch {}
+
+    // Classificar: se destinatário é Classic → frete compra, senão → frete venda
+    const destEhClassic = cnpjDest.startsWith(RADICAL_CLASSIC);
+    const categoria = destEhClassic ? 'FRETES COMPRAS' : 'FRETES VENDAS';
+
+    results.push({
+      chave_nfe: chave || `CTE_${nCTe}_${cnpjTransp}_${dataEmissao}`,
+      numero_nf: nCTe,
+      nitem: i - headerIdx,
+      data_emissao: dataEmissao,
+      tipo: destEhClassic ? 'entrada' : 'saida',
+      fornecedor_cliente: nomeTransp,
+      cnpj: cnpjTransp,
+      produto_xml: `FRETE - ${nomeTransp.substring(0,30)}`,
+      ncm: '', cfop: '',
+      unidade: 'UN',
+      quantidade: 1,
+      valor_unitario: vlrPrestacao,
+      valor_total: vlrPrestacao,
+      icms: 0, pis: 0, cofins: 0,
+      compra_liquida: vlrPrestacao,
+      filial: 'MATRIZ',
+      categoria_id: null,
+      _mapped: false,
+      _source: 'cte',
+      _catNome: categoria
+    });
+  }
+
+  return results;
+}
+
+// Detectar tipo de XLS: NF Stock ou CTe
+function detectarTipoXLS(workbook) {
+  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 0 });
+  if (!rows.length) return 'unknown';
+  const header = rows[0].map(c => String(c || '').toLowerCase());
+  if (header.some(c => c.includes('modelo') && c !== 'modelo')) return 'unknown';
+  if (header.some(c => c === 'modelo')) return 'cte';
+  if (header.some(c => c.includes('mero') || c.includes('descri'))) return 'nfstock';
+  return 'unknown';
 }
 
 // ── Mapeamento ──────────────────────────────────────────────────

@@ -803,25 +803,41 @@ async function processarArquivos(files) {
       const text = await file.text();
       xmlFiles.push({ name: file.name, text });
     } else if (fname.endsWith('.xls') || fname.endsWith('.xlsx')) {
-      // NF Stock XLS — processar com SheetJS
+      // Detectar tipo: NF Stock ou CTe
       try {
         const data = await file.arrayBuffer();
         const wb = XLSX.read(data);
-        const stockItens = parseNFStockXLS(wb);
-        if (stockItens.length) {
-          // Agrupar por NF para criar objetos nf
-          const byNF = {};
-          stockItens.forEach(item => {
-            if (!byNF[item.numero_nf]) byNF[item.numero_nf] = {
-              chaveNFe: item.chave_nfe.split('_').slice(0,3).join('_'),
-              nNF: item.numero_nf, dataEmissao: item.data_emissao,
-              tipo: item.tipo, parceiro: item.fornecedor_cliente,
-              parceiroCNPJ: item.cnpj, filial: item.filial,
-              itens: [], _fileName: file.name
-            };
+        const tipo = detectarTipoXLS(wb);
+
+        let xlsItens = [];
+        if (tipo === 'cte') {
+          xlsItens = parseCTeXLS(wb);
+          // Para CTe, resolver categoria pelo nome especial _catNome
+          xlsItens.forEach(item => {
+            const cat = _categorias.find(c => c.nome === item._catNome);
+            if (cat) { item.categoria_id = cat.id; item._mapped = true; }
+          });
+          toast(`CTe: ${xlsItens.length} fretes detectados`, 'ok');
+        } else {
+          xlsItens = parseNFStockXLS(wb);
+          xlsItens.forEach(item => {
             item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
             item._mapped = !!item.categoria_id;
-            byNF[item.numero_nf].itens.push(item);
+          });
+          toast(`NF Stock: ${xlsItens.length} itens`, 'ok');
+        }
+
+        if (xlsItens.length) {
+          const byNF = {};
+          xlsItens.forEach(item => {
+            const key = item.numero_nf + '_' + item.data_emissao;
+            if (!byNF[key]) byNF[key] = {
+              chaveNFe: item.chave_nfe, nNF: item.numero_nf,
+              dataEmissao: item.data_emissao, tipo: item.tipo,
+              parceiro: item.fornecedor_cliente, parceiroCNPJ: item.cnpj,
+              filial: item.filial, itens: [], _fileName: file.name
+            };
+            byNF[key].itens.push(item);
           });
 
           for (const nf of Object.values(byNF)) {
@@ -830,7 +846,6 @@ async function processarArquivos(files) {
             allParsedItens.push(...nf.itens);
             novos++;
           }
-          toast(`NF Stock: ${stockItens.length} itens em ${Object.keys(byNF).length} NFs`, 'ok');
         }
       } catch(e) {
         console.error('Erro ao ler XLS:', file.name, e);

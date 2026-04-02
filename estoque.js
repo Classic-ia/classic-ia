@@ -219,6 +219,114 @@ function parseNFeXML(xmlString) {
   return { chaveNFe, nNF, dataEmissao, tipo, parceiro, parceiroCNPJ, filial, itens };
 }
 
+// ── Parser CTe XML ──────────────────────────────────────────────
+function parseCTeXML(xmlString) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlString, 'text/xml');
+  const nsCte = 'http://www.portalfiscal.inf.br/cte';
+
+  function qc(parent, tag) {
+    return parent.getElementsByTagNameNS(nsCte, tag)[0] || parent.querySelector(tag);
+  }
+  function txtc(parent, tag) {
+    const el = qc(parent, tag);
+    return el ? el.textContent.trim() : '';
+  }
+
+  const infCte = qc(doc, 'infCte');
+  if (!infCte) return null;
+
+  // Verificar cancelamento
+  const protCTe = qc(doc, 'protCTe');
+  if (protCTe) {
+    const cStat = txtc(protCTe, 'cStat');
+    if (cStat === '101' || cStat === '135') return null;
+  }
+
+  const ide = qc(infCte, 'ide');
+  if (!ide) return null;
+
+  const nCT = txtc(ide, 'nCT');
+  const dhEmi = txtc(ide, 'dhEmi');
+  const dataEmissao = dhEmi ? dhEmi.substring(0, 10) : '';
+
+  const emit = qc(infCte, 'emit');
+  const rem = qc(infCte, 'rem');
+  const dest = qc(infCte, 'dest');
+  const vPrest = qc(infCte, 'vPrest');
+
+  const emitNome = emit ? txtc(emit, 'xNome') : '';
+  const remCNPJ = rem ? txtc(rem, 'CNPJ') : '';
+  const remNome = rem ? txtc(rem, 'xNome') : '';
+  const destCNPJ = dest ? txtc(dest, 'CNPJ') : '';
+  const destNome = dest ? txtc(dest, 'xNome') : '';
+  const valorFrete = vPrest ? parseFloat(txtc(vPrest, 'vTPrest')) || 0 : 0;
+
+  // Chave CTe
+  const chaveCTe = (infCte.getAttribute('Id') || '').replace('CTe', '');
+
+  // NF referenciada
+  const infNFe = qc(infCte, 'infNFe');
+  const chaveNFRef = infNFe ? txtc(infNFe, 'chave') : '';
+
+  // ICMS do frete
+  let vICMS = 0;
+  const impCte = qc(infCte, 'imp');
+  if (impCte) {
+    const icmsEl = qc(impCte, 'ICMS');
+    if (icmsEl) {
+      for (const child of icmsEl.children) {
+        const v = child.getElementsByTagNameNS(nsCte, 'vICMS')[0];
+        if (v && v.textContent) { vICMS = parseFloat(v.textContent); break; }
+      }
+    }
+  }
+
+  // Produto transportado
+  const infCarga = qc(infCte, 'infCarga');
+  const proPred = infCarga ? txtc(infCarga, 'proPred') : 'FRETE';
+
+  // Classificar: remetente Classic = frete venda, destinatário Classic = frete compra
+  const remEhClassic = remCNPJ.startsWith(RADICAL_CLASSIC);
+  const destEhClassic = destCNPJ.startsWith(RADICAL_CLASSIC);
+
+  let categoria = 'FRETES COMPRAS';
+  let tipo = 'entrada';
+  if (remEhClassic && !destEhClassic) {
+    categoria = 'FRETES VENDAS';
+    tipo = 'saida';
+  }
+
+  const item = {
+    chave_nfe: chaveCTe,
+    numero_nf: nCT,
+    nitem: 1,
+    data_emissao: dataEmissao,
+    tipo,
+    fornecedor_cliente: emitNome,
+    cnpj: emit ? txtc(emit, 'CNPJ') : '',
+    produto_xml: `FRETE ${proPred} — ${remNome.substring(0,20)} → ${destNome.substring(0,20)}` + (chaveNFRef ? ` [NF:${chaveNFRef.substring(22,34)}]` : ''),
+    ncm: '', cfop: txtc(ide, 'CFOP'),
+    unidade: 'UN',
+    quantidade: 1,
+    valor_unitario: valorFrete,
+    valor_total: valorFrete,
+    icms: vICMS, pis: 0, cofins: 0,
+    compra_liquida: valorFrete - vICMS,
+    filial: remEhClassic ? (CNPJS_CLASSIC[remCNPJ] || 'MATRIZ') : 'MATRIZ',
+    categoria_id: null,
+    _mapped: false,
+    _catNome: categoria,
+    _nfRef: chaveNFRef
+  };
+
+  return {
+    chaveNFe: chaveCTe, nNF: nCT, dataEmissao, tipo,
+    parceiro: emitNome, parceiroCNPJ: emit ? txtc(emit, 'CNPJ') : '',
+    filial: item.filial, itens: [item], _fileName: '', _isCTe: true
+  };
+}
+
 // ── Parser NF Stock (XLS/XLSX do sistema contábil) ──────────────
 function parseNFStockXLS(workbook) {
   const sheet = workbook.Sheets[workbook.SheetNames[0]];

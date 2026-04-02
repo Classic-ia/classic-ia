@@ -858,10 +858,24 @@ async function processarArquivos(files) {
 
   if (zips) toast(`Descompactando ${zips} ZIP(s)... ${xmlFiles.length} XMLs encontrados`, 'ok');
 
-  // Processar cada XML
+  // Processar cada XML (NFe ou CTe)
   for (const xf of xmlFiles) {
     try {
-      const nf = parseNFeXML(xf.text);
+      // Detectar: CTe ou NFe
+      const isCTe = xf.text.includes('cteProc') || xf.text.includes('infCte');
+      let nf;
+      if (isCTe) {
+        nf = parseCTeXML(xf.text);
+        if (nf) {
+          // Resolver categoria pelo _catNome
+          for (const item of nf.itens) {
+            const cat = _categorias.find(c => c.nome === item._catNome);
+            if (cat) { item.categoria_id = cat.id; item._mapped = true; }
+          }
+        }
+      } else {
+        nf = parseNFeXML(xf.text);
+      }
       if (!nf || !nf.itens.length) { erros++; continue; }
 
       if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }

@@ -455,28 +455,35 @@ tr:hover td{background:rgba(200,169,110,0.03)}
     </table>
   </div>
 
-  <!-- Ranking Fornecedores -->
-  <div class="section-head" style="margin-top:32px">Ranking de Fornecedores</div>
-  <div class="filters">
-    <div class="filter-group">
-      <select class="filter-select" id="dashFornTipo" onchange="renderFornecedores()">
-        <option value="">Todos</option>
-        <option value="entrada">Fornecedores (Entrada)</option>
-        <option value="saida">Clientes (Saida)</option>
-      </select>
-    </div>
-  </div>
+  <!-- Ranking Fornecedores (Compras) -->
+  <div class="section-head" style="margin-top:32px">Fornecedores (Compras)</div>
   <div style="overflow-x:auto">
     <table>
       <thead>
         <tr>
-          <th>#</th><th>Fornecedor/Cliente</th><th>CNPJ</th><th>Tipo</th>
+          <th>#</th><th>Fornecedor</th><th>CNPJ</th>
           <th style="text-align:right">NFs</th><th style="text-align:right">Itens</th>
           <th style="text-align:right">Qtde Total</th><th style="text-align:right">Valor Total</th>
           <th>Primeira NF</th><th>Ultima NF</th>
         </tr>
       </thead>
-      <tbody id="dashFornBody"></tbody>
+      <tbody id="dashFornEntBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Ranking Clientes (Vendas) -->
+  <div class="section-head" style="margin-top:32px">Clientes (Vendas)</div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th><th>Cliente</th><th>CNPJ</th>
+          <th style="text-align:right">NFs</th><th style="text-align:right">Itens</th>
+          <th style="text-align:right">Qtde Total</th><th style="text-align:right">Valor Total</th>
+          <th>Primeira NF</th><th>Ultima NF</th>
+        </tr>
+      </thead>
+      <tbody id="dashFornSaiBody"></tbody>
     </table>
   </div>
 
@@ -1148,23 +1155,28 @@ async function renderDashboard() {
   }
 }
 
-// ── Ranking Fornecedores ──
+// ── Ranking Fornecedores e Clientes (separados) ──
 async function renderFornecedores() {
   try {
-    const tipo = document.getElementById('dashFornTipo')?.value || '';
-    const dados = await carregarFornecedores(tipo || undefined);
-    document.getElementById('dashFornBody').innerHTML = dados.slice(0,30).map((f,i) => `<tr>
+    const [entradas, saidas] = await Promise.all([
+      carregarFornecedores('entrada'),
+      carregarFornecedores('saida')
+    ]);
+
+    const renderTabela = (dados) => dados.slice(0,30).map((f,i) => `<tr>
       <td class="td-center">${i+1}</td>
       <td>${f.fornecedor_cliente}</td>
       <td style="font-family:'DM Mono';font-size:11px">${f.cnpj||'—'}</td>
-      <td><span class="badge ${f.tipo==='entrada'?'badge-entrada':'badge-saida'}">${f.tipo}</span></td>
       <td class="td-num">${f.total_nfs}</td>
       <td class="td-num">${f.total_itens}</td>
       <td class="td-num">${fmtNum(f.qtd_total,0)}</td>
       <td class="td-num">${fmtBRL(f.valor_total)}</td>
       <td>${fmtData(f.primeira_nf)}</td>
       <td>${fmtData(f.ultima_nf)}</td>
-    </tr>`).join('') || '<tr><td colspan="10" class="empty">Nenhum dado</td></tr>';
+    </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum dado</td></tr>';
+
+    document.getElementById('dashFornEntBody').innerHTML = renderTabela(entradas);
+    document.getElementById('dashFornSaiBody').innerHTML = renderTabela(saidas);
   } catch(e) { console.warn('Fornecedores:', e); }
 }
 

@@ -252,7 +252,7 @@ async function importarItens(itens) {
     compra_liquida: i.compra_liquida
   }));
 
-  return sbFetch('estoque_movimentacoes', {
+  return sbFetch('estoque_movimentacoes?on_conflict=chave_nfe,produto_xml', {
     method: 'POST',
     headers: { ...sbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
     body: JSON.stringify(payload)

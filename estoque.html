@@ -828,9 +828,12 @@ async function executarImportacao() {
   btn.textContent = 'Importando...';
 
   try {
-    await importarItens(mapeados);
-    toast(`${mapeados.length} item(ns) importado(s) com sucesso!`);
-    limparPreview();
+    const r = await importarItens(mapeados);
+    let msg = `${r.inseridos} inserido(s)`;
+    if (r.duplicados) msg += `, ${r.duplicados} ja existente(s)`;
+    if (r.erros) msg += `, ${r.erros} erro(s)`;
+    toast(msg, r.erros ? 'warn' : 'ok');
+    if (r.inseridos > 0) limparPreview();
   } catch(e) {
     toast('Erro: ' + e.message, 'error');
   } finally {

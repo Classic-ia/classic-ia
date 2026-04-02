@@ -259,34 +259,33 @@ async function importarItens(itens) {
   const validos = itens.filter(i => i.categoria_id);
   if (!validos.length) throw new Error('Nenhum item com categoria mapeada.');
 
-  const payload = validos.map(i => ({
-    chave_nfe: i.chave_nfe,
-    numero_nf: i.numero_nf,
-    nitem: i.nitem || 1,
-    data_emissao: i.data_emissao,
-    tipo: i.tipo,
-    fornecedor_cliente: i.fornecedor_cliente,
-    cnpj: i.cnpj,
-    categoria_id: i.categoria_id,
-    produto_xml: i.produto_xml,
-    ncm: i.ncm,
-    cfop: i.cfop,
-    unidade: i.unidade,
-    quantidade: i.quantidade,
-    valor_unitario: i.valor_unitario,
-    valor_total: i.valor_total,
-    icms: i.icms,
-    pis: i.pis,
-    cofins: i.cofins,
-    compra_liquida: i.compra_liquida,
-    filial: i.filial || 'MATRIZ'
-  }));
+  let inseridos = 0, duplicados = 0, erros = 0;
 
-  return sbFetch('estoque_movimentacoes?on_conflict=chave_nfe,nitem', {
-    method: 'POST',
-    headers: { ...sbHeaders(), 'Prefer': 'return=representation,resolution=merge-duplicates' },
-    body: JSON.stringify(payload)
-  });
+  // Inserir item a item para controlar duplicatas
+  for (const i of validos) {
+    const payload = {
+      chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
+      data_emissao: i.data_emissao, tipo: i.tipo,
+      fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
+      categoria_id: i.categoria_id, produto_xml: i.produto_xml,
+      ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
+      quantidade: i.quantidade, valor_unitario: i.valor_unitario,
+      valor_total: i.valor_total, icms: i.icms, pis: i.pis,
+      cofins: i.cofins, compra_liquida: i.compra_liquida,
+      filial: i.filial || 'MATRIZ'
+    };
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes`, {
+        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+      if (r.ok) { inseridos++; }
+      else if (r.status === 409) { duplicados++; }
+      else { erros++; }
+    } catch { erros++; }
+  }
+
+  return { inseridos, duplicados, erros, total: validos.length };
 }
 
 // ── Consultas ───────────────────────────────────────────────────

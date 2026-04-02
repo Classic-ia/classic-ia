@@ -124,7 +124,7 @@
   /* ── Large Cards (Operations) ──────────────────── */
   .grid-ops {
     display:grid;
-    grid-template-columns:repeat(2, 1fr);
+    grid-template-columns:repeat(auto-fill, minmax(400px, 1fr));
     gap:16px;
   }
   .card-ops {
@@ -195,8 +195,8 @@
   </div>
 </header>
 
-<!-- KPI Strip -->
-<div class="kpi-strip">
+<!-- KPI Strip (CQ) -->
+<div class="kpi-strip" id="kpiStripCQ">
   <div class="kpi-box clickable" onclick="window.location.href='dashboard_cq.html'" title="Ver dashboard de cargas">
     <div class="kpi-value" id="kpiCargas">&mdash;</div>
     <div class="kpi-label">Cargas hoje ›</div>
@@ -212,6 +212,25 @@
   <div class="kpi-box clickable" onclick="window.location.href='historico_importacoes.html'" title="Ver histórico de importações">
     <div class="kpi-value" id="kpiUltimaImport">&mdash;</div>
     <div class="kpi-label">Última importação ›</div>
+  </div>
+</div>
+<!-- KPI Strip (Estoque) -->
+<div class="kpi-strip" id="kpiStripEstoque" style="display:none">
+  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
+    <div class="kpi-value" id="kpiEstEntrada">&mdash;</div>
+    <div class="kpi-label">Total Entradas (R$) ›</div>
+  </div>
+  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
+    <div class="kpi-value" id="kpiEstSaida">&mdash;</div>
+    <div class="kpi-label">Total Saídas (R$) ›</div>
+  </div>
+  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
+    <div class="kpi-value" id="kpiEstSaldo">&mdash;</div>
+    <div class="kpi-label">Saldo Estoque (Qtde) ›</div>
+  </div>
+  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
+    <div class="kpi-value" id="kpiEstNFs">&mdash;</div>
+    <div class="kpi-label">NFs Processadas ›</div>
   </div>
 </div>
 
@@ -506,11 +525,37 @@ function renderSections(perfilUsuario) {
     'Bem-vindo, ' + (perfil.nome || perfil.email) + '. Selecione um módulo abaixo.';
 
   renderSections(perfil.perfil);
-  carregarKPIs();
+
+  if (perfil.perfil === 'estoque') {
+    document.getElementById('kpiStripCQ').style.display = 'none';
+    document.getElementById('kpiStripEstoque').style.display = 'flex';
+    carregarKPIsEstoque();
+  } else {
+    carregarKPIs();
+  }
 })();
 
+async function carregarKPIsEstoque() {
+  try {
+    const h = {'apikey':SB_KEY,'Authorization':'Bearer '+(JSON.parse(localStorage.getItem('cq_sess_v2')||'{}').access_token||SB_KEY)};
+    const r = await fetch(`${SB_URL}/rest/v1/vw_estoque_saldo?select=*`,{headers:h});
+    if (!r.ok) return;
+    const saldos = await r.json();
+    const totEnt = saldos.reduce((s,x)=>s+Number(x.valor_entradas||0),0);
+    const totSai = saldos.reduce((s,x)=>s+Number(x.valor_saidas||0),0);
+    const totSaldo = saldos.reduce((s,x)=>s+Number(x.saldo_atual||0),0);
+    const totNFs = saldos.reduce((s,x)=>s+Number(x.total_nfs||0),0);
+    const fmt = v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
+    const fmtN = v=>v.toLocaleString('pt-BR',{maximumFractionDigits:0});
+    document.getElementById('kpiEstEntrada').textContent = fmt(totEnt);
+    document.getElementById('kpiEstSaida').textContent = fmt(totSai);
+    document.getElementById('kpiEstSaldo').textContent = fmtN(totSaldo);
+    document.getElementById('kpiEstNFs').textContent = fmtN(totNFs);
+  } catch(e) { console.warn('KPI estoque:', e); }
+}
+
 function traduzPerfil(p) {
-  const t = {administrador:'Administrador',qualidade:'Qualidade',comercial:'Comercial',financeiro:'Financeiro',logistica:'Logística',industrial:'Industrial',diretoria:'Diretoria'};
+  const t = {administrador:'Administrador',qualidade:'Qualidade',comercial:'Comercial',financeiro:'Financeiro',logistica:'Logística',industrial:'Industrial',diretoria:'Diretoria',estoque:'Estoque'};
   return t[p] || p;
 }
 </script>

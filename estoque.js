@@ -24,6 +24,11 @@ async function sbFetch(path, opts = {}) {
   const r = await fetch(`${SB_URL}/rest/v1/${path}`, { headers: sbHeaders(), ...opts });
   if (!r.ok) {
     const txt = await r.text();
+    if (r.status === 401 && txt.includes('JWT expired')) {
+      localStorage.removeItem('cq_sess_v2');
+      window.location.href = 'login.html';
+      return;
+    }
     throw new Error(`Supabase ${r.status}: ${txt}`);
   }
   if (r.status === 204) return [];

@@ -93,8 +93,9 @@
   .kpi-box.clickable { cursor:pointer; transition: background 0.2s; }
   .kpi-box.clickable:hover { background: rgba(200,169,110,0.08); }
   .kpi-value {
-    font-family:'Syne',sans-serif; font-size:28px; font-weight:800;
+    font-family:'Syne',sans-serif; font-size:22px; font-weight:800;
     color:var(--accent); line-height:1;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   }
   .kpi-label {
     font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
@@ -545,10 +546,15 @@ async function carregarKPIsEstoque() {
     const totSai = saldos.reduce((s,x)=>s+Number(x.valor_saidas||0),0);
     const totSaldo = saldos.reduce((s,x)=>s+Number(x.saldo_atual||0),0);
     const totNFs = saldos.reduce((s,x)=>s+Number(x.total_nfs||0),0);
-    const fmt = v=>v.toLocaleString('pt-BR',{style:'currency',currency:'BRL',maximumFractionDigits:0});
-    const fmtN = v=>v.toLocaleString('pt-BR',{maximumFractionDigits:0});
-    document.getElementById('kpiEstEntrada').textContent = fmt(totEnt);
-    document.getElementById('kpiEstSaida').textContent = fmt(totSai);
+    const fmtC = v => {
+      v = v || 0;
+      if (Math.abs(v)>=1000000) return 'R$ '+(v/1000000).toFixed(1).replace('.',',')+'M';
+      if (Math.abs(v)>=1000) return 'R$ '+(v/1000).toFixed(0)+'K';
+      return 'R$ '+v.toFixed(0);
+    };
+    const fmtN = v=>(v||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
+    document.getElementById('kpiEstEntrada').textContent = fmtC(totEnt);
+    document.getElementById('kpiEstSaida').textContent = fmtC(totSai);
     document.getElementById('kpiEstSaldo').textContent = fmtN(totSaldo);
     document.getElementById('kpiEstNFs').textContent = fmtN(totNFs);
   } catch(e) { console.warn('KPI estoque:', e); }

@@ -187,23 +187,23 @@ async function carregarMapeamentos() {
 }
 
 // CFOPs de transferência entre filiais
-const CFOPS_TRANSFERENCIA = ['5151','5152','6151','6152','5409','5949','1151','1152','5901','5902','6901','6902'];
+const CFOPS_TRANSFERENCIA = ['5151','5152','6151','6152','1151','1152','5901','5902','6901','6902'];
 
 function resolverCategoria(produtoXml, ncm, cfop) {
-  // 0. Transferência entre filiais — detectar pelo CFOP
+  const prodUp = produtoXml.toUpperCase().trim();
+  const descMaps = _mapeamentos.filter(x => x.tipo_chave === 'descricao');
+
+  // 1. Match exato por descrição (PRIORIDADE sobre CFOP)
+  let m = descMaps.find(x => x.chave.toUpperCase() === prodUp);
+  if (m) return m.categoria_id;
+
+  // 2. Transferência entre filiais — detectar pelo CFOP
   if (cfop && CFOPS_TRANSFERENCIA.includes(cfop)) {
     const catTransf = _categorias.find(c => c.nome === 'TRANSFERENCIA');
     if (catTransf) return catTransf.id;
   }
 
-  const prodUp = produtoXml.toUpperCase().trim();
-  const descMaps = _mapeamentos.filter(x => x.tipo_chave === 'descricao');
-
-  // 1. Match exato por descrição
-  let m = descMaps.find(x => x.chave.toUpperCase() === prodUp);
-  if (m) return m.categoria_id;
-
-  // 2. Match parcial — produto COMEÇA com a chave (palavra completa)
+  // 3. Match parcial — produto COMEÇA com a chave (palavra completa)
   //    Ordena por tamanho decrescente para priorizar matches mais específicos
   const sorted = [...descMaps].sort((a, b) => b.chave.length - a.chave.length);
   for (const s of sorted) {

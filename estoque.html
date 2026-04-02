@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic BI — Controle de Estoque</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg:#0a0a0a; --surface:#141414; --surface2:#1a1a1a; --border:#2a2a2a;
+  --accent:#c8a96e; --accent2:#e8c98e; --text:#f0ede8; --muted:#888;
+  --ok:#22c55e; --warn:#eab308; --err:#ef4444;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh}
+
+/* Header */
+header{
+  position:sticky;top:0;z-index:100;
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:14px 28px;display:flex;align-items:center;justify-content:space-between;
+}
+.hd-left{display:flex;align-items:center;gap:14px}
+.hd-back{
+  color:var(--muted);text-decoration:none;font-size:12px;
+  letter-spacing:0.1em;transition:color 0.2s;
+}
+.hd-back:hover{color:var(--accent)}
+.hd-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;letter-spacing:0.05em}
+.hd-title span{color:var(--accent)}
+.hd-right{display:flex;align-items:center;gap:14px}
+#headerUser{font-size:11px;color:var(--muted);font-family:'DM Mono',monospace}
+.btn-sair{
+  background:transparent;border:1px solid var(--border);border-radius:2px;
+  color:var(--muted);font-size:10px;padding:5px 12px;cursor:pointer;
+  letter-spacing:0.1em;text-transform:uppercase;transition:all 0.2s;
+}
+.btn-sair:hover{border-color:var(--accent);color:var(--accent)}
+
+/* Tabs */
+.tabs{
+  display:flex;gap:0;border-bottom:2px solid var(--border);
+  background:var(--surface);padding:0 28px;
+}
+.tab{
+  padding:12px 24px;cursor:pointer;
+  font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.12em;
+  text-transform:uppercase;color:var(--muted);
+  border-bottom:2px solid transparent;margin-bottom:-2px;
+  transition:all 0.2s;white-space:nowrap;
+}
+.tab:hover{color:var(--text)}
+.tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+
+/* Main */
+main{max-width:1200px;margin:0 auto;padding:32px 24px}
+.tab-content{display:none}
+.tab-content.active{display:block}
+
+/* KPI Strip */
+.kpi-row{display:flex;gap:16px;margin-bottom:32px;flex-wrap:wrap}
+.kpi{
+  flex:1;min-width:180px;
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--accent);
+  padding:20px;border-radius:2px;
+}
+.kpi-value{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;color:var(--accent)}
+.kpi-label{font-size:10px;letter-spacing:0.14em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+
+/* Upload Zone */
+.upload-zone{
+  border:2px dashed var(--border);border-radius:4px;
+  padding:48px;text-align:center;cursor:pointer;
+  transition:border-color 0.3s,background 0.3s;
+  margin-bottom:24px;
+}
+.upload-zone:hover,.upload-zone.dragover{
+  border-color:var(--accent);background:rgba(200,169,110,0.04);
+}
+.upload-zone-icon{font-size:48px;margin-bottom:12px;opacity:0.6}
+.upload-zone-text{font-size:13px;color:var(--muted)}
+.upload-zone-text strong{color:var(--accent)}
+
+/* Preview Table */
+.preview-section{margin-top:24px}
+.preview-header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:12px;
+}
+.preview-title{font-family:'Syne',sans-serif;font-size:14px;font-weight:700}
+.nf-info{
+  background:var(--surface2);border:1px solid var(--border);
+  padding:12px 16px;border-radius:2px;margin-bottom:16px;
+  font-family:'DM Mono',monospace;font-size:12px;
+  display:flex;gap:24px;flex-wrap:wrap;
+}
+.nf-info span{color:var(--muted)}
+.nf-info strong{color:var(--accent)}
+
+/* Tables */
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{
+  font-family:'DM Mono',monospace;font-size:10px;
+  letter-spacing:0.1em;text-transform:uppercase;
+  color:var(--muted);text-align:left;padding:10px 12px;
+  border-bottom:1px solid var(--border);background:var(--surface);
+  position:sticky;top:0;
+}
+td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+tr:hover td{background:rgba(200,169,110,0.03)}
+.td-num{text-align:right;font-family:'DM Mono',monospace}
+.td-center{text-align:center}
+
+/* Badges */
+.badge{
+  display:inline-block;font-size:10px;letter-spacing:0.08em;
+  padding:2px 8px;border-radius:2px;text-transform:uppercase;
+  font-family:'DM Mono',monospace;
+}
+.badge-entrada{background:rgba(34,197,94,0.15);color:var(--ok)}
+.badge-saida{background:rgba(239,68,68,0.15);color:var(--err)}
+.badge-warn{background:rgba(234,179,8,0.15);color:var(--warn)}
+.badge-ok{background:rgba(34,197,94,0.15);color:var(--ok)}
+
+/* Buttons */
+.btn{
+  font-family:'DM Mono',monospace;font-size:11px;letter-spacing:0.08em;
+  padding:8px 20px;border:1px solid var(--border);border-radius:2px;
+  background:transparent;color:var(--text);cursor:pointer;
+  text-transform:uppercase;transition:all 0.2s;
+}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn-primary{background:var(--accent);color:#0a0a0a;border-color:var(--accent);font-weight:500}
+.btn-primary:hover{background:var(--accent2)}
+.btn-primary:disabled{opacity:0.4;cursor:not-allowed}
+.btn-sm{padding:5px 12px;font-size:10px}
+.btn-danger{border-color:var(--err);color:var(--err)}
+.btn-danger:hover{background:rgba(239,68,68,0.1)}
+
+/* Filters */
+.filters{
+  display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap;align-items:flex-end;
+}
+.filter-group{display:flex;flex-direction:column;gap:4px}
+.filter-label{font-size:10px;color:var(--muted);letter-spacing:0.1em;text-transform:uppercase}
+.filter-input,.filter-select{
+  background:var(--surface);border:1px solid var(--border);border-radius:2px;
+  color:var(--text);padding:7px 12px;font-size:12px;
+  font-family:'DM Mono',monospace;
+}
+.filter-input:focus,.filter-select:focus{outline:none;border-color:var(--accent)}
+.filter-select{cursor:pointer}
+
+/* Toast */
+.toast{
+  position:fixed;bottom:24px;right:24px;z-index:9999;
+  background:var(--surface);border:1px solid var(--border);border-left:3px solid var(--ok);
+  padding:14px 20px;border-radius:2px;font-size:12px;
+  opacity:0;transform:translateY(20px);transition:all 0.3s;
+  max-width:400px;
+}
+.toast.show{opacity:1;transform:translateY(0)}
+.toast.error{border-left-color:var(--err)}
+.toast.warn{border-left-color:var(--warn)}
+
+/* Chart containers */
+.chart-row{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:32px}
+.chart-box{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:2px;padding:20px;
+}
+.chart-title{
+  font-family:'Syne',sans-serif;font-size:12px;font-weight:700;
+  letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:16px;
+}
+
+/* Mapping */
+.map-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+.map-panel{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:2px;padding:20px;max-height:70vh;overflow-y:auto;
+}
+.map-panel-title{
+  font-family:'Syne',sans-serif;font-size:13px;font-weight:700;
+  margin-bottom:16px;color:var(--accent);
+}
+.map-item{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:8px 0;border-bottom:1px solid var(--border);
+}
+.map-item:last-child{border-bottom:none}
+.map-item-name{font-size:12px}
+.map-item-badge{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted)}
+.map-add-row{
+  display:flex;gap:8px;margin-top:12px;align-items:center;
+}
+.map-add-row input,.map-add-row select{
+  flex:1;background:var(--surface2);border:1px solid var(--border);
+  border-radius:2px;color:var(--text);padding:6px 10px;font-size:11px;
+  font-family:'DM Mono',monospace;
+}
+
+/* Section title */
+.section-head{
+  font-family:'Syne',sans-serif;font-size:11px;font-weight:700;
+  letter-spacing:0.2em;text-transform:uppercase;color:var(--accent);
+  margin-bottom:16px;padding-bottom:10px;border-bottom:1px solid var(--border);
+  display:flex;align-items:center;gap:10px;
+}
+.section-head::before{
+  content:'';width:3px;height:14px;background:var(--accent);
+  border-radius:1px;display:inline-block;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar{width:6px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
+/* Saldo table */
+.saldo-positivo{color:var(--ok)}
+.saldo-negativo{color:var(--err)}
+.saldo-zero{color:var(--muted)}
+
+/* Empty state */
+.empty{text-align:center;padding:48px;color:var(--muted);font-size:13px}
+.empty-icon{font-size:36px;margin-bottom:12px;opacity:0.4}
+
+/* Modal */
+.modal-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:1000;
+  display:none;align-items:center;justify-content:center;
+}
+.modal-overlay.show{display:flex}
+.modal{
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:4px;padding:28px;width:90%;max-width:500px;
+}
+.modal-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px}
+.modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:20px}
+
+/* Responsive */
+@media(max-width:768px){
+  .tabs{overflow-x:auto;padding:0 12px}
+  .tab{padding:10px 16px;font-size:10px}
+  main{padding:20px 12px}
+  .kpi-row{flex-direction:column}
+  .chart-row{grid-template-columns:1fr}
+  .map-grid{grid-template-columns:1fr}
+  .filters{flex-direction:column}
+  .nf-info{flex-direction:column;gap:8px}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hd-left">
+    <a href="app.html" class="hd-back">&#8592; MENU</a>
+    <div class="hd-title">CONTROLE DE <span>ESTOQUE</span></div>
+  </div>
+  <div class="hd-right">
+    <span id="headerUser"></span>
+    <button class="btn-sair" onclick="CQAuth.logout()">Sair</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <div class="tab active" data-tab="upload">Upload XML</div>
+  <div class="tab" data-tab="movimentacoes">Movimentacoes</div>
+  <div class="tab" data-tab="mapeamento">Mapeamento</div>
+  <div class="tab" data-tab="dashboard">Dashboard</div>
+</nav>
+
+<main>
+<!-- ═══ TAB: UPLOAD XML ═══════════════════════════════════════ -->
+<div id="tab-upload" class="tab-content active">
+  <div class="upload-zone" id="uploadZone">
+    <div class="upload-zone-icon">&#128462;</div>
+    <div class="upload-zone-text">
+      Arraste XMLs de <strong>NFe</strong> aqui ou <strong>clique para selecionar</strong>
+    </div>
+    <input type="file" id="fileInput" accept=".xml" multiple hidden>
+  </div>
+
+  <div id="uploadPreview" style="display:none">
+    <div class="preview-header">
+      <div class="preview-title" id="previewCount"></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn" onclick="limparPreview()">Limpar</button>
+        <button class="btn btn-primary" id="btnImportar" onclick="executarImportacao()">Importar</button>
+      </div>
+    </div>
+    <div id="previewCards"></div>
+  </div>
+</div>
+
+<!-- ═══ TAB: MOVIMENTACOES ════════════════════════════════════ -->
+<div id="tab-movimentacoes" class="tab-content">
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Periodo Inicio</span>
+      <input type="date" class="filter-input" id="filtDataInicio">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Periodo Fim</span>
+      <input type="date" class="filter-input" id="filtDataFim">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Tipo</span>
+      <select class="filter-select" id="filtTipo">
+        <option value="">Todos</option>
+        <option value="entrada">Entrada</option>
+        <option value="saida">Saida</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Categoria</span>
+      <select class="filter-select" id="filtCategoria">
+        <option value="">Todas</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Fornecedor</span>
+      <input type="text" class="filter-input" id="filtFornecedor" placeholder="Buscar...">
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn" onclick="filtrarMovimentacoes()">Filtrar</button>
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn" onclick="exportarExcel()">Exportar Excel</button>
+    </div>
+  </div>
+
+  <div id="movTotais" class="kpi-row"></div>
+
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th><th>NF</th><th>Tipo</th><th>Fornec./Cliente</th>
+          <th>Categoria</th><th>Produto</th><th style="text-align:right">Qtde</th>
+          <th style="text-align:right">Vlr Unit</th><th style="text-align:right">Vlr Total</th>
+          <th style="text-align:right">ICMS</th><th style="text-align:right">PIS</th>
+          <th style="text-align:right">COFINS</th><th style="text-align:right">Liq.</th>
+        </tr>
+      </thead>
+      <tbody id="movBody"></tbody>
+    </table>
+  </div>
+  <div id="movEmpty" class="empty" style="display:none">
+    <div class="empty-icon">&#128230;</div>
+    Nenhuma movimentacao encontrada. Importe XMLs na aba Upload.
+  </div>
+</div>
+
+<!-- ═══ TAB: MAPEAMENTO ══════════════════════════════════════ -->
+<div id="tab-mapeamento" class="tab-content">
+  <div class="map-grid">
+    <div class="map-panel">
+      <div class="map-panel-title">Categorias (Produtos)</div>
+      <div class="map-add-row">
+        <input type="text" id="novaCatNome" placeholder="Nome da categoria">
+        <select id="novaCatUnidade">
+          <option value="KG">KG</option><option value="PC">PC</option>
+          <option value="PRS">PRS</option><option value="UN">UN</option>
+          <option value="ML">ML</option><option value="LT">LT</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="adicionarCategoria()">+</button>
+      </div>
+      <div id="listaCategorias" style="margin-top:16px"></div>
+    </div>
+
+    <div class="map-panel">
+      <div class="map-panel-title">Mapeamento Produto NFe &rarr; Categoria</div>
+      <div class="map-add-row">
+        <input type="text" id="novoMapChave" placeholder="Descricao ou NCM">
+        <select id="novoMapTipo">
+          <option value="descricao">Descricao</option>
+          <option value="ncm">NCM</option>
+        </select>
+        <select id="novoMapCategoria"></select>
+        <button class="btn btn-sm btn-primary" onclick="adicionarMapeamento()">+</button>
+      </div>
+      <div id="listaMapeamentos" style="margin-top:16px"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ TAB: DASHBOARD ═══════════════════════════════════════ -->
+<div id="tab-dashboard" class="tab-content">
+  <div class="kpi-row" id="dashKpis"></div>
+
+  <div class="chart-row">
+    <div class="chart-box">
+      <div class="chart-title">Saldo por Categoria (Top 15)</div>
+      <canvas id="chartSaldo"></canvas>
+    </div>
+    <div class="chart-box">
+      <div class="chart-title">Evolucao Mensal: Entradas vs Saidas</div>
+      <canvas id="chartMensal"></canvas>
+    </div>
+  </div>
+
+  <div class="section-head">Posicao de Estoque</div>
+  <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Categoria</th><th>Unidade</th>
+          <th style="text-align:right">Saldo Inicial</th>
+          <th style="text-align:right">Entradas</th>
+          <th style="text-align:right">Saidas</th>
+          <th style="text-align:right">Saldo Atual</th>
+          <th style="text-align:right">Vlr Entradas</th>
+          <th style="text-align:right">Vlr Saidas</th>
+          <th style="text-align:right">NFs</th>
+        </tr>
+      </thead>
+      <tbody id="dashSaldoBody"></tbody>
+    </table>
+  </div>
+</div>
+</main>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Modal Mapeamento Rapido -->
+<div class="modal-overlay" id="modalMapear">
+  <div class="modal">
+    <div class="modal-title">Mapear Produto</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px" id="modalMapProduto"></p>
+    <div class="filter-group" style="width:100%">
+      <span class="filter-label">Categoria</span>
+      <select class="filter-select" id="modalMapCategoria" style="width:100%"></select>
+    </div>
+    <div class="filter-group" style="width:100%;margin-top:8px">
+      <span class="filter-label">Tipo de Chave</span>
+      <select class="filter-select" id="modalMapTipoChave" style="width:100%">
+        <option value="descricao">Descricao do produto</option>
+        <option value="ncm">Codigo NCM</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="fecharModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarMapeamentoRapido()">Mapear</button>
+    </div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="cq_auth.js"></script>
+<script src="estoque.js"></script>
+<script>
+// ═══════════════════════════════════════════════════════════════
+// CONTROLE DE ESTOQUE — UI Logic
+// ═══════════════════════════════════════════════════════════════
+
+let allParsedNFs = [];
+let allParsedItens = [];
+let _currentMapItem = null;
+
+// ── Init ────────────────────────────────────────────────────────
+async function init() {
+  if (typeof CQAuth !== 'undefined') {
+    try {
+      const user = await CQAuth.init({
+        perfisPermitidos: ['administrador','estoque']
+      });
+      document.getElementById('headerUser').textContent = user?.nome || user?.email || '';
+    } catch(e) {
+      console.warn('Auth:', e);
+    }
+  }
+
+  setupTabs();
+  setupUpload();
+  await Promise.all([carregarCategorias(), carregarMapeamentos()]);
+  popularSelectsCategorias();
+}
+
+// ── Tabs ────────────────────────────────────────────────────────
+function setupTabs() {
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      tab.classList.add('active');
+      document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
+
+      if (tab.dataset.tab === 'movimentacoes') filtrarMovimentacoes();
+      if (tab.dataset.tab === 'mapeamento') renderMapeamento();
+      if (tab.dataset.tab === 'dashboard') renderDashboard();
+    });
+  });
+}
+
+// ── Upload ──────────────────────────────────────────────────────
+function setupUpload() {
+  const zone = document.getElementById('uploadZone');
+  const input = document.getElementById('fileInput');
+
+  zone.addEventListener('click', () => input.click());
+  zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+  zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+  zone.addEventListener('drop', e => {
+    e.preventDefault();
+    zone.classList.remove('dragover');
+    processarArquivos(e.dataTransfer.files);
+  });
+  input.addEventListener('change', () => {
+    if (input.files.length) processarArquivos(input.files);
+    input.value = '';
+  });
+}
+
+async function processarArquivos(files) {
+  let novos = 0, dups = 0, erros = 0;
+
+  for (const file of files) {
+    if (!file.name.toLowerCase().endsWith('.xml')) { erros++; continue; }
+    try {
+      const text = await file.text();
+      const nf = parseNFeXML(text);
+      if (!nf || !nf.itens.length) { erros++; continue; }
+
+      // Verificar duplicata local
+      if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
+
+      // Verificar duplicata no Supabase
+      const jaExiste = await verificarDuplicata(nf.chaveNFe);
+      if (jaExiste) { dups++; continue; }
+
+      // Resolver mapeamentos
+      for (const item of nf.itens) {
+        item.categoria_id = resolverCategoria(item.produto_xml, item.ncm);
+        item._mapped = !!item.categoria_id;
+      }
+
+      nf._fileName = file.name;
+      allParsedNFs.push(nf);
+      allParsedItens.push(...nf.itens);
+      novos++;
+    } catch(e) {
+      console.error('Erro ao processar:', file.name, e);
+      erros++;
+    }
+  }
+
+  if (novos) renderPreview();
+  let msg = `${novos} NF(s) carregada(s)`;
+  if (dups) msg += `, ${dups} duplicata(s)`;
+  if (erros) msg += `, ${erros} erro(s)`;
+  toast(msg, erros ? 'warn' : 'ok');
+}
+
+function renderPreview() {
+  const section = document.getElementById('uploadPreview');
+  const cards = document.getElementById('previewCards');
+  const count = document.getElementById('previewCount');
+
+  const naoMapeados = allParsedItens.filter(i => !i._mapped).length;
+  count.innerHTML = `${allParsedItens.length} item(ns) em ${allParsedNFs.length} NF(s)` +
+    (naoMapeados ? ` &mdash; <span style="color:var(--warn)">${naoMapeados} sem mapeamento</span>` : '');
+
+  let html = '';
+  for (const nf of allParsedNFs) {
+    html += `<div class="nf-info">
+      <div><span>NF:</span> <strong>${nf.nNF}</strong></div>
+      <div><span>Data:</span> <strong>${fmtData(nf.dataEmissao)}</strong></div>
+      <div><span>Tipo:</span> <strong class="badge ${nf.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${nf.tipo}</strong></div>
+      <div><span>Parceiro:</span> <strong>${nf.parceiro}</strong></div>
+      <div><span>Arquivo:</span> <strong>${nf._fileName}</strong></div>
+    </div>`;
+
+    html += `<table style="margin-bottom:20px"><thead><tr>
+      <th>Produto</th><th>NCM</th><th>CFOP</th><th>Und</th>
+      <th style="text-align:right">Qtde</th><th style="text-align:right">Vlr Unit</th>
+      <th style="text-align:right">Vlr Total</th><th>Categoria</th><th></th>
+    </tr></thead><tbody>`;
+
+    for (const item of nf.itens) {
+      const catNome = item._mapped ? nomeCategoria(item.categoria_id) : '';
+      const cls = item._mapped ? 'badge badge-ok' : 'badge badge-warn';
+      const label = item._mapped ? catNome : 'SEM MAPEAMENTO';
+      html += `<tr>
+        <td>${item.produto_xml}</td>
+        <td class="td-center">${item.ncm || '—'}</td>
+        <td class="td-center">${item.cfop || '—'}</td>
+        <td class="td-center">${item.unidade || '—'}</td>
+        <td class="td-num">${fmtNum(item.quantidade)}</td>
+        <td class="td-num">${fmtNum(item.valor_unitario)}</td>
+        <td class="td-num">${fmtNum(item.valor_total)}</td>
+        <td><span class="${cls}">${label}</span></td>
+        <td>${!item._mapped ? `<button class="btn btn-sm" onclick="abrirModalMapear('${item.produto_xml.replace(/'/g,"\\'")}','${item.ncm||''}')">Mapear</button>` : ''}</td>
+      </tr>`;
+    }
+    html += '</tbody></table>';
+  }
+
+  cards.innerHTML = html;
+  section.style.display = 'block';
+}
+
+function limparPreview() {
+  allParsedNFs = [];
+  allParsedItens = [];
+  document.getElementById('uploadPreview').style.display = 'none';
+}
+
+async function executarImportacao() {
+  const mapeados = allParsedItens.filter(i => i._mapped);
+  if (!mapeados.length) {
+    toast('Nenhum item mapeado para importar. Configure o mapeamento primeiro.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('btnImportar');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  try {
+    await importarItens(mapeados);
+    toast(`${mapeados.length} item(ns) importado(s) com sucesso!`);
+    limparPreview();
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Importar';
+  }
+}
+
+// ── Mapeamento Rapido Modal ─────────────────────────────────────
+function abrirModalMapear(produtoXml, ncm) {
+  _currentMapItem = { produtoXml, ncm };
+  document.getElementById('modalMapProduto').textContent = `Produto: ${produtoXml}` + (ncm ? ` | NCM: ${ncm}` : '');
+  popularSelectModal();
+  document.getElementById('modalMapear').classList.add('show');
+}
+
+function fecharModal() {
+  document.getElementById('modalMapear').classList.remove('show');
+  _currentMapItem = null;
+}
+
+function popularSelectModal() {
+  const sel = document.getElementById('modalMapCategoria');
+  sel.innerHTML = _categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+}
+
+async function confirmarMapeamentoRapido() {
+  if (!_currentMapItem) return;
+  const catId = document.getElementById('modalMapCategoria').value;
+  const tipoChave = document.getElementById('modalMapTipoChave').value;
+  const chave = tipoChave === 'ncm' ? _currentMapItem.ncm : _currentMapItem.produtoXml;
+
+  if (!chave) { toast('Chave vazia', 'error'); return; }
+
+  try {
+    await criarMapeamento(chave, tipoChave, catId);
+    await carregarMapeamentos();
+
+    // Re-resolver mapeamentos nos itens carregados
+    for (const item of allParsedItens) {
+      if (!item._mapped) {
+        item.categoria_id = resolverCategoria(item.produto_xml, item.ncm);
+        item._mapped = !!item.categoria_id;
+      }
+    }
+
+    renderPreview();
+    fecharModal();
+    toast('Mapeamento criado!');
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+  }
+}
+
+// ── Movimentacoes ───────────────────────────────────────────────
+async function filtrarMovimentacoes() {
+  const filtros = {
+    dataInicio: document.getElementById('filtDataInicio').value || undefined,
+    dataFim: document.getElementById('filtDataFim').value || undefined,
+    tipo: document.getElementById('filtTipo').value || undefined,
+    categoria_id: document.getElementById('filtCategoria').value || undefined,
+    fornecedor: document.getElementById('filtFornecedor').value || undefined,
+  };
+
+  try {
+    const movs = await carregarMovimentacoes(filtros);
+    renderMovimentacoes(movs);
+  } catch(e) {
+    toast('Erro ao carregar: ' + e.message, 'error');
+  }
+}
+
+function renderMovimentacoes(movs) {
+  const body = document.getElementById('movBody');
+  const empty = document.getElementById('movEmpty');
+  const totais = document.getElementById('movTotais');
+
+  if (!movs.length) {
+    body.innerHTML = '';
+    empty.style.display = 'block';
+    totais.innerHTML = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // KPIs
+  const ent = movs.filter(m => m.tipo === 'entrada');
+  const sai = movs.filter(m => m.tipo === 'saida');
+  totais.innerHTML = `
+    <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Registros</div></div>
+    <div class="kpi"><div class="kpi-value">${ent.length}</div><div class="kpi-label">Entradas</div></div>
+    <div class="kpi"><div class="kpi-value">${sai.length}</div><div class="kpi-label">Saidas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtBRL(ent.reduce((s,m) => s + (m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Entradas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtBRL(sai.reduce((s,m) => s + (m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Saidas</div></div>
+  `;
+
+  body.innerHTML = movs.map(m => `<tr>
+    <td>${fmtData(m.data_emissao)}</td>
+    <td>${m.numero_nf}</td>
+    <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${m.tipo}</span></td>
+    <td>${m.fornecedor_cliente}</td>
+    <td>${m.estoque_categorias?.nome || '—'}</td>
+    <td>${m.produto_xml}</td>
+    <td class="td-num">${fmtNum(m.quantidade)}</td>
+    <td class="td-num">${fmtNum(m.valor_unitario)}</td>
+    <td class="td-num">${fmtNum(m.valor_total)}</td>
+    <td class="td-num">${fmtNum(m.icms)}</td>
+    <td class="td-num">${fmtNum(m.pis)}</td>
+    <td class="td-num">${fmtNum(m.cofins)}</td>
+    <td class="td-num">${fmtNum(m.compra_liquida)}</td>
+  </tr>`).join('');
+}
+
+// ── Mapeamento ──────────────────────────────────────────────────
+function popularSelectsCategorias() {
+  const options = _categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+  document.getElementById('filtCategoria').innerHTML = '<option value="">Todas</option>' + options;
+  document.getElementById('novoMapCategoria').innerHTML = options;
+}
+
+async function renderMapeamento() {
+  await Promise.all([carregarCategorias(), carregarMapeamentos()]);
+  popularSelectsCategorias();
+
+  // Categorias
+  const listaCat = document.getElementById('listaCategorias');
+  listaCat.innerHTML = _categorias.map(c => `
+    <div class="map-item">
+      <div>
+        <div class="map-item-name">${c.nome}</div>
+        <div class="map-item-badge">${c.unidade} | Saldo inicial: ${fmtNum(c.saldo_inicial, 0)}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removerCategoria('${c.id}','${c.nome.replace(/'/g,"\\'")}')">&#10005;</button>
+    </div>
+  `).join('');
+
+  // Mapeamentos
+  const listaMap = document.getElementById('listaMapeamentos');
+  listaMap.innerHTML = _mapeamentos.map(m => `
+    <div class="map-item">
+      <div>
+        <div class="map-item-name">${m.chave}</div>
+        <div class="map-item-badge">${m.tipo_chave} &rarr; ${m.estoque_categorias?.nome || '?'}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removerMapeamento('${m.id}')">&#10005;</button>
+    </div>
+  `).join('');
+}
+
+async function adicionarCategoria() {
+  const nome = document.getElementById('novaCatNome').value.trim();
+  const unidade = document.getElementById('novaCatUnidade').value;
+  if (!nome) { toast('Informe o nome', 'warn'); return; }
+  try {
+    await criarCategoria(nome, unidade);
+    document.getElementById('novaCatNome').value = '';
+    await carregarCategorias();
+    popularSelectsCategorias();
+    renderMapeamento();
+    toast('Categoria criada!');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function removerCategoria(id, nome) {
+  if (!confirm(`Excluir categoria "${nome}"?`)) return;
+  try {
+    await excluirCategoria(id);
+    await carregarCategorias();
+    popularSelectsCategorias();
+    renderMapeamento();
+    toast('Categoria removida');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function adicionarMapeamento() {
+  const chave = document.getElementById('novoMapChave').value.trim();
+  const tipo = document.getElementById('novoMapTipo').value;
+  const catId = document.getElementById('novoMapCategoria').value;
+  if (!chave || !catId) { toast('Preencha todos os campos', 'warn'); return; }
+  try {
+    await criarMapeamento(chave, tipo, catId);
+    document.getElementById('novoMapChave').value = '';
+    await carregarMapeamentos();
+    renderMapeamento();
+    toast('Mapeamento criado!');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function removerMapeamento(id) {
+  try {
+    await excluirMapeamento(id);
+    await carregarMapeamentos();
+    renderMapeamento();
+    toast('Mapeamento removido');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ── Dashboard ───────────────────────────────────────────────────
+let chartSaldo = null, chartMensal = null;
+
+async function renderDashboard() {
+  try {
+    const { saldos, mensal } = await carregarDashboardData();
+
+    // KPIs
+    const totalEstoque = saldos.reduce((s, r) => s + Number(r.saldo_atual || 0), 0);
+    const valorEntradas = saldos.reduce((s, r) => s + Number(r.valor_entradas || 0), 0);
+    const valorSaidas = saldos.reduce((s, r) => s + Number(r.valor_saidas || 0), 0);
+    const totalNfs = saldos.reduce((s, r) => s + Number(r.total_nfs || 0), 0);
+
+    document.getElementById('dashKpis').innerHTML = `
+      <div class="kpi"><div class="kpi-value">${fmtNum(totalEstoque, 0)}</div><div class="kpi-label">Saldo Total (Qtde)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRL(valorEntradas)}</div><div class="kpi-label">Total Entradas (R$)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRL(valorSaidas)}</div><div class="kpi-label">Total Saidas (R$)</div></div>
+      <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs Processadas</div></div>
+    `;
+
+    // Tabela de saldos
+    const body = document.getElementById('dashSaldoBody');
+    body.innerHTML = saldos.map(s => {
+      const sa = Number(s.saldo_atual || 0);
+      const cls = sa > 0 ? 'saldo-positivo' : sa < 0 ? 'saldo-negativo' : 'saldo-zero';
+      return `<tr>
+        <td>${s.nome}</td>
+        <td class="td-center">${s.unidade}</td>
+        <td class="td-num">${fmtNum(s.saldo_inicial, 0)}</td>
+        <td class="td-num">${fmtNum(s.total_entrada, 0)}</td>
+        <td class="td-num">${fmtNum(s.total_saida, 0)}</td>
+        <td class="td-num ${cls}"><strong>${fmtNum(sa, 0)}</strong></td>
+        <td class="td-num">${fmtBRL(s.valor_entradas)}</td>
+        <td class="td-num">${fmtBRL(s.valor_saidas)}</td>
+        <td class="td-num">${s.total_nfs}</td>
+      </tr>`;
+    }).join('');
+
+    // Chart: Saldo por categoria (top 15)
+    const top15 = [...saldos].sort((a, b) => Math.abs(b.saldo_atual) - Math.abs(a.saldo_atual)).slice(0, 15);
+    if (chartSaldo) chartSaldo.destroy();
+    chartSaldo = new Chart(document.getElementById('chartSaldo'), {
+      type: 'bar',
+      data: {
+        labels: top15.map(s => s.nome.length > 18 ? s.nome.substring(0, 18) + '...' : s.nome),
+        datasets: [{
+          label: 'Saldo',
+          data: top15.map(s => Number(s.saldo_atual)),
+          backgroundColor: top15.map(s => Number(s.saldo_atual) >= 0 ? 'rgba(200,169,110,0.7)' : 'rgba(239,68,68,0.7)'),
+          borderRadius: 2,
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } },
+          y: { grid: { display: false }, ticks: { color: '#f0ede8', font: { family: 'DM Mono', size: 10 } } }
+        }
+      }
+    });
+
+    // Chart: Evolucao mensal
+    const meses = [...new Set(mensal.map(m => m.mes))].sort();
+    const entMes = meses.map(mes => {
+      const r = mensal.find(m => m.mes === mes && m.tipo === 'entrada');
+      return r ? Number(r.valor_total) : 0;
+    });
+    const saiMes = meses.map(mes => {
+      const r = mensal.find(m => m.mes === mes && m.tipo === 'saida');
+      return r ? Number(r.valor_total) : 0;
+    });
+
+    if (chartMensal) chartMensal.destroy();
+    chartMensal = new Chart(document.getElementById('chartMensal'), {
+      type: 'line',
+      data: {
+        labels: meses.map(m => {
+          const d = new Date(m);
+          return d.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
+        }),
+        datasets: [
+          {
+            label: 'Entradas (R$)', data: entMes,
+            borderColor: '#22c55e', backgroundColor: 'rgba(34,197,94,0.1)',
+            fill: true, tension: 0.3, pointRadius: 3,
+          },
+          {
+            label: 'Saidas (R$)', data: saiMes,
+            borderColor: '#ef4444', backgroundColor: 'rgba(239,68,68,0.1)',
+            fill: true, tension: 0.3, pointRadius: 3,
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { labels: { color: '#888', font: { family: 'DM Mono', size: 10 } } }
+        },
+        scales: {
+          x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } },
+          y: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888', font: { family: 'DM Mono', size: 10 } } }
+        }
+      }
+    });
+
+  } catch(e) {
+    toast('Erro ao carregar dashboard: ' + e.message, 'error');
+  }
+}
+
+// ── Toast ────────────────────────────────────────────────────────
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (type === 'error' ? ' error' : type === 'warn' ? ' warn' : '');
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// ── Start ────────────────────────────────────────────────────────
+init();
+</script>
+</body>
+</html>

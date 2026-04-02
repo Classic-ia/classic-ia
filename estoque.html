@@ -364,17 +364,39 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 <div id="tab-mapeamento" class="tab-content">
   <div class="map-grid">
     <div class="map-panel">
-      <div class="map-panel-title">Categorias (Produtos)</div>
-      <div class="map-add-row">
-        <input type="text" id="novaCatNome" placeholder="Nome da categoria">
-        <select id="novaCatUnidade">
-          <option value="KG">KG</option><option value="PC">PC</option>
-          <option value="PRS">PRS</option><option value="UN">UN</option>
-          <option value="ML">ML</option><option value="LT">LT</option>
-        </select>
-        <button class="btn btn-sm btn-primary" onclick="adicionarCategoria()">+</button>
+      <div class="map-panel-title">Cadastro de Produtos (Categorias)</div>
+      <div style="background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:16px;margin-bottom:16px">
+        <div style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;margin-bottom:8px">
+          <div class="filter-group">
+            <span class="filter-label">Nome do Produto</span>
+            <input type="text" class="filter-input" id="novaCatNome" placeholder="Ex: BUCHO BOVINO" style="text-transform:uppercase">
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Unidade</span>
+            <select class="filter-select" id="novaCatUnidade">
+              <option value="KG">KG</option><option value="PC">PC</option>
+              <option value="PRS">PRS</option><option value="UN">UN</option>
+              <option value="ML">ML</option><option value="LT">LT</option>
+              <option value="CX">CX</option><option value="SC">SC</option>
+            </select>
+          </div>
+          <div class="filter-group">
+            <span class="filter-label">Est. Minimo</span>
+            <input type="number" class="filter-input" id="novaCatMinimo" placeholder="0" value="0" min="0">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <div class="filter-group" style="flex:1">
+            <span class="filter-label">Saldo Inicial</span>
+            <input type="number" class="filter-input" id="novaCatSaldo" placeholder="0" value="0" min="0" step="0.01">
+          </div>
+          <button class="btn btn-primary" onclick="adicionarCategoria()" style="margin-top:16px">Cadastrar Produto</button>
+        </div>
       </div>
-      <div id="listaCategorias" style="margin-top:16px"></div>
+      <div class="filter-group" style="margin-bottom:12px">
+        <input type="text" class="filter-input" id="filtCatBusca" placeholder="Buscar categoria..." oninput="filtrarCategorias()" style="width:100%">
+      </div>
+      <div id="listaCategorias"></div>
     </div>
 
     <div class="map-panel">
@@ -937,12 +959,17 @@ async function renderMapeamento() {
   // Categorias
   const listaCat = document.getElementById('listaCategorias');
   listaCat.innerHTML = _categorias.map(c => `
-    <div class="map-item">
-      <div>
-        <div class="map-item-name">${c.nome}</div>
-        <div class="map-item-badge">${c.unidade} | Saldo inicial: ${fmtNum(c.saldo_inicial, 0)}</div>
+    <div class="map-item" data-nome="${c.nome}">
+      <div style="flex:1">
+        <div class="map-item-name" style="font-weight:bold">${c.nome}</div>
+        <div class="map-item-badge">${c.unidade} | Saldo ini: ${fmtNum(c.saldo_inicial,0)} | Est.min: ${c.estoque_minimo > 0 ? fmtNum(c.estoque_minimo,0) : '—'}</div>
       </div>
-      <button class="btn btn-sm btn-danger" onclick="removerCategoria('${c.id}','${c.nome.replace(/'/g,"\\'")}')">&#10005;</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <input type="number" class="filter-input" style="width:70px;padding:4px 6px;font-size:10px"
+          placeholder="Min" value="${c.estoque_minimo||0}"
+          onchange="salvarEstoqueMinimo('${c.id}',this.value)" title="Estoque minimo">
+        <button class="btn btn-sm btn-danger" onclick="removerCategoria('${c.id}','${c.nome.replace(/'/g,"\\'")}')">&#10005;</button>
+      </div>
     </div>
   `).join('');
 
@@ -960,17 +987,40 @@ async function renderMapeamento() {
 }
 
 async function adicionarCategoria() {
-  const nome = document.getElementById('novaCatNome').value.trim();
+  const nome = document.getElementById('novaCatNome').value.trim().toUpperCase();
   const unidade = document.getElementById('novaCatUnidade').value;
-  if (!nome) { toast('Informe o nome', 'warn'); return; }
+  const minimo = parseFloat(document.getElementById('novaCatMinimo').value) || 0;
+  const saldo = parseFloat(document.getElementById('novaCatSaldo').value) || 0;
+  if (!nome) { toast('Informe o nome do produto', 'warn'); return; }
   try {
-    await criarCategoria(nome, unidade);
+    await sbFetch('estoque_categorias', {
+      method: 'POST',
+      body: JSON.stringify({ nome, unidade, estoque_minimo: minimo, saldo_inicial: saldo })
+    });
     document.getElementById('novaCatNome').value = '';
+    document.getElementById('novaCatMinimo').value = '0';
+    document.getElementById('novaCatSaldo').value = '0';
     await carregarCategorias();
     popularSelectsCategorias();
     renderMapeamento();
-    toast('Categoria criada!');
+    toast('Produto cadastrado: ' + nome);
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function salvarEstoqueMinimo(id, valor) {
+  try {
+    await atualizarEstoqueMinimo(id, parseFloat(valor) || 0);
+    toast('Estoque minimo atualizado');
+  } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+function filtrarCategorias() {
+  const busca = (document.getElementById('filtCatBusca')?.value || '').toUpperCase();
+  const items = document.querySelectorAll('#listaCategorias .map-item');
+  items.forEach(el => {
+    const nome = el.dataset.nome || '';
+    el.style.display = nome.includes(busca) ? '' : 'none';
+  });
 }
 
 async function removerCategoria(id, nome) {

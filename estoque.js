@@ -73,6 +73,7 @@ async function sbFetchAll(path, opts = {}) {
 }
 
 // Normalizar campos numericos de movimentacao
+const VALOR_MAX_ITEM = 50000000; // R$ 50M — teto por item individual
 function normalizarMov(m) {
   m.quantidade = Number(m.quantidade || 0);
   m.valor_unitario = Number(m.valor_unitario || 0);
@@ -81,16 +82,31 @@ function normalizarMov(m) {
   m.pis = Number(m.pis || 0);
   m.cofins = Number(m.cofins || 0);
   m.compra_liquida = Number(m.compra_liquida || 0);
-  // Validar valor_total: se muito diferente de qtd*unit, recalcular
-  if (m.quantidade > 0 && m.valor_unitario > 0) {
-    const esperado = m.quantidade * m.valor_unitario;
-    // Se valor_total difere mais de 100x do esperado, usar o recalculado
-    if (m.valor_total > esperado * 100 || m.valor_total < esperado / 100) {
-      console.warn('valor_total inconsistente, recalculando:', m.produto_xml, 'original:', m.valor_total, 'esperado:', esperado);
-      m.valor_total = esperado;
-      m.compra_liquida = esperado - m.icms - m.pis - m.cofins;
+
+  // Se valor_total excede teto absoluto, recalcular ou zerar
+  if (Math.abs(m.valor_total) > VALOR_MAX_ITEM) {
+    if (m.quantidade > 0 && m.valor_unitario > 0) {
+      const recalc = m.quantidade * m.valor_unitario;
+      if (Math.abs(recalc) <= VALOR_MAX_ITEM) {
+        console.warn('valor_total corrigido:', m.produto_xml, 'de', m.valor_total, 'para', recalc);
+        m.valor_total = recalc;
+        m.compra_liquida = recalc - m.icms - m.pis - m.cofins;
+      } else {
+        console.warn('valor_total e recalc ambos invalidos, zerando:', m.produto_xml, m.valor_total, recalc);
+        m.valor_total = 0;
+        m.compra_liquida = 0;
+      }
+    } else {
+      console.warn('valor_total invalido sem unit/qtd para recalc, zerando:', m.produto_xml, m.valor_total);
+      m.valor_total = 0;
+      m.compra_liquida = 0;
     }
   }
+  // Mesma validacao para icms, pis, cofins
+  if (Math.abs(m.icms) > VALOR_MAX_ITEM) m.icms = 0;
+  if (Math.abs(m.pis) > VALOR_MAX_ITEM) m.pis = 0;
+  if (Math.abs(m.cofins) > VALOR_MAX_ITEM) m.cofins = 0;
+  if (Math.abs(m.compra_liquida) > VALOR_MAX_ITEM) m.compra_liquida = 0;
   return m;
 }
 

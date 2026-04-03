@@ -101,7 +101,8 @@ main{max-width:1200px;margin:0 auto;padding:32px 24px}
 .nf-info strong{color:var(--accent)}
 
 /* Tables */
-table{width:100%;border-collapse:collapse;font-size:12px}
+[style*="overflow-x"]{-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+table{width:100%;border-collapse:collapse;font-size:12px;min-width:600px}
 th{
   font-family:'DM Mono',monospace;font-size:10px;
   letter-spacing:0.1em;text-transform:uppercase;
@@ -244,16 +245,81 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 .modal-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:20px}
 
-/* Responsive */
-@media(max-width:768px){
-  .tabs{overflow-x:auto;padding:0 12px}
-  .tab{padding:10px 16px;font-size:10px}
-  main{padding:20px 12px}
-  .kpi-row{flex-direction:column}
+/* Responsive — Tablet */
+@media(max-width:1024px){
+  main{max-width:100%;padding:24px 16px}
   .chart-row{grid-template-columns:1fr}
   .map-grid{grid-template-columns:1fr}
-  .filters{flex-direction:column}
-  .nf-info{flex-direction:column;gap:8px}
+  .map-panel{max-height:50vh}
+}
+
+/* Responsive — Mobile */
+@media(max-width:768px){
+  header{padding:10px 14px;gap:8px}
+  .hd-title{font-size:13px}
+  .hd-back{font-size:10px}
+  #headerUser{font-size:10px;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .tabs{overflow-x:auto;padding:0 8px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .tab{padding:10px 14px;font-size:9px;letter-spacing:0.08em}
+
+  main{padding:16px 10px}
+
+  .kpi-row{flex-direction:column;gap:8px;margin-bottom:20px}
+  .kpi{min-width:unset;padding:12px 14px}
+  .kpi-value{font-size:16px}
+  .kpi-label{font-size:8px}
+
+  .upload-zone{padding:28px 16px}
+  .upload-zone-icon{font-size:32px}
+  .upload-zone-text{font-size:12px}
+
+  .filters{flex-direction:column;gap:8px}
+  .filter-group{width:100%}
+  .filter-input,.filter-select{width:100%;font-size:13px;padding:10px 12px}
+  .btn{padding:10px 16px;font-size:11px;width:100%;text-align:center}
+  .btn-sm{width:auto}
+
+  .chart-row{grid-template-columns:1fr;gap:16px}
+  .chart-box{padding:14px}
+  .chart-title{font-size:11px}
+
+  .map-grid{grid-template-columns:1fr;gap:16px}
+  .map-panel{max-height:60vh;padding:14px}
+
+  .section-head{font-size:10px;margin-bottom:12px}
+  .nf-info{flex-direction:column;gap:6px;padding:10px 12px;font-size:11px}
+
+  table{font-size:11px}
+  th{font-size:9px;padding:8px 6px;letter-spacing:0.06em}
+  td{padding:8px 6px}
+
+  .preview-header{flex-direction:column;gap:8px;align-items:flex-start}
+
+  .modal{padding:20px 16px;width:95%;max-width:none}
+  .modal-title{font-size:14px}
+  .modal-actions{flex-direction:column}
+  .modal-actions .btn{width:100%}
+
+  .toast{left:12px;right:12px;bottom:12px;max-width:none}
+}
+
+/* Responsive — Mobile form grids */
+@media(max-width:768px){
+  .cat-form-grid{grid-template-columns:1fr 1fr !important}
+  .cat-form-grid>:first-child{grid-column:1/-1}
+}
+
+/* Responsive — Small phones */
+@media(max-width:400px){
+  header{flex-wrap:wrap;justify-content:center;gap:6px;padding:8px 10px}
+  .hd-left{gap:8px}
+  .hd-right{gap:8px}
+  .hd-title{font-size:12px}
+  .tab{padding:8px 10px;font-size:8px}
+  .kpi-value{font-size:14px}
+  main{padding:12px 8px}
 }
 </style>
 </head>
@@ -372,7 +438,7 @@ tr:hover td{background:rgba(200,169,110,0.03)}
     <div class="map-panel">
       <div class="map-panel-title">Cadastro de Produtos (Categorias)</div>
       <div style="background:var(--surface2);border:1px solid var(--border);border-radius:2px;padding:16px;margin-bottom:16px">
-        <div style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;margin-bottom:8px">
+        <div class="cat-form-grid" style="display:grid;grid-template-columns:1fr 100px 100px;gap:8px;margin-bottom:8px">
           <div class="filter-group">
             <span class="filter-label">Nome do Produto</span>
             <input type="text" class="filter-input" id="novaCatNome" placeholder="Ex: BUCHO BOVINO" style="text-transform:uppercase">
@@ -938,7 +1004,7 @@ function renderPreview() {
       <div><span>Arquivo:</span> <strong>${nf._fileName}</strong></div>
     </div>`;
 
-    html += `<table style="margin-bottom:20px"><thead><tr>
+    html += `<div style="overflow-x:auto"><table style="margin-bottom:20px"><thead><tr>
       <th>Produto</th><th>NCM</th><th>CFOP</th><th>Und</th>
       <th style="text-align:right">Qtde</th><th style="text-align:right">Vlr Unit</th>
       <th style="text-align:right">Vlr Total</th><th>Categoria</th><th></th>
@@ -960,7 +1026,7 @@ function renderPreview() {
         <td><button class="btn btn-sm" onclick="abrirModalMapear('${item.produto_xml.replace(/'/g,"\\'")}','${item.ncm||''}')">${item._mapped ? 'Alterar' : 'Mapear'}</button></td>
       </tr>`;
     }
-    html += '</tbody></table>';
+    html += '</tbody></table></div>';
   }
 
   cards.innerHTML = html;
@@ -1464,13 +1530,13 @@ function renderDuplicatas(dups) {
     el.innerHTML = '<div style="padding:16px;color:var(--ok);font-size:12px;background:var(--surface);border-radius:2px;border-left:3px solid var(--ok)">Nenhuma duplicata encontrada. Tudo OK!</div>';
     return;
   }
-  el.innerHTML = `<table><thead><tr><th>NF</th><th>Data</th><th>Tipo</th><th>Fornecedor</th><th style="text-align:right">Itens</th><th style="text-align:right">Valor</th></tr></thead><tbody>` +
+  el.innerHTML = `<div style="overflow-x:auto"><table><thead><tr><th>NF</th><th>Data</th><th>Tipo</th><th>Fornecedor</th><th style="text-align:right">Itens</th><th style="text-align:right">Valor</th></tr></thead><tbody>` +
     dups.map(d => `<tr style="background:rgba(239,68,68,0.05)">
       <td>${d.numero_nf}</td><td>${fmtData(d.data_emissao)}</td>
       <td><span class="badge ${d.tipo==='entrada'?'badge-entrada':'badge-saida'}">${d.tipo}</span></td>
       <td>${d.fornecedor_cliente}</td>
       <td class="td-num">${d.total_itens}</td><td class="td-num">${fmtBRL(d.valor_total)}</td>
-    </tr>`).join('') + '</tbody></table>';
+    </tr>`).join('') + '</tbody></table></div>';
 }
 
 // ── Posicao Estoque ──────────────────────────────────────────────
@@ -1578,7 +1644,7 @@ async function calcularPosicao() {
 
     // Resumo
     document.getElementById('posicaoResumo').innerHTML = `
-      <table style="max-width:500px">
+      <table style="max-width:500px;min-width:auto">
         <tbody>
           <tr><td>Materia Prima / Acabados</td><td class="td-num"><strong>${fmtBRL(vlrMP)}</strong></td></tr>
           <tr><td>Mercadorias para Revenda</td><td class="td-num"><strong>${fmtBRL(vlrRevenda)}</strong></td></tr>

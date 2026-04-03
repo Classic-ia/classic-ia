@@ -359,6 +359,16 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
     <input type="file" id="fileInput" accept=".xml,.zip,.xls,.xlsx" multiple hidden>
   </div>
 
+  <div style="display:flex;gap:10px;margin-top:12px;flex-wrap:wrap">
+    <button class="btn" onclick="selecionarPasta()" style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:16px">&#128193;</span> Importar Pasta Local
+    </button>
+    <button class="btn" onclick="importarOneDrive()" id="btnOneDrive" style="display:flex;align-items:center;gap:6px">
+      <span style="font-size:16px">&#9729;</span> Importar do OneDrive
+    </button>
+    <input type="file" id="folderInput" webkitdirectory multiple hidden>
+  </div>
+
   <div id="uploadPreview" style="display:none">
     <div class="preview-header">
       <div class="preview-title" id="previewCount"></div>
@@ -889,6 +899,203 @@ function setupUpload() {
     if (input.files.length) processarArquivos(input.files);
     input.value = '';
   });
+
+  // Folder input (para importar pasta local / OneDrive sincronizado)
+  const folderInput = document.getElementById('folderInput');
+  folderInput.addEventListener('change', () => {
+    if (folderInput.files.length) {
+      // Filtrar apenas XMLs, ZIPs e XLS da pasta
+      const validExts = ['.xml', '.zip', '.xls', '.xlsx'];
+      const valid = Array.from(folderInput.files).filter(f => {
+        const ext = f.name.toLowerCase().slice(f.name.lastIndexOf('.'));
+        return validExts.includes(ext);
+      });
+      if (valid.length) {
+        toast(`Encontrados ${valid.length} arquivos na pasta`, 'ok');
+        // Converter array para FileList-like object
+        const dt = new DataTransfer();
+        valid.forEach(f => dt.items.add(f));
+        processarArquivos(dt.files);
+      } else {
+        toast('Nenhum XML, ZIP ou XLS encontrado na pasta', 'warn');
+      }
+      folderInput.value = '';
+    }
+  });
+}
+
+function selecionarPasta() {
+  document.getElementById('folderInput').click();
+}
+
+// ── OneDrive Picker (Microsoft Graph API) ──────────────────────
+const ONEDRIVE_CLIENT_ID = CQ_CONFIG.ONEDRIVE_CLIENT_ID || '';
+const ONEDRIVE_REDIRECT = window.location.origin + window.location.pathname;
+
+async function importarOneDrive() {
+  if (!ONEDRIVE_CLIENT_ID) {
+    toast('OneDrive nao configurado. Configure ONEDRIVE_CLIENT_ID no config.js', 'error');
+    // Fallback: abrir seletor de pasta (funciona se OneDrive esta sincronizado)
+    toast('Use "Importar Pasta Local" e selecione a pasta do OneDrive no computador', 'warn');
+    return;
+  }
+
+  const btn = document.getElementById('btnOneDrive');
+  btn.disabled = true;
+  btn.innerHTML = '<span style="font-size:16px">&#9729;</span> Conectando...';
+
+  try {
+    // Usar popup OAuth2 do Microsoft para obter token
+    const token = await obterTokenOneDrive();
+    if (!token) { toast('Login cancelado', 'warn'); return; }
+
+    // Listar pasta raiz ou selecionar pasta
+    const pasta = await selecionarPastaOneDrive(token);
+    if (!pasta) { toast('Nenhuma pasta selecionada', 'warn'); return; }
+
+    // Baixar XMLs da pasta
+    btn.innerHTML = '<span style="font-size:16px">&#9729;</span> Baixando XMLs...';
+    const arquivos = await baixarXmlsOneDrive(token, pasta);
+
+    if (arquivos.length === 0) {
+      toast('Nenhum XML encontrado na pasta selecionada', 'warn');
+      return;
+    }
+
+    toast(`${arquivos.length} XMLs baixados do OneDrive`, 'ok');
+
+    // Processar como se fossem uploads normais
+    const dt = new DataTransfer();
+    arquivos.forEach(a => {
+      const blob = new Blob([a.content], { type: 'text/xml' });
+      dt.items.add(new File([blob], a.name, { type: 'text/xml' }));
+    });
+    processarArquivos(dt.files);
+
+  } catch(e) {
+    console.error('OneDrive error:', e);
+    toast('Erro OneDrive: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<span style="font-size:16px">&#9729;</span> Importar do OneDrive';
+  }
+}
+
+function obterTokenOneDrive() {
+  return new Promise((resolve) => {
+    const scope = 'Files.Read.All';
+    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${ONEDRIVE_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(ONEDRIVE_REDIRECT)}&scope=${scope}&response_mode=fragment`;
+
+    const w = 600, h = 700;
+    const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
+    const popup = window.open(url, 'onedrive_login', `width=${w},height=${h},left=${left},top=${top}`);
+
+    const timer = setInterval(() => {
+      try {
+        if (!popup || popup.closed) { clearInterval(timer); resolve(null); return; }
+        const hash = popup.location.hash;
+        if (hash && hash.includes('access_token=')) {
+          clearInterval(timer);
+          const params = new URLSearchParams(hash.substring(1));
+          const token = params.get('access_token');
+          popup.close();
+          resolve(token);
+        }
+      } catch(e) { /* cross-origin, aguardar redirect */ }
+    }, 300);
+  });
+}
+
+async function selecionarPastaOneDrive(token) {
+  const headers = { 'Authorization': `Bearer ${token}` };
+
+  // Buscar pastas na raiz do OneDrive
+  const r = await fetch('https://graph.microsoft.com/v1.0/me/drive/root/children?$filter=folder ne null&$top=50', { headers });
+  if (!r.ok) throw new Error('Erro ao acessar OneDrive');
+  const data = await r.json();
+  const pastas = data.value || [];
+
+  if (!pastas.length) { toast('Nenhuma pasta encontrada no OneDrive', 'warn'); return null; }
+
+  // Mostrar seletor de pasta em modal simples
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay show';
+    overlay.innerHTML = `
+      <div class="modal" style="max-width:500px;max-height:70vh;display:flex;flex-direction:column">
+        <div class="modal-title">Selecionar Pasta do OneDrive</div>
+        <div style="overflow:auto;flex:1">
+          ${pastas.map(p => `
+            <div style="padding:10px 14px;border-bottom:1px solid var(--border);cursor:pointer;font-size:13px;display:flex;align-items:center;gap:8px;transition:background 0.15s"
+                 onmouseover="this.style.background='rgba(200,169,110,0.1)'" onmouseout="this.style.background='transparent'"
+                 data-id="${p.id}">
+              <span style="font-size:18px">&#128193;</span>
+              <div>
+                <div style="font-weight:500">${p.name}</div>
+                <div style="font-size:10px;color:var(--muted)">${p.folder.childCount} itens</div>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+        <div class="modal-actions">
+          <button class="btn" id="btnCancelOneDrive">Cancelar</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector('#btnCancelOneDrive').onclick = () => { overlay.remove(); resolve(null); };
+    overlay.querySelectorAll('[data-id]').forEach(el => {
+      el.onclick = () => {
+        const id = el.dataset.id;
+        overlay.remove();
+        resolve(id);
+      };
+    });
+  });
+}
+
+async function baixarXmlsOneDrive(token, pastaId) {
+  const headers = { 'Authorization': `Bearer ${token}` };
+  const arquivos = [];
+
+  // Buscar todos os arquivos na pasta (recursivo 1 nivel)
+  async function listarPasta(id) {
+    const r = await fetch(`https://graph.microsoft.com/v1.0/me/drive/items/${id}/children?$top=200`, { headers });
+    if (!r.ok) return;
+    const data = await r.json();
+
+    for (const item of (data.value || [])) {
+      const name = item.name.toLowerCase();
+      if (item.folder) {
+        // Entrar em subpastas (1 nivel)
+        await listarPasta(item.id);
+      } else if (name.endsWith('.xml') && !name.includes('evento')) {
+        // Baixar XML
+        try {
+          const dl = await fetch(item['@microsoft.graph.downloadUrl'], { mode: 'cors' });
+          const content = await dl.text();
+          arquivos.push({ name: item.name, content });
+        } catch(e) { console.warn('Erro ao baixar:', item.name, e); }
+      } else if (name.endsWith('.zip')) {
+        // Baixar e extrair ZIP
+        try {
+          const dl = await fetch(item['@microsoft.graph.downloadUrl'], { mode: 'cors' });
+          const buf = await dl.arrayBuffer();
+          const zip = await JSZip.loadAsync(buf);
+          for (const [zname, entry] of Object.entries(zip.files)) {
+            if (entry.dir || !zname.toLowerCase().endsWith('.xml')) continue;
+            if (zname.toLowerCase().includes('evento')) continue;
+            const content = await entry.async('string');
+            arquivos.push({ name: zname.split('/').pop(), content });
+          }
+        } catch(e) { console.warn('Erro ao extrair zip:', item.name, e); }
+      }
+    }
+  }
+
+  await listarPasta(pastaId);
+  return arquivos;
 }
 
 async function processarArquivos(files) {

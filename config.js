@@ -6,6 +6,9 @@ const CQ_CONFIG = {
   SB_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw',
   APP_NAME: 'Classic CQ',
   VERSION: 'v2026.03',
+  // OneDrive: registrar app em https://portal.azure.com > App registrations
+  // Redirect URI: https://classic-ia-classic-ias-projects.vercel.app/estoque.html
+  ONEDRIVE_CLIENT_ID: '', // Preencher com o Application (client) ID do Azure AD
 };
 
 // Aliases para compatibilidade com código existente

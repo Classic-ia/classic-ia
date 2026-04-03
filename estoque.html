@@ -1422,7 +1422,7 @@ async function renderDashboard() {
     }
 
     // ── Fornecedores ──
-    renderFornecedores();
+    renderFornecedores(movs);
 
     // ── Comparativo mensal ──
     renderComparativo(comparativo);
@@ -1436,29 +1436,41 @@ async function renderDashboard() {
   }
 }
 
-// ── Ranking Fornecedores e Clientes (separados) ──
-async function renderFornecedores() {
-  try {
-    const [entradas, saidas] = await Promise.all([
-      carregarFornecedores('entrada'),
-      carregarFornecedores('saida')
-    ]);
+// ── Ranking Fornecedores e Clientes (separados — calculado client-side) ──
+function renderFornecedores(movs) {
+  const agrupar = (tipo) => {
+    const map = {};
+    movs.filter(m => m.tipo === tipo).forEach(m => {
+      const key = m.fornecedor_cliente || 'DESCONHECIDO';
+      if (!map[key]) map[key] = { fornecedor_cliente: key, cnpj: m.cnpj, total_nfs: new Set(), total_itens: 0, qtd_total: 0, valor_total: 0, primeira_nf: m.data_emissao, ultima_nf: m.data_emissao };
+      const f = map[key];
+      if (m.chave_nfe) f.total_nfs.add(m.chave_nfe);
+      f.total_itens++;
+      f.qtd_total += m.quantidade;
+      f.valor_total += m.valor_total;
+      if (m.data_emissao < f.primeira_nf) f.primeira_nf = m.data_emissao;
+      if (m.data_emissao > f.ultima_nf) f.ultima_nf = m.data_emissao;
+    });
+    return Object.values(map).map(f => ({ ...f, total_nfs: f.total_nfs.size })).sort((a,b) => b.valor_total - a.valor_total);
+  };
 
-    const renderTabela = (dados) => dados.slice(0,30).map((f,i) => `<tr>
-      <td class="td-center">${i+1}</td>
-      <td>${f.fornecedor_cliente}</td>
-      <td style="font-family:'DM Mono';font-size:11px">${f.cnpj||'—'}</td>
-      <td class="td-num">${f.total_nfs}</td>
-      <td class="td-num">${f.total_itens}</td>
-      <td class="td-num">${fmtNum(f.qtd_total,0)}</td>
-      <td class="td-num">${fmtBRL(f.valor_total)}</td>
-      <td>${fmtData(f.primeira_nf)}</td>
-      <td>${fmtData(f.ultima_nf)}</td>
-    </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum dado</td></tr>';
+  const entradas = agrupar('entrada');
+  const saidas = agrupar('saida');
 
-    document.getElementById('dashFornEntBody').innerHTML = renderTabela(entradas);
-    document.getElementById('dashFornSaiBody').innerHTML = renderTabela(saidas);
-  } catch(e) { console.warn('Fornecedores:', e); }
+  const renderTabela = (dados) => dados.slice(0,30).map((f,i) => `<tr>
+    <td class="td-center">${i+1}</td>
+    <td>${f.fornecedor_cliente}</td>
+    <td style="font-family:'DM Mono';font-size:11px">${f.cnpj||'—'}</td>
+    <td class="td-num">${f.total_nfs}</td>
+    <td class="td-num">${f.total_itens}</td>
+    <td class="td-num">${fmtNum(f.qtd_total,0)}</td>
+    <td class="td-num">${fmtBRL(f.valor_total)}</td>
+    <td>${fmtData(f.primeira_nf)}</td>
+    <td>${fmtData(f.ultima_nf)}</td>
+  </tr>`).join('') || '<tr><td colspan="9" class="empty">Nenhum dado</td></tr>';
+
+  document.getElementById('dashFornEntBody').innerHTML = renderTabela(entradas);
+  document.getElementById('dashFornSaiBody').innerHTML = renderTabela(saidas);
 }
 
 // ── Historico de Precos ──

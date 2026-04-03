@@ -6,9 +6,9 @@
 <title>Gestão de Pagamentos · Classic</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -125,8 +125,8 @@ tbody td{padding:9px 10px;vertical-align:middle;}
     <div class="ht">Gestão de Pagamentos</div>
     <div class="hs">Dados Bancários · Lotes · Exportação · Validação</div>
   </div>
-  <div id="cq-user-chip"></div>
-  <a href="app.html" class="btn-back">← Painel</a>
+  <div id="rh-user-chip"></div>
+  <a href="app_rh.html" class="btn-back">← Painel</a>
 </div>
 
 <div class="container">
@@ -401,11 +401,11 @@ function toggleCamposPag() {
 }
 
 async function carregar() {
-  const load = async (t) => { try { return await CQ_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
+  const load = async (t) => { try { return await RH_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
   [FUNC, DADOS_BANC, LOTES] = await Promise.all([
     load('rh_funcionarios'), load('rh_dados_bancarios'), load('rh_lotes_pagamento')
   ]);
-  try { LOG_EXPORT = await CQ_API.get('rh_log_exportacao?order=created_at.desc&limit=100') || []; } catch { LOG_EXPORT = []; }
+  try { LOG_EXPORT = await RH_API.get('rh_log_exportacao?order=created_at.desc&limit=100') || []; } catch { LOG_EXPORT = []; }
 }
 
 function popularSelects() {
@@ -525,8 +525,8 @@ async function salvarDados(e) {
   };
   try {
     let ok;
-    if (id) { ok = (await CQ_API.fetch('rh_dados_bancarios?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
-    else { ok = (await CQ_API.post('rh_dados_bancarios', dados, 'return=minimal')).ok; }
+    if (id) { ok = (await RH_API.fetch('rh_dados_bancarios?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
+    else { ok = (await RH_API.post('rh_dados_bancarios', dados, 'return=minimal')).ok; }
     if (ok) { toast(id ? 'Dados atualizados' : 'Dados cadastrados'); fecharModal('modalDados'); await recarregar(); }
     else toast('Erro ao salvar', true);
   } catch (err) { toast('Erro: ' + err.message, true); }
@@ -534,7 +534,7 @@ async function salvarDados(e) {
 
 async function validarDados(id) {
   try {
-    const ok = (await CQ_API.fetch('rh_dados_bancarios?id=eq.' + id, {
+    const ok = (await RH_API.fetch('rh_dados_bancarios?id=eq.' + id, {
       method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: { status_validacao: 'validado' }
     })).ok;
     if (ok) { toast('Dados validados'); await recarregar(); }
@@ -582,7 +582,7 @@ async function salvarLote(e) {
     status: 'rascunho',
   };
   try {
-    const ok = (await CQ_API.post('rh_lotes_pagamento', dados, 'return=minimal')).ok;
+    const ok = (await RH_API.post('rh_lotes_pagamento', dados, 'return=minimal')).ok;
     if (ok) { toast('Lote criado com ' + funcLote.length + ' funcionários'); fecharModal('modalLote'); await recarregar(); }
     else toast('Erro ao criar lote', true);
   } catch (err) { toast('Erro: ' + err.message, true); }
@@ -647,9 +647,9 @@ function exportarLista(tipo, formato) {
   toast(`Exportado: ${lista.length} registros (${formato.toUpperCase()})`);
 
   // Log de exportação
-  const user = CQAuth.getUser();
+  const user = RHAuth.getUser();
   try {
-    CQ_API.post('rh_log_exportacao', {
+    RH_API.post('rh_log_exportacao', {
       usuario_id: user?.id, usuario_nome: user?.nome,
       tipo_lista: tipo, formato, total_registros: lista.length,
       filtros: JSON.stringify({ tipo, formato }),
@@ -680,7 +680,7 @@ async function recarregar() {
 }
 
 (async () => {
-  const user = await CQAuth.init();
+  const user = await RHAuth.init();
   if (!user) return;
   await recarregar();
 })();

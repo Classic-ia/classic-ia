@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestão RH & SST · Classic</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -149,8 +149,8 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="ht">Gestão RH & SST</div>
     <div class="hs">Funcionários · ASO · Treinamentos · EPIs · Acidentes · Desligamentos</div>
   </div>
-  <div id="cq-user-chip"></div>
-  <a href="app.html" class="btn-back">← Painel</a>
+  <div id="rh-user-chip"></div>
+  <a href="app_rh.html" class="btn-back">← Painel</a>
 </div>
 
 <!-- MOTOR LÓGICO BANNER -->
@@ -966,7 +966,7 @@ function renderMotorBanner() {
 // ── API HELPERS ──────────────────────────────────────────
 async function carregarDados(tabela) {
   try {
-    return await CQ_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
+    return await RH_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
   } catch (e) {
     console.warn('Erro ao carregar ' + tabela, e);
     return [];
@@ -976,14 +976,14 @@ async function carregarDados(tabela) {
 async function salvarRegistro(tabela, dados, id) {
   try {
     if (id) {
-      const res = await CQ_API.fetch(tabela + '?id=eq.' + id, {
+      const res = await RH_API.fetch(tabela + '?id=eq.' + id, {
         method: 'PATCH',
         headers: { 'Prefer': 'return=minimal' },
         body: dados
       });
       return res.ok;
     } else {
-      const res = await CQ_API.post(tabela, dados, 'return=minimal');
+      const res = await RH_API.post(tabela, dados, 'return=minimal');
       return res.ok;
     }
   } catch (e) {
@@ -994,7 +994,7 @@ async function salvarRegistro(tabela, dados, id) {
 
 async function deletarRegistro(tabela, id) {
   try {
-    const res = await CQ_API.fetch(tabela + '?id=eq.' + id, { method: 'DELETE' });
+    const res = await RH_API.fetch(tabela + '?id=eq.' + id, { method: 'DELETE' });
     return res.ok;
   } catch (e) {
     return false;
@@ -1003,10 +1003,10 @@ async function deletarRegistro(tabela, id) {
 
 // ── AUDIT LOG ────────────────────────────────────────────
 async function logAudit(acao, tabela, registro_id, antes, depois) {
-  const user = CQAuth.getUser();
+  const user = RHAuth.getUser();
   if (!user) return;
   try {
-    await CQ_API.post('rh_audit_log', {
+    await RH_API.post('rh_audit_log', {
       usuario_id: user.id,
       usuario_nome: user.nome,
       acao,
@@ -1887,7 +1887,7 @@ async function recarregar() {
 }
 
 (async () => {
-  const user = await CQAuth.init();
+  const user = await RHAuth.init();
   if (!user) return;
   await recarregar();
 })();

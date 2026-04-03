@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Recrutamento & Seleção · Classic</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -178,7 +178,7 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="ht">Recrutamento & Seleção</div>
     <div class="hs">Pipeline de vagas, candidatos, agenda e banco de talentos</div>
   </div>
-  <a href="app.html" class="btn-back">← Voltar</a>
+  <a href="app_rh.html" class="btn-back">← Voltar</a>
 </div>
 
 <!-- KPI STRIP -->
@@ -715,7 +715,7 @@ let vagas = [], candidatos = [], pipelines = [], entrevistas = [], bancoTalentos
 // INIT
 // ═══════════════════════════════════════════════════════════
 document.addEventListener('DOMContentLoaded', async () => {
-  try { await CQAuth.init(); } catch(e) { window.location.href = 'index_2.html'; return; }
+  try { await RHAuth.init(); } catch(e) { window.location.href = 'login_rh.html'; return; }
 
   // Tabs
   document.querySelectorAll('.tab').forEach(t => {
@@ -781,7 +781,7 @@ function carregarKPIs() {
 // ═══════════════════════════════════════════════════════════
 async function carregarVagas() {
   try {
-    vagas = await CQ_API.get('rs_vagas?order=created_at.desc') || [];
+    vagas = await RH_API.get('rs_vagas?order=created_at.desc') || [];
   } catch(e) { vagas = []; }
   renderVagas();
   preencherSelectVagas();
@@ -899,9 +899,9 @@ async function salvarVaga() {
   const id = document.getElementById('vagaId').value;
   try {
     if (id) {
-      await CQ_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+      await RH_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
     } else {
-      await CQ_API.post('rs_vagas', obj);
+      await RH_API.post('rs_vagas', obj);
     }
     fecharModal('modalVaga');
     await carregarVagas();
@@ -918,7 +918,7 @@ async function alterarStatusVaga(id) {
   try {
     const body = { status: novo };
     if (novo === 'fechada') body.data_fechamento = new Date().toISOString().slice(0,10);
-    await CQ_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
+    await RH_API.fetch(`rs_vagas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
     await carregarVagas();
     carregarKPIs();
   } catch(e) { alert('Erro: ' + e.message); }
@@ -947,7 +947,7 @@ function preencherSelectVagas() {
 // ═══════════════════════════════════════════════════════════
 async function carregarCandidatos() {
   try {
-    candidatos = await CQ_API.get('rs_candidatos?order=created_at.desc') || [];
+    candidatos = await RH_API.get('rs_candidatos?order=created_at.desc') || [];
   } catch(e) { candidatos = []; }
   renderCandidatos();
   preencherSelectCandidatos();
@@ -1055,9 +1055,9 @@ async function salvarCandidato() {
   const id = document.getElementById('candId').value;
   try {
     if (id) {
-      await CQ_API.fetch(`rs_candidatos?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+      await RH_API.fetch(`rs_candidatos?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
     } else {
-      await CQ_API.post('rs_candidatos', obj);
+      await RH_API.post('rs_candidatos', obj);
     }
     fecharModal('modalCandidato');
     await carregarCandidatos();
@@ -1082,7 +1082,7 @@ function preencherSelectCandidatos() {
 // ═══════════════════════════════════════════════════════════
 async function carregarPipeline() {
   try {
-    pipelines = await CQ_API.get('rs_pipeline?order=created_at.desc') || [];
+    pipelines = await RH_API.get('rs_pipeline?order=created_at.desc') || [];
   } catch(e) { pipelines = []; }
   renderKanban();
   preencherSelectPipeline();
@@ -1148,7 +1148,7 @@ async function salvarPipeline() {
   if (existe) return alert('Candidato já vinculado a esta vaga.');
 
   try {
-    await CQ_API.post('rs_pipeline', {
+    await RH_API.post('rs_pipeline', {
       vaga_id, candidato_id, etapa:'triagem',
       observacoes: document.getElementById('pipeObs').value.trim() || null
     });
@@ -1195,13 +1195,13 @@ async function salvarMoverEtapa() {
   };
 
   try {
-    await CQ_API.fetch(`rs_pipeline?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+    await RH_API.fetch(`rs_pipeline?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
 
     // Se aprovado, marcar candidato como contratado
     if (etapa === 'aprovado') {
       const pipe = pipelines.find(p => p.id === id);
       if (pipe) {
-        await CQ_API.fetch(`rs_candidatos?id=eq.${pipe.candidato_id}`, {
+        await RH_API.fetch(`rs_candidatos?id=eq.${pipe.candidato_id}`, {
           method:'PATCH', body:JSON.stringify({ status:'contratado' })
         });
       }
@@ -1230,7 +1230,7 @@ function preencherSelectPipeline() {
 // ═══════════════════════════════════════════════════════════
 async function carregarAgenda() {
   try {
-    entrevistas = await CQ_API.get('rs_entrevistas?order=data_hora.asc') || [];
+    entrevistas = await RH_API.get('rs_entrevistas?order=data_hora.asc') || [];
   } catch(e) { entrevistas = []; }
   renderAgenda();
 }
@@ -1372,9 +1372,9 @@ async function salvarEntrevista() {
   const id = document.getElementById('entrevId').value;
   try {
     if (id) {
-      await CQ_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
+      await RH_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(obj) });
     } else {
-      await CQ_API.post('rs_entrevistas', obj);
+      await RH_API.post('rs_entrevistas', obj);
     }
     fecharModal('modalEntrevista');
     await carregarAgenda();
@@ -1391,7 +1391,7 @@ async function alterarStatusEntrevista(id) {
   try {
     const body = { status: novo };
     if (novo === 'realizada') body.resultado = prompt('Resultado (aprovado / reprovado / pendente):') || 'pendente';
-    await CQ_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
+    await RH_API.fetch(`rs_entrevistas?id=eq.${id}`, { method:'PATCH', body:JSON.stringify(body) });
     await carregarAgenda();
   } catch(e) { alert('Erro: ' + e.message); }
 }
@@ -1439,7 +1439,7 @@ async function salvarAvaliacao() {
   };
 
   try {
-    await CQ_API.post('rs_avaliacoes', obj);
+    await RH_API.post('rs_avaliacoes', obj);
     fecharModal('modalAvaliacao');
     alert('Avaliação salva com sucesso!');
   } catch(e) { alert('Erro: ' + e.message); }
@@ -1450,7 +1450,7 @@ async function salvarAvaliacao() {
 // ═══════════════════════════════════════════════════════════
 async function carregarBancoTalentos() {
   try {
-    bancoTalentos = await CQ_API.get('rs_banco_talentos?order=created_at.desc') || [];
+    bancoTalentos = await RH_API.get('rs_banco_talentos?order=created_at.desc') || [];
   } catch(e) { bancoTalentos = []; }
   renderBancoTalentos();
 }
@@ -1515,7 +1515,7 @@ async function salvarBancoTalentos() {
   if (existe) return alert('Candidato já está no banco de talentos.');
 
   try {
-    await CQ_API.post('rs_banco_talentos', {
+    await RH_API.post('rs_banco_talentos', {
       candidato_id,
       area_interesse: document.getElementById('bancoArea').value.trim() || null,
       tags: document.getElementById('bancoTags').value.trim() || null,
@@ -1524,7 +1524,7 @@ async function salvarBancoTalentos() {
     });
 
     // Atualizar status do candidato
-    await CQ_API.fetch(`rs_candidatos?id=eq.${candidato_id}`, {
+    await RH_API.fetch(`rs_candidatos?id=eq.${candidato_id}`, {
       method:'PATCH', body:JSON.stringify({ status:'banco_talentos' })
     });
 
@@ -1538,9 +1538,9 @@ async function removerDoBanco(id) {
   if (!confirm('Remover do banco de talentos?')) return;
   try {
     const b = bancoTalentos.find(x => x.id === id);
-    await CQ_API.fetch(`rs_banco_talentos?id=eq.${id}`, { method:'DELETE' });
+    await RH_API.fetch(`rs_banco_talentos?id=eq.${id}`, { method:'DELETE' });
     if (b) {
-      await CQ_API.fetch(`rs_candidatos?id=eq.${b.candidato_id}`, {
+      await RH_API.fetch(`rs_candidatos?id=eq.${b.candidato_id}`, {
         method:'PATCH', body:JSON.stringify({ status:'ativo' })
       });
     }

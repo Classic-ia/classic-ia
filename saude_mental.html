@@ -6,9 +6,9 @@
 <title>Saúde e Equilíbrio Ocupacional · Classic</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -164,8 +164,8 @@ tbody td{padding:9px 10px;vertical-align:middle;}
     <div class="ht">Saúde e Equilíbrio Ocupacional</div>
     <div class="hs">Programa de Gestão de Saúde Mental · NR-1 Riscos Psicossociais</div>
   </div>
-  <div id="cq-user-chip"></div>
-  <a href="app.html" class="btn-back">← Painel</a>
+  <div id="rh-user-chip"></div>
+  <a href="app_rh.html" class="btn-back">← Painel</a>
 </div>
 
 <div class="container">
@@ -485,7 +485,7 @@ function nomeF(id) { const f = FUNC.find(x => x.id === id); return f ? f.nome_co
 function setorF(id) { const f = FUNC.find(x => x.id === id); return f ? (f.setor || 'N/A') : 'N/A'; }
 
 async function carregar() {
-  const load = async (t) => { try { return await CQ_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
+  const load = async (t) => { try { return await RH_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
   [FUNC, ATEND, ABSENT, DESLIG] = await Promise.all([
     load('rh_funcionarios'), load('rh_saude_mental'), load('rh_ausencias'), load('rh_desligamentos')
   ]);
@@ -738,10 +738,10 @@ async function salvarAtendimento(e) {
   try {
     let ok;
     if (id) {
-      const res = await CQ_API.fetch('rh_saude_mental?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados });
+      const res = await RH_API.fetch('rh_saude_mental?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados });
       ok = res.ok;
     } else {
-      const res = await CQ_API.post('rh_saude_mental', dados, 'return=minimal');
+      const res = await RH_API.post('rh_saude_mental', dados, 'return=minimal');
       ok = res.ok;
     }
     if (ok) {
@@ -764,7 +764,7 @@ async function recarregar() {
 }
 
 (async () => {
-  const user = await CQAuth.init();
+  const user = await RHAuth.init();
   if (!user) return;
   await recarregar();
 })();

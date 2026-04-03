@@ -430,7 +430,7 @@ async function loadKPIs() {
   const monthStart = startOfMonth();
 
   // 1. Colaboradores Ativos
-  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const resAtivos = await RH_API.fetch('rh_funcionarios?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
   const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
   renderKPI('kpi-ativos', totalAtivos, 'Colaboradores Ativos', null);
 
@@ -443,7 +443,7 @@ async function loadKPIs() {
   renderKPI('kpi-epi', episEntregues.length, 'EPIs Entregues (periodo)', null);
 
   // 4. Ocorrencias (periodo)
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=id`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${pStart}&select=id`);
   renderKPI('kpi-ocorrencias', ocorrencias.length, 'Ocorrencias (periodo)', ocorrencias.length > 5 ? 'Acima da media' : null, ocorrencias.length <= 5);
 }
 
@@ -454,7 +454,7 @@ async function loadKPIs2() {
   const todayDate = new Date();
 
   // 5. Turnover Mensal
-  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const resAtivos = await RH_API.fetch('rh_funcionarios?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
   const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
   const desligMes = await RH_API.get(`rh_desligamentos?data_desligamento=gte.${pStart}&select=id`);
   const turnover = totalAtivos > 0 ? ((desligMes.length / totalAtivos) * 100).toFixed(1) : '0.0';
@@ -522,7 +522,7 @@ async function loadChartDesligamentos() {
 
 async function loadChartOcorrencias() {
   const pStart = periodStart();
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=tipo`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${pStart}&select=tipo`);
 
   const grouped = {};
   ocorrencias.forEach(o => {
@@ -562,7 +562,7 @@ async function loadChartOcorrencias() {
 }
 
 async function loadChartSetores() {
-  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=setor');
+  const colaboradores = await RH_API.get('rh_funcionarios?status=eq.ativo&select=setor');
 
   const grouped = {};
   colaboradores.forEach(c => {
@@ -716,7 +716,7 @@ async function loadAlertas() {
 
   // EPIs sem entrega > 6 meses
   const sixMonthsAgo = new Date(todayDate.getFullYear(), todayDate.getMonth() - 6, todayDate.getDate()).toISOString().slice(0, 10);
-  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=id,nome');
+  const colaboradores = await RH_API.get('rh_funcionarios?status=eq.ativo&select=id,nome');
   const episRecentes = await RH_API.get(`rh_epi_entregas?data_entrega=gte.${sixMonthsAgo}&select=colaborador_id`);
   const colabComEPI = new Set(episRecentes.map(e => e.colaborador_id));
   colaboradores.forEach(c => {
@@ -731,7 +731,7 @@ async function loadAlertas() {
 
   // Colaboradores com > 3 ocorrencias no mes
   const monthStart = startOfMonth();
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${monthStart}&select=colaborador_nome,colaborador_id`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${monthStart}&select=colaborador_nome,colaborador_id`);
   const ocCount = {};
   ocorrencias.forEach(o => {
     const key = o.colaborador_nome || o.colaborador_id || 'Desconhecido';

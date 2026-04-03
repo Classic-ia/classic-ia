@@ -8,7 +8,7 @@ const CQ_CONFIG = {
   VERSION: 'v2026.03',
   // OneDrive: registrar app em https://portal.azure.com > App registrations
   // Redirect URI: https://classic-ia-classic-ias-projects.vercel.app/estoque.html
-  ONEDRIVE_CLIENT_ID: '', // Preencher com o Application (client) ID do Azure AD
+  ONEDRIVE_CLIENT_ID: '94364649-570d-44cd-b95a-7999fe403e91',
 };
 
 // Aliases para compatibilidade com código existente

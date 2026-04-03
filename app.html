@@ -539,11 +539,22 @@ function renderSections(perfilUsuario) {
 async function carregarKPIsEstoque() {
   try {
     const h = {'apikey':SB_KEY,'Authorization':'Bearer '+(JSON.parse(localStorage.getItem('cq_sess_v2')||'{}').access_token||SB_KEY)};
-    const r = await fetch(`${SB_URL}/rest/v1/vw_estoque_saldo?select=*`,{headers:h});
-    if (!r.ok) return;
-    const saldos = await r.json();
-    const totEnt = saldos.reduce((s,x)=>s+Number(x.valor_entradas||0),0);
-    const totSai = saldos.reduce((s,x)=>s+Number(x.valor_saidas||0),0);
+    // Buscar movimentacoes brutas (paginado) para evitar dados corrompidos na view
+    const MAX_ITEM = 50000000; // R$ 50M teto por item
+    let allMovs = [], offset = 0, batch;
+    do {
+      const r = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes?select=tipo,valor_total&limit=1000&offset=${offset}`,{headers:h});
+      if (!r.ok) break;
+      batch = await r.json();
+      allMovs = allMovs.concat(batch);
+      offset += 1000;
+    } while (batch.length === 1000);
+    const cap = v => { const n = Number(v||0); return Math.abs(n) > MAX_ITEM ? 0 : n; };
+    const totEnt = allMovs.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+cap(m.valor_total),0);
+    const totSai = allMovs.filter(m=>m.tipo==='saida').reduce((s,m)=>s+cap(m.valor_total),0);
+    // Saldo e NFs da view (esses campos nao tem problema)
+    const r2 = await fetch(`${SB_URL}/rest/v1/vw_estoque_saldo?select=saldo_atual,total_nfs`,{headers:h});
+    const saldos = r2.ok ? await r2.json() : [];
     const totSaldo = saldos.reduce((s,x)=>s+Number(x.saldo_atual||0),0);
     const totNFs = saldos.reduce((s,x)=>s+Number(x.total_nfs||0),0);
     const fmtC = v => {

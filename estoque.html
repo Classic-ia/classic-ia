@@ -1261,10 +1261,10 @@ async function renderDashboard() {
       carregarComparativo(), carregarDuplicatas()
     ]);
 
-    // ── KPIs ──
+    // ── KPIs (calculados a partir das movimentacoes para evitar problemas de tipo) ──
     const totalEstoque = saldos.reduce((s,r) => s + Number(r.saldo_atual||0), 0);
-    const valorEntradas = saldos.reduce((s,r) => s + Number(r.valor_entradas||0), 0);
-    const valorSaidas = saldos.reduce((s,r) => s + Number(r.valor_saidas||0), 0);
+    const valorEntradas = movs.filter(m=>m.tipo==='entrada').reduce((s,m) => s + Number(m.valor_total||0), 0);
+    const valorSaidas = movs.filter(m=>m.tipo==='saida').reduce((s,m) => s + Number(m.valor_total||0), 0);
     const totalNfs = saldos.reduce((s,r) => s + Number(r.total_nfs||0), 0);
     const totalCats = saldos.filter(s => Number(s.total_entrada) > 0 || Number(s.total_saida) > 0).length;
 
@@ -1296,7 +1296,10 @@ async function renderDashboard() {
     body.innerHTML = saldos.map(s => {
       const sa = Number(s.saldo_atual||0);
       const cls = sa > 0 ? 'saldo-positivo' : sa < 0 ? 'saldo-negativo' : 'saldo-zero';
-      const cmp = catMovs[s.id] ? custoMedioPonderado(catMovs[s.id]) : 0;
+      const cms = catMovs[s.id] || [];
+      const cmp = cms.length ? custoMedioPonderado(cms) : 0;
+      const vlrEnt = cms.filter(m=>m.tipo==='entrada').reduce((ac,m) => ac + Number(m.valor_total||0), 0);
+      const vlrSai = cms.filter(m=>m.tipo==='saida').reduce((ac,m) => ac + Number(m.valor_total||0), 0);
       const vlrEstoque = sa * cmp;
       return `<tr>
         <td>${s.nome}</td>
@@ -1304,8 +1307,8 @@ async function renderDashboard() {
         <td class="td-num">${fmtNum(s.total_entrada,0)}</td>
         <td class="td-num">${fmtNum(s.total_saida,0)}</td>
         <td class="td-num ${cls}"><strong>${fmtNum(sa,0)}</strong></td>
-        <td class="td-num">${fmtBRL(s.valor_entradas)}</td>
-        <td class="td-num">${fmtBRL(s.valor_saidas)}</td>
+        <td class="td-num">${fmtBRL(vlrEnt)}</td>
+        <td class="td-num">${fmtBRL(vlrSai)}</td>
         <td class="td-num">${cmp > 0 ? fmtBRL(cmp) : '—'}</td>
         <td class="td-num">${vlrEstoque > 0 ? fmtBRL(vlrEstoque) : '—'}</td>
         <td class="td-num">${s.estoque_minimo > 0 ? fmtNum(s.estoque_minimo,0) : '—'}</td>

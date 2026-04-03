@@ -63,6 +63,7 @@ SELECT
   c.nome,
   c.unidade,
   c.saldo_inicial,
+  c.estoque_minimo,
   COALESCE(SUM(CASE WHEN m.tipo = 'entrada' THEN m.quantidade ELSE 0 END), 0) AS total_entrada,
   COALESCE(SUM(CASE WHEN m.tipo = 'saida'   THEN m.quantidade ELSE 0 END), 0) AS total_saida,
   c.saldo_inicial
@@ -74,7 +75,7 @@ SELECT
 FROM estoque_categorias c
 LEFT JOIN estoque_movimentacoes m ON m.categoria_id = c.id
 WHERE c.ativo = true
-GROUP BY c.id, c.nome, c.unidade, c.saldo_inicial
+GROUP BY c.id, c.nome, c.unidade, c.saldo_inicial, c.estoque_minimo
 ORDER BY c.nome;
 
 -- 5. View de evolução mensal

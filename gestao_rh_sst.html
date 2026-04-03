@@ -1054,6 +1054,26 @@ function popularSetores() {
   }
 }
 
+async function popularEmpresasFiliais() {
+  try {
+    EMPRESAS = await RH_API.get('rh_empresas?status=eq.ativa&order=razao_social') || [];
+  } catch { EMPRESAS = []; }
+  const selEmpresa = document.getElementById('funcEmpresa');
+  selEmpresa.innerHTML = '<option value="">Selecione</option>';
+  EMPRESAS.forEach(e => {
+    selEmpresa.innerHTML += `<option value="${e.id}">${e.nome_fantasia || e.razao_social}</option>`;
+  });
+  // Filiais
+  try {
+    const filiais = await RH_API.get('rh_filiais?status=eq.ativa&order=razao_social') || [];
+    const selFilial = document.getElementById('funcFilial');
+    selFilial.innerHTML = '<option value="">Selecione</option>';
+    filiais.forEach(f => {
+      selFilial.innerHTML += `<option value="${f.id}">${f.nome_fantasia || f.razao_social}</option>`;
+    });
+  } catch {}
+}
+
 // ══════════════════════════════════════════════════════════
 // RENDERIZAÇÃO DAS TABELAS
 // ══════════════════════════════════════════════════════════
@@ -1499,6 +1519,8 @@ function editarFunc(id) {
   document.getElementById('funcSalario').value = f.salario_base || '';
   document.getElementById('funcMatricula').value = f.matricula || '';
   document.getElementById('funcPis').value = f.pis_pasep || '';
+  document.getElementById('funcEmpresa').value = f.empresa_id || '';
+  document.getElementById('funcFilial').value = f.filial_id || '';
   document.getElementById('funcObs').value = f.observacoes || '';
   document.getElementById('modalFuncTitle').textContent = 'Editar Funcionário';
   abrirModal('modalFunc');
@@ -1523,6 +1545,8 @@ async function salvarFuncionario(e) {
     salario_base: parseFloat(document.getElementById('funcSalario').value) || null,
     matricula: document.getElementById('funcMatricula').value.trim() || null,
     pis_pasep: document.getElementById('funcPis').value.trim() || null,
+    empresa_id: document.getElementById('funcEmpresa').value || null,
+    filial_id: document.getElementById('funcFilial').value || null,
     observacoes: document.getElementById('funcObs').value.trim() || null,
     status: 'ativo',
   };
@@ -1889,7 +1913,16 @@ async function recarregar() {
 (async () => {
   const user = await RHAuth.init();
   if (!user) return;
+  await popularEmpresasFiliais();
   await recarregar();
+
+  // Suporte a ?tab= na URL (ex: ?tab=aso)
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab) {
+    const tabEl = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (tabEl) tabEl.click();
+  }
 })();
 </script>
 </body>

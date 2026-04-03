@@ -59,6 +59,41 @@ async function sbFetch(path, opts = {}) {
   return r.json();
 }
 
+// Fetch paginado para tabelas grandes (busca TODOS os registros)
+async function sbFetchAll(path, opts = {}) {
+  const pageSize = 1000;
+  let all = [], offset = 0, batch;
+  do {
+    const sep = path.includes('?') ? '&' : '?';
+    batch = await sbFetch(`${path}${sep}limit=${pageSize}&offset=${offset}`, opts);
+    all = all.concat(batch);
+    offset += pageSize;
+  } while (batch.length === pageSize);
+  return all;
+}
+
+// Normalizar campos numericos de movimentacao
+function normalizarMov(m) {
+  m.quantidade = Number(m.quantidade || 0);
+  m.valor_unitario = Number(m.valor_unitario || 0);
+  m.valor_total = Number(m.valor_total || 0);
+  m.icms = Number(m.icms || 0);
+  m.pis = Number(m.pis || 0);
+  m.cofins = Number(m.cofins || 0);
+  m.compra_liquida = Number(m.compra_liquida || 0);
+  // Validar valor_total: se muito diferente de qtd*unit, recalcular
+  if (m.quantidade > 0 && m.valor_unitario > 0) {
+    const esperado = m.quantidade * m.valor_unitario;
+    // Se valor_total difere mais de 100x do esperado, usar o recalculado
+    if (m.valor_total > esperado * 100 || m.valor_total < esperado / 100) {
+      console.warn('valor_total inconsistente, recalculando:', m.produto_xml, 'original:', m.valor_total, 'esperado:', esperado);
+      m.valor_total = esperado;
+      m.compra_liquida = esperado - m.icms - m.pis - m.cofins;
+    }
+  }
+  return m;
+}
+
 // ── Parser XML NFe ──────────────────────────────────────────────
 function parseNFeXML(xmlString) {
   const parser = new DOMParser();
@@ -631,7 +666,8 @@ async function carregarMovimentacoes(filtros = {}) {
   if (filtros.dataInicio) qs += `&data_emissao=gte.${filtros.dataInicio}`;
   if (filtros.dataFim) qs += `&data_emissao=lte.${filtros.dataFim}`;
   if (filtros.fornecedor) qs += `&fornecedor_cliente=ilike.*${filtros.fornecedor}*`;
-  return sbFetch(qs);
+  const movs = await sbFetchAll(qs);
+  return movs.map(normalizarMov);
 }
 
 async function carregarSaldos() {

@@ -244,6 +244,9 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 }
 .modal-title{font-family:'Syne',sans-serif;font-size:16px;font-weight:700;margin-bottom:16px}
 .modal-actions{display:flex;gap:12px;justify-content:flex-end;margin-top:20px}
+#modalRemapear{z-index:1010}
+tr.clickable-row{cursor:pointer;transition:background 0.15s}
+tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
 
 /* Responsive — Tablet */
 @media(max-width:1024px){
@@ -770,6 +773,49 @@ tr:hover td{background:rgba(200,169,110,0.03)}
   </div>
 </div>
 
+<!-- Modal Detalhe Categoria -->
+<div class="modal-overlay" id="modalDetalheCategoria">
+  <div class="modal" style="max-width:95vw;width:1100px;max-height:90vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="modal-title" style="margin-bottom:0" id="detCatTitulo">Categoria</div>
+      <button class="btn btn-sm" onclick="fecharModalDetalhe()" style="min-width:auto;padding:6px 14px">✕</button>
+    </div>
+    <div class="kpi-row" id="detCatKpis" style="margin-bottom:16px"></div>
+    <div style="overflow:auto;flex:1">
+      <table>
+        <thead>
+          <tr>
+            <th>Data</th><th>NF</th><th>Tipo</th>
+            <th>Fornecedor/Cliente</th><th>Produto XML</th>
+            <th style="text-align:right">Qtde</th>
+            <th style="text-align:right">Vlr Unit</th>
+            <th style="text-align:right">Vlr Total</th>
+            <th>Acao</th>
+          </tr>
+        </thead>
+        <tbody id="detCatBody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Remapear Movimentacao -->
+<div class="modal-overlay" id="modalRemapear">
+  <div class="modal" style="z-index:1010">
+    <div class="modal-title">Remapear Movimentacao</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:6px" id="remapProduto"></p>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px" id="remapInfo"></p>
+    <div class="filter-group" style="width:100%">
+      <span class="filter-label">Nova Categoria</span>
+      <select class="filter-select" id="remapCategoria" style="width:100%"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="fecharModalRemapear()">Cancelar</button>
+      <button class="btn btn-primary" onclick="confirmarRemapeamento()">Remapear</button>
+    </div>
+  </div>
+</div>
+
 <script src="config.js"></script>
 <script src="cq_auth.js"></script>
 <script src="estoque.js"></script>
@@ -781,6 +827,8 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 let allParsedNFs = [];
 let allParsedItens = [];
 let _currentMapItem = null;
+let _dashMovs = []; // movimentacoes carregadas no dashboard (para detalhe de categoria)
+let _remapMovId = null; // id da movimentacao sendo remapeada
 
 // ── Init ────────────────────────────────────────────────────────
 async function init() {
@@ -1113,6 +1161,95 @@ async function confirmarMapeamentoRapido() {
   }
 }
 
+// ── Detalhe Categoria (modal) ─────────────────────────────────────
+function abrirDetalheCategoria(catId, catNome, catUnidade) {
+  const movsCat = _dashMovs.filter(m => m.categoria_id === catId);
+
+  document.getElementById('detCatTitulo').textContent = `${catNome} (${catUnidade})`;
+
+  const ent = movsCat.filter(m => m.tipo === 'entrada');
+  const sai = movsCat.filter(m => m.tipo === 'saida');
+  const qtdEnt = ent.reduce((s,m) => s + Number(m.quantidade||0), 0);
+  const qtdSai = sai.reduce((s,m) => s + Number(m.quantidade||0), 0);
+  const vlrEnt = ent.reduce((s,m) => s + Number(m.valor_total||0), 0);
+  const vlrSai = sai.reduce((s,m) => s + Number(m.valor_total||0), 0);
+
+  document.getElementById('detCatKpis').innerHTML = `
+    <div class="kpi"><div class="kpi-value">${movsCat.length}</div><div class="kpi-label">Movimentacoes</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtNum(qtdEnt,0)}</div><div class="kpi-label">Qtd Entradas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtNum(qtdSai,0)}</div><div class="kpi-label">Qtd Saidas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrEnt)}</div><div class="kpi-label">Vlr Entradas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrSai)}</div><div class="kpi-label">Vlr Saidas</div></div>
+  `;
+
+  document.getElementById('detCatBody').innerHTML = movsCat.length ? movsCat.map(m => `<tr>
+    <td>${fmtData(m.data_emissao)}</td>
+    <td>${m.numero_nf}</td>
+    <td><span class="badge ${m.tipo==='entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
+    <td>${m.fornecedor_cliente || '—'}</td>
+    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(m.produto_xml||'').replace(/"/g,'&quot;')}">${m.produto_xml || '—'}</td>
+    <td class="td-num">${fmtNum(m.quantidade)}</td>
+    <td class="td-num">${fmtNum(m.valor_unitario)}</td>
+    <td class="td-num">${fmtNum(m.valor_total)}</td>
+    <td><button class="btn btn-sm" onclick="event.stopPropagation();abrirRemapear('${m.id}','${(m.produto_xml||'').replace(/'/g,"\\'")}','${m.numero_nf}','${fmtData(m.data_emissao)}')">Remapear</button></td>
+  </tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhuma movimentacao para esta categoria</td></tr>';
+
+  document.getElementById('modalDetalheCategoria').classList.add('show');
+}
+
+function fecharModalDetalhe() {
+  document.getElementById('modalDetalheCategoria').classList.remove('show');
+}
+
+function abrirRemapear(movId, produtoXml, nf, data) {
+  _remapMovId = movId;
+  document.getElementById('remapProduto').textContent = `Produto: ${produtoXml}`;
+  document.getElementById('remapInfo').textContent = `NF: ${nf} | Data: ${data}`;
+  const sel = document.getElementById('remapCategoria');
+  sel.innerHTML = _categorias.map(c => `<option value="${c.id}">${c.nome} (${c.unidade})</option>`).join('');
+  document.getElementById('modalRemapear').classList.add('show');
+}
+
+function fecharModalRemapear() {
+  document.getElementById('modalRemapear').classList.remove('show');
+  _remapMovId = null;
+}
+
+async function confirmarRemapeamento() {
+  if (!_remapMovId) return;
+  const novaCatId = document.getElementById('remapCategoria').value;
+  if (!novaCatId) { toast('Selecione uma categoria', 'warn'); return; }
+
+  try {
+    await sbFetch(`estoque_movimentacoes?id=eq.${_remapMovId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ categoria_id: novaCatId })
+    });
+
+    // Atualizar localmente
+    const mov = _dashMovs.find(m => m.id === _remapMovId);
+    if (mov) {
+      mov.categoria_id = novaCatId;
+      const cat = _categorias.find(c => c.id === novaCatId);
+      if (cat && mov.estoque_categorias) mov.estoque_categorias.nome = cat.nome;
+    }
+
+    fecharModalRemapear();
+    fecharModalDetalhe();
+    toast('Movimentacao remapeada! Atualizando...');
+
+    // Recarregar dashboard ou posicao
+    const dashActive = document.querySelector('#tab-dashboard.tab-content.active');
+    if (dashActive) {
+      await renderDashboard();
+    } else {
+      await calcularPosicao();
+    }
+  } catch(e) {
+    toast('Erro ao remapear: ' + e.message, 'error');
+  }
+}
+
 // ── Movimentacoes ───────────────────────────────────────────────
 async function filtrarMovimentacoes() {
   const filtros = {
@@ -1355,6 +1492,7 @@ async function renderDashboard() {
     } else { alertaDiv.style.display = 'none'; }
 
     // ── Tabela de saldos com CMP ──
+    _dashMovs = movs; // guardar para detalhe de categoria
     const body = document.getElementById('dashSaldoBody');
     const catMovs = {};
     movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
@@ -1367,7 +1505,7 @@ async function renderDashboard() {
       const vlrEnt = cms.filter(m=>m.tipo==='entrada').reduce((ac,m) => ac + Number(m.valor_total||0), 0);
       const vlrSai = cms.filter(m=>m.tipo==='saida').reduce((ac,m) => ac + Number(m.valor_total||0), 0);
       const vlrEstoque = sa * cmp;
-      return `<tr>
+      return `<tr class="clickable-row" onclick="abrirDetalheCategoria('${s.id}','${s.nome}','${s.unidade}')">
         <td>${s.nome}</td>
         <td class="td-center">${s.unidade}</td>
         <td class="td-num">${fmtNum(s.total_entrada,0)}</td>
@@ -1571,11 +1709,14 @@ async function calcularPosicao() {
 
     document.getElementById('posicaoResultado').style.display = 'block';
 
+    // Guardar movs para detalhe
+    _dashMovs = movs;
+
     // Agrupar por categoria + unidade
     const posicao = {};
     for (const c of cats) {
       posicao[c.id] = {
-        nome: c.nome, unidade: c.unidade,
+        catId: c.id, nome: c.nome, unidade: c.unidade,
         saldo_ini: Number(c.saldo_inicial || 0),
         entradas: 0, saidas: 0, vlr_ent: 0, vlr_sai: 0
       };
@@ -1608,7 +1749,7 @@ async function calcularPosicao() {
 
     const renderTabela = (items) => items.map(p => {
       const cls = p.saldo_final > 0 ? 'saldo-positivo' : p.saldo_final < 0 ? 'saldo-negativo' : 'saldo-zero';
-      return `<tr>
+      return `<tr class="clickable-row" onclick="abrirDetalheCategoria('${p.catId}','${p.nome.replace(/'/g,"\\'")}','${p.unidade}')">
         <td>${p.nome}</td><td class="td-center">${p.unidade}</td>
         <td class="td-num">${fmtNum(p.saldo_ini,2)}</td>
         <td class="td-num">${fmtNum(p.entradas,2)}</td>

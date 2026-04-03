@@ -683,13 +683,15 @@ async function atualizarEstoqueMinimo(categoriaId, valor) {
 function custoMedioPonderado(movs) {
   let qtdAcum = 0, custoAcum = 0;
   for (const m of movs.sort((a,b) => a.data_emissao.localeCompare(b.data_emissao))) {
-    if (m.tipo === 'entrada' && m.quantidade > 0) {
-      custoAcum += m.valor_total;
-      qtdAcum += m.quantidade;
+    const qty = Number(m.quantidade || 0);
+    const val = Number(m.valor_total || 0);
+    if (m.tipo === 'entrada' && qty > 0) {
+      custoAcum += val;
+      qtdAcum += qty;
     } else if (m.tipo === 'saida' && qtdAcum > 0) {
       const cmp = custoAcum / qtdAcum;
-      custoAcum -= cmp * Math.min(m.quantidade, qtdAcum);
-      qtdAcum = Math.max(0, qtdAcum - m.quantidade);
+      custoAcum -= cmp * Math.min(qty, qtdAcum);
+      qtdAcum = Math.max(0, qtdAcum - qty);
     }
   }
   return qtdAcum > 0 ? custoAcum / qtdAcum : 0;
@@ -720,7 +722,7 @@ async function exportarExcel() {
       'Qtde Saída', 'Vlr NF Venda', 'ICMS s/ Venda', 'Saldo ' + (cat.unidade || 'KG')];
 
     const rows = [row1, header];
-    let saldo = cat.saldo_inicial || 0;
+    let saldo = Number(cat.saldo_inicial || 0);
     rows.push(['', '', '', 'Saldo Anterior', saldo, '', '', '', '', '', '', '', '', '', '', '', saldo]);
 
     let tVlrE=0, tIcmsE=0, tPisE=0, tCofE=0, tLiqE=0, tVlrS=0, tIcmsS=0;
@@ -728,15 +730,15 @@ async function exportarExcel() {
     for (const m of catMovs) {
       const pisCof = (Number(m.pis||0) > 0 || Number(m.cofins||0) > 0) ? 'S' : 'N';
       if (m.tipo === 'entrada') {
-        saldo += m.quantidade;
-        tVlrE += m.valor_total; tIcmsE += m.icms; tPisE += m.pis; tCofE += m.cofins; tLiqE += m.compra_liquida;
+        saldo += Number(m.quantidade||0);
+        tVlrE += Number(m.valor_total||0); tIcmsE += Number(m.icms||0); tPisE += Number(m.pis||0); tCofE += Number(m.cofins||0); tLiqE += Number(m.compra_liquida||0);
         rows.push([m.data_emissao, m.numero_nf, 'COM', m.fornecedor_cliente,
           m.quantidade, m.quantidade, m.valor_unitario, m.valor_total,
           m.icms, pisCof, m.pis, m.cofins, m.compra_liquida,
           '', '', '', saldo]);
       } else {
-        saldo -= m.quantidade;
-        tVlrS += m.valor_total; tIcmsS += m.icms;
+        saldo -= Number(m.quantidade||0);
+        tVlrS += Number(m.valor_total||0); tIcmsS += Number(m.icms||0);
         rows.push([m.data_emissao, m.numero_nf, 'VEN', m.fornecedor_cliente,
           '', '', '', '', '', '', '', '', '',
           m.quantidade, m.valor_total, m.icms, saldo]);
@@ -808,15 +810,15 @@ async function carregarDashboardData() {
 
 // ── Formatters ──────────────────────────────────────────────────
 function fmtNum(v, dec = 2) {
-  return (v || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
 }
 
 function fmtBRL(v) {
-  return (v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 function fmtBRLCompacto(v) {
-  v = v || 0;
+  v = Number(v || 0);
   if (Math.abs(v) >= 1000000) return 'R$ ' + (v/1000000).toFixed(1).replace('.',',') + 'M';
   if (Math.abs(v) >= 1000) return 'R$ ' + (v/1000).toFixed(1).replace('.',',') + 'K';
   return 'R$ ' + v.toFixed(0);

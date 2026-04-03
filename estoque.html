@@ -842,6 +842,21 @@ let _dashMovs = []; // movimentacoes carregadas no dashboard (para detalhe de ca
 let _remapMovId = null; // id da movimentacao sendo remapeada
 
 // ── Init ────────────────────────────────────────────────────────
+
+// Interceptar retorno OAuth do OneDrive (antes de qualquer coisa)
+(function checkOneDriveReturn() {
+  const hash = window.location.hash;
+  if (hash && hash.includes('access_token=')) {
+    const params = new URLSearchParams(hash.substring(1));
+    const token = params.get('access_token');
+    if (token) {
+      sessionStorage.setItem('onedrive_token', token);
+      // Limpar hash da URL
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }
+})();
+
 async function init() {
   // Auth obrigatório — redireciona para login se não autenticado
   if (typeof CQAuth === 'undefined') {
@@ -864,6 +879,12 @@ async function init() {
   setupUpload();
   await Promise.all([carregarCategorias(), carregarMapeamentos()]);
   popularSelectsCategorias();
+
+  // Se voltou do login OneDrive, continuar importacao automaticamente
+  if (sessionStorage.getItem('onedrive_token') && sessionStorage.getItem('onedrive_pending')) {
+    toast('Login OneDrive OK! Selecione a pasta...', 'ok');
+    setTimeout(() => importarOneDrive(), 500);
+  }
 }
 
 // ── Tabs ────────────────────────────────────────────────────────
@@ -934,21 +955,32 @@ const ONEDRIVE_REDIRECT = window.location.origin + window.location.pathname;
 
 async function importarOneDrive() {
   if (!ONEDRIVE_CLIENT_ID) {
-    toast('OneDrive nao configurado. Configure ONEDRIVE_CLIENT_ID no config.js', 'error');
-    // Fallback: abrir seletor de pasta (funciona se OneDrive esta sincronizado)
-    toast('Use "Importar Pasta Local" e selecione a pasta do OneDrive no computador', 'warn');
+    toast('OneDrive nao configurado', 'error');
     return;
   }
+
+  // Verificar se ja temos token (voltou do redirect OAuth)
+  let token = sessionStorage.getItem('onedrive_token');
+
+  if (!token) {
+    // Salvar estado para retomar apos login
+    sessionStorage.setItem('onedrive_pending', 'true');
+    // Redirecionar para login Microsoft (funciona em mobile e desktop)
+    const scope = 'Files.Read.All';
+    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${ONEDRIVE_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(ONEDRIVE_REDIRECT)}&scope=${scope}&response_mode=fragment&prompt=select_account`;
+    window.location.href = url;
+    return;
+  }
+
+  // Limpar token usado
+  sessionStorage.removeItem('onedrive_token');
+  sessionStorage.removeItem('onedrive_pending');
 
   const btn = document.getElementById('btnOneDrive');
   btn.disabled = true;
   btn.innerHTML = '<span style="font-size:16px">&#9729;</span> Conectando...';
 
   try {
-    // Usar popup OAuth2 do Microsoft para obter token
-    const token = await obterTokenOneDrive();
-    if (!token) { toast('Login cancelado', 'warn'); return; }
-
     // Listar pasta raiz ou selecionar pasta
     const pasta = await selecionarPastaOneDrive(token);
     if (!pasta) { toast('Nenhuma pasta selecionada', 'warn'); return; }
@@ -979,31 +1011,6 @@ async function importarOneDrive() {
     btn.disabled = false;
     btn.innerHTML = '<span style="font-size:16px">&#9729;</span> Importar do OneDrive';
   }
-}
-
-function obterTokenOneDrive() {
-  return new Promise((resolve) => {
-    const scope = 'Files.Read.All';
-    const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?client_id=${ONEDRIVE_CLIENT_ID}&response_type=token&redirect_uri=${encodeURIComponent(ONEDRIVE_REDIRECT)}&scope=${scope}&response_mode=fragment`;
-
-    const w = 600, h = 700;
-    const left = (screen.width - w) / 2, top = (screen.height - h) / 2;
-    const popup = window.open(url, 'onedrive_login', `width=${w},height=${h},left=${left},top=${top}`);
-
-    const timer = setInterval(() => {
-      try {
-        if (!popup || popup.closed) { clearInterval(timer); resolve(null); return; }
-        const hash = popup.location.hash;
-        if (hash && hash.includes('access_token=')) {
-          clearInterval(timer);
-          const params = new URLSearchParams(hash.substring(1));
-          const token = params.get('access_token');
-          popup.close();
-          resolve(token);
-        }
-      } catch(e) { /* cross-origin, aguardar redirect */ }
-    }, 300);
-  });
 }
 
 async function selecionarPastaOneDrive(token) {

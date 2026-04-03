@@ -780,7 +780,8 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <div class="modal-title" style="margin-bottom:0" id="detCatTitulo">Categoria</div>
       <button class="btn btn-sm" onclick="fecharModalDetalhe()" style="min-width:auto;padding:6px 14px">✕</button>
     </div>
-    <div class="kpi-row" id="detCatKpis" style="margin-bottom:16px"></div>
+    <div class="kpi-row" id="detCatKpis" style="margin-bottom:12px"></div>
+    <div id="detCatSaldoIni"></div>
     <div style="overflow:auto;flex:1">
       <table>
         <thead>
@@ -1162,8 +1163,13 @@ async function confirmarMapeamentoRapido() {
 }
 
 // ── Detalhe Categoria (modal) ─────────────────────────────────────
+let _detCatId = null;
+
 function abrirDetalheCategoria(catId, catNome, catUnidade) {
+  _detCatId = catId;
   const movsCat = _dashMovs.filter(m => m.categoria_id === catId);
+  const cat = _categorias.find(c => c.id === catId);
+  const saldoIni = cat ? Number(cat.saldo_inicial || 0) : 0;
 
   document.getElementById('detCatTitulo').textContent = `${catNome} (${catUnidade})`;
 
@@ -1173,14 +1179,29 @@ function abrirDetalheCategoria(catId, catNome, catUnidade) {
   const qtdSai = sai.reduce((s,m) => s + Number(m.quantidade||0), 0);
   const vlrEnt = ent.reduce((s,m) => s + Number(m.valor_total||0), 0);
   const vlrSai = sai.reduce((s,m) => s + Number(m.valor_total||0), 0);
+  const saldoFinal = saldoIni + qtdEnt - qtdSai;
 
   document.getElementById('detCatKpis').innerHTML = `
-    <div class="kpi"><div class="kpi-value">${movsCat.length}</div><div class="kpi-label">Movimentacoes</div></div>
-    <div class="kpi"><div class="kpi-value">${fmtNum(qtdEnt,0)}</div><div class="kpi-label">Qtd Entradas</div></div>
-    <div class="kpi"><div class="kpi-value">${fmtNum(qtdSai,0)}</div><div class="kpi-label">Qtd Saidas</div></div>
-    <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrEnt)}</div><div class="kpi-label">Vlr Entradas</div></div>
-    <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrSai)}</div><div class="kpi-label">Vlr Saidas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtNum(saldoIni,0)}</div><div class="kpi-label">Saldo Inicial</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtNum(qtdEnt,0)}</div><div class="kpi-label">Entradas</div></div>
+    <div class="kpi"><div class="kpi-value">${fmtNum(qtdSai,0)}</div><div class="kpi-label">Saidas</div></div>
+    <div class="kpi"><div class="kpi-value" style="color:${saldoFinal>=0?'var(--ok)':'var(--err)'}">${fmtNum(saldoFinal,0)}</div><div class="kpi-label">Saldo Final</div></div>
+    <div class="kpi"><div class="kpi-value">${movsCat.length}</div><div class="kpi-label">NF-es</div></div>
   `;
+
+  // Saldo inicial info + edit
+  const saldoIniHtml = `<div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+    <div style="font-size:12px;color:var(--muted)">
+      <strong style="color:var(--fg)">Saldo Inicial:</strong> ${fmtNum(saldoIni,2)} ${catUnidade}
+      ${saldoIni > 0 && movsCat.length === 0 ? '<span style="color:var(--warn);margin-left:8px">← Todo o saldo vem do inventario inicial (sem NF-es)</span>' : ''}
+    </div>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="number" id="detSaldoIniInput" value="${saldoIni}" step="0.01" style="background:var(--bg);border:1px solid var(--border);color:var(--fg);padding:6px 10px;border-radius:2px;width:120px;font-size:12px;font-family:'DM Mono',monospace">
+      <button class="btn btn-sm btn-primary" onclick="salvarSaldoInicial()">Salvar</button>
+    </div>
+  </div>`;
+
+  document.getElementById('detCatSaldoIni').innerHTML = saldoIniHtml;
 
   document.getElementById('detCatBody').innerHTML = movsCat.length ? movsCat.map(m => `<tr>
     <td>${fmtData(m.data_emissao)}</td>
@@ -1192,9 +1213,28 @@ function abrirDetalheCategoria(catId, catNome, catUnidade) {
     <td class="td-num">${fmtNum(m.valor_unitario)}</td>
     <td class="td-num">${fmtNum(m.valor_total)}</td>
     <td><button class="btn btn-sm" onclick="event.stopPropagation();abrirRemapear('${m.id}','${(m.produto_xml||'').replace(/'/g,"\\'")}','${m.numero_nf}','${fmtData(m.data_emissao)}')">Remapear</button></td>
-  </tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhuma movimentacao para esta categoria</td></tr>';
+  </tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhuma movimentacao de NF-e para esta categoria</td></tr>';
 
   document.getElementById('modalDetalheCategoria').classList.add('show');
+}
+
+async function salvarSaldoInicial() {
+  if (!_detCatId) return;
+  const val = Number(document.getElementById('detSaldoIniInput').value || 0);
+  try {
+    await atualizarCategoria(_detCatId, { saldo_inicial: val });
+    // Atualizar localmente
+    const cat = _categorias.find(c => c.id === _detCatId);
+    if (cat) cat.saldo_inicial = val;
+    fecharModalDetalhe();
+    toast('Saldo inicial atualizado!');
+    // Recarregar
+    const dashActive = document.querySelector('#tab-dashboard.tab-content.active');
+    if (dashActive) await renderDashboard();
+    else await calcularPosicao();
+  } catch(e) {
+    toast('Erro: ' + e.message, 'error');
+  }
 }
 
 function fecharModalDetalhe() {

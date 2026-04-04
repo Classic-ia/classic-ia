@@ -439,6 +439,24 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <span class="filter-label">Fornecedor</span>
       <input type="text" class="filter-input" id="filtFornecedor" placeholder="Buscar...">
     </div>
+    <div class="filter-group">
+      <span class="filter-label">CFOP</span>
+      <input type="text" class="filter-input" id="filtCfop" placeholder="Ex: 5101" style="width:80px">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Operacao</span>
+      <select class="filter-select" id="filtOperacao">
+        <option value="">Todas</option>
+        <option value="devolucao">Devoluções</option>
+        <option value="exportacao">Exportações (CFOP 7xxx)</option>
+        <option value="transferencia">Transferências</option>
+        <option value="normal">Normais (sem devol/transf)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">NF / Produto</span>
+      <input type="text" class="filter-input" id="filtBusca" placeholder="Buscar NF ou produto...">
+    </div>
     <div class="filter-group" style="align-self:flex-end">
       <button class="btn" onclick="filtrarMovimentacoes()">Filtrar</button>
     </div>
@@ -453,8 +471,8 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
     <table>
       <thead>
         <tr>
-          <th>Data</th><th>NF</th><th>Tipo</th><th>Fornec./Cliente</th>
-          <th>Categoria</th><th>Produto</th><th style="text-align:right">Qtde</th>
+          <th>Data</th><th>NF</th><th>CFOP</th><th>Tipo</th><th>Fornec./Cliente</th>
+          <th>Categoria</th><th>Produto</th><th>Nat. Operacao</th><th style="text-align:right">Qtde</th>
           <th style="text-align:right">Vlr Unit</th><th style="text-align:right">Vlr Total</th>
           <th style="text-align:right">ICMS</th><th style="text-align:right">PIS</th>
           <th style="text-align:right">COFINS</th><th style="text-align:right">Liq.</th>
@@ -1790,7 +1808,45 @@ async function filtrarMovimentacoes() {
   };
 
   try {
-    const movs = await carregarMovimentacoes(filtros);
+    let movs = await carregarMovimentacoes(filtros);
+
+    // Filtro CFOP
+    const cfopFiltro = (document.getElementById('filtCfop')?.value || '').trim();
+    if (cfopFiltro) movs = movs.filter(m => (m.cfop || '').startsWith(cfopFiltro));
+
+    // Filtro Operação
+    const opFiltro = document.getElementById('filtOperacao')?.value || '';
+    if (opFiltro === 'devolucao') {
+      movs = movs.filter(m => {
+        const nat = (m.nat_operacao || '').toUpperCase();
+        return nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+      });
+    } else if (opFiltro === 'exportacao') {
+      movs = movs.filter(m => (m.cfop || '').startsWith('7'));
+    } else if (opFiltro === 'transferencia') {
+      const cfopsTransf = ['5151','5152','6151','6152','1151','1152','5901','5902','6901','6902'];
+      movs = movs.filter(m => cfopsTransf.includes(m.cfop));
+    } else if (opFiltro === 'normal') {
+      const cfopsTransf = ['5151','5152','6151','6152','1151','1152','5901','5902','6901','6902'];
+      movs = movs.filter(m => {
+        const nat = (m.nat_operacao || '').toUpperCase();
+        const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+        const isTransf = cfopsTransf.includes(m.cfop);
+        const isExp = (m.cfop || '').startsWith('7');
+        return !isDev && !isTransf && !isExp;
+      });
+    }
+
+    // Filtro busca (NF ou produto)
+    const busca = (document.getElementById('filtBusca')?.value || '').toUpperCase().trim();
+    if (busca) {
+      movs = movs.filter(m =>
+        (m.numero_nf || '').includes(busca) ||
+        (m.produto_xml || '').toUpperCase().includes(busca) ||
+        (m.chave_nfe || '').includes(busca)
+      );
+    }
+
     renderMovimentacoes(movs);
   } catch(e) {
     toast('Erro ao carregar: ' + e.message, 'error');
@@ -1810,24 +1866,40 @@ function renderMovimentacoes(movs) {
   }
   empty.style.display = 'none';
 
-  // KPIs
+  // Classificar
   const ent = movs.filter(m => m.tipo === 'entrada');
   const sai = movs.filter(m => m.tipo === 'saida');
+  const devs = movs.filter(m => { const n=(m.nat_operacao||'').toUpperCase(); return n.includes('DEVOLUC')||n.includes('DEVOLUÇ'); });
+  const exps = movs.filter(m => (m.cfop||'').startsWith('7'));
+
   totais.innerHTML = `
     <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Registros</div></div>
     <div class="kpi"><div class="kpi-value">${ent.length}</div><div class="kpi-label">Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${sai.length}</div><div class="kpi-label">Saidas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(ent.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(sai.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Saidas</div></div>
+    ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
+    ${exps.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--ok)">${exps.length}</div><div class="kpi-label">Exportações</div></div>` : ''}
   `;
 
-  body.innerHTML = movs.map(m => `<tr>
+  body.innerHTML = movs.map(m => {
+    const nat = (m.nat_operacao||'').toUpperCase();
+    const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+    const isExp = (m.cfop||'').startsWith('7');
+    const rowStyle = isDev ? 'background:rgba(234,179,8,0.06)' : isExp ? 'background:rgba(34,197,94,0.06)' : '';
+    let tipoBadge = `<span class="badge ${m.tipo==='entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span>`;
+    if (isDev) tipoBadge += ' <span style="font-size:9px;color:var(--warn);font-weight:bold">DEV</span>';
+    if (isExp) tipoBadge += ' <span style="font-size:9px;color:var(--ok);font-weight:bold">EXP</span>';
+
+    return `<tr style="${rowStyle}">
     <td>${fmtData(m.data_emissao)}</td>
     <td>${m.numero_nf}</td>
-    <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${m.tipo}</span></td>
-    <td>${m.fornecedor_cliente}</td>
-    <td>${m.estoque_categorias?.nome || '—'}</td>
-    <td>${m.produto_xml}</td>
+    <td style="font-size:11px">${m.cfop||'—'}</td>
+    <td>${tipoBadge}</td>
+    <td style="font-size:11px">${(m.fornecedor_cliente||'').substring(0,35)}</td>
+    <td style="font-size:11px">${m.estoque_categorias?.nome || '—'}</td>
+    <td style="font-size:11px">${(m.produto_xml||'').substring(0,40)}</td>
+    <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao||'—').substring(0,25)}</td>
     <td class="td-num">${fmtNum(m.quantidade)}</td>
     <td class="td-num">${fmtNum(m.valor_unitario)}</td>
     <td class="td-num">${fmtNum(m.valor_total)}</td>
@@ -1835,7 +1907,8 @@ function renderMovimentacoes(movs) {
     <td class="td-num">${fmtNum(m.pis)}</td>
     <td class="td-num">${fmtNum(m.cofins)}</td>
     <td class="td-num">${fmtNum(m.compra_liquida)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 // ── Mapeamento ──────────────────────────────────────────────────

@@ -1276,3 +1276,213 @@ function fmtData(d) {
   const [y, m, dd] = d.split('-');
   return `${dd}/${m}/${y}`;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// BUSCA AUTOMÁTICA SEFAZ — Distribuição DFe
+// ═══════════════════════════════════════════════════════════════
+
+function _sefazLog(msg) {
+  const el = document.getElementById('sefazLog');
+  if (el) {
+    const ts = new Date().toLocaleTimeString('pt-BR');
+    el.innerHTML += `<div>[${ts}] ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+function _getSefazLastNSU(cnpj) {
+  try { return localStorage.getItem('cq_sefaz_nsu_' + cnpj) || '0'; } catch { return '0'; }
+}
+
+function _setSefazLastNSU(cnpj, nsu) {
+  try { localStorage.setItem('cq_sefaz_nsu_' + cnpj, nsu); } catch {}
+}
+
+function buscarNotasSefaz() {
+  const el = document.getElementById('sefazStatus');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function executarBuscaSefaz(resetNSU) {
+  const sel = document.getElementById('sefazCnpj').value;
+  const [cnpj, uf] = sel.split('|');
+  const btn = document.getElementById('btnExecSefaz');
+  const spinner = document.getElementById('sefazSpinner');
+  const progress = document.getElementById('sefazProgress');
+  const result = document.getElementById('sefazResult');
+  const log = document.getElementById('sefazLog');
+
+  // Reset UI
+  log.innerHTML = '';
+  result.style.display = 'none';
+  result.innerHTML = '';
+  progress.style.display = 'block';
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+
+  let ultimoNSU = resetNSU ? '0' : _getSefazLastNSU(cnpj);
+  _sefazLog(`Iniciando busca para CNPJ ${cnpj} / UF ${uf}`);
+  _sefazLog(`Último NSU processado: ${ultimoNSU}`);
+
+  const headers = sbHeaders();
+  let totalDocs = 0;
+  let totalImportados = 0;
+  let totalErros = 0;
+  let rodadas = 0;
+  const maxRodadas = 100; // Safety: max 5000 notas (100 * 50)
+
+  try {
+    while (rodadas < maxRodadas) {
+      rodadas++;
+      _sefazLog(`Rodada ${rodadas}: buscando a partir do NSU ${ultimoNSU}...`);
+
+      document.getElementById('sefazProgressTxt').textContent = `Buscando rodada ${rodadas}...`;
+      document.getElementById('sefazProgressNum').textContent = `${totalDocs} notas encontradas`;
+
+      const r = await fetch(`${SB_URL}/functions/v1/distribuicao-nfe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': headers.Authorization,
+          'apikey': SB_KEY
+        },
+        body: JSON.stringify({ cnpj, uf, ultimo_nsu: ultimoNSU })
+      });
+
+      const data = await r.json();
+
+      if (!r.ok) {
+        if (data.instrucoes) {
+          _sefazLog('⚠ Certificado digital não configurado no Supabase.');
+          _sefazLog('Siga as instruções em supabase/SETUP_SEFAZ.md');
+          result.style.display = 'block';
+          result.innerHTML = `
+            <div style="padding:12px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:6px;color:var(--warn)">
+              <strong>Certificado digital não configurado</strong>
+              <p style="font-size:12px;margin-top:6px">Para buscar notas direto na SEFAZ, configure o certificado A1:</p>
+              <ol style="font-size:11px;margin:8px 0 0 16px;line-height:1.8">
+                ${data.instrucoes.map(i => `<li>${i}</li>`).join('')}
+              </ol>
+            </div>`;
+          break;
+        }
+        _sefazLog(`ERRO: ${data.error || 'Erro desconhecido'}`);
+        totalErros++;
+        break;
+      }
+
+      _sefazLog(`SEFAZ retornou: ${data.motivo} (código ${data.status_codigo})`);
+
+      // Status 137 = nenhum documento localizado, 138 = fim dos documentos
+      if (data.status_codigo === '137' || data.status_codigo === '138') {
+        _sefazLog('Nenhum documento novo encontrado.');
+        break;
+      }
+
+      if (!data.documentos || !data.documentos.length) {
+        _sefazLog('Sem documentos na resposta. Fim da busca.');
+        break;
+      }
+
+      totalDocs += data.documentos.length;
+      _sefazLog(`Recebidos ${data.documentos.length} documentos (total: ${totalDocs})`);
+
+      // Processar cada XML recebido
+      const itensParaImportar = [];
+      for (const doc of data.documentos) {
+        if (!doc.xml) {
+          _sefazLog(`NSU ${doc.nsu}: falha ao descompactar`);
+          totalErros++;
+          continue;
+        }
+
+        // Verificar se é NFe (schema contém 'procNFe' ou 'resNFe')
+        if (doc.schema.includes('resNFe') || doc.schema.includes('resEvento')) {
+          // Resumo de NFe ou evento — não é XML completo
+          // Extrair chave para log
+          const chaveMatch = doc.xml.match(/<chNFe>(\d{44})<\/chNFe>/);
+          if (chaveMatch) {
+            _sefazLog(`NSU ${doc.nsu}: resumo NFe ${chaveMatch[1].substring(25, 34)}`);
+          }
+          continue;
+        }
+
+        if (doc.schema.includes('procNFe') || doc.xml.includes('<nfeProc') || doc.xml.includes('<NFe')) {
+          try {
+            const nf = parseNFeXML(doc.xml);
+            if (nf && nf.itens.length > 0) {
+              // Resolver categorias
+              for (const item of nf.itens) {
+                if (!item.categoria_id) {
+                  const cat = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+                  if (cat) { item.categoria_id = cat; item._mapped = true; }
+                }
+              }
+              itensParaImportar.push(...nf.itens);
+              _sefazLog(`NSU ${doc.nsu}: NF ${nf.numero_nf} — ${nf.itens.length} itens`);
+            }
+          } catch (e) {
+            _sefazLog(`NSU ${doc.nsu}: erro ao parsear — ${e.message}`);
+            totalErros++;
+          }
+        }
+      }
+
+      // Importar itens no banco
+      if (itensParaImportar.length > 0) {
+        try {
+          const importados = await importarItens(itensParaImportar);
+          totalImportados += itensParaImportar.length;
+          _sefazLog(`Importados ${itensParaImportar.length} itens no banco.`);
+        } catch(e) {
+          _sefazLog(`Erro ao importar: ${e.message}`);
+          totalErros++;
+        }
+      }
+
+      // Atualizar NSU
+      ultimoNSU = data.ultimo_nsu;
+      _setSefazLastNSU(cnpj, ultimoNSU);
+
+      // Atualizar progress bar
+      const maxNSU = parseInt(data.max_nsu) || 1;
+      const pct = Math.min(100, Math.round((parseInt(ultimoNSU) / maxNSU) * 100));
+      document.getElementById('sefazProgressBar').style.width = pct + '%';
+
+      // Se último NSU >= max NSU, acabou
+      if (data.ultimo_nsu === data.max_nsu || parseInt(data.ultimo_nsu) >= parseInt(data.max_nsu)) {
+        _sefazLog('Todos os documentos foram processados.');
+        break;
+      }
+
+      // Pausa entre rodadas (SEFAZ rate limit)
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    // Resultado final
+    document.getElementById('sefazProgressBar').style.width = '100%';
+    document.getElementById('sefazProgressTxt').textContent = 'Concluído!';
+    document.getElementById('sefazProgressNum').textContent = `${totalDocs} documentos processados`;
+
+    const okColor = totalImportados > 0 ? 'var(--ok)' : 'var(--muted)';
+    result.style.display = 'block';
+    result.innerHTML = `
+      <div class="kpi-row" style="margin-top:8px">
+        <div class="kpi"><div class="kpi-value">${totalDocs}</div><div class="kpi-label">Documentos</div></div>
+        <div class="kpi"><div class="kpi-value" style="color:${okColor}">${totalImportados}</div><div class="kpi-label">Itens Importados</div></div>
+        ${totalErros ? `<div class="kpi"><div class="kpi-value" style="color:var(--err)">${totalErros}</div><div class="kpi-label">Erros</div></div>` : ''}
+      </div>
+      ${totalImportados > 0 ? '<div style="font-size:12px;color:var(--ok);margin-top:8px">✓ Notas importadas com sucesso! Verifique na aba Movimentações.</div>' : ''}`;
+
+    _sefazLog(`Finalizado. Docs: ${totalDocs}, Importados: ${totalImportados}, Erros: ${totalErros}`);
+    _sefazLog(`Último NSU salvo: ${ultimoNSU}`);
+
+  } catch(e) {
+    _sefazLog(`ERRO GERAL: ${e.message}`);
+    result.style.display = 'block';
+    result.innerHTML = `<div style="padding:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;color:var(--err);font-size:12px">Erro: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
+}

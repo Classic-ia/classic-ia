@@ -3,580 +3,405 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Classic Couros — Painel</title>
-<link rel="icon" type="image/jpeg" href="assets/logo-classic-icon.png.jpg">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<title>Classic RH &amp; SST &amp; SST - Painel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
 <style>
-  :root {
-    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
-    --accent: #c8a96e; --accent2: #e8c98e; --text: #f0ede8; --muted: #888;
-  }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
-  .bg-pattern {
-    position:fixed; inset:0; z-index:0;
-    background-image:
-      repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
-      repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
-  }
-  header {
-    position:sticky; top:0; z-index:100;
-    background:var(--surface); border-bottom:1px solid var(--border);
-    padding:16px 32px; display:flex; align-items:center; justify-content:space-between;
-  }
-  .logo { display:flex; align-items:center; gap:12px; }
-  .logo-icon {
-    width:36px; height:36px;
-    background:linear-gradient(135deg,var(--accent),var(--accent2));
-    border-radius:2px; display:flex; align-items:center; justify-content:center; font-size:16px;
-  }
-  .logo-text { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; letter-spacing:0.05em; }
-  .logo-text span { color:var(--accent); }
-  .header-right { display:flex; align-items:center; gap:16px; }
-  #headerUser { font-size:12px; color:var(--muted); }
-  .btn-sair {
-    background:transparent; border:1px solid var(--border); border-radius:2px;
-    color:var(--muted); font-size:11px; padding:6px 14px; cursor:pointer;
-    letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s;
-  }
-  .btn-sair:hover { border-color:var(--accent); color:var(--accent); }
+:root {
+  --bg: #07111c; --surface: #0d1b2a; --surface2: #112233;
+  --border: #1e3a52; --accent: #c8a96e; --accent2: #e8c98e;
+  --text: #e8f0f5; --muted: #5d7f95;
+  --ok: #27ae60; --warn: #f39c12; --err: #e74c3c; --info: #2E6B8A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
 
-  main { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:48px 24px; }
-  .welcome {
-    margin-bottom:48px;
-    padding-bottom:32px;
-    border-bottom:1px solid var(--border);
-  }
-  .welcome-tag { font-size:11px; letter-spacing:0.18em; text-transform:uppercase; color:var(--accent); margin-bottom:12px; }
-  .welcome-title { font-family:'Syne',sans-serif; font-size:32px; font-weight:800; line-height:1.1; }
-  .welcome-title span { color:var(--accent); }
-  .welcome-sub { font-size:14px; color:var(--muted); margin-top:8px; }
+/* Grid background */
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(46,107,138,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(46,107,138,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
 
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:16px; }
-  .card {
-    background:var(--surface); border:1px solid var(--border); border-radius:2px;
-    padding:28px; cursor:pointer; text-decoration:none; color:var(--text);
-    display:block; transition:border-color 0.2s,transform 0.15s;
-    animation:fadeIn 0.4s ease both;
-  }
-  .card:hover { border-color:var(--accent); transform:translateY(-2px); }
-  @keyframes fadeIn { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:none} }
-  .card:nth-child(1){animation-delay:0.05s}
-  .card:nth-child(2){animation-delay:0.10s}
-  .card:nth-child(3){animation-delay:0.15s}
-  .card:nth-child(4){animation-delay:0.20s}
-  .card:nth-child(5){animation-delay:0.25s}
-  .card-icon { font-size:28px; margin-bottom:16px; }
-  .card-title { font-family:'Syne',sans-serif; font-size:15px; font-weight:700; letter-spacing:0.05em; margin-bottom:6px; }
-  .card-desc { font-size:12px; color:var(--muted); line-height:1.5; }
-  .card-badge {
-    display:inline-block; margin-top:14px;
-    font-size:10px; letter-spacing:0.12em; text-transform:uppercase;
-    color:var(--accent); border:1px solid rgba(200,169,110,0.3); border-radius:2px; padding:3px 8px;
-  }
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
 
-  .hidden { display:none !important; }
+/* Main */
+.main { max-width: 900px; margin: 0 auto; padding: 30px 20px; }
 
-  /* ── KPI Strip ─────────────────────────────────── */
-  .kpi-strip {
-    position:relative; z-index:1;
-    display:flex; gap:0; justify-content:center;
-    background:var(--surface); border-bottom:2px solid var(--accent);
-    padding:0;
-  }
-  .kpi-box {
-    flex:1; max-width:280px;
-    padding:14px 24px;
-    text-align:center;
-    border-right:1px solid var(--border);
-  }
-  .kpi-box:last-child { border-right:none; }
-  .kpi-box.clickable { cursor:pointer; transition: background 0.2s; }
-  .kpi-box.clickable:hover { background: rgba(200,169,110,0.08); }
-  .kpi-value {
-    font-family:'Syne',sans-serif; font-size:22px; font-weight:800;
-    color:var(--accent); line-height:1;
-    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-  }
-  .kpi-label {
-    font-size:10px; letter-spacing:0.14em; text-transform:uppercase;
-    color:var(--muted); margin-top:4px;
-  }
+/* KPI Row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px; margin-bottom: 30px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 16px; text-align: center;
+  cursor: pointer; transition: all .25s;
+}
+.kpi-card:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 28px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
 
-  /* ── Section Titles ────────────────────────────── */
-  .section-block { margin-bottom:48px; }
-  .section-title {
-    font-family:'Syne',sans-serif;
-    font-size:11px; font-weight:700;
-    letter-spacing:0.22em; text-transform:uppercase;
-    color:var(--accent);
-    margin-bottom:16px;
-    padding-bottom:10px;
-    border-bottom:1px solid var(--border);
-    display:flex; align-items:center; gap:10px;
-  }
-  .section-title::before {
-    content:'';
-    width:3px; height:14px;
-    background:var(--accent);
-    border-radius:1px;
-    display:inline-block;
-  }
+/* Section */
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 14px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px; padding-left: 4px;
+}
 
-  /* ── Large Cards (Operations) ──────────────────── */
-  .grid-ops {
-    display:grid;
-    grid-template-columns:repeat(auto-fill, minmax(400px, 1fr));
-    gap:16px;
-  }
-  .card-ops {
-    background:var(--surface);
-    border:1px solid var(--border);
-    border-left:3px solid var(--accent);
-    border-radius:2px;
-    padding:32px 28px;
-    min-height:160px;
-    cursor:pointer; text-decoration:none; color:var(--text);
-    display:block;
-    transition:border-color 0.2s, transform 0.15s, box-shadow 0.2s;
-    animation:fadeIn 0.4s ease both;
-  }
-  .card-ops:hover {
-    border-color:var(--accent);
-    transform:translateY(-2px);
-    box-shadow:0 4px 20px rgba(200,169,110,0.08);
-  }
-  .card-ops .card-icon { font-size:32px; margin-bottom:14px; }
-  .card-ops .card-title { font-size:16px; margin-bottom:8px; }
-  .card-ops .card-desc { font-size:13px; line-height:1.6; }
+/* Menu Grid */
+.menu-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px; margin-bottom: 36px;
+}
+.menu-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px 18px;
+  cursor: pointer; transition: all .25s; text-decoration: none;
+  display: flex; align-items: flex-start; gap: 14px;
+}
+.menu-card:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.menu-icon {
+  width: 42px; height: 42px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px; flex-shrink: 0;
+}
+.menu-icon.green  { background: rgba(39,174,96,.12); }
+.menu-icon.blue   { background: rgba(46,107,138,.15); }
+.menu-icon.orange { background: rgba(243,156,18,.12); }
+.menu-icon.purple { background: rgba(142,68,173,.12); }
+.menu-icon.red    { background: rgba(231,76,60,.12); }
+.menu-icon.gold   { background: rgba(200,169,110,.12); }
+.menu-info { flex: 1; }
+.menu-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 14px; color: var(--text); margin-bottom: 4px;
+}
+.menu-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.menu-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em; margin-top: 6px;
+}
+.badge-new { background: rgba(39,174,96,.15); color: #27ae60; }
 
-  /* ── 3-column grid ─────────────────────────────── */
-  .grid-3 {
-    display:grid;
-    grid-template-columns:repeat(3, 1fr);
-    gap:16px;
-  }
-
-  /* ── Admin Cards (dimmed) ──────────────────────── */
-  .card-admin {
-    opacity:0.7;
-    transition:opacity 0.2s, border-color 0.2s, transform 0.15s;
-  }
-  .card-admin:hover {
-    opacity:1;
-    border-color:var(--accent);
-    transform:translateY(-2px);
-  }
-
-  /* ── Responsive ────────────────────────────────── */
-  @media (max-width:768px) {
-    .grid-ops { grid-template-columns:1fr; }
-    .grid-3   { grid-template-columns:1fr; }
-    .kpi-strip { flex-direction:column; }
-    .kpi-box { border-right:none; border-bottom:1px solid var(--border); }
-    .kpi-box:last-child { border-bottom:none; }
-    header { padding:12px 16px; }
-    main { padding:32px 16px; }
-  }
-  @media (min-width:769px) and (max-width:1024px) {
-    .grid-3 { grid-template-columns:repeat(2, 1fr); }
-  }
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
 </style>
 </head>
 <body>
-<div class="bg-pattern"></div>
 
-<header>
-  <div class="logo">
-    <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:36px;height:36px;object-fit:contain;border-radius:2px;" onerror="this.style.display='none'">
-    <div class="logo-text">CLASSIC <span>BI</span></div>
+<div class="header">
+  <div class="header-left">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros" style="height:42px;width:auto;border-radius:8px;object-fit:contain;">
+    <div>
+      <div class="header-title">Classic RH &amp; SST</div>
+      <div class="header-sub">Gestao de RH e Seguranca do Trabalho</div>
+    </div>
   </div>
-  <div class="header-right">
-    <span id="headerUser"></span>
-    <button class="btn-sair" onclick="CQAuth.logout()">Sair</button>
-  </div>
-</header>
-
-<!-- KPI Strip (CQ) -->
-<div class="kpi-strip" id="kpiStripCQ">
-  <div class="kpi-box clickable" onclick="window.location.href='dashboard_cq.html'" title="Ver dashboard de cargas">
-    <div class="kpi-value" id="kpiCargas">&mdash;</div>
-    <div class="kpi-label">Cargas hoje ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='dashboard_cq.html'" title="Ver inspeções">
-    <div class="kpi-value" id="kpiInspecoes">&mdash;</div>
-    <div class="kpi-label">Inspeções pendentes ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='dashboard_cq.html?filtro=criticos'" title="Ver fornecedores críticos">
-    <div class="kpi-value" id="kpiFornCriticos">&mdash;</div>
-    <div class="kpi-label">Fornecedores críticos ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='historico_importacoes.html'" title="Ver histórico de importações">
-    <div class="kpi-value" id="kpiUltimaImport">&mdash;</div>
-    <div class="kpi-label">Última importação ›</div>
-  </div>
-</div>
-<!-- KPI Strip (Estoque) -->
-<div class="kpi-strip" id="kpiStripEstoque" style="display:none">
-  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
-    <div class="kpi-value" id="kpiEstEntrada">&mdash;</div>
-    <div class="kpi-label">Total Entradas (R$) ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
-    <div class="kpi-value" id="kpiEstSaida">&mdash;</div>
-    <div class="kpi-label">Total Saídas (R$) ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
-    <div class="kpi-value" id="kpiEstSaldo">&mdash;</div>
-    <div class="kpi-label">Saldo Estoque (Qtde) ›</div>
-  </div>
-  <div class="kpi-box clickable" onclick="window.location.href='estoque.html'">
-    <div class="kpi-value" id="kpiEstNFs">&mdash;</div>
-    <div class="kpi-label">NFs Processadas ›</div>
-  </div>
+  <div id="rh-user-chip"></div>
 </div>
 
-<main>
-  <div class="welcome">
-    <div class="welcome-tag">Classic Importação e Exportação de Couros</div>
-    <div class="welcome-title">Controle de <span>Qualidade</span></div>
-    <div class="welcome-sub" id="welcomeSub">Carregando...</div>
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpis">
+    <a class="kpi-card" href="colaboradores.html" style="text-decoration:none;color:inherit;">
+      <div class="kpi-value" id="kpi-ativos">--</div>
+      <div class="kpi-label">Colaboradores Ativos</div>
+    </a>
+    <a class="kpi-card" href="beneficios.html" style="text-decoration:none;color:inherit;">
+      <div class="kpi-value" id="kpi-va">--</div>
+      <div class="kpi-label">Recebem VA</div>
+    </a>
+    <a class="kpi-card" href="beneficios.html" style="text-decoration:none;color:inherit;">
+      <div class="kpi-value" id="kpi-desloc">--</div>
+      <div class="kpi-label">Auxilio Deslocamento</div>
+    </a>
+    <a class="kpi-card" href="beneficios.html" style="text-decoration:none;color:inherit;">
+      <div class="kpi-value" id="kpi-alianca">--</div>
+      <div class="kpi-label">Plano Alianca</div>
+    </a>
   </div>
 
-  <!-- Sections injected by JS -->
-  <div id="sectionsContainer"></div>
-</main>
+  <!-- Alerta -->
+  <a class="menu-card" href="alertas_rh.html" style="margin-bottom:24px;border-color:#b87a28;">
+    <div class="menu-icon orange" style="width:48px;height:48px;font-size:24px;">&#9888;</div>
+    <div class="menu-info">
+      <div class="menu-title" style="font-size:16px;">Central de Alertas</div>
+      <div class="menu-desc">Contratos experiencia, ASOs, treinamentos vencendo, ferias — tudo que precisa de atencao HOJE</div>
+      <span class="menu-badge badge-new">Verificar</span>
+    </div>
+  </a>
 
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+  <!-- Cadastros -->
+  <div class="section-title">Cadastros</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="colaboradores.html">
+      <div class="menu-icon blue">&#128101;</div>
+      <div class="menu-info">
+        <div class="menu-title">Colaboradores</div>
+        <div class="menu-desc">Cadastro, importacao eSocial, dados pessoais e contratuais</div>
+      </div>
+    </a>
+    <a class="menu-card" href="beneficios.html">
+      <div class="menu-icon green">&#127873;</div>
+      <div class="menu-info">
+        <div class="menu-title">Beneficios</div>
+        <div class="menu-desc">VA, Auxilio Deslocamento, Plano Alianca — por colaborador</div>
+      </div>
+    </a>
+    <a class="menu-card" href="treinamentos.html">
+      <div class="menu-icon purple">&#127891;</div>
+      <div class="menu-info">
+        <div class="menu-title">Treinamentos e NRs</div>
+        <div class="menu-desc">Certificados, vencimentos, reciclagem obrigatoria</div>
+      </div>
+    </a>
+    <a class="menu-card" href="asos.html">
+      <div class="menu-icon green">&#127973;</div>
+      <div class="menu-info">
+        <div class="menu-title">Controle de ASOs</div>
+        <div class="menu-desc">Exames admissional, periodico, retorno, demissional</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Operacional -->
+  <div class="section-title">Operacional</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="apuracao.html">
+      <div class="menu-icon orange">&#128200;</div>
+      <div class="menu-info">
+        <div class="menu-title">Apuracao Mensal</div>
+        <div class="menu-desc">Calculo de beneficios por competencia (27-26), importar Secullum</div>
+        <span class="menu-badge badge-new">Principal</span>
+      </div>
+    </a>
+    <a class="menu-card" href="importar_secullum.html">
+      <div class="menu-icon purple">&#128229;</div>
+      <div class="menu-info">
+        <div class="menu-title">Importar Secullum</div>
+        <div class="menu-desc">Importar dados de ponto: faltas, atrasos, atestados</div>
+      </div>
+    </a>
+    <a class="menu-card" href="ocorrencias.html">
+      <div class="menu-icon red">&#128203;</div>
+      <div class="menu-info">
+        <div class="menu-title">Ocorrencias</div>
+        <div class="menu-desc">Atestados medicos, advertencias e suspensoes — importar das pastas ou lancar manual</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Seguranca do Trabalho -->
+  <div class="section-title">Seguranca do Trabalho</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="inspecoes.html">
+      <div class="menu-icon orange">&#128270;</div>
+      <div class="menu-info">
+        <div class="menu-title">Inspecoes de Seguranca</div>
+        <div class="menu-desc">Checklist por setor, nao conformidades, plano de acao</div>
+      </div>
+    </a>
+    <a class="menu-card" href="acidentes.html">
+      <div class="menu-icon red">&#9888;</div>
+      <div class="menu-info">
+        <div class="menu-title">Acidentes e Incidentes</div>
+        <div class="menu-desc">Registro CAT, investigacao 5 porques, taxa de frequencia/gravidade</div>
+      </div>
+    </a>
+    <a class="menu-card" href="dds.html">
+      <div class="menu-icon blue">&#128172;</div>
+      <div class="menu-info">
+        <div class="menu-title">DDS</div>
+        <div class="menu-desc">Dialogo diario de seguranca — registro, temas, participantes</div>
+      </div>
+    </a>
+    <a class="menu-card" href="cipa.html">
+      <div class="menu-icon green">&#127891;</div>
+      <div class="menu-info">
+        <div class="menu-title">CIPA</div>
+        <div class="menu-desc">Mandatos, membros, reunioes mensais, acoes</div>
+      </div>
+    </a>
+    <a class="menu-card" href="extintores.html">
+      <div class="menu-icon red">&#128293;</div>
+      <div class="menu-info">
+        <div class="menu-title">Extintores</div>
+        <div class="menu-desc">Cadastro, validade, inspecao mensal, recarga</div>
+      </div>
+    </a>
+  </div>
+
+  <!-- Auditoria -->
+  <div class="section-title">Auditoria (Contabilidade Externa)</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="auditoria_folha.html">
+      <div class="menu-icon red">&#128269;</div>
+      <div class="menu-info">
+        <div class="menu-title">Auditoria de Folha</div>
+        <div class="menu-desc">Importar PDF da folha da contabilidade, conferir beneficios e proventos</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+    <a class="menu-card" href="auditoria_rescisao.html">
+      <div class="menu-icon red">&#128221;</div>
+      <div class="menu-info">
+        <div class="menu-title">Auditoria de Rescisao</div>
+        <div class="menu-desc">Conferir calculos rescisórios (TRCT) da contabilidade externa</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Recrutamento & Seleção -->
+  <div class="section-title">Recrutamento & Seleção</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="recrutamento_selecao.html">
+      <div class="menu-icon purple">&#128188;</div>
+      <div class="menu-info">
+        <div class="menu-title">Gestão de Vagas</div>
+        <div class="menu-desc">Vagas, candidatos, kanban de seleção, agenda de entrevistas e banco de talentos</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Gestao Estrategica -->
+  <div class="section-title">Gestao Estrategica</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="saude_mental.html" style="border-color:#1abc9c;">
+      <div class="menu-icon" style="background:rgba(26,188,156,.12);width:48px;height:48px;font-size:24px;">&#129504;</div>
+      <div class="menu-info">
+        <div class="menu-title" style="font-size:15px;">Saude e Equilibrio Ocupacional</div>
+        <div class="menu-desc">Programa de saude mental — agenda psicologa, classificacao de risco, gatilhos automaticos</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+    <a class="menu-card" href="desligamentos_turnover.html" style="border-color:#e74c3c;">
+      <div class="menu-icon red" style="width:48px;height:48px;font-size:24px;">&#128200;</div>
+      <div class="menu-info">
+        <div class="menu-title" style="font-size:15px;">Desligamentos &amp; Turnover</div>
+        <div class="menu-desc">Analise de causa raiz, entrevista estruturada, indicadores e analise cruzada com produtividade</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+    <a class="menu-card" href="lideranca.html" style="border-color:#c8a96e;">
+      <div class="menu-icon" style="background:rgba(200,169,110,.12);width:48px;height:48px;font-size:24px;">&#127942;</div>
+      <div class="menu-info">
+        <div class="menu-title" style="font-size:15px;">Gestão &amp; Liderança</div>
+        <div class="menu-desc">Avaliações de desempenho, metas, engajamento, rankings, rondas motivacionais e IA para gestores</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Integrações -->
+  <div class="section-title">Integrações</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="convenia_integracao.html" style="border-color:#e85d26;">
+      <div class="menu-icon" style="background:rgba(232,93,38,.12);width:48px;height:48px;font-size:24px;">🔗</div>
+      <div class="menu-info">
+        <div class="menu-title" style="font-size:15px;">Integração Convenia</div>
+        <div class="menu-desc">Sincronizar funcionários, folha, benefícios, afastamentos e férias via API Convenia v3</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+  </div>
+
+  <!-- Relatorios -->
+  <div class="section-title">Relatorios e Dashboard</div>
+  <div class="menu-grid">
+    <a class="menu-card" href="dashboard_gerencial.html" style="border-color:#c8a96e;">
+      <div class="menu-icon gold" style="width:48px;height:48px;font-size:24px;">&#128200;</div>
+      <div class="menu-info">
+        <div class="menu-title" style="font-size:16px;">Dashboard Gerencial</div>
+        <div class="menu-desc">Turnover, absenteismo, piramide etaria, ASOs, EPIs — indicadores estrategicos com graficos</div>
+        <span class="menu-badge badge-new">Novo</span>
+      </div>
+    </a>
+    <a class="menu-card" href="dashboard_rh.html">
+      <div class="menu-icon gold">&#128202;</div>
+      <div class="menu-info">
+        <div class="menu-title">Dashboard RH</div>
+        <div class="menu-desc">KPIs, custos de beneficios, assiduidade, tendencias</div>
+      </div>
+    </a>
+    <a class="menu-card" href="relatorio_beneficios.html">
+      <div class="menu-icon gold">&#128196;</div>
+      <div class="menu-info">
+        <div class="menu-title">Relatorio de Beneficios</div>
+        <div class="menu-desc">Relatorio mensal consolidado para folha de pagamento</div>
+      </div>
+    </a>
+  </div>
+
+</div>
+
+<div class="footer">Classic RH &amp; SST v2026.03 — Classic Importacao e Exportacao de Couros Ltda</div>
+
 <script>
-
-// ── MODULE DEFINITIONS ───────────────────────────────────────────
-const SECTIONS = [
-  {
-    id: 'operacao',
-    titulo: 'Operação',
-    gridClass: 'grid-ops',
-    cardClass: 'card-ops',
-    modulos: [
-      {
-        id:'recebimento_lote', titulo:'Recebimento de Lote', icon:'📦',
-        href:'recebimento_lote.html',
-        desc:'Registrar chegada da carga: fornecedor, lote ATAK, etiqueta, quantidade, temperatura, transporte e fotos.',
-        badge:'Operação',
-        perfis:['administrador','qualidade','logistica']
-      },
-      {
-        id:'inspecao_qualidade', titulo:'Inspeção de Qualidade', icon:'🔍',
-        href:'inspecao_qualidade.html',
-        desc:'Defeitos padronizados, foto e video de evidencia, galeria do celular, OCR de etiqueta, classificacao automatica A/B/C e relatorio PDF.',
-        badge:'Principal',
-        perfis:['administrador','qualidade']
-      },
-      {
-        id:'fila_inspecoes', titulo:'Fila de Inspeções', icon:'📋',
-        href:'fila_inspecoes.html',
-        desc:'Fila com status de workflow, filtros por status/fornecedor/produto, contadores e acesso rápido à revisão.',
-        badge:'Workflow',
-        perfis:['administrador','qualidade','diretoria','financeiro']
-      },
-      {
-        id:'rastreabilidade', titulo:'Rastreabilidade do Lote', icon:'🔎',
-        href:'rastreabilidade_lote.html',
-        desc:'Timeline do lote: inspeções, defeitos, fotos, transporte. Gera Relatório Técnico e Relatório ao Fornecedor em PDF.',
-        badge:'PDF',
-        perfis:['administrador','qualidade','comercial','financeiro','logistica','industrial','diretoria']
-      }
-    ]
-  },
-  {
-    id: 'dashboards',
-    titulo: 'Dashboards',
-    gridClass: 'grid-ops',
-    cardClass: 'card-ops',
-    modulos: [
-      {
-        id:'dashboard_qualidade', titulo:'Dashboard Operacional', icon:'📊',
-        href:'dashboard_qualidade.html',
-        desc:'KPIs diários, pipeline de workflow, NCs abertas, planos de ação e tendência semanal.',
-        badge:'Operacional',
-        perfis:['administrador','qualidade','diretoria','financeiro']
-      },
-      {
-        id:'dashboard_cq', titulo:'Dashboard Analítico', icon:'📈',
-        href:'dashboard_cq.html',
-        desc:'Fornecedores, defeitos, score, radar de risco, timeline, eficiência e mapa de defeitos — tudo em um painel.',
-        badge:'Analytics',
-        perfis:['administrador','qualidade','comercial','financeiro','logistica','industrial','diretoria']
-      },
-      {
-        id:'dashboard_producao', titulo:'Dashboard de Produção', icon:'🏭',
-        href:'dashboard_producao.html',
-        desc:'Produtividade por funcionário, volume por produto, horas, setores e tendências.',
-        badge:'Produção',
-        perfis:['administrador','qualidade','industrial','diretoria']
-      },
-      {
-        id:'dashboard_embarques', titulo:'Dashboard Embarques', icon:'🚛',
-        href:'dashboard_embarques.html',
-        desc:'Classificação A/B/C por frigorífico, volume por carga, tendências de qualidade.',
-        badge:'Embarques',
-        perfis:['administrador','qualidade','industrial','diretoria']
-      },
-      {
-        id:'dashboard_omaso', titulo:'Controle Omaso', icon:'🎯',
-        href:'dashboard_omaso.html',
-        desc:'Painel de decisão: fornecedores críticos, alertas %C > 40%, ranking, confiabilidade e ações sugeridas.',
-        badge:'Omaso',
-        perfis:['administrador','qualidade','comercial','industrial','diretoria']
-      },
-      {
-        id:'estoque', titulo:'Controle de Estoque', icon:'📦',
-        href:'estoque.html',
-        desc:'Importação de XML NFe, movimentações de entrada e saída, mapeamento de produtos, dashboard e exportação Excel.',
-        badge:'Estoque',
-        perfis:['administrador','estoque']
-      }
-    ]
-  },
-  {
-    id: 'importacao',
-    titulo: 'Importação de Dados',
-    gridClass: 'grid-3',
-    cardClass: 'card',
-    modulos: [
-      {
-        id:'importar_planilha', titulo:'Importar Planilha de Cargas', icon:'📊',
-        href:'importar_planilha.html',
-        desc:'Importe a planilha Excel (.xlsx) dos motoristas. Lê a aba FECHAMENTO com defeitos, contagem e classificação.',
-        badge:'Importação',
-        perfis:['administrador','qualidade']
-      },
-      {
-        id:'importar_atak', titulo:'Importar Relatório ATAK', icon:'📥',
-        href:'importar_atak.html',
-        desc:'Importe o PDF WRPRD501 do ATAK. Analisa lotes, defeitos e classificação. Exporta para Supabase e CSV.',
-        badge:'ATAK',
-        perfis:['administrador','qualidade']
-      },
-      {
-        id:'importar_pcr', titulo:'Importar PCR (WRMVE500)', icon:'📋',
-        href:'importar_pcr.html',
-        desc:'Importe a planilha WRMVE500 do ATAK (PCR). Dados de recebimento por documento, motorista, fornecedor e produto.',
-        badge:'ATAK',
-        perfis:['administrador','qualidade']
-      },
-      {
-        id:'importar_producao', titulo:'Importar Produção (WRPRD600)', icon:'🏭',
-        href:'importar_producao.html',
-        desc:'Importe o relatório WRPRD600 do ATAK. Produção individual por funcionário, produto, horas e quantidade.',
-        badge:'ATAK',
-        perfis:['administrador','qualidade','industrial']
-      },
-      {
-        id:'importar_embarques', titulo:'Importar Embarques', icon:'📦',
-        href:'importar_embarques.html',
-        desc:'Importe a planilha CARGAS 2026 (.xlsx) com classificação A/B/C por frigorífico.',
-        badge:'Embarques',
-        perfis:['administrador','qualidade']
-      },
-      {
-        id:'historico_importacoes', titulo:'Histórico de Importações', icon:'📦',
-        href:'historico_importacoes.html',
-        desc:'Consulte o histórico de todas as importações: lotes, arquivos, status, erros e rastreabilidade.',
-        badge:'Importação',
-        perfis:['administrador','qualidade','diretoria']
-      }
-    ]
-  },
-  {
-    id: 'administracao',
-    titulo: 'Administração',
-    gridClass: 'grid-3',
-    cardClass: 'card card-admin',
-    modulos: [
-      {
-        id:'gestao_usuarios', titulo:'Gestão de Usuários', icon:'👥',
-        href:'gestao_usuarios.html',
-        desc:'Cadastrar analisadores, perfis de acesso, sessões ativas e log de auditoria.',
-        badge:'Admin',
-        perfis:['administrador']
-      },
-      {
-        id:'processo_bucho', titulo:'Processo do Bucho', icon:'📋',
-        href:'processo_bucho.html',
-        desc:'Fluxo completo de industrialização: romaneios ATAK do recebimento à expedição. Referência MIA021.',
-        badge:'Referência',
-        perfis:['administrador','qualidade','logistica','industrial','diretoria']
-      }
-    ]
-  }
-];
-
-// ── Logo from localStorage ───────────────────────────────────────
-(function(){
-  const s = localStorage.getItem('classic_logo');
-  const el = document.getElementById('logoImg');
-  if (el && s) el.src = s;
-})();
-
-// ── KPI Fetch ────────────────────────────────────────────────────
-async function carregarKPIs() {
-  const hoje = new Date().toISOString().slice(0, 10);
-
-  // 1. Lotes recebidos hoje (cq_cargas + cq_recebimentos)
-  try {
-    let total = 0;
-    try {
-      const r1 = await CQ_API.get(`cq_cargas?data_coleta=eq.${hoje}&select=id`);
-      total += (r1 || []).length;
-    } catch(e) {}
-    try {
-      const r2 = await CQ_API.get(`cq_recebimentos?data_recebimento=eq.${hoje}&select=id`);
-      total += (r2 || []).length;
-    } catch(e) {}
-    document.getElementById('kpiCargas').textContent = total;
-  } catch(e) { console.warn('KPI cargas:', e); }
-
-  // 2. Inspeções pendentes (não aprovadas/encerradas)
-  try {
-    const rows = await CQ_API.get('registros_cq_inspecao?status_workflow=neq.aprovada&status_workflow=neq.encerrada&select=id');
-    document.getElementById('kpiInspecoes').textContent = (rows || []).length;
-  } catch(e) { console.warn('KPI inspeções:', e); }
-
-  // 3. Fornecedores críticos (classe C nos últimos 30 dias — todas as fontes)
-  try {
-    const d30 = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
-    const fornCriticos = new Set();
-    try {
-      const r1 = await CQ_API.get(`cq_cargas?classificacao=eq.C&data_coleta=gte.${d30}&select=frigorifico`);
-      (r1 || []).forEach(r => { if (r.frigorifico) fornCriticos.add(r.frigorifico); });
-    } catch(e) {}
-    try {
-      const r2 = await CQ_API.get(`registros_cq_inspecao?classificacao=eq.C&data_inspecao=gte.${d30}&select=fornecedor`);
-      (r2 || []).forEach(r => { if (r.fornecedor) fornCriticos.add(r.fornecedor); });
-    } catch(e) {}
-    document.getElementById('kpiFornCriticos').textContent = fornCriticos.size;
-  } catch(e) { console.warn('KPI fornecedores:', e); }
-
-  // 4. Última importação (data mais recente de cq_importacoes)
-  try {
-    const rows = await CQ_API.get('cq_importacoes?order=criado_em.desc&limit=1&select=criado_em,tipo');
-    if (rows && rows.length) {
-      const d = new Date(rows[0].criado_em);
-      const diff = Math.floor((Date.now() - d) / 60000);
-      let label;
-      if (diff < 1) label = 'agora';
-      else if (diff < 60) label = diff + ' min';
-      else if (diff < 1440) label = Math.floor(diff/60) + 'h';
-      else label = Math.floor(diff/1440) + 'd';
-      document.getElementById('kpiUltimaImport').textContent = label;
-    } else {
-      document.getElementById('kpiUltimaImport').textContent = '—';
-    }
-  } catch(e) { console.warn('KPI importação:', e); }
-}
-
-// ── Render Sections ──────────────────────────────────────────────
-function renderSections(perfilUsuario) {
-  const container = document.getElementById('sectionsContainer');
-  container.innerHTML = '';
-
-  SECTIONS.forEach(section => {
-    const visiveis = section.modulos.filter(m => m.perfis.includes(perfilUsuario));
-    if (visiveis.length === 0) return;
-
-    const block = document.createElement('div');
-    block.className = 'section-block';
-
-    const title = document.createElement('div');
-    title.className = 'section-title';
-    title.textContent = section.titulo;
-    block.appendChild(title);
-
-    const grid = document.createElement('div');
-    grid.className = section.gridClass;
-
-    visiveis.forEach((m, i) => {
-      const a = document.createElement('a');
-      a.className = section.cardClass;
-      a.href = m.href;
-      a.style.animationDelay = (i * 0.05 + 0.05) + 's';
-      a.innerHTML = `
-        <div class="card-icon">${m.icon}</div>
-        <div class="card-title">${m.titulo}</div>
-        <div class="card-desc">${m.desc}</div>
-        <div class="card-badge">${m.badge}</div>`;
-      grid.appendChild(a);
-    });
-
-    block.appendChild(grid);
-    container.appendChild(block);
-  });
-}
-
-// ── Init ─────────────────────────────────────────────────────────
 (async () => {
-  const perfil = await CQAuth.init();
-  if (!perfil) return;
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','visualizador'] });
+  if (!user) return;
 
-  document.getElementById('headerUser').textContent =
-    (perfil.nome || perfil.email) + ' \u00b7 ' + traduzPerfil(perfil.perfil);
-  document.getElementById('welcomeSub').textContent =
-    'Bem-vindo, ' + (perfil.nome || perfil.email) + '. Selecione um módulo abaixo.';
+  // Carregar KPIs
+  try {
+    const colabs = await RH_API.get('rh_funcionarios?status=eq.ativo&select=id');
+    document.getElementById('kpi-ativos').textContent = colabs.length;
 
-  renderSections(perfil.perfil);
+    const va = await RH_API.get('rh_vale_alimentacao?ativo=eq.true&select=id');
+    document.getElementById('kpi-va').textContent = va.length;
 
-  if (perfil.perfil === 'estoque') {
-    document.getElementById('kpiStripCQ').style.display = 'none';
-    document.getElementById('kpiStripEstoque').style.display = 'flex';
-    carregarKPIsEstoque();
-  } else {
-    carregarKPIs();
+    const desloc = await RH_API.get('rh_auxilio_deslocamento?ativo=eq.true&select=id');
+    document.getElementById('kpi-desloc').textContent = desloc.length;
+
+    const alianca = await RH_API.get('rh_plano_alianca?ativo=eq.true&select=id');
+    document.getElementById('kpi-alianca').textContent = alianca.length;
+  } catch(e) {
+    console.warn('KPIs:', e.message);
   }
 })();
-
-async function carregarKPIsEstoque() {
-  try {
-    let token = SB_KEY; try { token = JSON.parse(localStorage.getItem('cq_sess_v2')||'{}').access_token || SB_KEY; } catch(_){}
-    const h = {'apikey':SB_KEY,'Authorization':'Bearer '+token};
-    // Buscar movimentacoes brutas (paginado) para evitar dados corrompidos na view
-    const MAX_ITEM = 50000000; // R$ 50M teto por item
-    let allMovs = [], offset = 0, batch;
-    do {
-      const r = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes?select=tipo,valor_total&limit=1000&offset=${offset}`,{headers:h});
-      if (!r.ok) break;
-      batch = await r.json();
-      allMovs = allMovs.concat(batch);
-      offset += 1000;
-    } while (batch.length === 1000);
-    const cap = v => { const n = Number(v||0); return Math.abs(n) > MAX_ITEM ? 0 : n; };
-    const totEnt = allMovs.filter(m=>m.tipo==='entrada').reduce((s,m)=>s+cap(m.valor_total),0);
-    const totSai = allMovs.filter(m=>m.tipo==='saida').reduce((s,m)=>s+cap(m.valor_total),0);
-    // Saldo e NFs da view (esses campos nao tem problema)
-    const r2 = await fetch(`${SB_URL}/rest/v1/vw_estoque_saldo?select=saldo_atual,total_nfs`,{headers:h});
-    const saldos = r2.ok ? await r2.json() : [];
-    const totSaldo = saldos.reduce((s,x)=>s+Number(x.saldo_atual||0),0);
-    const totNFs = saldos.reduce((s,x)=>s+Number(x.total_nfs||0),0);
-    const fmtC = v => {
-      v = Number(v || 0);
-      if (Math.abs(v)>=1000000) return 'R$ '+(v/1000000).toFixed(1).replace('.',',')+'M';
-      if (Math.abs(v)>=1000) return 'R$ '+(v/1000).toFixed(0)+'K';
-      return 'R$ '+v.toFixed(0);
-    };
-    const fmtN = v=>Number(v||0).toLocaleString('pt-BR',{maximumFractionDigits:0});
-    document.getElementById('kpiEstEntrada').textContent = fmtC(totEnt);
-    document.getElementById('kpiEstSaida').textContent = fmtC(totSai);
-    document.getElementById('kpiEstSaldo').textContent = fmtN(totSaldo);
-    document.getElementById('kpiEstNFs').textContent = fmtN(totNFs);
-  } catch(e) { console.warn('KPI estoque:', e); }
-}
-
-function traduzPerfil(p) {
-  const t = {administrador:'Administrador',qualidade:'Qualidade',comercial:'Comercial',financeiro:'Financeiro',logistica:'Logística',industrial:'Industrial',diretoria:'Diretoria',estoque:'Estoque'};
-  return t[p] || p;
-}
 </script>
 </body>
 </html>

@@ -1,5 +1,5 @@
-// rh_api.js — Utilitário centralizado de chamadas API do Classic RH & SST
-// Requer: config_rh.js e rh_auth.js carregados antes deste arquivo.
+// rh_api.js — Utilitário centralizado de chamadas API do Classic RH
+// Requer: config.js e rh_auth.js carregados antes deste arquivo.
 
 const RH_API = {
   async fetch(endpoint, options = {}) {
@@ -53,7 +53,10 @@ const RH_API = {
   },
 
   async delete(endpoint) {
-    const res = await this.fetch(endpoint, { method: 'DELETE' });
+    const res = await this.fetch(endpoint, {
+      method: 'DELETE',
+      headers: { 'Prefer': 'return=minimal' },
+    });
     return res;
   },
 };

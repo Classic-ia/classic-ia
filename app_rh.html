@@ -362,6 +362,83 @@ function traduzPerfil(p) {
   return t[p] || p;
 }
 
+// ── Auto-sync Convenia (background, silencioso) ──
+async function autoSyncConvenia() {
+  const token = localStorage.getItem('classic_convenia_token') ||
+    (JSON.parse(localStorage.getItem('convenia_config') || '{}').token);
+  if (!token) return; // sem token configurado, pular
+
+  const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
+  const LS_LAST_SYNC = 'convenia_last_auto_sync';
+  const SYNC_INTERVAL = 4 * 60 * 60 * 1000; // 4 horas
+
+  // Verificar se ja sincronizou recentemente
+  const lastSync = parseInt(localStorage.getItem(LS_LAST_SYNC) || '0');
+  if (Date.now() - lastSync < SYNC_INTERVAL) {
+    console.info('[Convenia] Sync recente (' + new Date(lastSync).toLocaleTimeString('pt-BR') + '), pulando.');
+    return;
+  }
+
+  console.info('[Convenia] Iniciando auto-sync em background...');
+  try {
+    const res = await fetch(CONVENIA_BASE + '/employees', {
+      headers: { 'token': token, 'Accept': 'application/json' }
+    });
+    if (!res.ok) { console.warn('[Convenia] API retornou ' + res.status); return; }
+    const data = await res.json();
+    const empList = data.data || data || [];
+    if (!empList.length) return;
+
+    // Buscar funcionarios locais para comparar
+    const local = await RH_API.get('rh_funcionarios?select=id,cpf,convenia_id');
+    const syncedIds = new Set((local || []).filter(f => f.convenia_id).map(f => f.convenia_id));
+    const syncedCpfs = new Set((local || []).map(f => f.cpf).filter(Boolean));
+
+    let imported = 0;
+    for (const emp of empList) {
+      const empId = String(emp.id || emp.uuid || '');
+      const cpf = emp.cpf || emp.document || '';
+      if (syncedIds.has(empId) || (cpf && syncedCpfs.has(cpf))) continue;
+
+      const payload = {
+        nome_completo: emp.name || ((emp.first_name || '') + ' ' + (emp.last_name || '')).trim() || 'Sem nome',
+        cpf: cpf || null,
+        cargo: emp.role || emp.position || emp.cargo || null,
+        setor: (emp.department && emp.department.name) || emp.setor || null,
+        departamento: (emp.department && emp.department.name) || null,
+        data_admissao: emp.admission_date || emp.hire_date || null,
+        status: (function(s) {
+          if (!s) return 'ativo';
+          s = String(s).toLowerCase();
+          if (s.includes('ativ') || s === 'active') return 'ativo';
+          if (s.includes('deslig') || s === 'terminated') return 'inativo';
+          if (s.includes('afasta') || s === 'on_leave') return 'afastado';
+          if (s.includes('feria') || s === 'vacation') return 'ferias';
+          return 'ativo';
+        })(emp.status),
+        telefone: emp.phone || emp.mobile || null,
+        email: emp.email || null,
+        convenia_id: empId,
+        origem: 'convenia'
+      };
+      try {
+        const r = await RH_API.post('rh_funcionarios', payload, 'return=minimal');
+        if (r.ok || r.status === 201) imported++;
+      } catch (e) { /* silencioso */ }
+    }
+
+    localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
+    if (imported > 0) {
+      console.info('[Convenia] Auto-sync: ' + imported + ' novos funcionarios importados.');
+      carregarKPIs(); // atualizar KPIs com novos dados
+    } else {
+      console.info('[Convenia] Auto-sync: tudo sincronizado, 0 novos.');
+    }
+  } catch (e) {
+    console.warn('[Convenia] Auto-sync erro:', e.message);
+  }
+}
+
 // Init
 (async () => {
   const perfil = await RHAuth.init();
@@ -374,6 +451,9 @@ function traduzPerfil(p) {
 
   renderSections(perfil.perfil);
   carregarKPIs();
+
+  // Auto-sync Convenia em background (nao bloqueia a tela)
+  autoSyncConvenia();
 })();
 </script>
 </body>

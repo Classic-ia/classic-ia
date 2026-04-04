@@ -593,8 +593,39 @@ tbody td{padding:10px;vertical-align:middle;}
       <select id="epiFunc" required><option value="">Selecione</option></select>
     </div>
     <div class="field-row">
-      <div class="field"><label>EPI *</label><input id="epiNome" required placeholder="Ex: Luva Nitrílica"></div>
-      <div class="field"><label>CA (Certificado)</label><input id="epiCa"></div>
+      <div class="field"><label>EPI *</label>
+        <select id="epiNomeSelect" onchange="preencherEpiCatalogo()" style="margin-bottom:6px">
+          <option value="">-- Selecione do catalogo ou digite abaixo --</option>
+          <option value="Capacete de Seguranca">Capacete de Seguranca</option>
+          <option value="Luva Nitrílica">Luva Nitrilica</option>
+          <option value="Luva Vaqueta">Luva Vaqueta (Couro)</option>
+          <option value="Luva PVC">Luva PVC</option>
+          <option value="Luva Latex">Luva Latex</option>
+          <option value="Bota PVC">Bota PVC</option>
+          <option value="Botina Seguranca">Botina de Seguranca</option>
+          <option value="Oculos de Protecao">Oculos de Protecao</option>
+          <option value="Protetor Auricular Plug">Protetor Auricular Plug</option>
+          <option value="Protetor Auricular Concha">Protetor Auricular Concha</option>
+          <option value="Respirador PFF2">Respirador PFF2</option>
+          <option value="Respirador PFF1">Respirador PFF1</option>
+          <option value="Mascara Facial">Mascara Facial</option>
+          <option value="Avental PVC">Avental PVC</option>
+          <option value="Avental Raspa Couro">Avental Raspa de Couro</option>
+          <option value="Mangote">Mangote</option>
+          <option value="Perneira">Perneira</option>
+          <option value="Cinto Seguranca">Cinto de Seguranca (NR-35)</option>
+          <option value="Protetor Solar">Protetor Solar</option>
+          <option value="custom">Outro (digitar)</option>
+        </select>
+        <input id="epiNome" required placeholder="Nome do EPI">
+      </div>
+      <div class="field"><label>CA (Certificado)</label>
+        <div style="display:flex;gap:6px;">
+          <input id="epiCa" placeholder="Ex: 12345" style="flex:1">
+          <button type="button" class="btn btn-outline" style="padding:6px 12px;font-size:11px;white-space:nowrap;" onclick="buscarCA()">Buscar CA</button>
+        </div>
+        <div id="epiCaInfo" style="font-size:10px;color:var(--muted);margin-top:4px;"></div>
+      </div>
     </div>
     <div class="field-row-3">
       <div class="field"><label>Data Entrega *</label><input type="date" id="epiDataEntrega" required></div>
@@ -1649,10 +1680,155 @@ async function salvarTreinamento(e) {
   } else toast('Erro ao salvar treinamento', true);
 }
 
+// ── EPI CATALOGO & BUSCA CA ─────────────────────────────
+
+// Catalogo local de EPIs comuns na industria de couro
+const EPI_CATALOGO = {
+  'Capacete de Seguranca':      { nr: 'NR-06', validade_meses: 60 },
+  'Luva Nitrílica':             { nr: 'NR-06', validade_meses: 6 },
+  'Luva Vaqueta':               { nr: 'NR-06', validade_meses: 6 },
+  'Luva PVC':                   { nr: 'NR-06', validade_meses: 6 },
+  'Luva Latex':                 { nr: 'NR-06', validade_meses: 3 },
+  'Bota PVC':                   { nr: 'NR-06', validade_meses: 12 },
+  'Botina Seguranca':           { nr: 'NR-06', validade_meses: 12 },
+  'Oculos de Protecao':         { nr: 'NR-06', validade_meses: 12 },
+  'Protetor Auricular Plug':    { nr: 'NR-06', validade_meses: 1 },
+  'Protetor Auricular Concha':  { nr: 'NR-06', validade_meses: 12 },
+  'Respirador PFF2':            { nr: 'NR-06', validade_meses: 1 },
+  'Respirador PFF1':            { nr: 'NR-06', validade_meses: 1 },
+  'Mascara Facial':             { nr: 'NR-06', validade_meses: 12 },
+  'Avental PVC':                { nr: 'NR-06', validade_meses: 12 },
+  'Avental Raspa Couro':        { nr: 'NR-06', validade_meses: 12 },
+  'Mangote':                    { nr: 'NR-06', validade_meses: 6 },
+  'Perneira':                   { nr: 'NR-06', validade_meses: 12 },
+  'Cinto Seguranca':            { nr: 'NR-35', validade_meses: 24 },
+  'Protetor Solar':             { nr: 'NR-21', validade_meses: 1 },
+};
+
+function preencherEpiCatalogo() {
+  const sel = document.getElementById('epiNomeSelect');
+  const inp = document.getElementById('epiNome');
+  const val = sel.value;
+  if (val === 'custom') {
+    inp.value = '';
+    inp.focus();
+    return;
+  }
+  if (!val) return;
+  inp.value = val;
+
+  // Auto-preencher validade se data entrega preenchida
+  const cat = EPI_CATALOGO[val];
+  const dataEntrega = document.getElementById('epiDataEntrega').value;
+  if (cat && dataEntrega) {
+    const d = new Date(dataEntrega);
+    d.setMonth(d.getMonth() + cat.validade_meses);
+    document.getElementById('epiValidade').value = d.toISOString().slice(0, 10);
+  }
+}
+
+// Auto-preencher validade quando muda data entrega
+document.getElementById('epiDataEntrega').addEventListener('change', function() {
+  const nome = document.getElementById('epiNome').value;
+  const cat = EPI_CATALOGO[nome];
+  if (cat && this.value) {
+    const d = new Date(this.value);
+    d.setMonth(d.getMonth() + cat.validade_meses);
+    document.getElementById('epiValidade').value = d.toISOString().slice(0, 10);
+  }
+});
+
+// ── BuscaEPI API Config ──────────────────────────────────
+const BUSCA_EPI_CONFIG = {
+  baseUrl: 'https://api.buscaepi.com/v1',
+  token_auth: localStorage.getItem('buscaepi_token_auth') || 'MDg4NDk5NjQwMDAxMTAxNjU0Ng==',
+  token_access: localStorage.getItem('buscaepi_token_access') || 'f7bcecf8870c85f5b8b5445ff7c20577'
+};
+// Salvar tokens padrao no localStorage para referencia
+if (!localStorage.getItem('buscaepi_token_auth')) {
+  localStorage.setItem('buscaepi_token_auth', BUSCA_EPI_CONFIG.token_auth);
+  localStorage.setItem('buscaepi_token_access', BUSCA_EPI_CONFIG.token_access);
+}
+
+function buscaEpiHeaders() {
+  return {
+    'Accept': 'application/json',
+    'Content-Type': 'application/json',
+    'token_auth': BUSCA_EPI_CONFIG.token_auth,
+    'token_access': BUSCA_EPI_CONFIG.token_access
+  };
+}
+
+// Buscar CA via BuscaEPI API
+async function buscarCA() {
+  const ca = document.getElementById('epiCa').value.trim();
+  const info = document.getElementById('epiCaInfo');
+  if (!ca) { info.textContent = 'Digite o numero do CA'; return; }
+  info.innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px;display:inline-block;vertical-align:middle;"></span> Buscando CA ' + ca + '...';
+
+  try {
+    // BuscaEPI API v1 — consulta por numero do CA
+    const res = await fetch(BUSCA_EPI_CONFIG.baseUrl + '/ca/' + encodeURIComponent(ca), {
+      headers: buscaEpiHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      // Adaptar campos conforme resposta da API
+      const nome = data.NomeEquipamento || data.DescricaoEquipamento || data.descricao || data.equipamento || '';
+      const fab = data.RazaoSocial || data.MarcaCA || data.fabricante || '';
+      const validade = data.DataValidade || data.validade || '';
+      const situacao = data.Situacao || data.situacao || '';
+      const cor = situacao.toLowerCase() === 'valido' || situacao.toLowerCase() === 'válido'
+        ? 'var(--green)' : (situacao ? 'var(--yellow)' : 'var(--green)');
+
+      info.innerHTML = '<span style="color:' + cor + ';">CA ' + ca +
+        (situacao ? ' — ' + situacao : ' encontrado') + '</span>' +
+        (nome ? ' — ' + nome : '') +
+        (fab ? ' (' + fab + ')' : '') +
+        (validade ? ' | Val: ' + validade : '');
+
+      // Auto-preencher nome do EPI se campo vazio
+      if (nome && !document.getElementById('epiNome').value) {
+        document.getElementById('epiNome').value = nome;
+      }
+      // Auto-preencher validade se disponivel
+      if (validade && !document.getElementById('epiValidade').value) {
+        try {
+          const parts = validade.includes('/') ? validade.split('/').reverse().join('-') : validade;
+          document.getElementById('epiValidade').value = parts.slice(0, 10);
+        } catch(e) {}
+      }
+      return;
+    }
+  } catch (e) {
+    console.warn('[BuscaEPI] Erro na consulta:', e.message);
+  }
+
+  // Fallback: tentar endpoint alternativo sem auth
+  try {
+    const res2 = await fetch('https://api.buscaepi.com/v1/consulta/ca/' + encodeURIComponent(ca), {
+      headers: buscaEpiHeaders()
+    });
+    if (res2.ok) {
+      const data = await res2.json();
+      const nome = data.NomeEquipamento || data.descricao || data.equipamento || '';
+      info.innerHTML = '<span style="color:var(--green);">CA encontrado</span> — ' + (nome || ca);
+      if (nome && !document.getElementById('epiNome').value) {
+        document.getElementById('epiNome').value = nome;
+      }
+      return;
+    }
+  } catch (e) { /* fallback tambem falhou */ }
+
+  info.innerHTML = '<span style="color:var(--yellow);">Nao foi possivel validar o CA online. Verifique em <a href="https://caepi.mte.gov.br" target="_blank" style="color:var(--accent);">caepi.mte.gov.br</a></span>';
+}
+
 // ── EPI ──────────────────────────────────────────────────
 function abrirModalEpi() {
   document.getElementById('formEpi').reset();
   document.getElementById('epiId').value = '';
+  document.getElementById('epiNomeSelect').value = '';
+  document.getElementById('epiCaInfo').textContent = '';
   abrirModal('modalEpi');
 }
 

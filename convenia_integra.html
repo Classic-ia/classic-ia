@@ -241,6 +241,22 @@
         <button class="btn btn-outline" onclick="testarConexao()">Testar Conexao</button>
         <button class="btn btn-danger" onclick="limparToken()">Remover Token</button>
       </div>
+      <div class="form-row" style="margin-top:16px;">
+        <div class="form-group">
+          <label>Sync Automatico</label>
+          <select id="selAutoSync" onchange="salvarAutoSync()">
+            <option value="off">Desligado</option>
+            <option value="1">A cada 1 hora</option>
+            <option value="4">A cada 4 horas</option>
+            <option value="8">A cada 8 horas</option>
+            <option value="24">Diario (24h)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ultimo Sync</label>
+          <input type="text" id="txtLastSync" readonly value="Nunca" style="cursor:default">
+        </div>
+      </div>
     </div>
   </div>
 
@@ -763,6 +779,61 @@ function toast(msg, type) {
   setTimeout(() => el.classList.add('show'), 10);
   setTimeout(() => el.classList.remove('show'), 3500);
 }
+
+// ── Auto-Sync ──
+const LS_AUTO_SYNC = 'convenia_auto_sync_interval';
+const LS_LAST_SYNC = 'convenia_last_auto_sync';
+let autoSyncTimer = null;
+
+function salvarAutoSync() {
+  const val = document.getElementById('selAutoSync').value;
+  localStorage.setItem(LS_AUTO_SYNC, val);
+  iniciarAutoSync();
+  if (val === 'off') {
+    addLog('Auto-sync desligado', 'warn');
+    toast('Auto-sync desligado', 'success');
+  } else {
+    addLog('Auto-sync configurado: a cada ' + val + 'h', 'ok');
+    toast('Auto-sync: a cada ' + val + 'h', 'success');
+  }
+}
+
+function iniciarAutoSync() {
+  if (autoSyncTimer) { clearInterval(autoSyncTimer); autoSyncTimer = null; }
+  const horas = parseInt(localStorage.getItem(LS_AUTO_SYNC) || '0');
+  if (!horas || !convToken) return;
+  const ms = horas * 60 * 60 * 1000;
+  autoSyncTimer = setInterval(() => {
+    addLog('Auto-sync iniciando...', 'ok');
+    sincronizarFuncionarios();
+  }, ms);
+}
+
+function atualizarUltimoSync() {
+  const ts = localStorage.getItem(LS_LAST_SYNC);
+  const el = document.getElementById('txtLastSync');
+  if (ts) {
+    el.value = new Date(parseInt(ts)).toLocaleString('pt-BR');
+  } else {
+    el.value = 'Nunca';
+  }
+}
+
+// Override sincronizarFuncionarios para salvar timestamp
+const _originalSync = sincronizarFuncionarios;
+sincronizarFuncionarios = async function() {
+  await _originalSync();
+  localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
+  atualizarUltimoSync();
+};
+
+// Init auto-sync
+(function() {
+  const savedInterval = localStorage.getItem(LS_AUTO_SYNC) || 'off';
+  document.getElementById('selAutoSync').value = savedInterval;
+  atualizarUltimoSync();
+  iniciarAutoSync();
+})();
 </script>
 </body>
 </html>

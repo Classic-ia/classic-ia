@@ -83,9 +83,20 @@ CREATE TABLE IF NOT EXISTS rh_funcionarios (
   filial_id UUID REFERENCES rh_filiais(id),
   status VARCHAR(20) DEFAULT 'ativo' CHECK (status IN ('ativo','inativo','afastado','ferias')),
   observacoes TEXT,
+  convenia_id TEXT,
+  origem TEXT DEFAULT 'manual',
+  foto_url TEXT,
+  departamento TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration: adicionar colunas Convenia (executar se tabela já existe)
+-- ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS convenia_id TEXT;
+-- ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS origem TEXT DEFAULT 'manual';
+-- ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS foto_url TEXT;
+-- ALTER TABLE rh_funcionarios ADD COLUMN IF NOT EXISTS departamento TEXT;
+-- CREATE INDEX IF NOT EXISTS idx_func_convenia ON rh_funcionarios(convenia_id);
 
 CREATE INDEX IF NOT EXISTS idx_func_status ON rh_funcionarios(status);
 CREATE INDEX IF NOT EXISTS idx_func_setor ON rh_funcionarios(setor);

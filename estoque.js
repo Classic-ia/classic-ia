@@ -615,6 +615,25 @@ let _mapeamentos = [];
 
 async function carregarCategorias() {
   _categorias = await sbFetch('estoque_categorias?select=*&ativo=eq.true&order=nome.asc');
+  // Garantir categorias padrão
+  const padrao = [
+    { nome: 'FRETE', unidade: 'UN' },
+    { nome: 'DESTINACAO DE RESIDUOS', unidade: 'UN' },
+    { nome: 'AGUA', unidade: 'UN' },
+    { nome: 'EMBALAGENS', unidade: 'UN' },
+  ];
+  const nomes = _categorias.map(c => c.nome.toUpperCase());
+  for (const p of padrao) {
+    if (!nomes.includes(p.nome.toUpperCase())) {
+      try {
+        await criarCategoria(p.nome, p.unidade);
+      } catch {}
+    }
+  }
+  // Recarregar se criou alguma nova
+  if (padrao.some(p => !nomes.includes(p.nome.toUpperCase()))) {
+    _categorias = await sbFetch('estoque_categorias?select=*&ativo=eq.true&order=nome.asc');
+  }
   return _categorias;
 }
 

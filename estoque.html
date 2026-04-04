@@ -2301,20 +2301,64 @@ async function renderDashboard() {
       carregarComparativo(), carregarDuplicatas()
     ]);
 
-    // ── KPIs (calculados a partir das movimentacoes para evitar problemas de tipo) ──
+    // ── Pré-computar agrupamentos ──
+    _dashMovs = movs;
+    const catMovs = {};
+    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
+
+    // ── KPIs ──
     const totalEstoque = saldos.reduce((s,r) => s + Number(r.saldo_atual||0), 0);
     const valorEntradas = movs.filter(m=>m.tipo==='entrada').reduce((s,m) => s + Number(m.valor_total||0), 0);
     const valorSaidas = movs.filter(m=>m.tipo==='saida').reduce((s,m) => s + Number(m.valor_total||0), 0);
     const totalNfs = saldos.reduce((s,r) => s + Number(r.total_nfs||0), 0);
     const totalCats = saldos.filter(s => Number(s.total_entrada) > 0 || Number(s.total_saida) > 0).length;
 
+    // Valor do estoque (saldo * CMP)
+    let vlrEstoqueTotal = 0;
+    saldos.forEach(s => {
+      const sa = Number(s.saldo_atual||0);
+      const cms = (catMovs[s.id] || []);
+      const cmp = cms.length ? custoMedioPonderado(cms) : 0;
+      if (sa > 0 && cmp > 0) vlrEstoqueTotal += sa * cmp;
+    });
+
+    // Devoluções e exportações
+    const devs = movs.filter(m => { const n=(m.nat_operacao||'').toUpperCase(); return n.includes('DEVOLUC')||n.includes('DEVOLUÇ'); });
+    const exps = movs.filter(m => (m.cfop||'').startsWith('7'));
+
+    // Comparativo mês anterior (se período é mês atual)
+    let trendHtml = '';
+    if (mensal.length >= 2) {
+      const mesesOrd = [...new Set(mensal.map(m=>m.mes))].sort();
+      if (mesesOrd.length >= 2) {
+        const mesAtual = mesesOrd[mesesOrd.length-1];
+        const mesAnt = mesesOrd[mesesOrd.length-2];
+        const entAtu = mensal.filter(m=>m.mes===mesAtual&&m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const entAnt = mensal.filter(m=>m.mes===mesAnt&&m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const saiAtu = mensal.filter(m=>m.mes===mesAtual&&m.tipo==='saida').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const saiAnt = mensal.filter(m=>m.mes===mesAnt&&m.tipo==='saida').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const varEnt = entAnt > 0 ? ((entAtu-entAnt)/entAnt*100) : 0;
+        const varSai = saiAnt > 0 ? ((saiAtu-saiAnt)/saiAnt*100) : 0;
+        const arrowEnt = varEnt > 0 ? '&#9650;' : varEnt < 0 ? '&#9660;' : '&#9644;';
+        const arrowSai = varSai > 0 ? '&#9650;' : varSai < 0 ? '&#9660;' : '&#9644;';
+        const corEnt = varEnt > 5 ? 'var(--ok)' : varEnt < -5 ? 'var(--err)' : 'var(--muted)';
+        const corSai = varSai > 5 ? 'var(--err)' : varSai < -5 ? 'var(--ok)' : 'var(--muted)';
+        trendHtml = `<div style="display:flex;gap:16px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+          <div style="font-size:10px;color:${corEnt}">${arrowEnt} Compras ${varEnt>0?'+':''}${varEnt.toFixed(1)}% vs mês ant.</div>
+          <div style="font-size:10px;color:${corSai}">${arrowSai} Vendas ${varSai>0?'+':''}${varSai.toFixed(1)}% vs mês ant.</div>
+        </div>`;
+      }
+    }
+
     document.getElementById('dashKpis').innerHTML = `
-      <div class="kpi"><div class="kpi-value">${fmtNum(totalEstoque,0)}</div><div class="kpi-label">Saldo Total (Qtde)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrEstoqueTotal)}</div><div class="kpi-label">Valor Estoque</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(valorEntradas)}</div><div class="kpi-label">Total Entradas</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(valorSaidas)}</div><div class="kpi-label">Total Saidas</div></div>
-      <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs Processadas</div></div>
-      <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias Ativas</div></div>
-    `;
+      ${exps.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--ok)">${fmtBRLCompacto(exps.reduce((s,m)=>s+Number(m.valor_total||0),0))}</div><div class="kpi-label">Exportações</div></div>` : ''}
+      ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
+      <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs</div></div>
+      <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias</div></div>
+    ` + trendHtml;
 
     // ── Alertas estoque minimo ──
     const alertaDiv = document.getElementById('dashAlertas');
@@ -2329,10 +2373,7 @@ async function renderDashboard() {
     } else { alertaDiv.style.display = 'none'; }
 
     // ── Tabela de saldos com CMP ──
-    _dashMovs = movs; // guardar para detalhe de categoria
     const body = document.getElementById('dashSaldoBody');
-    const catMovs = {};
-    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
 
     body.innerHTML = saldos.map(s => {
       const sa = Number(s.saldo_atual||0);

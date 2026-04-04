@@ -541,6 +541,34 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
     </div>
   </div>
 
+  <!-- Conversao de Unidades -->
+  <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+    <div class="map-panel-title">Conversao de Unidades por Categoria</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px">
+      Quando um XML traz uma unidade diferente da categoria (ex: entrada em KG mas categoria em PC), defina o fator de conversao. O sistema converte automaticamente na posicao de estoque.
+    </p>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+      <div class="filter-group">
+        <span class="filter-label">Categoria</span>
+        <select class="filter-select" id="convCategoria" style="min-width:150px"></select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Unidade XML (origem)</span>
+        <select class="filter-select" id="convUnidadeOrigem">
+          <option value="KG">KG</option><option value="PC">PC</option><option value="UN">UN</option>
+          <option value="PRS">PRS</option><option value="MT">MT</option><option value="LT">LT</option>
+          <option value="M2">M2</option><option value="CX">CX</option><option value="SC">SC</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Fator (1 und XML = X und categoria)</span>
+        <input type="number" step="0.0001" class="filter-input" id="convFator" placeholder="Ex: 0.04 (1 KG = 0.04 PC)" style="width:180px">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="adicionarConversao()">Adicionar</button>
+    </div>
+    <div id="listaConversoes"></div>
+  </div>
+
   <!-- Produtos Nao Mapeados -->
   <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
@@ -1175,7 +1203,7 @@ function setupTabs() {
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
 
       if (tab.dataset.tab === 'movimentacoes') filtrarMovimentacoes();
-      if (tab.dataset.tab === 'mapeamento') { renderMapeamento(); carregarNaoMapeados(); }
+      if (tab.dataset.tab === 'mapeamento') { renderMapeamento(); renderConversoes(); carregarNaoMapeados(); }
       if (tab.dataset.tab === 'dashboard') renderDashboard();
       if (tab.dataset.tab === 'apuracao') { carregarContratos(); carregarCambios(); carregarDrawbacks(); }
     });
@@ -2024,6 +2052,82 @@ async function removerMapeamento(id) {
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
 }
 
+// ── Conversao de Unidades ─────────────────────────────────────
+function _getConversoes() {
+  return JSON.parse(localStorage.getItem('cq_conversoes') || '[]');
+}
+
+function _saveConversoes(list) {
+  localStorage.setItem('cq_conversoes', JSON.stringify(list));
+}
+
+function renderConversoes() {
+  const list = _getConversoes();
+  const container = document.getElementById('listaConversoes');
+  if (!container) return;
+
+  // Popular select de categorias
+  const sel = document.getElementById('convCategoria');
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = _categorias.map(c => `<option value="${c.id}" data-und="${c.unidade}">${c.nome} (${c.unidade})</option>`).join('');
+  }
+
+  if (!list.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted)">Nenhuma conversao cadastrada. Unidades dos XMLs serao usadas diretamente.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map((c, i) => {
+    const cat = _categorias.find(x => x.id === c.catId);
+    return `<div class="map-item">
+      <div>
+        <div class="map-item-name">${cat ? cat.nome : c.catId}</div>
+        <div class="map-item-badge">1 ${c.undOrigem} = ${c.fator} ${cat ? cat.unidade : '?'}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removerConversao(${i})">&#10005;</button>
+    </div>`;
+  }).join('');
+}
+
+function adicionarConversao() {
+  const catId = document.getElementById('convCategoria').value;
+  const undOrigem = document.getElementById('convUnidadeOrigem').value;
+  const fator = parseFloat(document.getElementById('convFator').value);
+  if (!catId || !undOrigem || !fator || fator <= 0) { toast('Preencha todos os campos', 'warn'); return; }
+
+  const list = _getConversoes();
+  // Remover duplicata se existir
+  const idx = list.findIndex(c => c.catId === catId && c.undOrigem === undOrigem);
+  if (idx >= 0) list.splice(idx, 1);
+  list.push({ catId, undOrigem, fator });
+  _saveConversoes(list);
+  document.getElementById('convFator').value = '';
+  renderConversoes();
+  toast(`Conversao adicionada: 1 ${undOrigem} = ${fator}`, 'ok');
+}
+
+function removerConversao(idx) {
+  const list = _getConversoes();
+  list.splice(idx, 1);
+  _saveConversoes(list);
+  renderConversoes();
+  toast('Conversao removida', 'ok');
+}
+
+// Aplicar conversão: converte quantidade de undOrigem para unidade da categoria
+function converterQuantidade(catId, quantidade, undMovimento) {
+  const cat = _categorias.find(c => c.id === catId);
+  if (!cat) return quantidade;
+  // Se mesma unidade, não converter
+  if (undMovimento === cat.unidade) return quantidade;
+  // Buscar conversão
+  const conversoes = _getConversoes();
+  const conv = conversoes.find(c => c.catId === catId && c.undOrigem === undMovimento);
+  if (conv) return quantidade * conv.fator;
+  // Sem conversão definida, retorna original
+  return quantidade;
+}
+
 // ── Produtos Nao Mapeados ────────────────────────────────────
 let _naoMapeados = [];
 
@@ -2603,11 +2707,12 @@ async function calcularPosicao() {
     for (const m of movs) {
       if (!m.categoria_id || !posicao[m.categoria_id]) continue;
       const p = posicao[m.categoria_id];
+      const qtdConvertida = converterQuantidade(m.categoria_id, Number(m.quantidade || 0), m.unidade);
       if (m.tipo === 'entrada') {
-        p.entradas += Number(m.quantidade || 0);
+        p.entradas += qtdConvertida;
         p.vlr_ent += Number(m.valor_total || 0);
       } else {
-        p.saidas += Number(m.quantidade || 0);
+        p.saidas += qtdConvertida;
         p.vlr_sai += Number(m.valor_total || 0);
       }
     }

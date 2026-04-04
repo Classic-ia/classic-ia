@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/jpeg" href="assets/logo-classic-icon.png.jpg">
 <title>Classic BI — Controle de Estoque</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
@@ -2543,9 +2544,8 @@ async function mapearNaoMapeado(prodKey) {
     await carregarMapeamentos();
     toast(`Mapeado: ${prodKey} → ${nomeCategoria(catId)} (${movIds.length} movimentacoes atualizadas)`, 'ok');
 
-    // Remover da lista visual
-    const item = sel.closest('.map-item');
-    if (item) item.style.display = 'none';
+    // Atualizar lista de não mapeados
+    await carregarNaoMapeados();
 
   } catch (e) { toast('Erro: ' + e.message, 'error'); }
 }
@@ -2640,7 +2640,8 @@ async function renderDashboard() {
     // ── Pré-computar agrupamentos ──
     _dashMovs = movs;
     const catMovs = {};
-    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
+    movs.filter(m => m.categoria_id).forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
+    const semCategoria = movs.filter(m => !m.categoria_id).length;
 
     // ── KPIs ──
     const totalEstoque = saldos.reduce((s,r) => s + Number(r.saldo_atual||0), 0);
@@ -2694,6 +2695,7 @@ async function renderDashboard() {
       ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
       <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs</div></div>
       <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias</div></div>
+      ${semCategoria ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${semCategoria}</div><div class="kpi-label">Sem Categoria</div></div>` : ''}
     ` + trendHtml;
 
     // ── Alertas estoque minimo ──
@@ -2936,8 +2938,9 @@ async function calcularPosicao() {
       };
     }
 
+    let _posSkipped = 0;
     for (const m of movs) {
-      if (!m.categoria_id || !posicao[m.categoria_id]) continue;
+      if (!m.categoria_id || !posicao[m.categoria_id]) { _posSkipped++; continue; }
       const p = posicao[m.categoria_id];
       const qtdConvertida = converterQuantidade(m.categoria_id, Number(m.quantidade || 0), m.unidade);
       if (m.tipo === 'entrada') {
@@ -3008,6 +3011,7 @@ async function calcularPosicao() {
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrRevenda)}</div><div class="kpi-label">Revenda</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrMP)}</div><div class="kpi-label">MP / Acabados</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrTotal)}</div><div class="kpi-label">Total Geral</div></div>
+      ${_posSkipped ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${_posSkipped}</div><div class="kpi-label">Itens sem categoria</div></div>` : ''}
     `;
 
     // Resumo

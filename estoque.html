@@ -1191,6 +1191,12 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
 let allParsedNFs = [];
 let allParsedItens = [];
 let _currentMapItem = null;
+
+// HTML escape to prevent XSS from XML-sourced data
+function escHtml(s) {
+  if (!s) return '';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
 let _dashMovs = []; // movimentacoes carregadas no dashboard (para detalhe de categoria)
 let _remapMovId = null; // id da movimentacao sendo remapeada
 
@@ -1646,15 +1652,15 @@ function renderPreview() {
       const cls = item._mapped ? 'badge badge-ok' : 'badge badge-warn';
       const label = item._mapped ? catNome : 'SEM MAPEAMENTO';
       html += `<tr>
-        <td>${item.produto_xml}</td>
-        <td class="td-center">${item.ncm || '—'}</td>
-        <td class="td-center">${item.cfop || '—'}</td>
-        <td class="td-center">${item.unidade || '—'}</td>
+        <td>${escHtml(item.produto_xml)}</td>
+        <td class="td-center">${escHtml(item.ncm) || '—'}</td>
+        <td class="td-center">${escHtml(item.cfop) || '—'}</td>
+        <td class="td-center">${escHtml(item.unidade) || '—'}</td>
         <td class="td-num">${fmtNum(item.quantidade)}</td>
         <td class="td-num">${fmtNum(item.valor_unitario)}</td>
         <td class="td-num">${fmtNum(item.valor_total)}</td>
         <td><span class="${cls}">${label}</span></td>
-        <td><button class="btn btn-sm" onclick="abrirModalMapear('${item.produto_xml.replace(/'/g,"\\'")}','${item.ncm||''}')">${item._mapped ? 'Alterar' : 'Mapear'}</button></td>
+        <td><button class="btn btn-sm" onclick="abrirModalMapear('${escHtml(item.produto_xml).replace(/'/g,"\\'")}','${escHtml(item.ncm)||''}')">${item._mapped ? 'Alterar' : 'Mapear'}</button></td>
       </tr>`;
     }
     html += '</tbody></table></div>';
@@ -1796,12 +1802,12 @@ function abrirDetalheCategoria(catId, catNome, catUnidade) {
     <td>${fmtData(m.data_emissao)}</td>
     <td>${m.numero_nf}</td>
     <td><span class="badge ${m.tipo==='entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span></td>
-    <td>${m.fornecedor_cliente || '—'}</td>
-    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${(m.produto_xml||'').replace(/"/g,'&quot;')}">${m.produto_xml || '—'}</td>
+    <td>${escHtml(m.fornecedor_cliente) || '—'}</td>
+    <td style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escHtml(m.produto_xml)}">${escHtml(m.produto_xml) || '—'}</td>
     <td class="td-num">${fmtNum(m.quantidade)}</td>
     <td class="td-num">${fmtNum(m.valor_unitario)}</td>
     <td class="td-num">${fmtNum(m.valor_total)}</td>
-    <td><button class="btn btn-sm" onclick="event.stopPropagation();abrirRemapear('${m.id}','${(m.produto_xml||'').replace(/'/g,"\\'")}','${m.numero_nf}','${fmtData(m.data_emissao)}')">Remapear</button></td>
+    <td><button class="btn btn-sm" onclick="event.stopPropagation();abrirRemapear('${m.id}','${escHtml(m.produto_xml||'').replace(/'/g,"\\'")}','${escHtml(m.numero_nf)}','${fmtData(m.data_emissao)}')">Remapear</button></td>
   </tr>`).join('') : '<tr><td colspan="9" class="empty">Nenhuma movimentacao de NF-e para esta categoria</td></tr>';
 
   document.getElementById('modalDetalheCategoria').classList.add('show');
@@ -2046,8 +2052,8 @@ function _renderNFPage() {
     return `<tr class="nf-row" style="${rowBg}" onclick="toggleNFDetail(${globalIdx}, this)">
       <td><span class="nf-toggle" id="nfTgl${globalIdx}">&#9654;</span></td>
       <td style="font-weight:600">${nf.numero_nf}</td>
-      <td style="font-size:11px;color:var(--text2)">${nf.cnpj || '—'}</td>
-      <td style="font-size:12px">${(nf.fornecedor_cliente || '').substring(0, 40)}</td>
+      <td style="font-size:11px;color:var(--text2)">${escHtml(nf.cnpj) || '—'}</td>
+      <td style="font-size:12px">${escHtml((nf.fornecedor_cliente || '').substring(0, 40))}</td>
       <td>${tipoBadge}</td>
       <td>${fmtData(nf.data_emissao)}</td>
       <td class="td-num" style="font-weight:600">${fmtBRL(nf.valor_total)}</td>
@@ -2107,11 +2113,11 @@ function toggleNFDetail(idx, row) {
             const catNome = m.estoque_categorias?.nome;
             const catCell = catNome ? catNome : '<span class="badge-unmapped">Sem categoria</span>';
             return `<tr>
-              <td>${(m.produto_xml || '').substring(0, 50)}</td>
+              <td>${escHtml((m.produto_xml || '').substring(0, 50))}</td>
               <td>${catCell}</td>
-              <td style="font-size:11px">${m.ncm || '—'}</td>
-              <td style="font-size:11px">${m.cfop || '—'}</td>
-              <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao || '—').substring(0, 30)}</td>
+              <td style="font-size:11px">${escHtml(m.ncm) || '—'}</td>
+              <td style="font-size:11px">${escHtml(m.cfop) || '—'}</td>
+              <td style="font-size:10px;color:var(--muted)">${escHtml((m.nat_operacao || '—').substring(0, 30))}</td>
               <td class="td-num">${fmtNum(m.quantidade)}</td>
               <td style="font-size:10px">${m.unidade || '—'}</td>
               <td class="td-num">${fmtNum(m.valor_unitario)}</td>
@@ -2158,10 +2164,10 @@ function renderMovimentacoesItens(movs) {
     <td>${m.numero_nf}</td>
     <td style="font-size:11px">${m.cfop||'—'}</td>
     <td>${tipoBadge}</td>
-    <td style="font-size:11px">${(m.fornecedor_cliente||'').substring(0,35)}</td>
+    <td style="font-size:11px">${escHtml((m.fornecedor_cliente||'').substring(0,35))}</td>
     <td style="font-size:11px">${catNome}</td>
-    <td style="font-size:11px">${(m.produto_xml||'').substring(0,40)}</td>
-    <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao||'—').substring(0,25)}</td>
+    <td style="font-size:11px">${escHtml((m.produto_xml||'').substring(0,40))}</td>
+    <td style="font-size:10px;color:var(--muted)">${escHtml((m.nat_operacao||'—').substring(0,25))}</td>
     <td class="td-num">${fmtNum(m.quantidade)}</td>
     <td class="td-num">${fmtNum(m.valor_unitario)}</td>
     <td class="td-num">${fmtNum(m.valor_total)}</td>
@@ -2411,9 +2417,9 @@ async function carregarNaoMapeados() {
       const sugLabel = sug ? ` — Sugestao: <strong style="color:var(--ok)">${sug.nome}</strong>` : '';
       return `<div class="map-item" style="flex-wrap:wrap;gap:8px">
         <div style="flex:1;min-width:200px">
-          <div class="map-item-name">${g.nome}</div>
-          <div class="map-item-badge">${g.count}x | ${fmtBRL(g.valor)} | NCM: ${g.ncm||'—'} | CFOP: ${g.cfop||'—'} | ${g.tipo}${sugLabel}</div>
-          <div style="font-size:10px;color:var(--muted)">${[...g.fornecedores].slice(0,3).join(', ')}</div>
+          <div class="map-item-name">${escHtml(g.nome)}</div>
+          <div class="map-item-badge">${g.count}x | ${fmtBRL(g.valor)} | NCM: ${escHtml(g.ncm)||'—'} | CFOP: ${escHtml(g.cfop)||'—'} | ${g.tipo}${sugLabel}</div>
+          <div style="font-size:10px;color:var(--muted)">${[...g.fornecedores].slice(0,3).map(f=>escHtml(f)).join(', ')}</div>
         </div>
         <div style="display:flex;gap:6px;align-items:center">
           <select class="filter-select" style="min-width:150px;padding:4px 8px;font-size:11px" id="mapNM_${encodeURIComponent(key)}">
@@ -2813,8 +2819,8 @@ function renderFornecedores(movs) {
 
   const renderTabela = (dados) => dados.slice(0,30).map((f,i) => `<tr>
     <td class="td-center">${i+1}</td>
-    <td>${f.fornecedor_cliente}</td>
-    <td style="font-family:'DM Mono';font-size:11px">${f.cnpj||'—'}</td>
+    <td>${escHtml(f.fornecedor_cliente)}</td>
+    <td style="font-family:'DM Mono';font-size:11px">${escHtml(f.cnpj)||'—'}</td>
     <td class="td-num">${f.total_nfs}</td>
     <td class="td-num">${f.total_itens}</td>
     <td class="td-num">${fmtNum(f.qtd_total,0)}</td>
@@ -2900,7 +2906,7 @@ function renderDuplicatas(dups) {
     dups.map(d => `<tr style="background:rgba(239,68,68,0.05)">
       <td>${d.numero_nf}</td><td>${fmtData(d.data_emissao)}</td>
       <td><span class="badge ${d.tipo==='entrada'?'badge-entrada':'badge-saida'}">${d.tipo}</span></td>
-      <td>${d.fornecedor_cliente}</td>
+      <td>${escHtml(d.fornecedor_cliente)}</td>
       <td class="td-num">${d.total_itens}</td><td class="td-num">${fmtBRL(d.valor_total)}</td>
     </tr>`).join('') + '</tbody></table></div>';
 }

@@ -35,7 +35,7 @@ const RADICAL_CLASSIC = '08849964';
 
 // ── API Helpers ─────────────────────────────────────────────────
 function sbHeaders() {
-  const sess = JSON.parse(localStorage.getItem('cq_sess_v2') || '{}');
+  let sess = {}; try { sess = JSON.parse(localStorage.getItem('cq_sess_v2') || '{}'); } catch(_) {}
   return {
     'apikey': SB_KEY,
     'Authorization': `Bearer ${sess.access_token || SB_KEY}`,

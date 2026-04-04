@@ -246,6 +246,10 @@ textarea.form-input{resize:vertical;min-height:64px}
     <div class="nav-item" onclick="showPage('organograma',this)"><span class="nav-icon">🏢</span><span>Organograma</span></div>
     <div class="nav-item" onclick="showPage('ia',this)"><span class="nav-icon">🤖</span><span>Assistente IA</span></div>
     <div class="nav-item" onclick="showPage('relatorios',this)"><span class="nav-icon">📄</span><span>Relatórios PDF</span></div>
+    <div class="nav-label">Painel RH</div>
+    <div class="nav-item" onclick="showPage('sst',this)"><span class="nav-icon">🛡️</span><span>SST / Segurança</span></div>
+    <div class="nav-item" onclick="showPage('absenteismo',this)"><span class="nav-icon">📅</span><span>Absenteísmo</span></div>
+    <div class="nav-item" onclick="showPage('turnover',this)"><span class="nav-icon">🔄</span><span>Turnover</span></div>
   </div>
   <a href="app_rh.html" class="nav-back">← Voltar ao RH</a>
 </nav>
@@ -455,6 +459,47 @@ textarea.form-input{resize:vertical;min-height:64px}
   </div>
 </div>
 
+<!-- SST / SEGURANÇA -->
+<div class="page" id="pg-sst">
+  <div style="margin-bottom:16px"><h2 style="font-family:Syne;font-size:20px;font-weight:800">🛡️ SST — Segurança do Trabalho</h2></div>
+  <div class="grid4" id="sst-stats"></div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">🩺 ASOs Vencidos / Vencendo</div><div id="sst-aso" style="max-height:280px;overflow-y:auto"></div></div>
+    <div class="card"><div class="card-title">📚 Treinamentos Vencidos / Vencendo</div><div id="sst-trein" style="max-height:280px;overflow-y:auto"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">🧤 EPIs com Problema</div><div id="sst-epi" style="max-height:280px;overflow-y:auto"></div></div>
+    <div class="card"><div class="card-title">⚕️ Restricoes Medicas Ativas</div><div id="sst-restri" style="max-height:280px;overflow-y:auto"></div></div>
+  </div>
+  <div class="card"><div class="card-title">🚨 Acidentes Recentes</div><div id="sst-acidentes" style="max-height:240px;overflow-y:auto"></div></div>
+</div>
+
+<!-- ABSENTEÍSMO -->
+<div class="page" id="pg-absenteismo">
+  <div style="margin-bottom:16px"><h2 style="font-family:Syne;font-size:20px;font-weight:800">📅 Absenteismo</h2></div>
+  <div class="grid4" id="abs-stats"></div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">🔴 Top Faltantes (ultimos 90 dias)</div><div id="abs-ranking" style="max-height:300px;overflow-y:auto"></div></div>
+    <div class="card"><div class="card-title">📊 Ausencias por Setor</div><div id="abs-setores"></div></div>
+  </div>
+  <div class="card"><div class="card-title">📋 Ausencias Recentes</div><div class="table-wrap"><table><thead><tr><th>Funcionario</th><th>Setor</th><th>Tipo</th><th>Inicio</th><th>Fim</th><th>Dias</th><th>CID</th></tr></thead><tbody id="abs-lista"></tbody></table></div></div>
+</div>
+
+<!-- TURNOVER -->
+<div class="page" id="pg-turnover">
+  <div style="margin-bottom:16px"><h2 style="font-family:Syne;font-size:20px;font-weight:800">🔄 Turnover & Desligamentos</h2></div>
+  <div class="grid4" id="turn-stats"></div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">📊 Desligamentos por Tipo</div><div id="turn-tipos"></div></div>
+    <div class="card"><div class="card-title">📈 Causa dos Desligamentos</div><div id="turn-causas"></div></div>
+  </div>
+  <div class="grid2">
+    <div class="card"><div class="card-title">🏭 Turnover por Setor</div><div id="turn-setores"></div></div>
+    <div class="card"><div class="card-title">📅 Evolucao Mensal (12 meses)</div><div id="turn-mensal"></div></div>
+  </div>
+  <div class="card"><div class="card-title">💬 Entrevistas de Saida — Insights</div><div id="turn-entrevistas"></div></div>
+</div>
+
 </div><!-- /content -->
 </div><!-- /main -->
 
@@ -464,11 +509,17 @@ textarea.form-input{resize:vertical;min-height:64px}
 // ============================================================
 let G = {
   funcs: [],        // rh_funcionarios
-  ocorrs: [],       // rh_ocorrencias
+  ocorrs: [],       // rh_acidentes (ocorrencias)
   avals: [],        // rh_avaliacoes
   metas: [],        // rh_metas
   pulsos: [],       // rh_pulsos (localStorage fallback)
   rondas: [],       // rh_rondas (localStorage fallback)
+  asos: [],         // rh_aso
+  treinamentos: [], // rh_treinamentos
+  epis: [],         // rh_epi_entregas
+  ausencias: [],    // rh_ausencias
+  restricoes: [],   // rh_restricoes
+  desligamentos: [],// rh_desligamentos
 };
 
 const CORES = ['#c8a96e','#4f8ef7','#f97316','#a855f7','#f43f5e','#10b981','#fbbf24','#06b6d4','#ec4899','#84cc16'];
@@ -509,7 +560,7 @@ function showPage(id, el){
   (el||event.currentTarget).classList.add('active');
   const titles={dashboard:'Dashboard de Liderança',avaliacoes:'Avaliações de Desempenho',metas:'Metas',engajamento:'Engajamento das Equipes',rankings:'Rankings',rondas:'Rondas Motivacionais',organograma:'Organograma por Setor',ia:'Assistente IA Estratégico',relatorios:'Relatórios PDF'};
   document.getElementById('page-title').textContent=titles[id]||id;
-  const fns={dashboard:renderDashboard,avaliacoes:renderAvaliacoes,metas:()=>renderMetas('todas'),engajamento:renderEngajamento,rankings:()=>renderRanking('faltas'),rondas:renderRondas,organograma:renderOrg,ia:()=>{},relatorios:()=>{}};
+  const fns={dashboard:renderDashboard,avaliacoes:renderAvaliacoes,metas:()=>renderMetas('todas'),engajamento:renderEngajamento,rankings:()=>renderRanking('faltas'),rondas:renderRondas,organograma:renderOrg,ia:()=>{},relatorios:()=>{},sst:renderSST,absenteismo:renderAbsenteismo,turnover:renderTurnover};
   if(fns[id])fns[id]();
 }
 
@@ -518,16 +569,28 @@ function showPage(id, el){
 // ============================================================
 async function loadAll(){
   try{
-    const [f,o,a,m] = await Promise.all([
+    const [f,o,a,m,asos,trein,epis,aus,restri,deslig] = await Promise.all([
       RH_API.get('rh_funcionarios?order=nome_completo'),
       RH_API.get('rh_acidentes?order=created_at.desc').catch(()=>[]),
       RH_API.get('rh_avaliacoes?order=created_at.desc').catch(()=>[]),
       RH_API.get('rh_metas?order=created_at.desc').catch(()=>[]),
+      RH_API.get('rh_aso?order=data_validade.asc&limit=500').catch(()=>[]),
+      RH_API.get('rh_treinamentos?order=data_validade.asc&limit=500').catch(()=>[]),
+      RH_API.get('rh_epi_entregas?order=data_entrega.desc&limit=500').catch(()=>[]),
+      RH_API.get('rh_ausencias?order=data_inicio.desc&limit=500').catch(()=>[]),
+      RH_API.get('rh_restricoes?order=data_inicio.desc&limit=200').catch(()=>[]),
+      RH_API.get('rh_desligamentos?order=data_desligamento.desc&limit=300').catch(()=>[]),
     ]);
     G.funcs   = (f||[]).map((x,i)=>({...x,nome:x.nome_completo||x.nome||'Sem nome',_idx:i}));
     G.ocorrs  = o||[];
     G.avals   = a||[];
     G.metas   = m||[];
+    G.asos    = asos||[];
+    G.treinamentos = trein||[];
+    G.epis    = epis||[];
+    G.ausencias = aus||[];
+    G.restricoes = restri||[];
+    G.desligamentos = deslig||[];
     G.pulsos  = JSON.parse(localStorage.getItem('rh_pulsos')||'[]');
     G.rondas  = JSON.parse(localStorage.getItem('rh_rondas')||'[]');
     popularSetores();
@@ -553,13 +616,23 @@ function renderDashboard(){
   const risco=G.funcs.filter(f=>{const s=getOcorrFunc(f.id);return s.faltas>=3||s.advertencias>=2||s.atestados>=3}).length;
   const metasAtingidas=G.metas.filter(m=>m.valor_alvo>0&&m.valor_atual>=m.valor_alvo).length;
 
+  const hoje=new Date().toISOString().slice(0,10);
+  const asoVenc=G.asos.filter(a=>a.data_validade&&a.data_validade<hoje&&a.resultado!=='inapto').length;
+  const treinVenc=G.treinamentos.filter(t=>t.data_validade&&t.data_validade<hoje).length;
+  const epiVenc=G.epis.filter(e=>!e.data_devolucao&&e.data_validade&&e.data_validade<hoje).length;
+  const alertasSST=asoVenc+treinVenc+epiVenc;
+
   document.getElementById('dash-stats').innerHTML=`
     <div class="stat c1"><div class="stat-icon">👥</div><div class="stat-val">${total}</div><div class="stat-lbl">Colaboradores</div><div class="stat-sub" style="color:var(--success)">${ativos} ativos</div></div>
     <div class="stat c2"><div class="stat-icon">🔥</div><div class="stat-val">${eng}%</div><div class="stat-lbl">Engajamento</div><div class="stat-sub" style="color:${eng>=70?'var(--success)':eng>=40?'var(--warning)':'var(--danger)'}">${eng>=70?'Saudável':eng>=40?'Atenção':'Crítico'}</div></div>
     <div class="stat c3"><div class="stat-icon">🎯</div><div class="stat-val">${G.metas.length}</div><div class="stat-lbl">Metas Ativas</div><div class="stat-sub" style="color:var(--text3)">${metasAtingidas} atingidas</div></div>
-    <div class="stat c4"><div class="stat-icon">⚠️</div><div class="stat-val">${risco}</div><div class="stat-lbl">Em Risco</div><div class="stat-sub" style="color:var(--danger)">Requer atenção</div></div>`;
+    <div class="stat c4"><div class="stat-icon">⚠️</div><div class="stat-val">${risco}</div><div class="stat-lbl">Em Risco</div><div class="stat-sub" style="color:var(--danger)">Requer atenção</div></div>
+    <div class="stat c3"><div class="stat-icon">🛡️</div><div class="stat-val" style="color:${alertasSST?'var(--danger)':'var(--success)'}">${alertasSST}</div><div class="stat-lbl">Alertas SST</div><div class="stat-sub" style="color:var(--text3)">${asoVenc} ASO · ${treinVenc} Trein · ${epiVenc} EPI</div></div>
+    <div class="stat c1"><div class="stat-icon">📅</div><div class="stat-val">${G.ausencias.filter(a=>(a.data_inicio||'').startsWith(hoje.slice(0,7))).length}</div><div class="stat-lbl">Faltas Mês</div><div class="stat-sub" style="color:var(--text3)">${G.desligamentos.filter(d=>(d.data_desligamento||'').startsWith(hoje.slice(0,4))).length} deslig. ano</div></div>`;
 
-  document.getElementById('alert-badge').textContent=risco+' alert'+(risco===1?'a':'as');
+  const totalAlertas=risco+alertasSST;
+  document.getElementById('alert-badge').textContent=totalAlertas+' alert'+(totalAlertas===1?'a':'as');
+  document.getElementById('alert-badge').style.background=totalAlertas>0?'var(--danger)':'var(--success)';
 
   // Setores
   const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];
@@ -854,7 +927,7 @@ function toggleTodosSetores(){_orgExpanded=!_orgExpanded;renderOrg();}
 // IA
 // ============================================================
 function salvarChave(){const k=document.getElementById('claude-key').value.trim();if(!k){showToast('Informe a chave','warn');return}localStorage.setItem('claude_api_key',k);showToast('Chave salva! 🤖')}
-function buildCtx(){const total=G.funcs.length;const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];const f=G.ocorrs.filter(o=>o.tipo==='falta').length;const a=G.ocorrs.filter(o=>o.tipo==='advertencia'||o.tipo==='advertência').length;const at=G.ocorrs.filter(o=>o.tipo==='atestado').length;const eng=calcEngGeral();const risco=G.funcs.filter(f=>{const s=getOcorrFunc(f.id);return s.faltas>=3||s.advertencias>=2||s.atestados>=3}).length;return`Empresa: Classic Couros | Colaboradores: ${total} | Setores: ${setores.join(', ')} | Faltas: ${f} | Advertências: ${a} | Atestados: ${at} | Engajamento: ${eng}% | Em risco: ${risco} | Metas: ${G.metas.length} (${G.metas.filter(m=>m.valor_alvo>0&&m.valor_atual>=m.valor_alvo).length} atingidas) | Avaliações: ${G.avals.length}`}
+function buildCtx(){const total=G.funcs.length;const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];const f=G.ocorrs.filter(o=>o.tipo==='falta').length;const a=G.ocorrs.filter(o=>o.tipo==='advertencia'||o.tipo==='advertência').length;const at=G.ocorrs.filter(o=>o.tipo==='atestado').length;const eng=calcEngGeral();const risco=G.funcs.filter(f=>{const s=getOcorrFunc(f.id);return s.faltas>=3||s.advertencias>=2||s.atestados>=3}).length;const hoje=new Date().toISOString().slice(0,10);const asoV=G.asos.filter(x=>x.data_validade&&x.data_validade<hoje).length;const treinV=G.treinamentos.filter(x=>x.data_validade&&x.data_validade<hoje).length;const epiV=G.epis.filter(x=>!x.data_devolucao&&x.data_validade&&x.data_validade<hoje).length;const ausMes=G.ausencias.filter(x=>(x.data_inicio||'').startsWith(hoje.slice(0,7))).length;const desligAno=G.desligamentos.filter(x=>(x.data_desligamento||'').startsWith(hoje.slice(0,4))).length;const restAt=G.restricoes.filter(x=>x.status==='ativa').length;return`Empresa: Classic Couros (industria de couro) | Colaboradores: ${total} | Setores: ${setores.join(', ')} | Faltas: ${f} | Advertências: ${a} | Atestados: ${at} | Engajamento: ${eng}% | Em risco: ${risco} | Metas: ${G.metas.length} (${G.metas.filter(m=>m.valor_alvo>0&&m.valor_atual>=m.valor_alvo).length} atingidas) | Avaliações: ${G.avals.length} | ASOs vencidos: ${asoV} | Treinamentos vencidos: ${treinV} | EPIs vencidos: ${epiV} | Ausencias mes: ${ausMes} | Desligamentos ano: ${desligAno} | Restricoes medicas ativas: ${restAt}`}
 
 async function sendAI(){
   const inp=document.getElementById('ai-input');const msg=inp.value.trim();if(!msg)return;
@@ -870,6 +943,209 @@ async function sendAI(){
 function quickAI(msg){document.getElementById('ai-input').value=msg;sendAI()}
 function addAIMsg(text,type){const div=document.getElementById('ai-msgs');const el=document.createElement('div');el.className=`ai-msg ${type}`;el.innerHTML=`<div class="ai-av ${type==='bot'?'bot':'usr'}">${type==='bot'?'🤖':'👤'}</div><div class="ai-bubble">${text.replace(/\n/g,'<br>')}</div>`;div.appendChild(el);div.scrollTop=div.scrollHeight;return el}
 function addThinking(){const div=document.getElementById('ai-msgs');const el=document.createElement('div');el.className='ai-msg bot';el.innerHTML=`<div class="ai-av bot">🤖</div><div class="ai-bubble"><div style="display:flex;gap:3px"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div></div>`;div.appendChild(el);div.scrollTop=div.scrollHeight;return el}
+
+// ============================================================
+// SST / SEGURANÇA
+// ============================================================
+function nomeF(id){const f=G.funcs.find(x=>x.id===id);return f?f.nome:'—'}
+function setorF(id){const f=G.funcs.find(x=>x.id===id);return f?(f.departamento||f.setor||'—'):'—'}
+function diasEntre(d1,d2){return Math.round((new Date(d2)-new Date(d1))/86400000)}
+
+function renderSST(){
+  const hoje=new Date().toISOString().slice(0,10);
+
+  // Stats
+  const asoVenc=G.asos.filter(a=>a.data_validade&&a.data_validade<hoje).length;
+  const asoVencer30=G.asos.filter(a=>a.data_validade&&a.data_validade>=hoje&&diasEntre(hoje,a.data_validade)<=30).length;
+  const treinVenc=G.treinamentos.filter(t=>t.data_validade&&t.data_validade<hoje).length;
+  const treinVencer30=G.treinamentos.filter(t=>t.data_validade&&t.data_validade>=hoje&&diasEntre(hoje,t.data_validade)<=30).length;
+  const epiVenc=G.epis.filter(e=>!e.data_devolucao&&e.data_validade&&e.data_validade<hoje).length;
+  const epiVencer30=G.epis.filter(e=>!e.data_devolucao&&e.data_validade&&e.data_validade>=hoje&&diasEntre(hoje,e.data_validade)<=30).length;
+  const restAtivas=G.restricoes.filter(r=>r.status==='ativa').length;
+
+  document.getElementById('sst-stats').innerHTML=`
+    <div class="stat c3"><div class="stat-icon">🩺</div><div class="stat-val" style="color:${asoVenc?'var(--danger)':'var(--success)'}">${asoVenc}</div><div class="stat-lbl">ASOs Vencidos</div><div class="stat-sub" style="color:var(--warning)">${asoVencer30} vencem 30d</div></div>
+    <div class="stat c2"><div class="stat-icon">📚</div><div class="stat-val" style="color:${treinVenc?'var(--danger)':'var(--success)'}">${treinVenc}</div><div class="stat-lbl">Treinamentos Vencidos</div><div class="stat-sub" style="color:var(--warning)">${treinVencer30} vencem 30d</div></div>
+    <div class="stat c3"><div class="stat-icon">🧤</div><div class="stat-val" style="color:${epiVenc?'var(--danger)':'var(--success)'}">${epiVenc}</div><div class="stat-lbl">EPIs Vencidos</div><div class="stat-sub" style="color:var(--warning)">${epiVencer30} vencem 30d</div></div>
+    <div class="stat c4"><div class="stat-icon">⚕️</div><div class="stat-val">${restAtivas}</div><div class="stat-lbl">Restricoes Ativas</div><div class="stat-sub" style="color:var(--text3)">funcionarios com restricao</div></div>`;
+
+  // ASOs vencidos/vencendo
+  const asoProblema=G.asos.filter(a=>a.data_validade&&diasEntre(hoje,a.data_validade)<=30).sort((a,b)=>(a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('sst-aso').innerHTML=asoProblema.length
+    ?asoProblema.map(a=>{const d=diasEntre(hoje,a.data_validade);const cor=d<0?'var(--danger)':'var(--warning)';return`<div class="alert ${d<0?'al-danger':'al-warn'}" style="margin-bottom:4px;padding:6px 10px"><strong>${nomeF(a.funcionario_id)}</strong> <span style="color:var(--text3)">·</span> ${a.tipo_exame||'periodico'} <span style="float:right;font-weight:700;color:${cor}">${d<0?Math.abs(d)+'d vencido':d+'d restantes'}</span></div>`}).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Todos ASOs em dia</p></div>';
+
+  // Treinamentos
+  const treinProblema=G.treinamentos.filter(t=>t.data_validade&&diasEntre(hoje,t.data_validade)<=30).sort((a,b)=>(a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('sst-trein').innerHTML=treinProblema.length
+    ?treinProblema.map(t=>{const d=diasEntre(hoje,t.data_validade);const cor=d<0?'var(--danger)':'var(--warning)';return`<div class="alert ${d<0?'al-danger':'al-warn'}" style="margin-bottom:4px;padding:6px 10px"><strong>${nomeF(t.funcionario_id)}</strong> <span style="color:var(--text3)">·</span> ${t.tipo_treinamento||'NR'} <span style="float:right;font-weight:700;color:${cor}">${d<0?Math.abs(d)+'d vencido':d+'d restantes'}</span></div>`}).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Todos treinamentos em dia</p></div>';
+
+  // EPIs
+  const epiProblema=G.epis.filter(e=>!e.data_devolucao&&e.data_validade&&diasEntre(hoje,e.data_validade)<=30).sort((a,b)=>(a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('sst-epi').innerHTML=epiProblema.length
+    ?epiProblema.map(e=>{const d=diasEntre(hoje,e.data_validade);const cor=d<0?'var(--danger)':'var(--warning)';return`<div class="alert ${d<0?'al-danger':'al-warn'}" style="margin-bottom:4px;padding:6px 10px"><strong>${nomeF(e.funcionario_id)}</strong> <span style="color:var(--text3)">·</span> ${e.epi_nome||'EPI'} <span style="float:right;font-weight:700;color:${cor}">${d<0?Math.abs(d)+'d vencido':d+'d restantes'}</span></div>`}).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Todos EPIs em dia</p></div>';
+
+  // Restricoes
+  const restAtv=G.restricoes.filter(r=>r.status==='ativa');
+  document.getElementById('sst-restri').innerHTML=restAtv.length
+    ?restAtv.map(r=>`<div class="alert al-info" style="margin-bottom:4px;padding:6px 10px"><strong>${nomeF(r.funcionario_id)}</strong> <span style="color:var(--text3)">·</span> ${r.tipo_restricao} ${r.permanente?'<span class="tag tr">Permanente</span>':''}<div style="font-size:10px;color:var(--text3);margin-top:2px">${r.descricao||''}</div></div>`).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Nenhuma restricao ativa</p></div>';
+
+  // Acidentes recentes
+  const acidRecentes=G.ocorrs.slice(0,8);
+  document.getElementById('sst-acidentes').innerHTML=acidRecentes.length
+    ?acidRecentes.map(a=>{const gravCor={leve:'tg',moderado:'ty',grave:'tr',fatal:'tr'};return`<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)"><span class="tag ${gravCor[a.gravidade]||'to'}">${a.gravidade||'—'}</span><div style="flex:1"><strong style="font-size:12px">${nomeF(a.funcionario_id)}</strong><div style="font-size:10px;color:var(--text3)">${a.descricao||''}</div></div><div style="text-align:right"><div style="font-size:11px">${fmtDate(a.data_ocorrencia)}</div><div style="font-size:10px;color:var(--text3)">${a.setor||setorF(a.funcionario_id)}</div></div></div>`}).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Nenhum acidente registrado</p></div>';
+}
+
+// ============================================================
+// ABSENTEÍSMO
+// ============================================================
+function renderAbsenteismo(){
+  const hoje=new Date().toISOString().slice(0,10);
+  const mesAtual=hoje.slice(0,7);
+  const anoAtual=hoje.slice(0,4);
+  const d90=new Date(Date.now()-90*86400000).toISOString().slice(0,10);
+
+  const ausMes=G.ausencias.filter(a=>(a.data_inicio||'').startsWith(mesAtual));
+  const ausAno=G.ausencias.filter(a=>(a.data_inicio||'').startsWith(anoAtual));
+  const totalDiasMes=ausMes.reduce((s,a)=>s+(a.dias||1),0);
+  const atestMes=ausMes.filter(a=>a.tipo_ausencia==='atestado').length;
+  const faltasMes=ausMes.filter(a=>a.tipo_ausencia&&a.tipo_ausencia.includes('falta')).length;
+  const ativos=G.funcs.filter(f=>f.status==='ativo').length;
+  const taxaAbs=ativos>0?((totalDiasMes/(ativos*22))*100).toFixed(1):'0';
+
+  document.getElementById('abs-stats').innerHTML=`
+    <div class="stat c3"><div class="stat-icon">📅</div><div class="stat-val">${ausMes.length}</div><div class="stat-lbl">Ausencias Mes</div><div class="stat-sub" style="color:var(--text3)">${totalDiasMes} dias</div></div>
+    <div class="stat c2"><div class="stat-icon">📊</div><div class="stat-val">${taxaAbs}%</div><div class="stat-lbl">Taxa Absenteismo</div><div class="stat-sub" style="color:${taxaAbs>5?'var(--danger)':taxaAbs>3?'var(--warning)':'var(--success)'}">${taxaAbs>5?'Alto':taxaAbs>3?'Atencao':'Normal'}</div></div>
+    <div class="stat c4"><div class="stat-icon">🏥</div><div class="stat-val">${atestMes}</div><div class="stat-lbl">Atestados Mes</div><div class="stat-sub" style="color:var(--text3)">${faltasMes} faltas</div></div>
+    <div class="stat c1"><div class="stat-icon">📈</div><div class="stat-val">${ausAno.length}</div><div class="stat-lbl">Total Ano</div><div class="stat-sub" style="color:var(--text3)">${ausAno.reduce((s,a)=>s+(a.dias||1),0)} dias</div></div>`;
+
+  // Ranking faltantes 90 dias
+  const aus90=G.ausencias.filter(a=>(a.data_inicio||'')>=d90);
+  const porFunc={};
+  aus90.forEach(a=>{
+    if(!porFunc[a.funcionario_id]) porFunc[a.funcionario_id]={dias:0,count:0};
+    porFunc[a.funcionario_id].dias+=(a.dias||1);
+    porFunc[a.funcionario_id].count++;
+  });
+  const rankFalt=Object.entries(porFunc).map(([id,v])=>({id,nome:nomeF(id),setor:setorF(id),...v})).sort((a,b)=>b.dias-a.dias).slice(0,10);
+  const rnCls=['rn-gold','rn-silver','rn-bronze','rn-other'];
+  document.getElementById('abs-ranking').innerHTML=rankFalt.length
+    ?rankFalt.map((f,i)=>`<div class="rank-item"><div class="rank-num ${rnCls[Math.min(i,3)]}">${i+1}</div><div style="flex:1"><div style="font-size:12px;font-weight:600">${f.nome}</div><div style="font-size:10px;color:var(--text3)">${f.setor}</div></div><div style="text-align:right"><div style="font-weight:800;color:var(--danger);font-size:13px">${f.dias}d</div><div style="font-size:10px;color:var(--text3)">${f.count} ocorr.</div></div></div>`).join('')
+    :'<div class="empty"><div class="ei">✅</div><p>Sem ausencias em 90 dias</p></div>';
+
+  // Por setor
+  const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];
+  const max=Math.max(1,...setores.map(s=>{const ids=G.funcs.filter(f=>(f.departamento||f.setor)===s).map(f=>f.id);return aus90.filter(a=>ids.includes(a.funcionario_id)).reduce((sum,a)=>sum+(a.dias||1),0)}));
+  document.getElementById('abs-setores').innerHTML=setores.map((s,i)=>{
+    const ids=G.funcs.filter(f=>(f.departamento||f.setor)===s).map(f=>f.id);
+    const dias=aus90.filter(a=>ids.includes(a.funcionario_id)).reduce((sum,a)=>sum+(a.dias||1),0);
+    const pct=Math.round(dias/max*100);
+    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:11px">${s}</span><span style="font-size:11px;font-weight:700;color:var(--text)">${dias}d</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${getColor(i)}"></div></div></div>`;
+  }).join('');
+
+  // Lista recente
+  const tipoLabel={falta_justificada:'Falta Just.',falta_injustificada:'Falta Injust.',atestado:'Atestado',afastamento_inss:'INSS',licenca_maternidade:'Lic. Matern.',licenca_paternidade:'Lic. Patern.'};
+  const tipoCor={falta_justificada:'ty',falta_injustificada:'tr',atestado:'tp',afastamento_inss:'tb',licenca_maternidade:'tg',licenca_paternidade:'tg'};
+  document.getElementById('abs-lista').innerHTML=G.ausencias.slice(0,30).map(a=>`<tr>
+    <td><strong>${nomeF(a.funcionario_id)}</strong></td>
+    <td style="font-size:11px;color:var(--text3)">${setorF(a.funcionario_id)}</td>
+    <td><span class="tag ${tipoCor[a.tipo_ausencia]||'to'}">${tipoLabel[a.tipo_ausencia]||a.tipo_ausencia||'—'}</span></td>
+    <td>${fmtDate(a.data_inicio)}</td>
+    <td>${fmtDate(a.data_fim)}</td>
+    <td style="font-weight:700">${a.dias||1}</td>
+    <td style="font-size:11px;font-family:monospace">${a.cid||'—'}</td>
+  </tr>`).join('')||'<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">Nenhuma ausencia registrada</td></tr>';
+}
+
+// ============================================================
+// TURNOVER
+// ============================================================
+function renderTurnover(){
+  const hoje=new Date().toISOString().slice(0,10);
+  const anoAtual=hoje.slice(0,4);
+  const mesAtual=hoje.slice(0,7);
+
+  const desligAno=G.desligamentos.filter(d=>(d.data_desligamento||'').startsWith(anoAtual));
+  const desligMes=G.desligamentos.filter(d=>(d.data_desligamento||'').startsWith(mesAtual));
+  const admAno=G.funcs.filter(f=>(f.data_admissao||'').startsWith(anoAtual)).length;
+  const ativos=G.funcs.filter(f=>f.status==='ativo').length;
+  const taxaTurn=ativos>0?((desligAno.length/((ativos+desligAno.length)/2))*100).toFixed(1):'0';
+
+  document.getElementById('turn-stats').innerHTML=`
+    <div class="stat c3"><div class="stat-icon">🔄</div><div class="stat-val" style="color:${taxaTurn>15?'var(--danger)':taxaTurn>8?'var(--warning)':'var(--success)'}">${taxaTurn}%</div><div class="stat-lbl">Taxa Turnover Ano</div><div class="stat-sub" style="color:var(--text3)">${taxaTurn>15?'Critico':taxaTurn>8?'Atencao':'Saudavel'}</div></div>
+    <div class="stat c4"><div class="stat-icon">📉</div><div class="stat-val">${desligAno.length}</div><div class="stat-lbl">Desligamentos Ano</div><div class="stat-sub" style="color:var(--text3)">${desligMes.length} este mes</div></div>
+    <div class="stat c1"><div class="stat-icon">📈</div><div class="stat-val" style="color:var(--success)">${admAno}</div><div class="stat-lbl">Admissoes Ano</div><div class="stat-sub" style="color:var(--text3)">saldo: ${admAno-desligAno.length>=0?'+':''}${admAno-desligAno.length}</div></div>
+    <div class="stat c2"><div class="stat-icon">⏱️</div><div class="stat-val">${desligAno.length>0?Math.round(desligAno.reduce((s,d)=>{const f=G.funcs.find(x=>x.id===d.funcionario_id);if(!f||!f.data_admissao)return s;return s+diasEntre(f.data_admissao,d.data_desligamento)/30},0)/desligAno.length):'—'}</div><div class="stat-lbl">Tempo Medio (meses)</div><div class="stat-sub" style="color:var(--text3)">ate desligamento</div></div>`;
+
+  // Por tipo
+  const tipos={pedido_demissao:'Pedido Demissao',demissao_empresa:'Demissao Empresa',termino_contrato:'Termino Contrato',justa_causa:'Justa Causa',acordo_mutuo:'Acordo Mutuo'};
+  const porTipo={};
+  desligAno.forEach(d=>{const t=d.tipo_desligamento||'outro';porTipo[t]=(porTipo[t]||0)+1});
+  const maxT=Math.max(1,...Object.values(porTipo));
+  document.getElementById('turn-tipos').innerHTML=Object.entries(porTipo).sort((a,b)=>b[1]-a[1]).map(([t,v],i)=>{
+    const pct=Math.round(v/maxT*100);
+    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:11px">${tipos[t]||t}</span><span style="font-size:11px;font-weight:700">${v}</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${getColor(i)}"></div></div></div>`;
+  }).join('')||'<p style="font-size:12px;color:var(--text3)">Sem desligamentos no ano</p>';
+
+  // Por causa
+  const causas={admissao:'Admissao',operacional:'Operacional',financeiro:'Financeiro',pessoal:'Pessoal'};
+  const porCausa={};
+  desligAno.forEach(d=>{const c=d.categoria_causa||'pessoal';porCausa[c]=(porCausa[c]||0)+1});
+  const maxC=Math.max(1,...Object.values(porCausa));
+  const causCores={admissao:'var(--accent2)',operacional:'var(--accent3)',financeiro:'var(--accent)',pessoal:'var(--accent4)'};
+  document.getElementById('turn-causas').innerHTML=Object.entries(porCausa).sort((a,b)=>b[1]-a[1]).map(([c,v])=>{
+    const pct=Math.round(v/maxC*100);
+    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:11px">${causas[c]||c}</span><span style="font-size:11px;font-weight:700">${v} (${desligAno.length?Math.round(v/desligAno.length*100):0}%)</span></div><div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${causCores[c]||'var(--accent)'}"></div></div></div>`;
+  }).join('')||'<p style="font-size:12px;color:var(--text3)">Sem dados de causa</p>';
+
+  // Por setor
+  const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];
+  const porSetor={};
+  desligAno.forEach(d=>{const s=setorF(d.funcionario_id);porSetor[s]=(porSetor[s]||0)+1});
+  const maxS=Math.max(1,...Object.values(porSetor));
+  document.getElementById('turn-setores').innerHTML=setores.filter(s=>porSetor[s]).map((s,i)=>{
+    const v=porSetor[s]||0;const cs=G.funcs.filter(f=>(f.departamento||f.setor)===s).length;
+    const taxa=cs>0?Math.round(v/cs*100):0;
+    return`<div style="margin-bottom:8px"><div style="display:flex;justify-content:space-between;margin-bottom:2px"><span style="font-size:11px">${s}</span><span style="font-size:11px;font-weight:700">${v} deslig. (${taxa}%)</span></div><div class="prog-bar"><div class="prog-fill" style="width:${Math.round(v/maxS*100)}%;background:${getColor(i)}"></div></div></div>`;
+  }).join('')||'<p style="font-size:12px;color:var(--text3)">Sem desligamentos por setor</p>';
+
+  // Evolução mensal
+  const meses=[];
+  const now=new Date();
+  for(let i=11;i>=0;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const key=d.toISOString().slice(0,7);
+    const label=d.toLocaleDateString('pt-BR',{month:'short',year:'2-digit'});
+    const v=G.desligamentos.filter(x=>(x.data_desligamento||'').startsWith(key)).length;
+    meses.push({label,v});
+  }
+  const maxM=Math.max(1,...meses.map(m=>m.v));
+  document.getElementById('turn-mensal').innerHTML=meses.map(m=>{
+    const pct=Math.round(m.v/maxM*100);
+    return`<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px"><span style="min-width:50px;font-size:10px;text-align:right;color:var(--text3)">${m.label}</span><div class="prog-bar" style="flex:1"><div class="prog-fill" style="width:${pct}%;background:${m.v>2?'var(--danger)':m.v>0?'var(--warning)':'var(--success)'}"></div></div><span style="font-size:10px;font-weight:700;min-width:16px">${m.v}</span></div>`;
+  }).join('');
+
+  // Entrevistas de saída
+  const comEntrevista=G.desligamentos.filter(d=>d.entrevista_p1||d.entrevista_p2||d.entrevista_p3);
+  document.getElementById('turn-entrevistas').innerHTML=comEntrevista.length
+    ?comEntrevista.slice(0,6).map(d=>{
+      const f=G.funcs.find(x=>x.id===d.funcionario_id);
+      const nome=f?f.nome:'Ex-funcionario';
+      const notaLider=d.entrevista_p3||'—';
+      return`<div class="alert al-info" style="margin-bottom:6px"><div style="flex:1">
+        <strong>${nome}</strong> <span style="color:var(--text3)">· ${fmtDate(d.data_desligamento)} · ${tipos[d.tipo_desligamento]||d.tipo_desligamento}</span>
+        ${d.entrevista_p1?`<div style="font-size:11px;margin-top:4px"><strong>Trabalho diferente?</strong> ${d.entrevista_p1}</div>`:''}
+        ${d.entrevista_p2?`<div style="font-size:11px"><strong>O que incomodava?</strong> ${d.entrevista_p2}</div>`:''}
+        ${d.entrevista_p3?`<div style="font-size:11px"><strong>Nota lideranca:</strong> ${d.entrevista_p3}/5</div>`:''}
+        ${d.entrevista_p5?`<div style="font-size:11px"><strong>O que faria ficar?</strong> ${d.entrevista_p5}</div>`:''}
+      </div></div>`;
+    }).join('')
+    :'<div class="empty"><div class="ei">💬</div><p>Nenhuma entrevista de saida registrada</p></div>';
+}
 
 // ============================================================
 // PDF ENGINE

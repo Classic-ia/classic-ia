@@ -697,14 +697,15 @@ async function excluirMapeamento(id) {
 }
 
 // ── Importar Movimentações ──────────────────────────────────────
-async function importarItens(itens) {
+async function importarItens(itens, onProgress) {
   const validos = itens.filter(i => i.categoria_id);
   if (!validos.length) throw new Error('Nenhum item com categoria mapeada.');
 
   let inseridos = 0, duplicados = 0, erros = 0;
 
   // Inserir item a item para controlar duplicatas
-  for (const i of validos) {
+  for (let idx = 0; idx < validos.length; idx++) {
+    const i = validos[idx];
     const payload = {
       chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
       data_emissao: i.data_emissao, tipo: i.tipo, nat_operacao: i.nat_operacao || null,
@@ -732,6 +733,11 @@ async function importarItens(itens) {
       else if (r.status === 409) { duplicados++; }
       else { erros++; }
     } catch { erros++; }
+
+    // Report progress every 10 items
+    if (onProgress && (idx % 10 === 0 || idx === validos.length - 1)) {
+      onProgress(idx + 1, validos.length, inseridos, duplicados, erros);
+    }
   }
 
   return { inseridos, duplicados, erros, total: validos.length };
@@ -1072,7 +1078,12 @@ async function buscarNovosXMLs() {
     const allParsedNFs = [];
     let erros = 0, dups = 0;
 
-    for (const file of filesToProcess) {
+    for (let fi = 0; fi < filesToProcess.length; fi++) {
+      const file = filesToProcess[fi];
+      if (fi % 20 === 0 && infoEl) {
+        const scanPct = Math.round((fi / filesToProcess.length) * 100);
+        infoEl.textContent = `Lendo XMLs... ${scanPct}% (${fi}/${filesToProcess.length})`;
+      }
       try {
         const text = await file.text();
         const isCTe = text.includes('cteProc') || text.includes('infCte');
@@ -1113,11 +1124,23 @@ async function buscarNovosXMLs() {
 
     if (infoEl) infoEl.textContent = `Importando ${mapeados.length} itens (${naoMapeados.length} sem categoria)...`;
 
+    // Show progress bar
+    const progressDiv = document.getElementById('pastaAutoProgress');
+    const progressBar = document.getElementById('pastaAutoBar');
+    const progressPct = document.getElementById('pastaAutoPct');
+    if (progressDiv) progressDiv.style.display = 'block';
+
     let resultado = { inseridos: 0, duplicados: 0, erros: 0 };
     if (mapeados.length) {
-      resultado = await importarItens(mapeados);
+      resultado = await importarItens(mapeados, (current, total, ins, dup, err) => {
+        const pct = Math.round(current / total * 100);
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (progressPct) progressPct.textContent = `${pct}% — ${current}/${total} (${ins} novos, ${dup} dup, ${err} erros)`;
+        if (infoEl) infoEl.textContent = `Importando... ${current}/${total} itens`;
+      });
     }
 
+    if (progressDiv) progressDiv.style.display = 'none';
     _setLastImportDate(new Date().toISOString());
     const resumo = `${resultado.inseridos} novos, ${resultado.duplicados} duplicados, ${naoMapeados.length} sem categoria`;
     if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo}`;

@@ -35,7 +35,7 @@ const RADICAL_CLASSIC = '08849964';
 
 // ── API Helpers ─────────────────────────────────────────────────
 function sbHeaders() {
-  const sess = JSON.parse(localStorage.getItem('cq_sess_v2') || '{}');
+  let sess = {}; try { sess = JSON.parse(localStorage.getItem('cq_sess_v2') || '{}'); } catch(_) {}
   return {
     'apikey': SB_KEY,
     'Authorization': `Bearer ${sess.access_token || SB_KEY}`,
@@ -211,6 +211,12 @@ function parseNFeXML(xmlString) {
 
     const imposto = q(det, 'imposto');
     let vICMS = 0, vPIS = 0, vCOFINS = 0;
+    let cstICMS = '', cstPIS = '', cstCOFINS = '';
+    let aliqICMS = 0, aliqPIS = 0, aliqCOFINS = 0;
+    let bcICMS = 0, bcPIS = 0, bcCOFINS = 0;
+    let vIPI = 0, cstIPI = '', aliqIPI = 0;
+    let vICMSST = 0, vFCP = 0, vII = 0;
+    let modBC = '', orig = '';
 
     if (imposto) {
       // ICMS — pode estar em vários sub-elementos
@@ -218,7 +224,22 @@ function parseNFeXML(xmlString) {
       if (icmsEl) {
         for (const child of icmsEl.children) {
           const v = num(child, 'vICMS');
-          if (v) { vICMS = v; break; }
+          if (v) { vICMS = v; }
+          const cst = txt(child, 'CST') || txt(child, 'CSOSN');
+          if (cst) cstICMS = cst;
+          const al = num(child, 'pICMS');
+          if (al) aliqICMS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcICMS = bc;
+          const st = num(child, 'vICMSST');
+          if (st) vICMSST = st;
+          const fc = num(child, 'vFCP');
+          if (fc) vFCP = fc;
+          const mb = txt(child, 'modBC');
+          if (mb) modBC = mb;
+          const or = txt(child, 'orig');
+          if (or) orig = or;
+          if (vICMS || cstICMS) break;
         }
       }
       // PIS
@@ -226,7 +247,14 @@ function parseNFeXML(xmlString) {
       if (pisEl) {
         for (const child of pisEl.children) {
           const v = num(child, 'vPIS');
-          if (v) { vPIS = v; break; }
+          if (v) { vPIS = v; }
+          const cst = txt(child, 'CST');
+          if (cst) cstPIS = cst;
+          const al = num(child, 'pPIS');
+          if (al) aliqPIS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcPIS = bc;
+          if (vPIS || cstPIS) break;
         }
       }
       // COFINS
@@ -234,9 +262,32 @@ function parseNFeXML(xmlString) {
       if (cofinsEl) {
         for (const child of cofinsEl.children) {
           const v = num(child, 'vCOFINS');
-          if (v) { vCOFINS = v; break; }
+          if (v) { vCOFINS = v; }
+          const cst = txt(child, 'CST');
+          if (cst) cstCOFINS = cst;
+          const al = num(child, 'pCOFINS');
+          if (al) aliqCOFINS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcCOFINS = bc;
+          if (vCOFINS || cstCOFINS) break;
         }
       }
+      // IPI
+      const ipiEl = q(imposto, 'IPI');
+      if (ipiEl) {
+        const ipiTrib = q(ipiEl, 'IPITrib');
+        if (ipiTrib) {
+          vIPI = num(ipiTrib, 'vIPI');
+          cstIPI = txt(ipiTrib, 'CST');
+          aliqIPI = num(ipiTrib, 'pIPI');
+        } else {
+          const ipiNT = q(ipiEl, 'IPINT');
+          if (ipiNT) cstIPI = txt(ipiNT, 'CST');
+        }
+      }
+      // II (Imposto de Importação)
+      const iiEl = q(imposto, 'II');
+      if (iiEl) vII = num(iiEl, 'vII');
     }
 
     const vProd = num(prod, 'vProd');
@@ -247,6 +298,7 @@ function parseNFeXML(xmlString) {
       numero_nf: nNF,
       nitem: nItem,
       data_emissao: dataEmissao,
+      nat_operacao: natOp,
       tipo,
       fornecedor_cliente: parceiro,
       cnpj: parceiroCNPJ,
@@ -257,9 +309,13 @@ function parseNFeXML(xmlString) {
       quantidade: num(prod, 'qCom'),
       valor_unitario: num(prod, 'vUnCom'),
       valor_total: vProd,
-      icms: vICMS,
-      pis: vPIS,
-      cofins: vCOFINS,
+      // Impostos detalhados
+      icms: vICMS, cst_icms: cstICMS, aliq_icms: aliqICMS, bc_icms: bcICMS,
+      icms_st: vICMSST, fcp: vFCP, orig: orig,
+      pis: vPIS, cst_pis: cstPIS, aliq_pis: aliqPIS, bc_pis: bcPIS,
+      cofins: vCOFINS, cst_cofins: cstCOFINS, aliq_cofins: aliqCOFINS, bc_cofins: bcCOFINS,
+      ipi: vIPI, cst_ipi: cstIPI, aliq_ipi: aliqIPI,
+      ii: vII,
       compra_liquida: compraLiquida,
       filial,
       categoria_id: null,
@@ -346,10 +402,10 @@ function parseCTeXML(xmlString) {
 
   let categoria, tipo;
   if (destEhClassic) {
-    categoria = 'FRETES COMPRAS';
+    categoria = 'Fretes Compras';
     tipo = 'entrada';
   } else {
-    categoria = 'FRETES VENDAS';
+    categoria = 'Fretes Vendas';
     tipo = 'saida';
   }
 
@@ -512,7 +568,7 @@ function parseCTeXLS(workbook) {
 
     // Classificar: se destinatário é Classic → frete compra, senão → frete venda
     const destEhClassic = cnpjDest.startsWith(RADICAL_CLASSIC);
-    const categoria = destEhClassic ? 'FRETES COMPRAS' : 'FRETES VENDAS';
+    const categoria = destEhClassic ? 'Fretes Compras' : 'Fretes Vendas';
 
     results.push({
       chave_nfe: chave || `CTE_${nCTe}_${cnpjTransp}_${dataEmissao}`,
@@ -559,6 +615,25 @@ let _mapeamentos = [];
 
 async function carregarCategorias() {
   _categorias = await sbFetch('estoque_categorias?select=*&ativo=eq.true&order=nome.asc');
+  // Garantir categorias padrão
+  const padrao = [
+    { nome: 'FRETE', unidade: 'UN' },
+    { nome: 'DESTINACAO DE RESIDUOS', unidade: 'UN' },
+    { nome: 'AGUA', unidade: 'UN' },
+    { nome: 'EMBALAGENS', unidade: 'UN' },
+  ];
+  const nomes = _categorias.map(c => c.nome.toUpperCase());
+  for (const p of padrao) {
+    if (!nomes.includes(p.nome.toUpperCase())) {
+      try {
+        await criarCategoria(p.nome, p.unidade);
+      } catch {}
+    }
+  }
+  // Recarregar se criou alguma nova
+  if (padrao.some(p => !nomes.includes(p.nome.toUpperCase()))) {
+    _categorias = await sbFetch('estoque_categorias?select=*&ativo=eq.true&order=nome.asc');
+  }
   return _categorias;
 }
 
@@ -641,34 +716,75 @@ async function excluirMapeamento(id) {
 }
 
 // ── Importar Movimentações ──────────────────────────────────────
-async function importarItens(itens) {
-  const validos = itens.filter(i => i.categoria_id);
-  if (!validos.length) throw new Error('Nenhum item com categoria mapeada.');
+function _buildPayload(i) {
+  return {
+    chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
+    data_emissao: i.data_emissao, tipo: i.tipo, nat_operacao: i.nat_operacao || null,
+    fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
+    categoria_id: i.categoria_id, produto_xml: i.produto_xml,
+    ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
+    quantidade: i.quantidade, valor_unitario: i.valor_unitario,
+    valor_total: i.valor_total,
+    icms: i.icms, cst_icms: i.cst_icms || null, aliq_icms: i.aliq_icms || 0, bc_icms: i.bc_icms || 0,
+    icms_st: i.icms_st || 0, fcp: i.fcp || 0, orig: i.orig || null,
+    pis: i.pis, cst_pis: i.cst_pis || null, aliq_pis: i.aliq_pis || 0, bc_pis: i.bc_pis || 0,
+    cofins: i.cofins, cst_cofins: i.cst_cofins || null, aliq_cofins: i.aliq_cofins || 0, bc_cofins: i.bc_cofins || 0,
+    ipi: i.ipi || 0, cst_ipi: i.cst_ipi || null, aliq_ipi: i.aliq_ipi || 0,
+    ii: i.ii || 0,
+    compra_liquida: i.compra_liquida,
+    filial: i.filial || 'MATRIZ'
+  };
+}
+
+async function importarItens(itens, onProgress) {
+  // Import ALL items (including unmapped ones with categoria_id=null)
+  const validos = itens.filter(i => i.chave_nfe && i.produto_xml);
+  if (!validos.length) throw new Error('Nenhum item válido para importar.');
 
   let inseridos = 0, duplicados = 0, erros = 0;
+  const BATCH = 100;
 
-  // Inserir item a item para controlar duplicatas
-  for (const i of validos) {
-    const payload = {
-      chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
-      data_emissao: i.data_emissao, tipo: i.tipo,
-      fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
-      categoria_id: i.categoria_id, produto_xml: i.produto_xml,
-      ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
-      quantidade: i.quantidade, valor_unitario: i.valor_unitario,
-      valor_total: i.valor_total, icms: i.icms, pis: i.pis,
-      cofins: i.cofins, compra_liquida: i.compra_liquida,
-      filial: i.filial || 'MATRIZ'
-    };
+  for (let i = 0; i < validos.length; i += BATCH) {
+    const lote = validos.slice(i, i + BATCH);
+    const payloads = lote.map(_buildPayload);
+
     try {
       const r = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes`, {
-        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-        body: JSON.stringify(payload)
+        method: 'POST',
+        headers: {
+          ...sbHeaders(),
+          'Prefer': 'return=minimal,resolution=ignore-duplicates'
+        },
+        body: JSON.stringify(payloads)
       });
-      if (r.ok) { inseridos++; }
-      else if (r.status === 409) { duplicados++; }
-      else { erros++; }
-    } catch { erros++; }
+      if (r.ok) {
+        // Supabase ignore-duplicates returns 201 for all, we count batch as inserted
+        // Actual new vs dup is unknown per-item, but it's much faster
+        inseridos += lote.length;
+      } else if (r.status === 409) {
+        // Fallback: insert one by one for this batch
+        for (const p of payloads) {
+          try {
+            const r2 = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes`, {
+              method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+              body: JSON.stringify(p)
+            });
+            if (r2.ok) inseridos++;
+            else if (r2.status === 409) duplicados++;
+            else erros++;
+          } catch { erros++; }
+        }
+      } else {
+        erros += lote.length;
+      }
+    } catch {
+      erros += lote.length;
+    }
+
+    if (onProgress) {
+      const processed = Math.min(i + BATCH, validos.length);
+      onProgress(processed, validos.length, inseridos, duplicados, erros);
+    }
   }
 
   return { inseridos, duplicados, erros, total: validos.length };
@@ -854,6 +970,304 @@ async function exportarExcel() {
   XLSX.writeFile(wb, `Controle_Estoque_${new Date().toISOString().slice(0, 10)}.xlsx`);
 }
 
+// ── Pasta Automática (File System Access API) ──────────────────
+const PASTA_AUTO_DB = 'ClassicCQ_PastaAuto';
+const PASTA_AUTO_STORE = 'handles';
+
+function _openPastaDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(PASTA_AUTO_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(PASTA_AUTO_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _savePastaHandle(handle) {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readwrite');
+    tx.objectStore(PASTA_AUTO_STORE).put(handle, 'folderHandle');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function _getPastaHandle() {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readonly');
+    const req = tx.objectStore(PASTA_AUTO_STORE).get('folderHandle');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _removePastaHandle() {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readwrite');
+    tx.objectStore(PASTA_AUTO_STORE).delete('folderHandle');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function _getLastImportDate() {
+  return localStorage.getItem('cq_pasta_auto_last') || null;
+}
+
+function _setLastImportDate(iso) {
+  localStorage.setItem('cq_pasta_auto_last', iso);
+}
+
+// Track imported file names to skip on reimport
+function _getImportedFiles() {
+  try { return JSON.parse(localStorage.getItem('cq_imported_files') || '{}'); } catch { return {}; }
+}
+
+function _addImportedFiles(fileNames) {
+  const imported = _getImportedFiles();
+  fileNames.forEach(n => { imported[n] = Date.now(); });
+  // Keep max 20000 entries to avoid localStorage overflow
+  const keys = Object.keys(imported);
+  if (keys.length > 20000) {
+    const sorted = keys.sort((a,b) => imported[a] - imported[b]);
+    sorted.slice(0, keys.length - 15000).forEach(k => delete imported[k]);
+  }
+  localStorage.setItem('cq_imported_files', JSON.stringify(imported));
+}
+
+function _clearImportedFiles() {
+  localStorage.removeItem('cq_imported_files');
+}
+
+// Recursivamente coleta XMLs de uma pasta e subpastas
+async function _coletarXMLs(dirHandle, maxFiles = 5000) {
+  const xmlFiles = [];
+  async function walk(handle) {
+    for await (const entry of handle.values()) {
+      if (xmlFiles.length >= maxFiles) return;
+      if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.xml')) {
+        xmlFiles.push(entry);
+      } else if (entry.kind === 'directory') {
+        await walk(entry);
+      }
+    }
+  }
+  await walk(dirHandle);
+  return xmlFiles;
+}
+
+async function configurarPastaAuto() {
+  if (!window.showDirectoryPicker) {
+    toast('Navegador não suporta File System Access API. Use Chrome ou Edge.', 'erro');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    await _savePastaHandle(handle);
+    localStorage.setItem('cq_pasta_auto_nome', handle.name);
+    _atualizarPastaAutoUI(handle.name);
+    toast(`Pasta "${handle.name}" configurada!`, 'ok');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Erro ao selecionar pasta: ' + e.message, 'erro');
+  }
+}
+
+function _atualizarPastaAutoUI(nome, info) {
+  const btn = document.getElementById('btnPastaAuto');
+  const status = document.getElementById('pastaAutoStatus');
+  const nomeEl = document.getElementById('pastaAutoNome');
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (!status) return;
+
+  if (nome) {
+    if (btn) btn.style.display = 'none';
+    status.style.display = 'block';
+    if (nomeEl) nomeEl.textContent = 'Pasta: ' + nome;
+    if (infoEl) infoEl.textContent = info || '';
+  } else {
+    if (btn) btn.style.display = 'flex';
+    status.style.display = 'none';
+  }
+}
+
+async function buscarNovosXMLs() {
+  const handle = await _getPastaHandle();
+  if (!handle) {
+    toast('Nenhuma pasta configurada', 'erro');
+    return;
+  }
+
+  // Verificar permissão (precisa re-grant após reabrir browser)
+  const perm = await handle.queryPermission({ mode: 'read' });
+  if (perm !== 'granted') {
+    const req = await handle.requestPermission({ mode: 'read' });
+    if (req !== 'granted') {
+      toast('Permissão negada para ler a pasta', 'erro');
+      return;
+    }
+  }
+
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (infoEl) infoEl.textContent = 'Escaneando pasta...';
+
+  try {
+    const xmlEntries = await _coletarXMLs(handle);
+    if (!xmlEntries.length) {
+      if (infoEl) infoEl.textContent = 'Nenhum XML encontrado na pasta.';
+      toast('Nenhum XML encontrado', 'erro');
+      return;
+    }
+
+    // Filtrar arquivos já importados por nome
+    const imported = _getImportedFiles();
+    let filesToProcess = [];
+    let skipped = 0;
+
+    if (infoEl) infoEl.textContent = `Verificando ${xmlEntries.length} XMLs...`;
+
+    for (const entry of xmlEntries) {
+      if (imported[entry.name]) { skipped++; continue; }
+      const file = await entry.getFile();
+      filesToProcess.push(file);
+    }
+
+    if (!filesToProcess.length) {
+      if (infoEl) infoEl.textContent = `Nenhum XML novo. (${xmlEntries.length} na pasta, ${skipped} já importados)`;
+      toast('Nenhum XML novo encontrado', 'ok');
+      return;
+    }
+
+    if (infoEl) infoEl.textContent = `Processando ${filesToProcess.length} XMLs novos (${skipped} já importados)...`;
+
+    // Garantir categorias e mapeamentos carregados
+    if (!_categorias.length) await carregarCategorias();
+    if (!_mapeamentos.length) await carregarMapeamentos();
+
+    const allParsedNFs = [];
+    let erros = 0, dups = 0;
+
+    for (let fi = 0; fi < filesToProcess.length; fi++) {
+      const file = filesToProcess[fi];
+      if (fi % 20 === 0 && infoEl) {
+        const scanPct = Math.round((fi / filesToProcess.length) * 100);
+        infoEl.textContent = `Lendo XMLs... ${scanPct}% (${fi}/${filesToProcess.length})`;
+      }
+      try {
+        const text = await file.text();
+        const isCTe = text.includes('cteProc') || text.includes('infCte');
+        let nf;
+        if (isCTe) {
+          nf = parseCTeXML(text);
+          if (nf) {
+            for (const item of nf.itens) {
+              const cat = _categorias.find(c => c.nome === item._catNome);
+              if (cat) { item.categoria_id = cat.id; item._mapped = true; }
+            }
+          }
+        } else {
+          nf = parseNFeXML(text);
+        }
+        if (!nf || !nf.itens.length) { erros++; continue; }
+        if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
+
+        // Resolver categorias para NF-e
+        if (!isCTe) {
+          for (const item of nf.itens) {
+            if (!item._mapped) {
+              item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+              item._mapped = !!item.categoria_id;
+            }
+          }
+        }
+
+        nf._fileName = file.name;
+        allParsedNFs.push(nf);
+      } catch { erros++; }
+    }
+
+    // Importar TODOS os itens (mapeados e não mapeados)
+    const todosItens = allParsedNFs.flatMap(nf => nf.itens);
+    const naoMapeados = todosItens.filter(i => !i.categoria_id);
+
+    if (infoEl) infoEl.textContent = `Importando ${todosItens.length} itens (${naoMapeados.length} sem categoria)...`;
+
+    // Show progress bar
+    const progressDiv = document.getElementById('pastaAutoProgress');
+    const progressBar = document.getElementById('pastaAutoBar');
+    const progressPct = document.getElementById('pastaAutoPct');
+    if (progressDiv) progressDiv.style.display = 'block';
+
+    let resultado = { inseridos: 0, duplicados: 0, erros: 0 };
+    if (todosItens.length) {
+      resultado = await importarItens(todosItens, (current, total, ins, dup, err) => {
+        const pct = Math.round(current / total * 100);
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (progressPct) progressPct.textContent = `${pct}% — ${current}/${total} (${ins} novos, ${dup} dup, ${err} erros)`;
+        if (infoEl) infoEl.textContent = `Importando... ${current}/${total} itens`;
+      });
+    }
+
+    if (progressDiv) progressDiv.style.display = 'none';
+    _setLastImportDate(new Date().toISOString());
+
+    // Registrar arquivos importados para não reimportar
+    _addImportedFiles(filesToProcess.map(f => f.name));
+
+    const resumo = `${resultado.inseridos} novos, ${resultado.duplicados} duplicados, ${naoMapeados.length} sem categoria`;
+    if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo} (${skipped + filesToProcess.length} total na pasta)`;
+    toast(`Importação automática: ${resumo}`, resultado.inseridos > 0 ? 'ok' : 'info');
+
+    // Atualizar dashboard se houver novos
+    if (resultado.inseridos > 0 && typeof renderDashboard === 'function') {
+      renderDashboard();
+    }
+  } catch (e) {
+    if (infoEl) infoEl.textContent = 'Erro: ' + e.message;
+    toast('Erro na busca automática: ' + e.message, 'erro');
+  }
+}
+
+async function trocarPastaAuto() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    await _savePastaHandle(handle);
+    localStorage.setItem('cq_pasta_auto_nome', handle.name);
+    // Manter arquivos importados — só troca a pasta
+    _atualizarPastaAutoUI(handle.name);
+    toast(`Pasta trocada para "${handle.name}"`, 'ok');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Erro: ' + e.message, 'erro');
+  }
+}
+
+async function reimportarTudo() {
+  _clearImportedFiles();
+  localStorage.removeItem('cq_pasta_auto_last');
+  toast('Registro limpo. Clique em "Buscar Novos XMLs" para reimportar tudo.', 'ok');
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (infoEl) infoEl.textContent = 'Registro limpo — pronto para reimportar tudo.';
+}
+
+async function desconfigurarPastaAuto() {
+  await _removePastaHandle();
+  localStorage.removeItem('cq_pasta_auto_nome');
+  localStorage.removeItem('cq_pasta_auto_last');
+  _clearImportedFiles();
+  _atualizarPastaAutoUI(null);
+  toast('Pasta removida', 'ok');
+}
+
+// Verificar se há pasta configurada ao iniciar
+async function verificarPastaAuto() {
+  const nome = localStorage.getItem('cq_pasta_auto_nome');
+  if (nome) {
+    _atualizarPastaAutoUI(nome, 'Clique "Buscar Novos XMLs" para atualizar');
+  }
+}
+
 // ── Dashboard Data ──────────────────────────────────────────────
 async function carregarDashboardData() {
   const [saldos, mensal] = await Promise.all([carregarSaldos(), carregarEvolucaoMensal()]);
@@ -880,4 +1294,214 @@ function fmtData(d) {
   if (!d) return '—';
   const [y, m, dd] = d.split('-');
   return `${dd}/${m}/${y}`;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BUSCA AUTOMÁTICA SEFAZ — Distribuição DFe
+// ═══════════════════════════════════════════════════════════════
+
+function _sefazLog(msg) {
+  const el = document.getElementById('sefazLog');
+  if (el) {
+    const ts = new Date().toLocaleTimeString('pt-BR');
+    el.innerHTML += `<div>[${ts}] ${msg}</div>`;
+    el.scrollTop = el.scrollHeight;
+  }
+}
+
+function _getSefazLastNSU(cnpj) {
+  try { return localStorage.getItem('cq_sefaz_nsu_' + cnpj) || '0'; } catch { return '0'; }
+}
+
+function _setSefazLastNSU(cnpj, nsu) {
+  try { localStorage.setItem('cq_sefaz_nsu_' + cnpj, nsu); } catch {}
+}
+
+function buscarNotasSefaz() {
+  const el = document.getElementById('sefazStatus');
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+async function executarBuscaSefaz(resetNSU) {
+  const sel = document.getElementById('sefazCnpj').value;
+  const [cnpj, uf] = sel.split('|');
+  const btn = document.getElementById('btnExecSefaz');
+  const spinner = document.getElementById('sefazSpinner');
+  const progress = document.getElementById('sefazProgress');
+  const result = document.getElementById('sefazResult');
+  const log = document.getElementById('sefazLog');
+
+  // Reset UI
+  log.innerHTML = '';
+  result.style.display = 'none';
+  result.innerHTML = '';
+  progress.style.display = 'block';
+  btn.disabled = true;
+  spinner.style.display = 'inline-block';
+
+  let ultimoNSU = resetNSU ? '0' : _getSefazLastNSU(cnpj);
+  _sefazLog(`Iniciando busca para CNPJ ${cnpj} / UF ${uf}`);
+  _sefazLog(`Último NSU processado: ${ultimoNSU}`);
+
+  const headers = sbHeaders();
+  let totalDocs = 0;
+  let totalImportados = 0;
+  let totalErros = 0;
+  let rodadas = 0;
+  const maxRodadas = 100; // Safety: max 5000 notas (100 * 50)
+
+  try {
+    while (rodadas < maxRodadas) {
+      rodadas++;
+      _sefazLog(`Rodada ${rodadas}: buscando a partir do NSU ${ultimoNSU}...`);
+
+      document.getElementById('sefazProgressTxt').textContent = `Buscando rodada ${rodadas}...`;
+      document.getElementById('sefazProgressNum').textContent = `${totalDocs} notas encontradas`;
+
+      const r = await fetch(`${SB_URL}/functions/v1/distribuicao-nfe`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': headers.Authorization,
+          'apikey': SB_KEY
+        },
+        body: JSON.stringify({ cnpj, uf, ultimo_nsu: ultimoNSU })
+      });
+
+      const data = await r.json();
+
+      if (!r.ok) {
+        if (data.instrucoes) {
+          _sefazLog('⚠ Certificado digital não configurado no Supabase.');
+          _sefazLog('Siga as instruções em supabase/SETUP_SEFAZ.md');
+          result.style.display = 'block';
+          result.innerHTML = `
+            <div style="padding:12px;background:rgba(234,179,8,0.1);border:1px solid rgba(234,179,8,0.3);border-radius:6px;color:var(--warn)">
+              <strong>Certificado digital não configurado</strong>
+              <p style="font-size:12px;margin-top:6px">Para buscar notas direto na SEFAZ, configure o certificado A1:</p>
+              <ol style="font-size:11px;margin:8px 0 0 16px;line-height:1.8">
+                ${data.instrucoes.map(i => `<li>${i}</li>`).join('')}
+              </ol>
+            </div>`;
+          break;
+        }
+        _sefazLog(`ERRO: ${data.error || 'Erro desconhecido'}`);
+        totalErros++;
+        break;
+      }
+
+      _sefazLog(`SEFAZ retornou: ${data.motivo} (código ${data.status_codigo})`);
+
+      // Status 137 = nenhum documento localizado, 138 = fim dos documentos
+      if (data.status_codigo === '137' || data.status_codigo === '138') {
+        _sefazLog('Nenhum documento novo encontrado.');
+        break;
+      }
+
+      if (!data.documentos || !data.documentos.length) {
+        _sefazLog('Sem documentos na resposta. Fim da busca.');
+        break;
+      }
+
+      totalDocs += data.documentos.length;
+      _sefazLog(`Recebidos ${data.documentos.length} documentos (total: ${totalDocs})`);
+
+      // Processar cada XML recebido
+      const itensParaImportar = [];
+      for (const doc of data.documentos) {
+        if (!doc.xml) {
+          _sefazLog(`NSU ${doc.nsu}: falha ao descompactar`);
+          totalErros++;
+          continue;
+        }
+
+        // Verificar se é NFe (schema contém 'procNFe' ou 'resNFe')
+        if (doc.schema.includes('resNFe') || doc.schema.includes('resEvento')) {
+          // Resumo de NFe ou evento — não é XML completo
+          // Extrair chave para log
+          const chaveMatch = doc.xml.match(/<chNFe>(\d{44})<\/chNFe>/);
+          if (chaveMatch) {
+            _sefazLog(`NSU ${doc.nsu}: resumo NFe ${chaveMatch[1].substring(25, 34)}`);
+          }
+          continue;
+        }
+
+        if (doc.schema.includes('procNFe') || doc.xml.includes('<nfeProc') || doc.xml.includes('<NFe')) {
+          try {
+            const nf = parseNFeXML(doc.xml);
+            if (nf && nf.itens.length > 0) {
+              // Resolver categorias
+              for (const item of nf.itens) {
+                if (!item.categoria_id) {
+                  const cat = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+                  if (cat) { item.categoria_id = cat; item._mapped = true; }
+                }
+              }
+              itensParaImportar.push(...nf.itens);
+              _sefazLog(`NSU ${doc.nsu}: NF ${nf.numero_nf} — ${nf.itens.length} itens`);
+            }
+          } catch (e) {
+            _sefazLog(`NSU ${doc.nsu}: erro ao parsear — ${e.message}`);
+            totalErros++;
+          }
+        }
+      }
+
+      // Importar itens no banco
+      if (itensParaImportar.length > 0) {
+        try {
+          const importados = await importarItens(itensParaImportar);
+          totalImportados += itensParaImportar.length;
+          _sefazLog(`Importados ${itensParaImportar.length} itens no banco.`);
+        } catch(e) {
+          _sefazLog(`Erro ao importar: ${e.message}`);
+          totalErros++;
+        }
+      }
+
+      // Atualizar NSU
+      ultimoNSU = data.ultimo_nsu;
+      _setSefazLastNSU(cnpj, ultimoNSU);
+
+      // Atualizar progress bar
+      const maxNSU = parseInt(data.max_nsu) || 1;
+      const pct = Math.min(100, Math.round((parseInt(ultimoNSU) / maxNSU) * 100));
+      document.getElementById('sefazProgressBar').style.width = pct + '%';
+
+      // Se último NSU >= max NSU, acabou
+      if (data.ultimo_nsu === data.max_nsu || parseInt(data.ultimo_nsu) >= parseInt(data.max_nsu)) {
+        _sefazLog('Todos os documentos foram processados.');
+        break;
+      }
+
+      // Pausa entre rodadas (SEFAZ rate limit)
+      await new Promise(r => setTimeout(r, 1000));
+    }
+
+    // Resultado final
+    document.getElementById('sefazProgressBar').style.width = '100%';
+    document.getElementById('sefazProgressTxt').textContent = 'Concluído!';
+    document.getElementById('sefazProgressNum').textContent = `${totalDocs} documentos processados`;
+
+    const okColor = totalImportados > 0 ? 'var(--ok)' : 'var(--muted)';
+    result.style.display = 'block';
+    result.innerHTML = `
+      <div class="kpi-row" style="margin-top:8px">
+        <div class="kpi"><div class="kpi-value">${totalDocs}</div><div class="kpi-label">Documentos</div></div>
+        <div class="kpi"><div class="kpi-value" style="color:${okColor}">${totalImportados}</div><div class="kpi-label">Itens Importados</div></div>
+        ${totalErros ? `<div class="kpi"><div class="kpi-value" style="color:var(--err)">${totalErros}</div><div class="kpi-label">Erros</div></div>` : ''}
+      </div>
+      ${totalImportados > 0 ? '<div style="font-size:12px;color:var(--ok);margin-top:8px">✓ Notas importadas com sucesso! Verifique na aba Movimentações.</div>' : ''}`;
+
+    _sefazLog(`Finalizado. Docs: ${totalDocs}, Importados: ${totalImportados}, Erros: ${totalErros}`);
+    _sefazLog(`Último NSU salvo: ${ultimoNSU}`);
+
+  } catch(e) {
+    _sefazLog(`ERRO GERAL: ${e.message}`);
+    result.style.display = 'block';
+    result.innerHTML = `<div style="padding:10px;background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.3);border-radius:6px;color:var(--err);font-size:12px">Erro: ${e.message}</div>`;
+  } finally {
+    btn.disabled = false;
+    spinner.style.display = 'none';
+  }
 }

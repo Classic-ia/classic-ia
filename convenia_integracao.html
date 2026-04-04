@@ -1,0 +1,1233 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integração Convenia — Sistema RH</title>
+  <link rel="stylesheet" href="styles_rh.css">
+  <script src="config_rh.js"></script>
+  <script src="rh_auth.js"></script>
+  <script src="rh_api.js"></script>
+  <style>
+    :root {
+      --bg: #0a0e1a;
+      --surface: #111827;
+      --surface2: #1a2235;
+      --surface3: #243048;
+      --accent: #00d4aa;
+      --accent2: #4f8ef7;
+      --accent3: #f97316;
+      --accent4: #a855f7;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --text: #e8edf5;
+      --text2: #94a3b8;
+      --text3: #64748b;
+      --border: rgba(255,255,255,0.07);
+      --convenia: #e85d26;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* TOPBAR */
+    .topbar {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 28px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky; top: 0; z-index: 50;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 14px; }
+    .back-btn {
+      background: var(--surface2); border: 1px solid var(--border);
+      color: var(--text2); padding: 6px 12px; border-radius: 8px;
+      cursor: pointer; font-size: 13px; text-decoration: none;
+      transition: .2s;
+    }
+    .back-btn:hover { color: var(--text); background: var(--surface3); }
+    .page-title { font-size: 17px; font-weight: 700; display: flex; align-items: center; gap: 10px; }
+    .convenia-badge {
+      background: rgba(232,93,38,.15); color: var(--convenia);
+      border: 1px solid rgba(232,93,38,.3);
+      padding: 2px 10px; border-radius: 20px; font-size: 11px; font-weight: 700;
+    }
+    #rh-user-chip { font-size: 12px; color: var(--text2); }
+
+    /* LAYOUT */
+    .content { padding: 24px; max-width: 1200px; margin: 0 auto; }
+
+    /* CARDS */
+    .card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 16px; padding: 20px; margin-bottom: 18px;
+    }
+    .card-title {
+      font-size: 14px; font-weight: 700; margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 18px; }
+    .grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 18px; }
+    .grid4 { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 18px; }
+
+    /* STATUS CARD */
+    .status-card {
+      background: var(--surface2); border-radius: 14px; padding: 18px;
+      position: relative; overflow: hidden;
+    }
+    .status-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; }
+    .status-card.online::before { background: var(--success); }
+    .status-card.offline::before { background: var(--danger); }
+    .status-card.warning::before { background: var(--warning); }
+    .status-card.info::before { background: var(--accent2); }
+    .status-icon { font-size: 24px; margin-bottom: 6px; }
+    .status-val { font-size: 26px; font-weight: 800; line-height: 1; }
+    .status-label { font-size: 11px; color: var(--text2); margin-top: 3px; }
+    .status-sub { font-size: 11px; margin-top: 6px; }
+
+    /* FORM */
+    .form-group { margin-bottom: 14px; }
+    .form-label { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 5px; display: block; }
+    .form-input {
+      width: 100%; padding: 9px 13px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text);
+      font-family: 'DM Sans', sans-serif; font-size: 13px;
+      outline: none; transition: .2s;
+    }
+    .form-input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(0,212,170,.15); }
+    .form-input::placeholder { color: var(--text3); }
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+
+    /* BUTTONS */
+    .btn {
+      padding: 8px 18px; border-radius: 10px; border: none;
+      cursor: pointer; font-family: 'DM Sans', sans-serif;
+      font-size: 13px; font-weight: 600; transition: .2s;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #00bfa0; transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { background: var(--surface3); }
+    .btn-danger { background: rgba(239,68,68,.15); color: var(--danger); border: 1px solid rgba(239,68,68,.3); }
+    .btn-warning { background: rgba(245,158,11,.15); color: var(--warning); border: 1px solid rgba(245,158,11,.3); }
+    .btn-convenia { background: var(--convenia); color: #fff; }
+    .btn-convenia:hover { background: #d14f1e; transform: translateY(-1px); }
+    .btn-sm { padding: 5px 12px; font-size: 12px; }
+    .btn-xs { padding: 3px 8px; font-size: 11px; }
+
+    /* TABLE */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; }
+    th { text-align: left; padding: 9px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text3); border-bottom: 1px solid var(--border); font-weight: 600; }
+    td { padding: 10px 12px; font-size: 13px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+    tr:hover td { background: rgba(255,255,255,.02); }
+
+    /* TAGS */
+    .tag { display: inline-block; padding: 2px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+    .tag-green { background: rgba(16,185,129,.15); color: var(--success); }
+    .tag-red { background: rgba(239,68,68,.15); color: var(--danger); }
+    .tag-yellow { background: rgba(245,158,11,.15); color: var(--warning); }
+    .tag-blue { background: rgba(79,142,247,.15); color: var(--accent2); }
+    .tag-purple { background: rgba(168,85,247,.15); color: var(--accent4); }
+    .tag-cyan { background: rgba(0,212,170,.15); color: var(--accent); }
+    .tag-orange { background: rgba(232,93,38,.15); color: var(--convenia); }
+
+    /* TABS */
+    .tabs { display: flex; gap: 4px; background: var(--surface2); border-radius: 12px; padding: 4px; margin-bottom: 16px; flex-wrap: wrap; }
+    .tab { padding: 6px 16px; border-radius: 9px; cursor: pointer; font-size: 12px; font-weight: 500; color: var(--text2); transition: .2s; }
+    .tab.active { background: var(--surface3); color: var(--text); }
+
+    /* ALERT */
+    .alert { padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 10px; display: flex; align-items: flex-start; gap: 8px; }
+    .alert-info { background: rgba(79,142,247,.1); border: 1px solid rgba(79,142,247,.2); color: var(--accent2); }
+    .alert-success { background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.2); color: var(--success); }
+    .alert-warning { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.2); color: var(--warning); }
+    .alert-danger { background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.2); color: var(--danger); }
+
+    /* LOG */
+    .log-item { padding: 8px 12px; border-radius: 8px; background: var(--surface2); margin-bottom: 6px; display: flex; align-items: flex-start; gap: 10px; }
+    .log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+    .log-dot.success { background: var(--success); }
+    .log-dot.error { background: var(--danger); }
+    .log-dot.info { background: var(--accent2); }
+    .log-dot.warning { background: var(--warning); }
+
+    /* PROGRESS */
+    .prog-bar { background: var(--surface2); border-radius: 20px; height: 6px; overflow: hidden; }
+    .prog-fill { height: 100%; border-radius: 20px; transition: width .6s ease; }
+
+    /* SPINNER */
+    .spinner { width: 20px; height: 20px; border: 2px solid var(--surface3); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: middle; margin-right: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* SYNC PROGRESS OVERLAY */
+    .sync-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75);
+      z-index: 200; display: none; align-items: center; justify-content: center;
+    }
+    .sync-overlay.show { display: flex; }
+    .sync-box { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; width: 380px; text-align: center; }
+    .sync-spinner { width: 52px; height: 52px; border: 3px solid var(--surface3); border-top-color: var(--accent); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
+
+    /* EMPTY */
+    .empty { text-align: center; padding: 40px; color: var(--text3); }
+    .empty .icon { font-size: 40px; margin-bottom: 10px; opacity: .5; }
+
+    /* TOAST */
+    #toastBox { position: fixed; bottom: 24px; right: 24px; z-index: 9999; display: flex; flex-direction: column; gap: 8px; }
+    .toast { background: var(--surface); border: 1px solid var(--accent); color: var(--text); padding: 10px 18px; border-radius: 12px; font-size: 13px; animation: slideIn .3s ease; box-shadow: 0 8px 32px rgba(0,0,0,.4); max-width: 320px; }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(20px); } to { opacity: 1; transform: translateX(0); } }
+
+    /* MODAL */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.75); backdrop-filter: blur(4px); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 26px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .modal-title { font-size: 16px; font-weight: 700; }
+    .modal-close { background: var(--surface2); border: none; color: var(--text2); width: 30px; height: 30px; border-radius: 8px; cursor: pointer; font-size: 16px; }
+    .modal-close:hover { color: var(--text); }
+
+    /* EMPLOYEE CARD */
+    .emp-card { background: var(--surface2); border-radius: 12px; padding: 14px; display: flex; align-items: center; gap: 12px; margin-bottom: 8px; transition: .2s; }
+    .emp-card:hover { background: var(--surface3); }
+    .emp-avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--convenia); display: flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 700; color: #fff; flex-shrink: 0; }
+
+    /* WEBHOOK ITEM */
+    .webhook-item { background: var(--surface2); border-radius: 10px; padding: 12px 14px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+
+    @media (max-width: 768px) {
+      .grid2, .grid3, .grid4 { grid-template-columns: 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+      .content { padding: 14px; }
+    }
+
+    /* SCROLLBAR */
+    ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+  </style>
+</head>
+<body>
+
+<div id="toastBox"></div>
+
+<!-- SYNC OVERLAY -->
+<div class="sync-overlay" id="syncOverlay">
+  <div class="sync-box">
+    <div class="sync-spinner"></div>
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px" id="syncTitle">Sincronizando...</div>
+    <div style="font-size:13px;color:var(--text2);margin-bottom:16px" id="syncDesc">Aguarde enquanto buscamos os dados da Convenia</div>
+    <div class="prog-bar"><div class="prog-fill" id="syncProg" style="width:0%;background:var(--accent)"></div></div>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px" id="syncPct">0%</div>
+  </div>
+</div>
+
+<!-- MODAL: Detalhes Funcionário Convenia -->
+<div class="modal-overlay" id="modalEmpDetails">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">👤 Detalhes — Convenia</div>
+      <button class="modal-close" onclick="closeModal('modalEmpDetails')">✕</button>
+    </div>
+    <div id="empDetailsContent"></div>
+  </div>
+</div>
+
+<!-- MODAL: Configurar Webhook -->
+<div class="modal-overlay" id="modalWebhook">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">🔔 Configurar Webhook</div>
+      <button class="modal-close" onclick="closeModal('modalWebhook')">✕</button>
+    </div>
+    <div class="alert alert-info" style="margin-bottom:14px">
+      ℹ️ Webhooks permitem que a Convenia envie eventos em tempo real (admissão, demissão, férias) para seu sistema.
+    </div>
+    <div class="form-group">
+      <label class="form-label">URL do Endpoint *</label>
+      <input class="form-input" id="wh_url" placeholder="https://seu-dominio.com/webhook/convenia">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Eventos</label>
+      <div style="display:flex;flex-direction:column;gap:6px;background:var(--surface2);border-radius:10px;padding:12px;border:1px solid var(--border)">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wh_admissao" checked style="accent-color:var(--accent)"> Admissão</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wh_demissao" checked style="accent-color:var(--accent)"> Demissão</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wh_ferias" checked style="accent-color:var(--accent)"> Férias</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wh_folha" checked style="accent-color:var(--accent)"> Fechamento de Folha</label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer"><input type="checkbox" id="wh_afastamento" checked style="accent-color:var(--accent)"> Afastamento</label>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal('modalWebhook')">Cancelar</button>
+      <button class="btn btn-convenia" onclick="salvarWebhook()">🔔 Salvar Webhook</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOPBAR -->
+<div class="topbar">
+  <div class="topbar-left">
+    <a href="app.html" class="back-btn">← Voltar</a>
+    <div class="page-title">
+      🔗 Integração Convenia
+      <span class="convenia-badge">API v3</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="conexao-status" style="font-size:12px;color:var(--text3)">⬤ Verificando...</span>
+    <span id="rh-user-chip"></span>
+  </div>
+</div>
+
+<div class="content">
+
+  <!-- STATUS CARDS -->
+  <div class="grid4" id="statusGrid">
+    <div class="status-card info">
+      <div class="status-icon">🔌</div>
+      <div class="status-val" id="st-status">—</div>
+      <div class="status-label">Status da Conexão</div>
+      <div class="status-sub" style="color:var(--text3)">API Convenia v3</div>
+    </div>
+    <div class="status-card online">
+      <div class="status-icon">👥</div>
+      <div class="status-val" id="st-funcionarios">—</div>
+      <div class="status-label">Funcionários na Convenia</div>
+      <div class="status-sub" style="color:var(--text3)" id="st-func-sub">Aguardando sincronização</div>
+    </div>
+    <div class="status-card warning">
+      <div class="status-icon">📅</div>
+      <div class="status-val" id="st-ultima-sync">—</div>
+      <div class="status-label">Última Sincronização</div>
+      <div class="status-sub" style="color:var(--text3)" id="st-sync-sub">Nunca</div>
+    </div>
+    <div class="status-card info">
+      <div class="status-icon">⚙️</div>
+      <div class="status-val" id="st-pendentes">0</div>
+      <div class="status-label">Pendentes de Sync</div>
+      <div class="status-sub" style="color:var(--text3)">Divergências encontradas</div>
+    </div>
+  </div>
+
+  <!-- CONFIGURAÇÃO -->
+  <div class="grid2">
+    <div class="card">
+      <div class="card-title">⚙️ Configuração da API</div>
+      <div class="form-group">
+        <label class="form-label">Token da API Convenia *</label>
+        <div style="display:flex;gap:8px">
+          <input class="form-input" id="convenia_token" type="password" placeholder="Seu token da API Convenia...">
+          <button class="btn btn-secondary btn-sm" onclick="toggleToken()" title="Mostrar/Ocultar" style="white-space:nowrap">👁️</button>
+        </div>
+        <div style="font-size:11px;color:var(--text3);margin-top:5px">
+          Obtenha em: <strong>Convenia → Configurações → Integrações → Token API</strong>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Empresa ID (opcional)</label>
+        <input class="form-input" id="convenia_empresa_id" placeholder="ID da empresa na Convenia">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Sincronização Automática</label>
+        <select class="form-input" id="convenia_auto_sync">
+          <option value="off">Desativada</option>
+          <option value="daily">Diária (meia-noite)</option>
+          <option value="weekly">Semanal (segunda-feira)</option>
+        </select>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary" onclick="testarConexao()">🔍 Testar Conexão</button>
+        <button class="btn btn-primary" onclick="salvarConfig()">💾 Salvar</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">🔄 Ações de Sincronização</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="background:var(--surface2);border-radius:12px;padding:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">👥 Funcionários</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Importa ou atualiza todos os funcionários ativos da Convenia no banco Supabase.</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-convenia btn-sm" onclick="syncFuncionarios()">⬇️ Importar Agora</button>
+            <button class="btn btn-secondary btn-sm" onclick="mostrarTab('funcionarios')">👁️ Ver Lista</button>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:12px;padding:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">💰 Folha de Pagamento</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Busca as últimas folhas de pagamento fechadas.</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="syncFolha()">⬇️ Buscar Folhas</button>
+            <button class="btn btn-secondary btn-sm" onclick="mostrarTab('folha')">👁️ Ver Folhas</button>
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:12px;padding:14px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:4px">🎁 Benefícios</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Lista planos de benefícios e vínculos por funcionário.</div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary btn-sm" onclick="syncBeneficios()">⬇️ Buscar Benefícios</button>
+            <button class="btn btn-secondary btn-sm" onclick="mostrarTab('beneficios')">👁️ Ver Benefícios</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ABAS DE DADOS -->
+  <div class="tabs" id="mainTabs">
+    <div class="tab active" onclick="mostrarTab('funcionarios',this)">👥 Funcionários</div>
+    <div class="tab" onclick="mostrarTab('folha',this)">💰 Folha</div>
+    <div class="tab" onclick="mostrarTab('beneficios',this)">🎁 Benefícios</div>
+    <div class="tab" onclick="mostrarTab('afastamentos',this)">🏥 Afastamentos</div>
+    <div class="tab" onclick="mostrarTab('ferias',this)">🏖️ Férias</div>
+    <div class="tab" onclick="mostrarTab('webhooks',this)">🔔 Webhooks</div>
+    <div class="tab" onclick="mostrarTab('logs',this)">📋 Logs</div>
+  </div>
+
+  <!-- TAB: FUNCIONÁRIOS -->
+  <div id="tab-funcionarios" class="tab-content">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">👥 Funcionários Convenia</div>
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="text" placeholder="🔍 Buscar..." id="searchFunc" oninput="filtrarFuncionarios()" style="padding:6px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:12px;outline:none;width:180px">
+          <button class="btn btn-convenia btn-sm" onclick="syncFuncionarios()">⬇️ Sincronizar</button>
+          <button class="btn btn-secondary btn-sm" onclick="exportarFuncionariosCSV()">📊 CSV</button>
+        </div>
+      </div>
+      <div id="funcionariosContainer">
+        <div class="empty"><div class="icon">👥</div><p>Clique em "Sincronizar" para buscar os funcionários da Convenia</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: FOLHA -->
+  <div id="tab-folha" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">💰 Folhas de Pagamento</div>
+        <button class="btn btn-secondary btn-sm" onclick="syncFolha()">⬇️ Buscar Folhas</button>
+      </div>
+      <div id="folhaContainer">
+        <div class="empty"><div class="icon">💰</div><p>Clique em "Buscar Folhas" para listar as folhas de pagamento</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: BENEFÍCIOS -->
+  <div id="tab-beneficios" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">🎁 Benefícios</div>
+        <button class="btn btn-secondary btn-sm" onclick="syncBeneficios()">⬇️ Buscar Benefícios</button>
+      </div>
+      <div id="beneficiosContainer">
+        <div class="empty"><div class="icon">🎁</div><p>Clique em "Buscar Benefícios" para listar os planos</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: AFASTAMENTOS -->
+  <div id="tab-afastamentos" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">🏥 Afastamentos</div>
+        <button class="btn btn-secondary btn-sm" onclick="syncAfastamentos()">⬇️ Buscar Afastamentos</button>
+      </div>
+      <div id="afastamentosContainer">
+        <div class="empty"><div class="icon">🏥</div><p>Clique em "Buscar Afastamentos" para listar os registros</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: FÉRIAS -->
+  <div id="tab-ferias" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">🏖️ Férias</div>
+        <button class="btn btn-secondary btn-sm" onclick="syncFerias()">⬇️ Buscar Férias</button>
+      </div>
+      <div id="feriasConveniaContainer">
+        <div class="empty"><div class="icon">🏖️</div><p>Clique em "Buscar Férias" para listar os programados</p></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: WEBHOOKS -->
+  <div id="tab-webhooks" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">🔔 Webhooks Configurados</div>
+        <button class="btn btn-convenia btn-sm" onclick="abrirModalWebhook()">+ Novo Webhook</button>
+      </div>
+      <div id="webhooksContainer">
+        <div class="empty"><div class="icon">🔔</div><p>Nenhum webhook configurado</p></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">📖 Eventos Disponíveis</div>
+      <div class="grid2" style="margin-bottom:0">
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent)">Eventos de Funcionário</div>
+          <div style="font-size:12px;color:var(--text2);line-height:2">
+            📥 <code>employee.created</code> — Admissão<br>
+            📤 <code>employee.dismissed</code> — Demissão<br>
+            ✏️ <code>employee.updated</code> — Atualização cadastral<br>
+            🏖️ <code>employee.vacation</code> — Férias iniciadas<br>
+            🏥 <code>employee.leave</code> — Afastamento
+          </div>
+        </div>
+        <div style="background:var(--surface2);border-radius:10px;padding:12px">
+          <div style="font-weight:600;font-size:13px;margin-bottom:8px;color:var(--accent)">Eventos de Folha</div>
+          <div style="font-size:12px;color:var(--text2);line-height:2">
+            📊 <code>payroll.closed</code> — Folha fechada<br>
+            💳 <code>payroll.paid</code> — Pagamento efetuado<br>
+            🔔 <code>benefit.linked</code> — Benefício vinculado<br>
+            ❌ <code>benefit.unlinked</code> — Benefício removido
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: LOGS -->
+  <div id="tab-logs" class="tab-content" style="display:none">
+    <div class="card">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+        <div class="card-title" style="margin-bottom:0">📋 Log de Sincronizações</div>
+        <button class="btn btn-secondary btn-sm" onclick="limparLogs()">🗑️ Limpar Logs</button>
+      </div>
+      <div id="logsContainer">
+        <div class="empty"><div class="icon">📋</div><p>Nenhuma atividade registrada</p></div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /content -->
+
+<script>
+// ================================================================
+// CONFIG
+// ================================================================
+const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
+let conveniaConfig = JSON.parse(localStorage.getItem('convenia_config') || '{}');
+let conveniaLogs   = JSON.parse(localStorage.getItem('convenia_logs')   || '[]');
+let conveniaData   = JSON.parse(localStorage.getItem('convenia_data')   || '{"funcionarios":[],"folhas":[],"beneficios":[],"afastamentos":[],"ferias":[]}');
+let conveniaWebhooks = JSON.parse(localStorage.getItem('convenia_webhooks') || '[]');
+
+// ================================================================
+// INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  // Carregar config salva nos inputs
+  if (conveniaConfig.token)      document.getElementById('convenia_token').value = conveniaConfig.token;
+  if (conveniaConfig.empresa_id) document.getElementById('convenia_empresa_id').value = conveniaConfig.empresa_id;
+  if (conveniaConfig.auto_sync)  document.getElementById('convenia_auto_sync').value = conveniaConfig.auto_sync;
+
+  atualizarStatusCards();
+  renderLogs();
+  renderWebhooks();
+
+  // Verificar conexão se tiver token
+  if (conveniaConfig.token) await testarConexaoSilencioso();
+
+  // Renderizar dados em cache
+  if (conveniaData.funcionarios.length) renderFuncionarios(conveniaData.funcionarios);
+  if (conveniaData.folhas.length) renderFolhas(conveniaData.folhas);
+  if (conveniaData.beneficios.length) renderBeneficios(conveniaData.beneficios);
+  if (conveniaData.afastamentos.length) renderAfastamentos(conveniaData.afastamentos);
+  if (conveniaData.ferias.length) renderFeriasConvenia(conveniaData.ferias);
+
+  // Auth RH
+  if (typeof RHAuth !== 'undefined') {
+    try { await RHAuth.check(); } catch(e) {}
+  }
+});
+
+// ================================================================
+// UTILS
+// ================================================================
+function fmtDate(d) {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleDateString('pt-BR'); } catch { return d; }
+}
+function fmtMoeda(v) {
+  if (v == null) return '—';
+  return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function getToken() { return conveniaConfig.token || ''; }
+function getHeaders() { return { 'api-token': getToken(), 'Content-Type': 'application/json', 'Accept': 'application/json' }; }
+
+function salvarDados() {
+  localStorage.setItem('convenia_data', JSON.stringify(conveniaData));
+  localStorage.setItem('convenia_logs', JSON.stringify(conveniaLogs));
+  localStorage.setItem('convenia_webhooks', JSON.stringify(conveniaWebhooks));
+}
+
+function addLog(tipo, msg, detalhe = '') {
+  conveniaLogs.unshift({ tipo, msg, detalhe, ts: new Date().toISOString() });
+  if (conveniaLogs.length > 100) conveniaLogs = conveniaLogs.slice(0, 100);
+  salvarDados();
+  renderLogs();
+}
+
+function showToast(msg, tipo = 'ok') {
+  const box = document.getElementById('toastBox');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.style.borderColor = tipo === 'warn' ? 'var(--warning)' : tipo === 'err' ? 'var(--danger)' : 'var(--accent)';
+  el.textContent = msg;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 3500);
+}
+
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+function toggleToken() {
+  const inp = document.getElementById('convenia_token');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// ================================================================
+// CONFIG
+// ================================================================
+function salvarConfig() {
+  conveniaConfig = {
+    token:      document.getElementById('convenia_token').value.trim(),
+    empresa_id: document.getElementById('convenia_empresa_id').value.trim(),
+    auto_sync:  document.getElementById('convenia_auto_sync').value,
+  };
+  localStorage.setItem('convenia_config', JSON.stringify(conveniaConfig));
+  showToast('Configuração salva! ✅');
+  addLog('info', 'Configuração atualizada');
+}
+
+// ================================================================
+// STATUS CARDS
+// ================================================================
+function atualizarStatusCards() {
+  const ultima = conveniaConfig.ultima_sync;
+  document.getElementById('st-ultima-sync').textContent = ultima ? fmtDate(ultima) : '—';
+  document.getElementById('st-sync-sub').textContent    = ultima ? new Date(ultima).toLocaleTimeString('pt-BR') : 'Nunca sincronizado';
+  document.getElementById('st-funcionarios').textContent = conveniaData.funcionarios.length || '—';
+  document.getElementById('st-func-sub').textContent     = conveniaData.funcionarios.length ? `${conveniaData.funcionarios.filter(f => f.status === 'active' || f.active).length} ativos` : 'Aguardando sincronização';
+  document.getElementById('st-pendentes').textContent    = calcPendentes();
+}
+
+function calcPendentes() {
+  // Funcionários na Convenia que não existem no Supabase (mock)
+  return 0;
+}
+
+// ================================================================
+// TESTAR CONEXÃO
+// ================================================================
+async function testarConexao() {
+  if (!getToken()) { showToast('Informe o Token da API antes de testar', 'warn'); return; }
+  document.getElementById('conexao-status').innerHTML = '<span class="spinner" style="width:12px;height:12px;border-width:2px"></span> Testando...';
+
+  try {
+    const res = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, { headers: getHeaders() });
+    if (res.ok) {
+      document.getElementById('st-status').textContent = 'Online';
+      document.getElementById('conexao-status').innerHTML = '🟢 Conectado';
+      showToast('Conexão com Convenia estabelecida! ✅');
+      addLog('success', 'Teste de conexão bem-sucedido', `Status HTTP ${res.status}`);
+    } else {
+      const err = await res.text();
+      document.getElementById('st-status').textContent = `Erro ${res.status}`;
+      document.getElementById('conexao-status').innerHTML = '🔴 Falha';
+      showToast(`Erro ${res.status}: verifique o token`, 'err');
+      addLog('error', `Falha na conexão: HTTP ${res.status}`, err.slice(0, 200));
+    }
+  } catch (e) {
+    document.getElementById('st-status').textContent = 'Offline';
+    document.getElementById('conexao-status').innerHTML = '🔴 Sem conexão';
+    showToast('Sem conexão com a API Convenia', 'err');
+    addLog('error', 'Falha na conexão', e.message);
+  }
+}
+
+async function testarConexaoSilencioso() {
+  try {
+    const res = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, { headers: getHeaders() });
+    if (res.ok) {
+      document.getElementById('st-status').textContent = 'Online';
+      document.getElementById('conexao-status').innerHTML = '🟢 Conectado';
+    } else {
+      document.getElementById('st-status').textContent = `Erro ${res.status}`;
+      document.getElementById('conexao-status').innerHTML = '🔴 Token inválido';
+    }
+  } catch {
+    document.getElementById('st-status').textContent = 'Offline';
+    document.getElementById('conexao-status').innerHTML = '🔴 Sem conexão';
+  }
+}
+
+// ================================================================
+// SYNC FUNCIONÁRIOS
+// ================================================================
+async function syncFuncionarios() {
+  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
+  mostrarTab('funcionarios');
+  mostrarSyncOverlay('Importando Funcionários...', 'Buscando lista de colaboradores da Convenia...');
+
+  try {
+    let todos = [], page = 1, totalPages = 1;
+    do {
+      atualizarSyncProg(Math.round((page / (totalPages || 1)) * 80));
+      const res = await fetch(`${CONVENIA_BASE}/employees?page=${page}&per_page=100`, { headers: getHeaders() });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+
+      const lista = json.data || json.employees || json || [];
+      if (!Array.isArray(lista)) break;
+      todos = todos.concat(lista);
+
+      if (json.meta) { totalPages = json.meta.last_page || json.meta.total_pages || 1; }
+      page++;
+    } while (page <= totalPages && totalPages > 1 && page <= 20);
+
+    atualizarSyncProg(90);
+    conveniaData.funcionarios = todos;
+    conveniaConfig.ultima_sync = new Date().toISOString();
+    localStorage.setItem('convenia_config', JSON.stringify(conveniaConfig));
+    salvarDados();
+    atualizarStatusCards();
+    atualizarSyncProg(100);
+
+    // Salvar no Supabase via RH_API (em background)
+    if (typeof RH_API !== 'undefined') await salvarFuncionariosSupabase(todos);
+
+    setTimeout(() => {
+      esconderSyncOverlay();
+      renderFuncionarios(todos);
+      showToast(`${todos.length} funcionários importados da Convenia! ✅`);
+      addLog('success', `Sync funcionários concluído`, `${todos.length} registros importados`);
+    }, 400);
+
+  } catch (e) {
+    esconderSyncOverlay();
+    showToast('Erro ao sincronizar funcionários: ' + e.message, 'err');
+    addLog('error', 'Falha no sync de funcionários', e.message);
+  }
+}
+
+async function salvarFuncionariosSupabase(lista) {
+  // Salva cada funcionário no Supabase (upsert por cpf ou convenia_id)
+  try {
+    for (const f of lista.slice(0, 50)) { // Limite para não sobrecarregar
+      const payload = {
+        nome:       f.name || f.nome || '',
+        cpf:        f.cpf || '',
+        cargo:      f.position || f.cargo || '',
+        departamento: f.department?.name || f.departamento || '',
+        data_admissao: f.admission_date || f.data_admissao || null,
+        status:     f.active ? 'ativo' : 'inativo',
+        convenia_id: String(f.id || ''),
+        email:      f.email || f.work_email || '',
+        salario:    f.salary || null,
+      };
+      if (payload.cpf || payload.convenia_id) {
+        await RH_API.post('rh_funcionarios', payload).catch(() => {});
+      }
+    }
+  } catch(e) { console.warn('Supabase sync parcial:', e); }
+}
+
+// ================================================================
+// SYNC FOLHA
+// ================================================================
+async function syncFolha() {
+  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
+  mostrarTab('folha');
+  mostrarSyncOverlay('Buscando Folhas de Pagamento...', 'Conectando à Convenia...');
+
+  try {
+    atualizarSyncProg(30);
+    const res = await fetch(`${CONVENIA_BASE}/payrolls?per_page=24`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const lista = json.data || json.payrolls || json || [];
+    atualizarSyncProg(80);
+
+    conveniaData.folhas = Array.isArray(lista) ? lista : [];
+    salvarDados();
+    atualizarSyncProg(100);
+    setTimeout(() => {
+      esconderSyncOverlay();
+      renderFolhas(conveniaData.folhas);
+      showToast(`${conveniaData.folhas.length} folhas encontradas! ✅`);
+      addLog('success', 'Sync folha concluído', `${conveniaData.folhas.length} registros`);
+    }, 300);
+  } catch (e) {
+    esconderSyncOverlay();
+    showToast('Erro ao buscar folhas: ' + e.message, 'err');
+    addLog('error', 'Falha no sync de folha', e.message);
+  }
+}
+
+// ================================================================
+// SYNC BENEFÍCIOS
+// ================================================================
+async function syncBeneficios() {
+  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
+  mostrarTab('beneficios');
+  mostrarSyncOverlay('Buscando Benefícios...', 'Conectando à Convenia...');
+
+  try {
+    atualizarSyncProg(30);
+    const res = await fetch(`${CONVENIA_BASE}/benefits`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const lista = json.data || json.benefits || json || [];
+    atualizarSyncProg(80);
+
+    conveniaData.beneficios = Array.isArray(lista) ? lista : [];
+    salvarDados();
+    atualizarSyncProg(100);
+    setTimeout(() => {
+      esconderSyncOverlay();
+      renderBeneficios(conveniaData.beneficios);
+      showToast(`${conveniaData.beneficios.length} benefícios encontrados! ✅`);
+      addLog('success', 'Sync benefícios concluído', `${conveniaData.beneficios.length} registros`);
+    }, 300);
+  } catch (e) {
+    esconderSyncOverlay();
+    showToast('Erro ao buscar benefícios: ' + e.message, 'err');
+    addLog('error', 'Falha no sync de benefícios', e.message);
+  }
+}
+
+// ================================================================
+// SYNC AFASTAMENTOS
+// ================================================================
+async function syncAfastamentos() {
+  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
+  mostrarSyncOverlay('Buscando Afastamentos...', 'Conectando à Convenia...');
+  try {
+    atualizarSyncProg(40);
+    const res = await fetch(`${CONVENIA_BASE}/leaves?per_page=100`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const lista = json.data || json.leaves || json || [];
+    atualizarSyncProg(90);
+    conveniaData.afastamentos = Array.isArray(lista) ? lista : [];
+    salvarDados();
+    atualizarSyncProg(100);
+    setTimeout(() => {
+      esconderSyncOverlay();
+      renderAfastamentos(conveniaData.afastamentos);
+      showToast(`${conveniaData.afastamentos.length} afastamentos encontrados! ✅`);
+      addLog('success', 'Sync afastamentos concluído', `${conveniaData.afastamentos.length} registros`);
+    }, 300);
+  } catch (e) {
+    esconderSyncOverlay();
+    showToast('Erro: ' + e.message, 'err');
+    addLog('error', 'Falha no sync de afastamentos', e.message);
+  }
+}
+
+// ================================================================
+// SYNC FÉRIAS
+// ================================================================
+async function syncFerias() {
+  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
+  mostrarSyncOverlay('Buscando Férias...', 'Conectando à Convenia...');
+  try {
+    atualizarSyncProg(40);
+    const res = await fetch(`${CONVENIA_BASE}/vacations?per_page=100`, { headers: getHeaders() });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const json = await res.json();
+    const lista = json.data || json.vacations || json || [];
+    atualizarSyncProg(90);
+    conveniaData.ferias = Array.isArray(lista) ? lista : [];
+    salvarDados();
+    atualizarSyncProg(100);
+    setTimeout(() => {
+      esconderSyncOverlay();
+      renderFeriasConvenia(conveniaData.ferias);
+      showToast(`${conveniaData.ferias.length} registros de férias encontrados! ✅`);
+      addLog('success', 'Sync férias concluído', `${conveniaData.ferias.length} registros`);
+    }, 300);
+  } catch (e) {
+    esconderSyncOverlay();
+    showToast('Erro: ' + e.message, 'err');
+    addLog('error', 'Falha no sync de férias', e.message);
+  }
+}
+
+// ================================================================
+// RENDER FUNCIONÁRIOS
+// ================================================================
+let _funcCache = [];
+function renderFuncionarios(lista) {
+  _funcCache = lista;
+  const cont = document.getElementById('funcionariosContainer');
+  if (!lista.length) { cont.innerHTML = '<div class="empty"><div class="icon">👥</div><p>Nenhum funcionário encontrado</p></div>'; return; }
+
+  const html = `
+    <div style="margin-bottom:10px;font-size:12px;color:var(--text3)">${lista.length} funcionários · ${lista.filter(f=>f.active !== false).length} ativos</div>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Nome</th><th>CPF</th><th>Cargo</th><th>Departamento</th><th>Admissão</th><th>Salário</th><th>Status</th><th>Ações</th></tr></thead>
+        <tbody>
+          ${lista.map(f => {
+            const nome    = f.name || f.nome || '—';
+            const cpf     = f.cpf  || '—';
+            const cargo   = f.position || f.role || f.cargo || '—';
+            const depto   = f.department?.name || f.departamento || '—';
+            const adm     = fmtDate(f.admission_date || f.data_admissao);
+            const sal     = fmtMoeda(f.salary || f.salario);
+            const ativo   = f.active !== false;
+            return `<tr>
+              <td>
+                <div style="display:flex;align-items:center;gap:10px">
+                  <div class="emp-avatar" style="width:32px;height:32px;font-size:11px;background:${stringToColor(nome)}">${initials(nome)}</div>
+                  <div>
+                    <div style="font-weight:600;font-size:13px">${nome}</div>
+                    <div style="font-size:11px;color:var(--text3)">${f.email || f.work_email || ''}</div>
+                  </div>
+                </div>
+              </td>
+              <td style="font-size:12px">${cpf}</td>
+              <td style="font-size:12px">${cargo}</td>
+              <td><span class="tag tag-cyan">${depto}</span></td>
+              <td style="font-size:12px">${adm}</td>
+              <td style="font-size:12px">${sal}</td>
+              <td><span class="tag ${ativo ? 'tag-green' : 'tag-red'}">${ativo ? 'Ativo' : 'Inativo'}</span></td>
+              <td>
+                <div style="display:flex;gap:4px">
+                  <button class="btn btn-xs btn-secondary" onclick="verDetalhesFunc(${JSON.stringify(f).replace(/"/g,'&quot;')})">👁️</button>
+                  <button class="btn btn-xs btn-secondary" onclick="importarParaRH(${JSON.stringify(f).replace(/"/g,'&quot;')})" title="Importar para RH">⬇️</button>
+                </div>
+              </td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  cont.innerHTML = html;
+}
+
+function filtrarFuncionarios() {
+  const q = document.getElementById('searchFunc').value.toLowerCase();
+  const filtrado = _funcCache.filter(f =>
+    (f.name||'').toLowerCase().includes(q) ||
+    (f.cpf||'').includes(q) ||
+    (f.department?.name||'').toLowerCase().includes(q) ||
+    (f.position||'').toLowerCase().includes(q)
+  );
+  renderFuncionarios(filtrado);
+}
+
+function verDetalhesFunc(f) {
+  const nome  = f.name || f.nome || '—';
+  const cargo = f.position || f.cargo || '—';
+  const depto = f.department?.name || f.departamento || '—';
+  const adm   = fmtDate(f.admission_date || f.data_admissao);
+  const sal   = fmtMoeda(f.salary || f.salario);
+
+  document.getElementById('empDetailsContent').innerHTML = `
+    <div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
+      <div class="emp-avatar" style="width:56px;height:56px;font-size:18px;background:${stringToColor(nome)}">${initials(nome)}</div>
+      <div>
+        <div style="font-size:18px;font-weight:800">${nome}</div>
+        <div style="color:var(--text2)">${cargo} — <span style="color:var(--accent)">${depto}</span></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+      ${kv('CPF', f.cpf)}
+      ${kv('Email', f.email || f.work_email)}
+      ${kv('Admissão', adm)}
+      ${kv('Salário', sal)}
+      ${kv('Status', f.active !== false ? '🟢 Ativo' : '🔴 Inativo')}
+      ${kv('ID Convenia', f.id)}
+      ${kv('Telefone', f.phone || f.mobile || '—')}
+      ${kv('Regime', f.employment_type || f.regime || '—')}
+    </div>
+    <div style="margin-top:14px;display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-secondary" onclick="closeModal('modalEmpDetails')">Fechar</button>
+      <button class="btn btn-convenia" onclick="importarParaRH(${JSON.stringify(f).replace(/"/g,"'")});closeModal('modalEmpDetails')">⬇️ Importar para RH</button>
+    </div>`;
+  openModal('modalEmpDetails');
+}
+
+function kv(label, val) {
+  return `<div style="background:var(--surface2);border-radius:8px;padding:10px">
+    <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:1px;margin-bottom:2px">${label}</div>
+    <div style="font-size:13px;font-weight:600">${val || '—'}</div>
+  </div>`;
+}
+
+async function importarParaRH(f) {
+  if (typeof RH_API === 'undefined') { showToast('RH_API não disponível', 'warn'); return; }
+  const nome = f.name || f.nome || '';
+  if (!nome) { showToast('Funcionário sem nome, não importado', 'warn'); return; }
+  try {
+    await RH_API.post('rh_funcionarios', {
+      nome,
+      cpf:           f.cpf || '',
+      cargo:         f.position || f.cargo || '',
+      departamento:  f.department?.name || f.departamento || '',
+      data_admissao: f.admission_date || f.data_admissao || null,
+      status:        f.active !== false ? 'ativo' : 'inativo',
+      convenia_id:   String(f.id || ''),
+      email:         f.email || f.work_email || '',
+      salario:       f.salary || null,
+    });
+    showToast(`${nome} importado para o RH! ✅`);
+    addLog('success', `Funcionário importado: ${nome}`, `ID Convenia: ${f.id}`);
+  } catch(e) {
+    showToast('Erro ao importar: ' + e.message, 'err');
+    addLog('error', `Falha ao importar ${nome}`, e.message);
+  }
+}
+
+function exportarFuncionariosCSV() {
+  if (!_funcCache.length) { showToast('Sem dados para exportar', 'warn'); return; }
+  const header = ['Nome','CPF','Cargo','Departamento','Admissao','Salario','Status'];
+  const rows = _funcCache.map(f => [
+    f.name || '', f.cpf || '', f.position || '', f.department?.name || '',
+    f.admission_date || '', f.salary || '', f.active !== false ? 'Ativo' : 'Inativo'
+  ].map(v => `"${v}"`).join(','));
+  const csv = [header.join(','), ...rows].join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent('\ufeff' + csv);
+  a.download = `convenia_funcionarios_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  showToast('CSV exportado! 📊');
+}
+
+// ================================================================
+// RENDER FOLHAS
+// ================================================================
+function renderFolhas(lista) {
+  const cont = document.getElementById('folhaContainer');
+  if (!lista.length) { cont.innerHTML = '<div class="empty"><div class="icon">💰</div><p>Nenhuma folha encontrada</p></div>'; return; }
+  cont.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Competência</th><th>Tipo</th><th>Status</th><th>Total Bruto</th><th>Total Líquido</th><th>Funcionários</th><th>Criado em</th></tr></thead>
+        <tbody>
+          ${lista.map(p => `<tr>
+            <td style="font-weight:600">${p.competence || p.referencia || fmtDate(p.date || p.data)}</td>
+            <td><span class="tag tag-blue">${p.type || p.tipo || 'Mensal'}</span></td>
+            <td><span class="tag ${p.status === 'closed' || p.status === 'pago' ? 'tag-green' : 'tag-yellow'}">${p.status || '—'}</span></td>
+            <td style="color:var(--accent)">${fmtMoeda(p.gross_total || p.total_bruto)}</td>
+            <td style="color:var(--success)">${fmtMoeda(p.net_total || p.total_liquido)}</td>
+            <td>${p.employees_count || p.total_funcionarios || '—'}</td>
+            <td style="font-size:11px;color:var(--text3)">${fmtDate(p.created_at || p.criado_em)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ================================================================
+// RENDER BENEFÍCIOS
+// ================================================================
+function renderBeneficios(lista) {
+  const cont = document.getElementById('beneficiosContainer');
+  if (!lista.length) { cont.innerHTML = '<div class="empty"><div class="icon">🎁</div><p>Nenhum benefício encontrado</p></div>'; return; }
+  cont.innerHTML = `
+    <div class="grid3" style="margin-bottom:0">
+      ${lista.map(b => `
+        <div style="background:var(--surface2);border-radius:12px;padding:16px">
+          <div style="font-size:24px;margin-bottom:6px">${iconBeneficio(b.type || b.tipo || '')}</div>
+          <div style="font-weight:700;font-size:14px;margin-bottom:4px">${b.name || b.nome || '—'}</div>
+          <div style="font-size:12px;color:var(--text2);margin-bottom:8px">${b.type || b.tipo || '—'}</div>
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <span style="color:var(--text3)">Beneficiários</span>
+            <span style="color:var(--accent);font-weight:700">${b.employees_count || b.total_beneficiarios || '—'}</span>
+          </div>
+          ${b.cost_per_employee ? `<div style="display:flex;justify-content:space-between;font-size:12px;margin-top:3px"><span style="color:var(--text3)">Custo/func.</span><span>${fmtMoeda(b.cost_per_employee)}</span></div>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function iconBeneficio(tipo) {
+  const t = tipo.toLowerCase();
+  if (t.includes('saúde') || t.includes('saude') || t.includes('plano')) return '🏥';
+  if (t.includes('odonto')) return '🦷';
+  if (t.includes('vale') && t.includes('aliment')) return '🍽️';
+  if (t.includes('vale') && t.includes('transport')) return '🚌';
+  if (t.includes('vida') || t.includes('seguro')) return '🛡️';
+  if (t.includes('previdencia') || t.includes('previd')) return '📈';
+  return '🎁';
+}
+
+// ================================================================
+// RENDER AFASTAMENTOS
+// ================================================================
+function renderAfastamentos(lista) {
+  const cont = document.getElementById('afastamentosContainer');
+  if (!lista.length) { cont.innerHTML = '<div class="empty"><div class="icon">🏥</div><p>Nenhum afastamento encontrado</p></div>'; return; }
+  cont.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Funcionário</th><th>Motivo</th><th>Início</th><th>Fim</th><th>Dias</th><th>Status</th></tr></thead>
+        <tbody>
+          ${lista.map(a => {
+            const nome = a.employee?.name || a.funcionario || '—';
+            const dias = a.days || a.dias || '—';
+            return `<tr>
+              <td><div style="font-weight:600">${nome}</div></td>
+              <td><span class="tag tag-purple">${a.reason || a.motivo || '—'}</span></td>
+              <td>${fmtDate(a.start_date || a.inicio)}</td>
+              <td>${fmtDate(a.end_date || a.fim)}</td>
+              <td>${dias}</td>
+              <td><span class="tag ${a.active ? 'tag-red' : 'tag-yellow'}">${a.active ? 'Em andamento' : 'Encerrado'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ================================================================
+// RENDER FÉRIAS CONVENIA
+// ================================================================
+function renderFeriasConvenia(lista) {
+  const cont = document.getElementById('feriasConveniaContainer');
+  if (!lista.length) { cont.innerHTML = '<div class="empty"><div class="icon">🏖️</div><p>Nenhuma férias encontrada</p></div>'; return; }
+  cont.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Funcionário</th><th>Início</th><th>Fim</th><th>Dias</th><th>Status</th></tr></thead>
+        <tbody>
+          ${lista.map(v => {
+            const nome = v.employee?.name || v.funcionario || '—';
+            return `<tr>
+              <td><div style="font-weight:600">${nome}</div></td>
+              <td>${fmtDate(v.start_date || v.inicio)}</td>
+              <td>${fmtDate(v.end_date || v.fim)}</td>
+              <td>${v.days || v.dias || '—'}</td>
+              <td><span class="tag tag-blue">${v.status || v.situacao || '—'}</span></td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
+// ================================================================
+// WEBHOOKS
+// ================================================================
+function abrirModalWebhook() { openModal('modalWebhook'); }
+
+function salvarWebhook() {
+  const url = document.getElementById('wh_url').value.trim();
+  if (!url || !url.startsWith('http')) { showToast('URL inválida', 'warn'); return; }
+  const eventos = [];
+  if (document.getElementById('wh_admissao').checked) eventos.push('employee.created');
+  if (document.getElementById('wh_demissao').checked) eventos.push('employee.dismissed');
+  if (document.getElementById('wh_ferias').checked) eventos.push('employee.vacation');
+  if (document.getElementById('wh_folha').checked) eventos.push('payroll.closed');
+  if (document.getElementById('wh_afastamento').checked) eventos.push('employee.leave');
+
+  conveniaWebhooks.push({ id: Date.now(), url, eventos, ativo: true, criado: new Date().toISOString() });
+  salvarDados();
+  closeModal('modalWebhook');
+  renderWebhooks();
+  showToast('Webhook configurado! 🔔');
+  addLog('info', 'Webhook configurado', url);
+}
+
+function renderWebhooks() {
+  const cont = document.getElementById('webhooksContainer');
+  if (!conveniaWebhooks.length) { cont.innerHTML = '<div class="empty"><div class="icon">🔔</div><p>Nenhum webhook configurado</p></div>'; return; }
+  cont.innerHTML = conveniaWebhooks.map(w => `
+    <div class="webhook-item">
+      <div>
+        <div style="font-weight:600;font-size:13px">${w.url}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:3px">${w.eventos.join(' · ')}</div>
+        <div style="font-size:10px;color:var(--text3)">Criado em ${fmtDate(w.criado)}</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span class="tag ${w.ativo ? 'tag-green' : 'tag-red'}">${w.ativo ? 'Ativo' : 'Inativo'}</span>
+        <button class="btn btn-xs btn-danger" onclick="removerWebhook(${w.id})">🗑️</button>
+      </div>
+    </div>`).join('');
+}
+
+function removerWebhook(id) {
+  conveniaWebhooks = conveniaWebhooks.filter(w => w.id !== id);
+  salvarDados();
+  renderWebhooks();
+  showToast('Webhook removido');
+}
+
+// ================================================================
+// LOGS
+// ================================================================
+function renderLogs() {
+  const cont = document.getElementById('logsContainer');
+  if (!conveniaLogs.length) { cont.innerHTML = '<div class="empty"><div class="icon">📋</div><p>Nenhuma atividade registrada</p></div>'; return; }
+  cont.innerHTML = conveniaLogs.map(l => `
+    <div class="log-item">
+      <div class="log-dot ${l.tipo}"></div>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:500">${l.msg}</div>
+        ${l.detalhe ? `<div style="font-size:11px;color:var(--text3)">${l.detalhe}</div>` : ''}
+      </div>
+      <div style="font-size:11px;color:var(--text3);flex-shrink:0">${new Date(l.ts).toLocaleString('pt-BR')}</div>
+    </div>`).join('');
+}
+
+function limparLogs() {
+  if (!confirm('Limpar todos os logs?')) return;
+  conveniaLogs = [];
+  salvarDados();
+  renderLogs();
+}
+
+// ================================================================
+// TABS
+// ================================================================
+function mostrarTab(tab, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.style.display = 'none');
+  document.querySelectorAll('#mainTabs .tab').forEach(t => t.classList.remove('active'));
+  const cont = document.getElementById('tab-' + tab);
+  if (cont) cont.style.display = 'block';
+  if (el) el.classList.add('active');
+  else {
+    const tabs = document.querySelectorAll('#mainTabs .tab');
+    const map = { funcionarios:0, folha:1, beneficios:2, afastamentos:3, ferias:4, webhooks:5, logs:6 };
+    if (map[tab] !== undefined) tabs[map[tab]]?.classList.add('active');
+  }
+}
+
+// ================================================================
+// SYNC OVERLAY
+// ================================================================
+function mostrarSyncOverlay(titulo, desc) {
+  document.getElementById('syncTitle').textContent  = titulo;
+  document.getElementById('syncDesc').textContent   = desc;
+  document.getElementById('syncProg').style.width   = '0%';
+  document.getElementById('syncPct').textContent    = '0%';
+  document.getElementById('syncOverlay').classList.add('show');
+}
+function esconderSyncOverlay() { document.getElementById('syncOverlay').classList.remove('show'); }
+function atualizarSyncProg(pct) {
+  document.getElementById('syncProg').style.width = pct + '%';
+  document.getElementById('syncPct').textContent  = pct + '%';
+}
+
+// ================================================================
+// HELPERS
+// ================================================================
+function initials(nome) {
+  return (nome || '?').split(' ').filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+}
+function stringToColor(str) {
+  const cores = ['#00d4aa','#4f8ef7','#f97316','#a855f7','#f43f5e','#10b981','#e85d26','#06b6d4'];
+  let h = 0;
+  for (let i = 0; i < (str||'').length; i++) h = (h * 31 + str.charCodeAt(i)) >>> 0;
+  return cores[h % cores.length];
+}
+</script>
+</body>
+</html>

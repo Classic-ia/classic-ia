@@ -158,5 +158,18 @@ INSERT INTO estoque_categorias (nome, unidade) VALUES
   ('Fretes Vendas', 'UN'),
   ('Fretes Compras', 'UN'),
   ('Couro Bubalino', 'PC'),
-  ('Servicos', 'UN')
+  ('Servicos', 'UN'),
+  ('QUIMICOS', 'KG'),
+  ('Sebo', 'KG'),
+  ('Embalagens', 'UN'),
+  ('Energia', 'UN'),
+  ('Combustiveis', 'LT'),
+  ('Lenha/Biomassa', 'KG'),
+  ('TRANSFERENCIA', 'UN'),
+  ('Couro Bovino', 'PC'),
+  ('BUCHO BOVINO', 'KG'),
+  ('Raspas', 'KG'),
+  ('Materiais Diversos', 'UN'),
+  ('Ativo Imobilizado', 'UN'),
+  ('Devolucoes', 'UN')
 ON CONFLICT (nome) DO NOTHING;

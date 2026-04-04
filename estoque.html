@@ -2022,6 +2022,16 @@ function _sugerirCategoria(prodNome, ncm, cfop) {
     { palavras: ['ENERGIA', 'ELETRIC'], cat: 'Energia' },
     { palavras: ['COMBUSTIVEL', 'DIESEL', 'GASOLINA', 'ETANOL', 'GAS '], cat: 'Combustiveis' },
     { palavras: ['LENHA', 'CAVACO', 'BIOMASSA'], cat: 'Lenha/Biomassa' },
+    { palavras: ['COURO VERDE', 'COURO SALGADO', 'COURO FRESCO'], cat: 'Couro verde' },
+    { palavras: ['SEMI ACABADO', 'SEMI-ACABADO', 'SEMIACABADO'], cat: 'Semi' },
+    { palavras: ['WET BLUE', 'WET-BLUE', 'WETBLUE'], cat: 'Wet Blue' },
+    { palavras: ['BEXIGA'], cat: 'Bexiga' },
+    { palavras: ['AORTA'], cat: 'AORTA' },
+    { palavras: ['ESOFAGO', 'ESÔFAGO'], cat: 'Esofago' },
+    { palavras: ['TENDAO', 'TENDÃO'], cat: 'Tendao' },
+    { palavras: ['ORELHA'], cat: 'Orelha' },
+    { palavras: ['DEVOLUC', 'DEVOLUÇ'], cat: 'Devolucoes' },
+    { palavras: ['MAQUINA', 'EQUIPAMENTO', 'ATIVO IMOB'], cat: 'Ativo Imobilizado' },
   ];
 
   for (const regra of regras) {
@@ -2030,6 +2040,45 @@ function _sugerirCategoria(prodNome, ncm, cfop) {
         const cat = _categorias.find(c => c.nome.toUpperCase() === regra.cat.toUpperCase());
         if (cat) return { id: cat.id, nome: cat.nome };
       }
+    }
+  }
+
+  // NCM-based fallback
+  if (ncm) {
+    const ncmRegras = [
+      { prefixo: '4104', cat: 'Wet Blue' },       // couro bovino wet blue
+      { prefixo: '4107', cat: 'ACABADO' },         // couro preparado/acabado
+      { prefixo: '4101', cat: 'Couro verde' },     // couro bruto
+      { prefixo: '4105', cat: 'Couro Bovino' },    // couro ovino
+      { prefixo: '2501', cat: 'SAL' },             // sal
+      { prefixo: '3824', cat: 'QUIMICOS' },        // preparações químicas
+      { prefixo: '3402', cat: 'QUIMICOS' },        // agentes orgânicos
+      { prefixo: '2710', cat: 'Combustiveis' },    // óleos combustíveis
+      { prefixo: '2711', cat: 'Combustiveis' },    // gás
+      { prefixo: '4415', cat: 'Embalagens' },      // paletes de madeira
+      { prefixo: '1502', cat: 'Sebo' },            // gordura bovina
+    ];
+    for (const r of ncmRegras) {
+      if (ncm.startsWith(r.prefixo)) {
+        const cat = _categorias.find(c => c.nome.toUpperCase() === r.cat.toUpperCase());
+        if (cat) return { id: cat.id, nome: cat.nome };
+      }
+    }
+  }
+
+  // CFOP-based fallback
+  if (cfop) {
+    const cfopCat = {
+      '5151': 'TRANSFERENCIA', '5152': 'TRANSFERENCIA', '6151': 'TRANSFERENCIA', '6152': 'TRANSFERENCIA',
+      '1151': 'TRANSFERENCIA', '1152': 'TRANSFERENCIA',
+      '5901': 'TRANSFERENCIA', '5902': 'TRANSFERENCIA', '6901': 'TRANSFERENCIA', '6902': 'TRANSFERENCIA',
+      '1551': 'Ativo Imobilizado', '2551': 'Ativo Imobilizado',
+      '1201': 'Devolucoes', '1202': 'Devolucoes', '2201': 'Devolucoes', '2202': 'Devolucoes',
+      '5201': 'Devolucoes', '5202': 'Devolucoes', '6201': 'Devolucoes',
+    };
+    if (cfopCat[cfop]) {
+      const cat = _categorias.find(c => c.nome.toUpperCase() === cfopCat[cfop].toUpperCase());
+      if (cat) return { id: cat.id, nome: cat.nome };
     }
   }
 

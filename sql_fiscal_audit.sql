@@ -171,3 +171,9 @@ CREATE INDEX IF NOT EXISTS idx_mov_cst_pis ON estoque_movimentacoes(cst_pis);
 CREATE INDEX IF NOT EXISTS idx_mov_filial ON estoque_movimentacoes(filial);
 CREATE INDEX IF NOT EXISTS idx_exp_cont_status ON exportacao_contratos(status);
 CREATE INDEX IF NOT EXISTS idx_exp_camb_venc ON exportacao_cambio(data_vencimento);
+
+-- 10. Novas categorias (frete compra separado + couro bubalino)
+INSERT INTO estoque_categorias (nome, unidade) VALUES
+  ('Fretes Compras', 'UN'),
+  ('Couro Bubalino', 'PC')
+ON CONFLICT (nome) DO NOTHING;

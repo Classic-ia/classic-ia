@@ -402,10 +402,10 @@ function parseCTeXML(xmlString) {
 
   let categoria, tipo;
   if (destEhClassic) {
-    categoria = 'FRETES COMPRAS';
+    categoria = 'Fretes Compras';
     tipo = 'entrada';
   } else {
-    categoria = 'FRETES VENDAS';
+    categoria = 'Fretes Vendas';
     tipo = 'saida';
   }
 
@@ -568,7 +568,7 @@ function parseCTeXLS(workbook) {
 
     // Classificar: se destinatário é Classic → frete compra, senão → frete venda
     const destEhClassic = cnpjDest.startsWith(RADICAL_CLASSIC);
-    const categoria = destEhClassic ? 'FRETES COMPRAS' : 'FRETES VENDAS';
+    const categoria = destEhClassic ? 'Fretes Compras' : 'Fretes Vendas';
 
     results.push({
       chave_nfe: chave || `CTE_${nCTe}_${cnpjTransp}_${dataEmissao}`,
@@ -915,6 +915,238 @@ async function exportarExcel() {
   XLSX.utils.book_append_sheet(wb, wsEnc, 'ENCERRAMENTO');
 
   XLSX.writeFile(wb, `Controle_Estoque_${new Date().toISOString().slice(0, 10)}.xlsx`);
+}
+
+// ── Pasta Automática (File System Access API) ──────────────────
+const PASTA_AUTO_DB = 'ClassicCQ_PastaAuto';
+const PASTA_AUTO_STORE = 'handles';
+
+function _openPastaDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(PASTA_AUTO_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(PASTA_AUTO_STORE);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _savePastaHandle(handle) {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readwrite');
+    tx.objectStore(PASTA_AUTO_STORE).put(handle, 'folderHandle');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function _getPastaHandle() {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readonly');
+    const req = tx.objectStore(PASTA_AUTO_STORE).get('folderHandle');
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function _removePastaHandle() {
+  const db = await _openPastaDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(PASTA_AUTO_STORE, 'readwrite');
+    tx.objectStore(PASTA_AUTO_STORE).delete('folderHandle');
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+function _getLastImportDate() {
+  return localStorage.getItem('cq_pasta_auto_last') || null;
+}
+
+function _setLastImportDate(iso) {
+  localStorage.setItem('cq_pasta_auto_last', iso);
+}
+
+// Recursivamente coleta XMLs de uma pasta e subpastas
+async function _coletarXMLs(dirHandle, maxFiles = 5000) {
+  const xmlFiles = [];
+  async function walk(handle) {
+    for await (const entry of handle.values()) {
+      if (xmlFiles.length >= maxFiles) return;
+      if (entry.kind === 'file' && entry.name.toLowerCase().endsWith('.xml')) {
+        xmlFiles.push(entry);
+      } else if (entry.kind === 'directory') {
+        await walk(entry);
+      }
+    }
+  }
+  await walk(dirHandle);
+  return xmlFiles;
+}
+
+async function configurarPastaAuto() {
+  if (!window.showDirectoryPicker) {
+    toast('Navegador não suporta File System Access API. Use Chrome ou Edge.', 'erro');
+    return;
+  }
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    await _savePastaHandle(handle);
+    localStorage.setItem('cq_pasta_auto_nome', handle.name);
+    _atualizarPastaAutoUI(handle.name);
+    toast(`Pasta "${handle.name}" configurada!`, 'ok');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Erro ao selecionar pasta: ' + e.message, 'erro');
+  }
+}
+
+function _atualizarPastaAutoUI(nome, info) {
+  const btn = document.getElementById('btnPastaAuto');
+  const status = document.getElementById('pastaAutoStatus');
+  const nomeEl = document.getElementById('pastaAutoNome');
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (!status) return;
+
+  if (nome) {
+    if (btn) btn.style.display = 'none';
+    status.style.display = 'block';
+    if (nomeEl) nomeEl.textContent = 'Pasta: ' + nome;
+    if (infoEl) infoEl.textContent = info || '';
+  } else {
+    if (btn) btn.style.display = 'flex';
+    status.style.display = 'none';
+  }
+}
+
+async function buscarNovosXMLs() {
+  const handle = await _getPastaHandle();
+  if (!handle) {
+    toast('Nenhuma pasta configurada', 'erro');
+    return;
+  }
+
+  // Verificar permissão (precisa re-grant após reabrir browser)
+  const perm = await handle.queryPermission({ mode: 'read' });
+  if (perm !== 'granted') {
+    const req = await handle.requestPermission({ mode: 'read' });
+    if (req !== 'granted') {
+      toast('Permissão negada para ler a pasta', 'erro');
+      return;
+    }
+  }
+
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (infoEl) infoEl.textContent = 'Escaneando pasta...';
+
+  try {
+    const xmlEntries = await _coletarXMLs(handle);
+    if (!xmlEntries.length) {
+      if (infoEl) infoEl.textContent = 'Nenhum XML encontrado na pasta.';
+      toast('Nenhum XML encontrado', 'erro');
+      return;
+    }
+
+    // Filtrar por data de modificação se tiver lastImport
+    const lastImport = _getLastImportDate();
+    let filesToProcess = [];
+
+    for (const entry of xmlEntries) {
+      const file = await entry.getFile();
+      if (lastImport && file.lastModified <= new Date(lastImport).getTime()) continue;
+      filesToProcess.push(file);
+    }
+
+    if (!filesToProcess.length) {
+      if (infoEl) infoEl.textContent = `Nenhum XML novo desde última importação. (${xmlEntries.length} XMLs na pasta)`;
+      toast('Nenhum XML novo encontrado', 'ok');
+      return;
+    }
+
+    if (infoEl) infoEl.textContent = `Processando ${filesToProcess.length} XMLs novos de ${xmlEntries.length} total...`;
+
+    // Garantir categorias e mapeamentos carregados
+    if (!_categorias.length) await carregarCategorias();
+    if (!_mapeamentos.length) await carregarMapeamentos();
+
+    const allParsedNFs = [];
+    let erros = 0, dups = 0;
+
+    for (const file of filesToProcess) {
+      try {
+        const text = await file.text();
+        const isCTe = text.includes('cteProc') || text.includes('infCte');
+        let nf;
+        if (isCTe) {
+          nf = parseCTeXML(text);
+          if (nf) {
+            for (const item of nf.itens) {
+              const cat = _categorias.find(c => c.nome === item._catNome);
+              if (cat) { item.categoria_id = cat.id; item._mapped = true; }
+            }
+          }
+        } else {
+          nf = parseNFeXML(text);
+        }
+        if (!nf || !nf.itens.length) { erros++; continue; }
+        if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
+
+        // Resolver categorias para NF-e
+        if (!isCTe) {
+          for (const item of nf.itens) {
+            if (!item._mapped) {
+              item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+              item._mapped = !!item.categoria_id;
+            }
+          }
+        }
+
+        nf._fileName = file.name;
+        allParsedNFs.push(nf);
+      } catch { erros++; }
+    }
+
+    // Importar todos os itens mapeados
+    const todosItens = allParsedNFs.flatMap(nf => nf.itens);
+    const mapeados = todosItens.filter(i => i.categoria_id);
+    const naoMapeados = todosItens.filter(i => !i.categoria_id);
+
+    if (infoEl) infoEl.textContent = `Importando ${mapeados.length} itens (${naoMapeados.length} sem categoria)...`;
+
+    let resultado = { inseridos: 0, duplicados: 0, erros: 0 };
+    if (mapeados.length) {
+      resultado = await importarItens(mapeados);
+    }
+
+    _setLastImportDate(new Date().toISOString());
+    const resumo = `${resultado.inseridos} novos, ${resultado.duplicados} duplicados, ${naoMapeados.length} sem categoria`;
+    if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo}`;
+    toast(`Importação automática: ${resumo}`, resultado.inseridos > 0 ? 'ok' : 'info');
+
+    // Atualizar dashboard se houver novos
+    if (resultado.inseridos > 0 && typeof renderDashboard === 'function') {
+      renderDashboard();
+    }
+  } catch (e) {
+    if (infoEl) infoEl.textContent = 'Erro: ' + e.message;
+    toast('Erro na busca automática: ' + e.message, 'erro');
+  }
+}
+
+async function desconfigurarPastaAuto() {
+  await _removePastaHandle();
+  localStorage.removeItem('cq_pasta_auto_nome');
+  localStorage.removeItem('cq_pasta_auto_last');
+  _atualizarPastaAutoUI(null);
+  toast('Pasta automática removida', 'ok');
+}
+
+// Verificar se há pasta configurada ao iniciar
+async function verificarPastaAuto() {
+  const nome = localStorage.getItem('cq_pasta_auto_nome');
+  if (nome) {
+    _atualizarPastaAutoUI(nome, 'Clique "Buscar Novos XMLs" para atualizar');
+  }
 }
 
 // ── Dashboard Data ──────────────────────────────────────────────

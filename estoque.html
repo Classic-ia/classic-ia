@@ -1368,6 +1368,13 @@ async function baixarXmlsOneDrive(token, pastaId) {
 
 async function processarArquivos(files) {
   let novos = 0, dups = 0, erros = 0, zips = 0;
+  const zone = document.getElementById('uploadZone');
+  const origText = zone?.querySelector('p')?.innerHTML || '';
+
+  function updateStatus(msg) {
+    const p = zone?.querySelector('p');
+    if (p) p.innerHTML = msg;
+  }
 
   // Expandir ZIPs em XMLs individuais
   const xmlFiles = [];
@@ -1375,12 +1382,15 @@ async function processarArquivos(files) {
     const fname = file.name.toLowerCase();
     if (fname.endsWith('.zip')) {
       try {
+        updateStatus(`Descompactando ${file.name}...`);
         const zip = await JSZip.loadAsync(file);
         const entries = Object.entries(zip.files);
+        let zi = 0;
         for (const [name, entry] of entries) {
+          zi++;
           if (entry.dir || !name.toLowerCase().endsWith('.xml')) continue;
-          // Ignorar XMLs de evento (cancelamento, carta correção)
           if (name.toLowerCase().includes('evento')) continue;
+          if (zi % 100 === 0) updateStatus(`Descompactando ${file.name}... ${Math.round(zi/entries.length*100)}% (${xmlFiles.length} XMLs)`);
           const content = await entry.async('string');
           xmlFiles.push({ name: name.split('/').pop(), text: content });
         }
@@ -1393,7 +1403,6 @@ async function processarArquivos(files) {
       const text = await file.text();
       xmlFiles.push({ name: file.name, text });
     } else if (fname.endsWith('.xls') || fname.endsWith('.xlsx')) {
-      // Detectar tipo: NF Stock ou CTe
       try {
         const data = await file.arrayBuffer();
         const wb = XLSX.read(data);
@@ -1402,7 +1411,6 @@ async function processarArquivos(files) {
         let xlsItens = [];
         if (tipo === 'cte') {
           xlsItens = parseCTeXLS(wb);
-          // Para CTe, resolver categoria pelo nome especial _catNome
           xlsItens.forEach(item => {
             const cat = _categorias.find(c => c.nome === item._catNome);
             if (cat) { item.categoria_id = cat.id; item._mapped = true; }
@@ -1448,16 +1456,16 @@ async function processarArquivos(files) {
 
   if (zips) toast(`Descompactando ${zips} ZIP(s)... ${xmlFiles.length} XMLs encontrados`, 'ok');
 
-  // Processar cada XML (NFe ou CTe)
-  for (const xf of xmlFiles) {
+  // Processar cada XML (NFe ou CTe) — sem verificar duplicata individual (batch import cuida disso)
+  for (let xi = 0; xi < xmlFiles.length; xi++) {
+    const xf = xmlFiles[xi];
+    if (xi % 50 === 0) updateStatus(`Processando XMLs... ${Math.round(xi/xmlFiles.length*100)}% (${xi}/${xmlFiles.length})`);
     try {
-      // Detectar: CTe ou NFe
       const isCTe = xf.text.includes('cteProc') || xf.text.includes('infCte');
       let nf;
       if (isCTe) {
         nf = parseCTeXML(xf.text);
         if (nf) {
-          // Resolver categoria pelo _catNome
           for (const item of nf.itens) {
             const cat = _categorias.find(c => c.nome === item._catNome);
             if (cat) { item.categoria_id = cat.id; item._mapped = true; }
@@ -1470,12 +1478,11 @@ async function processarArquivos(files) {
 
       if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
 
-      const jaExiste = await verificarDuplicata(nf.chaveNFe);
-      if (jaExiste) { dups++; continue; }
-
       for (const item of nf.itens) {
-        item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
-        item._mapped = !!item.categoria_id;
+        if (!item._mapped) {
+          item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+          item._mapped = !!item.categoria_id;
+        }
       }
 
       nf._fileName = xf.name;
@@ -1487,6 +1494,10 @@ async function processarArquivos(files) {
       erros++;
     }
   }
+
+  // Restore upload zone text
+  const p = zone?.querySelector('p');
+  if (p) p.innerHTML = origText;
 
   if (novos) renderPreview();
   let msg = `${novos} NF(s) carregada(s)`;

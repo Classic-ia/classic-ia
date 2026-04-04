@@ -430,7 +430,7 @@ async function loadKPIs() {
   const monthStart = startOfMonth();
 
   // 1. Colaboradores Ativos
-  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const resAtivos = await RH_API.fetch('rh_funcionarios?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
   const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
   renderKPI('kpi-ativos', totalAtivos, 'Colaboradores Ativos', null);
 
@@ -443,7 +443,7 @@ async function loadKPIs() {
   renderKPI('kpi-epi', episEntregues.length, 'EPIs Entregues (periodo)', null);
 
   // 4. Ocorrencias (periodo)
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=id`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${pStart}&select=id`);
   renderKPI('kpi-ocorrencias', ocorrencias.length, 'Ocorrencias (periodo)', ocorrencias.length > 5 ? 'Acima da media' : null, ocorrencias.length <= 5);
 }
 
@@ -454,7 +454,7 @@ async function loadKPIs2() {
   const todayDate = new Date();
 
   // 5. Turnover Mensal
-  const resAtivos = await RH_API.fetch('rh_colaboradores?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
+  const resAtivos = await RH_API.fetch('rh_funcionarios?status=eq.ativo&select=id', { headers: { 'Prefer': 'count=exact' } });
   const totalAtivos = parseInt(resAtivos.headers.get('content-range')?.split('/')[1] || '0');
   const desligMes = await RH_API.get(`rh_desligamentos?data_desligamento=gte.${pStart}&select=id`);
   const turnover = totalAtivos > 0 ? ((desligMes.length / totalAtivos) * 100).toFixed(1) : '0.0';
@@ -476,7 +476,7 @@ async function loadKPIs2() {
 
   // 8. Treinamentos Pendentes (ASOs periodicos vencendo em 60 dias)
   const in60 = new Date(todayDate.getTime() + 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const treinPend = await RH_API.get(`rh_aso?tipo=eq.periodico&data_validade=gte.${todayStr}&data_validade=lte.${in60}&select=id`);
+  const treinPend = await RH_API.get(`rh_aso?tipo_exame=eq.periodico&data_validade=gte.${todayStr}&data_validade=lte.${in60}&select=id`);
   renderKPI('kpi-treinamentos', treinPend.length, 'Treinamentos Pendentes', treinPend.length > 0 ? 'Vencem em 60 dias' : null, treinPend.length === 0);
 }
 
@@ -522,11 +522,11 @@ async function loadChartDesligamentos() {
 
 async function loadChartOcorrencias() {
   const pStart = periodStart();
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${pStart}&select=tipo`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${pStart}&select=tipo_acidente`);
 
   const grouped = {};
   ocorrencias.forEach(o => {
-    const t = o.tipo || 'Outros';
+    const t = o.tipo_acidente || 'Outros';
     grouped[t] = (grouped[t] || 0) + 1;
   });
 
@@ -562,7 +562,7 @@ async function loadChartOcorrencias() {
 }
 
 async function loadChartSetores() {
-  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=setor');
+  const colaboradores = await RH_API.get('rh_funcionarios?status=eq.ativo&select=setor');
 
   const grouped = {};
   colaboradores.forEach(c => {
@@ -651,22 +651,32 @@ async function loadChartASO() {
 }
 
 async function loadTableDesligamentos() {
-  const deslig = await RH_API.get('rh_desligamentos?order=data_desligamento.desc&limit=10&select=nome,data_desligamento,tipo,motivo,tempo_empresa');
+  const deslig = await RH_API.get('rh_desligamentos?order=data_desligamento.desc&limit=10&select=funcionario_id,data_desligamento,tipo_desligamento,categoria_causa,descricao,rh_funcionarios(nome_completo,data_admissao)');
 
   const tbody = document.querySelector('#table-desligamentos tbody');
   if (deslig.length === 0) {
     tbody.innerHTML = '<tr class="empty-row"><td colspan="5">Nenhum desligamento encontrado</td></tr>';
     return;
   }
-  tbody.innerHTML = deslig.map(d => `
+  tbody.innerHTML = deslig.map(d => {
+    const nome = d.rh_funcionarios?.nome_completo || '--';
+    const tipo = d.tipo_desligamento || '--';
+    const admissao = d.rh_funcionarios?.data_admissao;
+    let tempoCasa = '--';
+    if (admissao && d.data_desligamento) {
+      const dias = Math.ceil((new Date(d.data_desligamento) - new Date(admissao)) / 86400000);
+      tempoCasa = dias < 30 ? dias + 'd' : dias < 365 ? Math.floor(dias/30) + 'm' : Math.floor(dias/365) + 'a ' + Math.floor((dias%365)/30) + 'm';
+    }
+    return `
     <tr>
-      <td>${d.nome || '--'}</td>
+      <td>${nome}</td>
       <td>${formatDate(d.data_desligamento)}</td>
-      <td><span class="badge ${d.tipo === 'justa_causa' ? 'badge-red' : 'badge-yellow'}">${d.tipo || '--'}</span></td>
-      <td>${d.motivo || '--'}</td>
-      <td>${d.tempo_empresa || '--'}</td>
+      <td><span class="badge ${tipo === 'justa_causa' ? 'badge-red' : 'badge-yellow'}">${tipo.replace(/_/g,' ')}</span></td>
+      <td>${d.descricao || d.categoria_causa || '--'}</td>
+      <td>${tempoCasa}</td>
     </tr>
-  `).join('');
+  `;
+  }).join('');
 }
 
 async function loadTableASOVencer() {
@@ -674,7 +684,7 @@ async function loadTableASOVencer() {
   const todayDate = new Date();
   const in30 = new Date(todayDate.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  const asos = await RH_API.get(`rh_aso?data_validade=gte.${todayStr}&data_validade=lte.${in30}&order=data_validade.asc&select=colaborador_nome,tipo,data_validade`);
+  const asos = await RH_API.get(`rh_aso?data_validade=gte.${todayStr}&data_validade=lte.${in30}&order=data_validade.asc&select=funcionario_id,tipo_exame,data_validade,rh_funcionarios(nome_completo)`);
 
   const tbody = document.querySelector('#table-aso-vencer tbody');
   if (asos.length === 0) {
@@ -689,8 +699,8 @@ async function loadTableASOVencer() {
     else if (dias <= 15) { badgeClass = 'badge-yellow'; statusText = dias + ' dias'; }
     return `
       <tr>
-        <td>${a.colaborador_nome || '--'}</td>
-        <td>${a.tipo || '--'}</td>
+        <td>${a.rh_funcionarios?.nome_completo || '--'}</td>
+        <td>${(a.tipo_exame || '--').replace(/_/g,' ')}</td>
         <td>${formatDate(a.data_validade)}</td>
         <td><span class="badge ${badgeClass}">${statusText}</span></td>
       </tr>
@@ -705,36 +715,36 @@ async function loadAlertas() {
   const alerts = [];
 
   // ASOs vencidos
-  const asosVencidos = await RH_API.get(`rh_aso?data_validade=lt.${todayStr}&select=colaborador_nome,data_validade`);
+  const asosVencidos = await RH_API.get(`rh_aso?data_validade=lt.${todayStr}&select=funcionario_id,data_validade,rh_funcionarios(nome_completo)`);
   asosVencidos.forEach(a => {
     alerts.push({
       level: 'red',
       badge: 'CRITICO',
-      text: `ASO vencido: ${a.colaborador_nome || 'Colaborador'} - Validade: ${formatDate(a.data_validade)}`
+      text: `ASO vencido: ${a.rh_funcionarios?.nome_completo || 'Colaborador'} - Validade: ${formatDate(a.data_validade)}`
     });
   });
 
   // EPIs sem entrega > 6 meses
   const sixMonthsAgo = new Date(todayDate.getFullYear(), todayDate.getMonth() - 6, todayDate.getDate()).toISOString().slice(0, 10);
-  const colaboradores = await RH_API.get('rh_colaboradores?status=eq.ativo&select=id,nome');
-  const episRecentes = await RH_API.get(`rh_epi_entregas?data_entrega=gte.${sixMonthsAgo}&select=colaborador_id`);
-  const colabComEPI = new Set(episRecentes.map(e => e.colaborador_id));
+  const colaboradores = await RH_API.get('rh_funcionarios?status=eq.ativo&select=id,nome_completo');
+  const episRecentes = await RH_API.get(`rh_epi_entregas?data_entrega=gte.${sixMonthsAgo}&select=funcionario_id`);
+  const colabComEPI = new Set(episRecentes.map(e => e.funcionario_id));
   colaboradores.forEach(c => {
     if (!colabComEPI.has(c.id)) {
       alerts.push({
         level: 'yellow',
         badge: 'ATENCAO',
-        text: `EPI sem entrega ha mais de 6 meses: ${c.nome || 'Colaborador ID ' + c.id}`
+        text: `EPI sem entrega ha mais de 6 meses: ${c.nome_completo || 'Colaborador ID ' + c.id}`
       });
     }
   });
 
   // Colaboradores com > 3 ocorrencias no mes
   const monthStart = startOfMonth();
-  const ocorrencias = await RH_API.get(`rh_ocorrencias?data_ocorrencia=gte.${monthStart}&select=colaborador_nome,colaborador_id`);
+  const ocorrencias = await RH_API.get(`rh_acidentes?data_ocorrencia=gte.${monthStart}&select=funcionario_id,rh_funcionarios(nome_completo)`);
   const ocCount = {};
   ocorrencias.forEach(o => {
-    const key = o.colaborador_nome || o.colaborador_id || 'Desconhecido';
+    const key = o.rh_funcionarios?.nome_completo || o.funcionario_id || 'Desconhecido';
     ocCount[key] = (ocCount[key] || 0) + 1;
   });
   Object.entries(ocCount).forEach(([nome, count]) => {

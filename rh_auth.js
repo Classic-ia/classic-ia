@@ -239,7 +239,12 @@ const RHAuth = (function () {
     }
     if (!_user || !_token) { window.location.href = 'login.html'; return null; }
 
-    if (_authToken) {
+    // Sessão demo — aceitar diretamente sem validação do servidor
+    if (_token && _token.startsWith('demo-')) {
+      console.info('[RHAuth] Sessão demo ativa — sem validação do servidor.');
+    }
+    // Renovar JWT se necessário e revalidar perfil do banco
+    else if (_authToken) {
       const refreshed = await _refreshToken();
       if (!refreshed) { _limparLocal(); window.location.href = 'login.html'; return null; }
       const perfilDB = await _revalidarPerfil();

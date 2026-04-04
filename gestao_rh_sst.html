@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gestão RH & SST · Classic</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
-<script src="config.js"></script>
-<script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -149,8 +149,8 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="ht">Gestão RH & SST</div>
     <div class="hs">Funcionários · ASO · Treinamentos · EPIs · Acidentes · Desligamentos</div>
   </div>
-  <div id="cq-user-chip"></div>
-  <a href="app.html" class="btn-back">← Painel</a>
+  <div id="rh-user-chip"></div>
+  <a href="app_rh.html" class="btn-back">← Painel</a>
 </div>
 
 <!-- MOTOR LÓGICO BANNER -->
@@ -966,7 +966,7 @@ function renderMotorBanner() {
 // ── API HELPERS ──────────────────────────────────────────
 async function carregarDados(tabela) {
   try {
-    return await CQ_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
+    return await RH_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
   } catch (e) {
     console.warn('Erro ao carregar ' + tabela, e);
     return [];
@@ -976,14 +976,14 @@ async function carregarDados(tabela) {
 async function salvarRegistro(tabela, dados, id) {
   try {
     if (id) {
-      const res = await CQ_API.fetch(tabela + '?id=eq.' + id, {
+      const res = await RH_API.fetch(tabela + '?id=eq.' + id, {
         method: 'PATCH',
         headers: { 'Prefer': 'return=minimal' },
         body: dados
       });
       return res.ok;
     } else {
-      const res = await CQ_API.post(tabela, dados, 'return=minimal');
+      const res = await RH_API.post(tabela, dados, 'return=minimal');
       return res.ok;
     }
   } catch (e) {
@@ -994,7 +994,7 @@ async function salvarRegistro(tabela, dados, id) {
 
 async function deletarRegistro(tabela, id) {
   try {
-    const res = await CQ_API.fetch(tabela + '?id=eq.' + id, { method: 'DELETE' });
+    const res = await RH_API.fetch(tabela + '?id=eq.' + id, { method: 'DELETE' });
     return res.ok;
   } catch (e) {
     return false;
@@ -1003,10 +1003,10 @@ async function deletarRegistro(tabela, id) {
 
 // ── AUDIT LOG ────────────────────────────────────────────
 async function logAudit(acao, tabela, registro_id, antes, depois) {
-  const user = CQAuth.getUser();
+  const user = RHAuth.getUser();
   if (!user) return;
   try {
-    await CQ_API.post('rh_audit_log', {
+    await RH_API.post('rh_audit_log', {
       usuario_id: user.id,
       usuario_nome: user.nome,
       acao,
@@ -1052,6 +1052,26 @@ function popularSetores() {
       selFunc.innerHTML += `<option value="${s}">${s}</option>`;
     });
   }
+}
+
+async function popularEmpresasFiliais() {
+  try {
+    EMPRESAS = await RH_API.get('rh_empresas?status=eq.ativa&order=razao_social') || [];
+  } catch { EMPRESAS = []; }
+  const selEmpresa = document.getElementById('funcEmpresa');
+  selEmpresa.innerHTML = '<option value="">Selecione</option>';
+  EMPRESAS.forEach(e => {
+    selEmpresa.innerHTML += `<option value="${e.id}">${e.nome_fantasia || e.razao_social}</option>`;
+  });
+  // Filiais
+  try {
+    const filiais = await RH_API.get('rh_filiais?status=eq.ativa&order=razao_social') || [];
+    const selFilial = document.getElementById('funcFilial');
+    selFilial.innerHTML = '<option value="">Selecione</option>';
+    filiais.forEach(f => {
+      selFilial.innerHTML += `<option value="${f.id}">${f.nome_fantasia || f.razao_social}</option>`;
+    });
+  } catch {}
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1499,6 +1519,8 @@ function editarFunc(id) {
   document.getElementById('funcSalario').value = f.salario_base || '';
   document.getElementById('funcMatricula').value = f.matricula || '';
   document.getElementById('funcPis').value = f.pis_pasep || '';
+  document.getElementById('funcEmpresa').value = f.empresa_id || '';
+  document.getElementById('funcFilial').value = f.filial_id || '';
   document.getElementById('funcObs').value = f.observacoes || '';
   document.getElementById('modalFuncTitle').textContent = 'Editar Funcionário';
   abrirModal('modalFunc');
@@ -1523,6 +1545,8 @@ async function salvarFuncionario(e) {
     salario_base: parseFloat(document.getElementById('funcSalario').value) || null,
     matricula: document.getElementById('funcMatricula').value.trim() || null,
     pis_pasep: document.getElementById('funcPis').value.trim() || null,
+    empresa_id: document.getElementById('funcEmpresa').value || null,
+    filial_id: document.getElementById('funcFilial').value || null,
     observacoes: document.getElementById('funcObs').value.trim() || null,
     status: 'ativo',
   };
@@ -1887,9 +1911,18 @@ async function recarregar() {
 }
 
 (async () => {
-  const user = await CQAuth.init();
+  const user = await RHAuth.init();
   if (!user) return;
+  await popularEmpresasFiliais();
   await recarregar();
+
+  // Suporte a ?tab= na URL (ex: ?tab=aso)
+  const params = new URLSearchParams(window.location.search);
+  const tab = params.get('tab');
+  if (tab) {
+    const tabEl = document.querySelector(`.tab[data-tab="${tab}"]`);
+    if (tabEl) tabEl.click();
+  }
 })();
 </script>
 </body>

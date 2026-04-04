@@ -194,7 +194,7 @@ const RHAuth = (function () {
           <div style="font-size:13px;color:#8bafc4;line-height:1.6;margin-bottom:24px">
             Sua sessao expirou por <strong style="color:#e8f0f5">1 hora de inatividade</strong>.<br>
             Faca login novamente para continuar.</div>
-          <a href="login.html" style="display:block;padding:13px;background:#2E6B8A;border-radius:8px;
+          <a href="login_rh.html" style="display:block;padding:13px;background:#2E6B8A;border-radius:8px;
             color:white;font-size:14px;font-weight:600;text-decoration:none;">Fazer Login</a>
         </div>
       </div>`;
@@ -237,7 +237,7 @@ const RHAuth = (function () {
         _user = s.user; _token = s.token; _authToken = s.access_token || null;
       } catch {}
     }
-    if (!_user || !_token) { window.location.href = 'login.html'; return null; }
+    if (!_user || !_token) { window.location.href = 'login_rh.html'; return null; }
 
     // Sessão demo — aceitar diretamente sem validação do servidor
     if (_token && _token.startsWith('demo-')) {
@@ -246,9 +246,9 @@ const RHAuth = (function () {
     // Renovar JWT se necessário e revalidar perfil do banco
     else if (_authToken) {
       const refreshed = await _refreshToken();
-      if (!refreshed) { _limparLocal(); window.location.href = 'login.html'; return null; }
+      if (!refreshed) { _limparLocal(); window.location.href = 'login_rh.html'; return null; }
       const perfilDB = await _revalidarPerfil();
-      if (!perfilDB) { _limparLocal(); window.location.href = 'login.html'; return null; }
+      if (!perfilDB) { _limparLocal(); window.location.href = 'login_rh.html'; return null; }
       _user.id = perfilDB.id; _user.nome = perfilDB.nome;
       _user.perfil = perfilDB.perfil; _user.email = perfilDB.email;
       const stored = JSON.parse(localStorage.getItem(STORE_KEY));
@@ -256,11 +256,11 @@ const RHAuth = (function () {
       localStorage.setItem(STORE_KEY, JSON.stringify(stored));
     } else {
       const ok = await _validarSessao();
-      if (!ok) { _limparLocal(); window.location.href = 'login.html'; return null; }
+      if (!ok) { _limparLocal(); window.location.href = 'login_rh.html'; return null; }
     }
 
     if (opts.perfisPermitidos && !opts.perfisPermitidos.includes(_user.perfil)) {
-      window.location.href = 'app.html'; return null;
+      window.location.href = 'app_rh.html'; return null;
     }
 
     _resetTimers();
@@ -307,7 +307,7 @@ const RHAuth = (function () {
     await _patch('rh_sessoes', `session_token=eq.${_token}&ativa=eq.true`,
       { ativa: false, encerrada_em: new Date().toISOString() });
     _limparLocal();
-    window.location.href = 'login.html';
+    window.location.href = 'login_rh.html';
   }
 
   async function log(acao, detalhes = {}) { await _log(acao, detalhes); }

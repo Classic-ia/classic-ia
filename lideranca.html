@@ -6,7 +6,7 @@
 <title>Gestão & Liderança — Classic Couros</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="config.js"></script>
+<script src="config_rh.js"></script>
 <script src="rh_auth.js"></script>
 <script src="rh_api.js"></script>
 <style>
@@ -247,7 +247,7 @@ textarea.form-input{resize:vertical;min-height:64px}
     <div class="nav-item" onclick="showPage('ia',this)"><span class="nav-icon">🤖</span><span>Assistente IA</span></div>
     <div class="nav-item" onclick="showPage('relatorios',this)"><span class="nav-icon">📄</span><span>Relatórios PDF</span></div>
   </div>
-  <a href="app.html" class="nav-back">← Voltar ao RH</a>
+  <a href="app_rh.html" class="nav-back">← Voltar ao RH</a>
 </nav>
 
 <!-- MAIN -->
@@ -494,7 +494,7 @@ function openModal(id){document.getElementById(id).classList.add('open')}
 function closeModal(id){document.getElementById(id).classList.remove('open')}
 document.querySelectorAll('.modal-overlay').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)m.classList.remove('open')}));
 
-function getOcorrFunc(id){const oc=G.ocorrs.filter(o=>o.funcionario_id===id||o.colaborador_id===id);return{faltas:oc.filter(o=>o.tipo==='falta').length,advertencias:oc.filter(o=>o.tipo==='advertencia'||o.tipo==='advertência').length,atestados:oc.filter(o=>o.tipo==='atestado').length}}
+function getOcorrFunc(id){const oc=G.ocorrs.filter(o=>o.funcionario_id===id);return{faltas:oc.filter(o=>o.tipo_acidente==='falta'||o.tipo==='falta').length,advertencias:oc.filter(o=>o.tipo_acidente==='advertencia'||o.tipo_acidente==='advertência'||o.tipo==='advertencia').length,atestados:oc.filter(o=>o.tipo_acidente==='atestado'||o.tipo==='atestado').length}}
 function getEngFunc(id){const s=getOcorrFunc(id);return Math.max(0,100-(s.faltas*10)-(s.advertencias*15)-(s.atestados*5))}
 function calcEngGeral(){if(!G.funcs.length)return 0;return Math.round(G.funcs.reduce((a,f)=>a+getEngFunc(f.id),0)/G.funcs.length)}
 function getAvalFunc(id){const avs=G.avals.filter(a=>a.funcionario_id===id);if(!avs.length)return null;const l=avs[avs.length-1];return((l.nota_geral+l.nota_proat+l.nota_equipe)/3).toFixed(1)}
@@ -519,12 +519,12 @@ function showPage(id, el){
 async function loadAll(){
   try{
     const [f,o,a,m] = await Promise.all([
-      RH_API.get('rh_funcionarios?order=nome'),
-      RH_API.get('rh_ocorrencias?order=created_at.desc').catch(()=>RH_API.get('rh_acidentes?order=created_at.desc').catch(()=>[])),
+      RH_API.get('rh_funcionarios?order=nome_completo'),
+      RH_API.get('rh_acidentes?order=created_at.desc').catch(()=>[]),
       RH_API.get('rh_avaliacoes?order=created_at.desc').catch(()=>[]),
       RH_API.get('rh_metas?order=created_at.desc').catch(()=>[]),
     ]);
-    G.funcs   = (f||[]).map((x,i)=>({...x,_idx:i}));
+    G.funcs   = (f||[]).map((x,i)=>({...x,nome:x.nome_completo||x.nome||'Sem nome',_idx:i}));
     G.ocorrs  = o||[];
     G.avals   = a||[];
     G.metas   = m||[];
@@ -565,9 +565,9 @@ function renderDashboard(){
   const setores=[...new Set(G.funcs.map(f=>f.departamento||f.setor||'—'))];
   document.getElementById('dash-setores').innerHTML=setores.map(s=>{
     const ids=G.funcs.filter(f=>(f.departamento||f.setor)===s).map(f=>f.id);
-    const f=G.ocorrs.filter(o=>ids.includes(o.funcionario_id||o.colaborador_id)&&o.tipo==='falta').length;
-    const a=G.ocorrs.filter(o=>ids.includes(o.funcionario_id||o.colaborador_id)&&(o.tipo==='advertencia'||o.tipo==='advertência')).length;
-    const at=G.ocorrs.filter(o=>ids.includes(o.funcionario_id||o.colaborador_id)&&o.tipo==='atestado').length;
+    const f=G.ocorrs.filter(o=>ids.includes(o.funcionario_id)&&(o.tipo_acidente==='falta'||o.tipo==='falta')).length;
+    const a=G.ocorrs.filter(o=>ids.includes(o.funcionario_id)&&(o.tipo_acidente==='advertencia'||o.tipo_acidente==='advertência'||o.tipo==='advertencia')).length;
+    const at=G.ocorrs.filter(o=>ids.includes(o.funcionario_id)&&(o.tipo_acidente==='atestado'||o.tipo==='atestado')).length;
     return`<div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)">
       <div style="width:100px;font-size:11px;color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s}</div>
       <div style="flex:1;display:flex;gap:2px">

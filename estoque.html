@@ -710,11 +710,21 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
 <div id="tab-apuracao" class="tab-content">
   <div class="filters">
     <div class="filter-group">
-      <span class="filter-label">Mes/Ano</span>
+      <span class="filter-label">Competencia</span>
       <input type="month" class="filter-input" id="apuracaoMes">
     </div>
+    <div class="filter-group">
+      <span class="filter-label">Filial</span>
+      <select class="filter-select" id="apuracaoFilial">
+        <option value="">Todas</option>
+        <option value="MATRIZ">Matriz</option>
+      </select>
+    </div>
     <div class="filter-group" style="align-self:flex-end">
-      <button class="btn btn-primary" onclick="renderApuracao()">Calcular</button>
+      <button class="btn btn-primary" onclick="renderApuracao()">Apurar</button>
+    </div>
+    <div class="filter-group" style="align-self:flex-end">
+      <button class="btn" onclick="exportarApuracao()">Exportar Excel</button>
     </div>
   </div>
 
@@ -722,20 +732,61 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
     <!-- KPIs resumo -->
     <div class="kpi-row" id="apuracaoKpis"></div>
 
-    <!-- Tabela Apuracao por categoria -->
-    <div class="section-head">Apuracao por Categoria</div>
+    <!-- Alertas Fiscais -->
+    <div id="apuracaoAlertas" style="margin-bottom:20px"></div>
+
+    <!-- Apuracao PIS/COFINS/ICMS/IPI -->
+    <div class="section-head">Apuracao de Impostos — Lucro Real Nao-Cumulativo</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th></th>
+            <th style="text-align:right">PIS (1,65%)</th>
+            <th style="text-align:right">COFINS (7,6%)</th>
+            <th style="text-align:right">ICMS</th>
+            <th style="text-align:right">IPI</th>
+          </tr>
+        </thead>
+        <tbody id="apuracaoFinalBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Detalhamento por CFOP -->
+    <div class="section-head" style="margin-top:32px">Detalhamento por CFOP</div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>CFOP</th><th>Descricao</th><th>Tipo</th>
+            <th style="text-align:right">NFs</th>
+            <th style="text-align:right">Itens</th>
+            <th style="text-align:right">Valor Total</th>
+            <th style="text-align:right">ICMS</th>
+            <th style="text-align:right">PIS</th>
+            <th style="text-align:right">COFINS</th>
+            <th style="text-align:right">IPI</th>
+          </tr>
+        </thead>
+        <tbody id="apuracaoCfopBody"></tbody>
+      </table>
+    </div>
+
+    <!-- Apuracao por Categoria -->
+    <div class="section-head" style="margin-top:32px">Apuracao por Categoria</div>
     <div style="overflow-x:auto">
       <table>
         <thead>
           <tr>
             <th>Categoria</th>
             <th style="text-align:right">Vlr Compras</th>
-            <th style="text-align:right">ICMS Compras</th>
-            <th style="text-align:right">PIS Compras</th>
-            <th style="text-align:right">COFINS Compras</th>
+            <th style="text-align:right">ICMS Cred.</th>
+            <th style="text-align:right">PIS Cred.</th>
+            <th style="text-align:right">COFINS Cred.</th>
             <th style="text-align:right">Compra Liquida</th>
             <th style="text-align:right">Vlr Vendas</th>
-            <th style="text-align:right">ICMS Vendas</th>
+            <th style="text-align:right">ICMS Deb.</th>
+            <th style="text-align:right">Exportacao</th>
           </tr>
         </thead>
         <tbody id="apuracaoCatBody"></tbody>
@@ -743,14 +794,23 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       </table>
     </div>
 
-    <!-- Apuracao Final PIS/COFINS/ICMS -->
-    <div class="section-head" style="margin-top:32px">Apuracao Final</div>
+    <!-- Créditos Acumulados -->
+    <div class="section-head" style="margin-top:32px">Creditos Tributarios Acumulados (Exportador)</div>
+    <div id="apuracaoCreditos"></div>
+
+    <!-- Análise CST -->
+    <div class="section-head" style="margin-top:32px">Analise por CST (Codigo Situacao Tributaria)</div>
     <div style="overflow-x:auto">
       <table>
         <thead>
-          <tr><th></th><th style="text-align:right">PIS</th><th style="text-align:right">COFINS</th><th style="text-align:right">ICMS</th></tr>
+          <tr>
+            <th>Imposto</th><th>CST</th><th>Descricao</th>
+            <th style="text-align:right">Itens</th>
+            <th style="text-align:right">Valor</th>
+            <th style="text-align:right">Imposto</th>
+          </tr>
         </thead>
-        <tbody id="apuracaoFinalBody"></tbody>
+        <tbody id="apuracaoCstBody"></tbody>
       </table>
     </div>
   </div>
@@ -2136,101 +2196,263 @@ async function exportarPosicao() {
 }
 
 // ── Apuracao Fiscal ──────────────────────────────────────────────
+// Mapa de descrições CFOP
+const CFOP_DESC = {
+  '1101':'Compra p/ industrializacao','1102':'Compra p/ comercializacao','1124':'Industrializacao por encomenda',
+  '1126':'Compra p/ uso/consumo','1152':'Transferencia p/ industrializacao','1201':'Devol. venda industrializacao',
+  '1202':'Devol. venda comercializacao','1253':'Compra energia eletrica','1352':'Servico transporte',
+  '1401':'Compra p/ industrializacao ST','1403':'Compra p/ comercializacao ST','1501':'Entrada c/ credito ICMS',
+  '1551':'Compra ativo imobilizado','1556':'Compra material uso/consumo','1652':'Compra combustivel',
+  '1901':'Entrada remessa beneficiamento','1902':'Entrada remessa consignacao',
+  '1949':'Outra entrada','2101':'Compra interestadual p/ ind.','2102':'Compra interestadual p/ com.',
+  '2152':'Transferencia interestadual','2201':'Devol. venda interestadual','2401':'Compra inter. c/ ST',
+  '2403':'Compra inter. com. c/ ST','2551':'Compra ativo inter.','2556':'Material uso/consumo inter.',
+  '2949':'Outra entrada interestadual',
+  '5101':'Venda prod. ind.','5102':'Venda merc. adquirida','5124':'Ind. por encomenda',
+  '5152':'Transferencia p/ ind.','5201':'Devol. compra p/ ind.','5202':'Devol. compra p/ com.',
+  '5401':'Venda c/ ST','5403':'Venda com. c/ ST','5501':'Remessa p/ beneficiamento',
+  '5551':'Venda ativo','5901':'Remessa beneficiamento','5902':'Remessa consignacao','5949':'Outra saida',
+  '6101':'Venda interestadual prod.','6102':'Venda interestadual merc.','6108':'Venda inter. nao contrib.',
+  '6152':'Transferencia interestadual','6201':'Devol. compra inter.','6949':'Outra saida inter.',
+  '7101':'Exportacao direta','7102':'Venda merc. exportacao','7127':'Venda energia exterior',
+  '7501':'Exportacao indireta','7949':'Outra saida exterior'
+};
+
+// Mapa CST PIS/COFINS
+const CST_PIS_DESC = {
+  '01':'Tributavel aliq. basica','02':'Tributavel aliq. diferenciada','03':'Tributavel aliq. por qtde',
+  '04':'Monofasica - revenda aliq. zero','05':'Tributavel ST','06':'Aliquota zero',
+  '07':'Isenta','08':'Sem incidencia (exportacao)','09':'Suspensao',
+  '49':'Outras operacoes saida','50':'Credito aliq. basica','51':'Credito aliq. diferenciada',
+  '52':'Credito aliq. por qtde','53':'Credito vinc. receita tributada','54':'Credito vinc. receita nao-trib.',
+  '55':'Credito vinc. rec. exportacao','56':'Credito vinc. rec. trib. e nao-trib.',
+  '60':'Credito presumido aliq. basica','61':'Credito presumido aliq. diferenciada',
+  '70':'Sem credito','71':'Sem credito - receita nao-trib.','72':'Sem credito - exportacao',
+  '73':'Sem credito - rec. trib. e nao-trib.','98':'Outras operacoes entrada','99':'Outras'
+};
+
 async function renderApuracao() {
   const mesInput = document.getElementById('apuracaoMes')?.value;
-  if (!mesInput) { toast('Selecione o mes/ano', 'warn'); return; }
+  if (!mesInput) { toast('Selecione a competencia', 'warn'); return; }
+  const filialFiltro = document.getElementById('apuracaoFilial')?.value || '';
 
   const [ano, mes] = mesInput.split('-');
   const dataInicio = `${ano}-${mes}-01`;
   const ultimoDia = new Date(ano, mes, 0).getDate();
   const dataFim = `${ano}-${mes}-${ultimoDia}`;
+  const compLabel = `${mes}/${ano}`;
 
   try {
-    const movs = await carregarMovimentacoes({ dataInicio, dataFim });
+    let movs = await carregarMovimentacoes({ dataInicio, dataFim });
+    if (filialFiltro) movs = movs.filter(m => m.filial === filialFiltro);
     if (!movs.length) { toast('Nenhuma movimentacao neste periodo', 'warn'); return; }
 
     document.getElementById('apuracaoResultado').style.display = 'block';
 
-    // Agrupar por categoria
-    const cats = {};
-    movs.forEach(m => {
-      const nome = m.estoque_categorias?.nome || 'Sem categoria';
-      if (!cats[nome]) cats[nome] = { vlrCompra:0, icmsCompra:0, pisCompra:0, cofinsCompra:0, liqCompra:0, vlrVenda:0, icmsVenda:0 };
-      if (m.tipo === 'entrada') {
-        cats[nome].vlrCompra += Number(m.valor_total||0);
-        cats[nome].icmsCompra += Number(m.icms||0);
-        cats[nome].pisCompra += Number(m.pis||0);
-        cats[nome].cofinsCompra += Number(m.cofins||0);
-        cats[nome].liqCompra += Number(m.compra_liquida||0);
-      } else {
-        cats[nome].vlrVenda += Number(m.valor_total||0);
-        cats[nome].icmsVenda += Number(m.icms||0);
-      }
-    });
+    // ── Classificar movimentações ──
+    const entradas = movs.filter(m => m.tipo === 'entrada');
+    const saidas = movs.filter(m => m.tipo === 'saida');
+    const exportacoes = saidas.filter(m => (m.cfop||'').startsWith('7'));
+    const vendasInternas = saidas.filter(m => !(m.cfop||'').startsWith('7'));
 
-    // Totais
-    let tVlrC=0,tIcmsC=0,tPisC=0,tCofC=0,tLiqC=0,tVlrV=0,tIcmsV=0;
-    Object.values(cats).forEach(c => {
-      tVlrC+=c.vlrCompra; tIcmsC+=c.icmsCompra; tPisC+=c.pisCompra;
-      tCofC+=c.cofinsCompra; tLiqC+=c.liqCompra; tVlrV+=c.vlrVenda; tIcmsV+=c.icmsVenda;
-    });
+    // ── Totais gerais ──
+    const sum = (arr, f) => arr.reduce((s,m) => s + Number(m[f]||0), 0);
+    const tVlrC = sum(entradas,'valor_total'), tVlrV = sum(saidas,'valor_total');
+    const tIcmsC = sum(entradas,'icms'), tIcmsV = sum(saidas,'icms');
+    const tPisC = sum(entradas,'pis'), tPisV = sum(saidas,'pis');
+    const tCofC = sum(entradas,'cofins'), tCofV = sum(saidas,'cofins');
+    const tLiqC = sum(entradas,'compra_liquida');
+    const tIpiC = sum(entradas,'ipi'), tIpiV = sum(saidas,'ipi');
+    const tExport = sum(exportacoes,'valor_total');
+    const tVendasInt = sum(vendasInternas,'valor_total');
+    const nfsTotal = new Set(movs.map(m=>m.chave_nfe)).size;
 
-    // KPIs
+    // ── KPIs ──
     document.getElementById('apuracaoKpis').innerHTML = `
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVlrC)}</div><div class="kpi-label">Total Compras</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVlrV)}</div><div class="kpi-label">Total Vendas</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tIcmsC)}</div><div class="kpi-label">ICMS Credito</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tIcmsV)}</div><div class="kpi-label">ICMS Debito</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tPisC)}</div><div class="kpi-label">PIS Credito</div></div>
-      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tCofC)}</div><div class="kpi-label">COFINS Credito</div></div>
+      <div class="kpi"><div class="kpi-value">${compLabel}</div><div class="kpi-label">Competencia</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVlrC)}</div><div class="kpi-label">Compras</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(tVendasInt)}</div><div class="kpi-label">Vendas Internas</div></div>
+      <div class="kpi"><div class="kpi-value" style="color:var(--ok)">${fmtBRLCompacto(tExport)}</div><div class="kpi-label">Exportacoes</div></div>
+      <div class="kpi"><div class="kpi-value">${nfsTotal}</div><div class="kpi-label">NF-es</div></div>
+      <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Itens</div></div>
     `;
 
-    // Tabela por categoria
-    document.getElementById('apuracaoCatBody').innerHTML = Object.entries(cats)
-      .sort((a,b) => b[1].vlrCompra - a[1].vlrCompra)
-      .map(([nome, c]) => `<tr>
-        <td>${nome}</td>
-        <td class="td-num">${fmtBRL(c.vlrCompra)}</td>
-        <td class="td-num">${fmtBRL(c.icmsCompra)}</td>
-        <td class="td-num">${fmtBRL(c.pisCompra)}</td>
-        <td class="td-num">${fmtBRL(c.cofinsCompra)}</td>
-        <td class="td-num">${fmtBRL(c.liqCompra)}</td>
-        <td class="td-num">${fmtBRL(c.vlrVenda)}</td>
-        <td class="td-num">${fmtBRL(c.icmsVenda)}</td>
-      </tr>`).join('');
+    // ── Alertas Fiscais (Auditoria) ──
+    const alertas = [];
+    // 1. Exportação sem CFOP 7xxx
+    const saidasSemCfop7 = saidas.filter(m => !(m.cfop||'').startsWith('7') && (m.nat_operacao||'').toUpperCase().includes('EXPORT'));
+    if (saidasSemCfop7.length) alertas.push({tipo:'ATENCAO',msg:`${saidasSemCfop7.length} notas com natureza "exportacao" mas CFOP nao inicia com 7`});
+    // 2. Entradas sem PIS/COFINS (possível crédito perdido)
+    const entSemPisCof = entradas.filter(m => Number(m.pis||0)===0 && Number(m.cofins||0)===0 && Number(m.valor_total||0)>100);
+    if (entSemPisCof.length) alertas.push({tipo:'INFO',msg:`${entSemPisCof.length} entradas sem PIS/COFINS destacado — verificar direito a credito presumido`});
+    // 3. ICMS em exportação (não deveria ter)
+    const exportComIcms = exportacoes.filter(m => Number(m.icms||0)>0);
+    if (exportComIcms.length) alertas.push({tipo:'CRITICO',msg:`${exportComIcms.length} exportacoes com ICMS destacado — exportacao é IMUNE (CF art.155)`});
+    // 4. PIS/COFINS CST inconsistente
+    const entCst08 = entradas.filter(m => m.cst_pis === '08');
+    if (entCst08.length) alertas.push({tipo:'ATENCAO',msg:`${entCst08.length} entradas com CST PIS 08 (sem incidencia/exportacao) — verificar classificacao`});
+    // 5. Alíquotas divergentes do padrão Lucro Real
+    const entAliqPisDiverg = entradas.filter(m => Number(m.aliq_pis||0)>0 && Math.abs(Number(m.aliq_pis)-1.65)>0.01 && m.cst_pis!=='02');
+    if (entAliqPisDiverg.length) alertas.push({tipo:'INFO',msg:`${entAliqPisDiverg.length} entradas com aliquota PIS diferente de 1,65% — verificar regime`});
+    // 6. Crédito acumulado alto
+    const saldoIcms = tIcmsC - tIcmsV;
+    if (saldoIcms > 50000) alertas.push({tipo:'INFO',msg:`Credito acumulado de ICMS: ${fmtBRL(saldoIcms)} — avaliar pedido de ressarcimento ou transferencia`});
+    const saldoPisCof = (tPisC - tPisV) + (tCofC - tCofV);
+    if (saldoPisCof > 50000) alertas.push({tipo:'INFO',msg:`Credito acumulado PIS+COFINS: ${fmtBRL(saldoPisCof)} — avaliar PER/DCOMP (ressarcimento)`});
 
-    document.getElementById('apuracaoCatFoot').innerHTML = `<tr style="font-weight:bold;border-top:2px solid var(--accent)">
-      <td>TOTAL</td>
-      <td class="td-num">${fmtBRL(tVlrC)}</td>
-      <td class="td-num">${fmtBRL(tIcmsC)}</td>
-      <td class="td-num">${fmtBRL(tPisC)}</td>
-      <td class="td-num">${fmtBRL(tCofC)}</td>
-      <td class="td-num">${fmtBRL(tLiqC)}</td>
-      <td class="td-num">${fmtBRL(tVlrV)}</td>
-      <td class="td-num">${fmtBRL(tIcmsV)}</td>
-    </tr>`;
+    const alertaDiv = document.getElementById('apuracaoAlertas');
+    if (alertas.length) {
+      const corMap = {CRITICO:'var(--err)',ATENCAO:'var(--warn)',INFO:'var(--accent)'};
+      alertaDiv.innerHTML = alertas.map(a => `<div style="background:var(--surface);border-left:3px solid ${corMap[a.tipo]};padding:10px 16px;margin-bottom:6px;border-radius:2px;font-size:12px">
+        <strong style="color:${corMap[a.tipo]}">${a.tipo}</strong> — ${a.msg}
+      </div>`).join('');
+    } else {
+      alertaDiv.innerHTML = '<div style="background:var(--surface);border-left:3px solid var(--ok);padding:10px 16px;border-radius:2px;font-size:12px;color:var(--ok)">Nenhuma inconsistencia fiscal detectada neste periodo</div>';
+    }
 
-    // Apuracao Final (como na planilha da Susan)
-    const saldoIcms = tIcmsC - tIcmsV; // positivo = credito a favor
+    // ── Apuração PIS/COFINS/ICMS/IPI ──
+    const saldoPis = tPisC - tPisV;
+    const saldoCof = tCofC - tCofV;
+    const saldoIpi = tIpiC - tIpiV;
     document.getElementById('apuracaoFinalBody').innerHTML = `
-      <tr><td><strong>Saldo Anterior</strong></td><td class="td-num">-</td><td class="td-num">-</td><td class="td-num">-</td></tr>
-      <tr><td>Creditos (compras)</td><td class="td-num">${fmtBRL(tPisC)}</td><td class="td-num">${fmtBRL(tCofC)}</td><td class="td-num">${fmtBRL(tIcmsC)}</td></tr>
-      <tr><td>Debitos (vendas)</td><td class="td-num">-</td><td class="td-num">-</td><td class="td-num">${fmtBRL(tIcmsV)}</td></tr>
+      <tr style="background:rgba(200,169,110,0.05)"><td><strong>Creditos (Entradas)</strong></td>
+        <td class="td-num">${fmtBRL(tPisC)}</td><td class="td-num">${fmtBRL(tCofC)}</td>
+        <td class="td-num">${fmtBRL(tIcmsC)}</td><td class="td-num">${fmtBRL(tIpiC)}</td></tr>
+      <tr><td><strong>Debitos (Saidas)</strong></td>
+        <td class="td-num">${fmtBRL(tPisV)}</td><td class="td-num">${fmtBRL(tCofV)}</td>
+        <td class="td-num">${fmtBRL(tIcmsV)}</td><td class="td-num">${fmtBRL(tIpiV)}</td></tr>
       <tr style="font-weight:bold;border-top:2px solid var(--accent)">
-        <td><strong>Saldo Final</strong></td>
-        <td class="td-num">${fmtBRL(tPisC)}</td>
-        <td class="td-num">${fmtBRL(tCofC)}</td>
+        <td>SALDO (Cred. - Deb.)</td>
+        <td class="td-num ${saldoPis>=0?'saldo-positivo':'saldo-negativo'}">${fmtBRL(saldoPis)}</td>
+        <td class="td-num ${saldoCof>=0?'saldo-positivo':'saldo-negativo'}">${fmtBRL(saldoCof)}</td>
         <td class="td-num ${saldoIcms>=0?'saldo-positivo':'saldo-negativo'}">${fmtBRL(saldoIcms)}</td>
+        <td class="td-num ${saldoIpi>=0?'saldo-positivo':'saldo-negativo'}">${fmtBRL(saldoIpi)}</td>
       </tr>
-      <tr><td colspan="4" style="font-size:10px;color:var(--muted);padding-top:8px">
-        ${saldoIcms >= 0 ? 'ICMS: Credito acumulado a favor da empresa' : 'ICMS: Debito a recolher neste mes'}
-        | PIS: Vlr credito s/ compras | COFINS: Vlr credito s/ compras
+      <tr><td colspan="5" style="font-size:10px;color:var(--muted);padding-top:8px">
+        Positivo = credito acumulado a favor da empresa | Negativo = imposto a recolher |
+        Exportacoes sao IMUNES de PIS/COFINS/ICMS/IPI — creditos das entradas sao mantidos
       </td></tr>
     `;
 
+    // ── Detalhamento por CFOP ──
+    const cfopMap = {};
+    movs.forEach(m => {
+      const cfop = m.cfop || '0000';
+      if (!cfopMap[cfop]) cfopMap[cfop] = {tipo:m.tipo, nfs:new Set(), itens:0, valor:0, icms:0, pis:0, cofins:0, ipi:0};
+      const c = cfopMap[cfop];
+      c.nfs.add(m.chave_nfe); c.itens++;
+      c.valor += Number(m.valor_total||0); c.icms += Number(m.icms||0);
+      c.pis += Number(m.pis||0); c.cofins += Number(m.cofins||0); c.ipi += Number(m.ipi||0);
+    });
+    document.getElementById('apuracaoCfopBody').innerHTML = Object.entries(cfopMap)
+      .sort((a,b) => a[0].localeCompare(b[0]))
+      .map(([cfop, c]) => {
+        const isExport = cfop.startsWith('7');
+        return `<tr ${isExport?'style="background:rgba(34,197,94,0.05)"':''}>
+          <td><strong>${cfop}</strong></td>
+          <td style="font-size:11px">${CFOP_DESC[cfop]||'—'}</td>
+          <td><span class="badge ${c.tipo==='entrada'?'badge-entrada':'badge-saida'}">${isExport?'EXPORT':c.tipo}</span></td>
+          <td class="td-num">${c.nfs.size}</td><td class="td-num">${c.itens}</td>
+          <td class="td-num">${fmtBRL(c.valor)}</td><td class="td-num">${fmtBRL(c.icms)}</td>
+          <td class="td-num">${fmtBRL(c.pis)}</td><td class="td-num">${fmtBRL(c.cofins)}</td>
+          <td class="td-num">${fmtBRL(c.ipi)}</td>
+        </tr>`;
+      }).join('');
+
+    // ── Tabela por Categoria ──
+    const cats = {};
+    movs.forEach(m => {
+      const nome = m.estoque_categorias?.nome || 'Sem categoria';
+      if (!cats[nome]) cats[nome] = {vlrC:0,icmsC:0,pisC:0,cofC:0,liqC:0,vlrV:0,icmsV:0,vlrExp:0};
+      const isExport = (m.cfop||'').startsWith('7');
+      if (m.tipo === 'entrada') {
+        cats[nome].vlrC += Number(m.valor_total||0); cats[nome].icmsC += Number(m.icms||0);
+        cats[nome].pisC += Number(m.pis||0); cats[nome].cofC += Number(m.cofins||0);
+        cats[nome].liqC += Number(m.compra_liquida||0);
+      } else {
+        cats[nome].vlrV += Number(m.valor_total||0); cats[nome].icmsV += Number(m.icms||0);
+        if (isExport) cats[nome].vlrExp += Number(m.valor_total||0);
+      }
+    });
+
+    document.getElementById('apuracaoCatBody').innerHTML = Object.entries(cats)
+      .sort((a,b) => b[1].vlrC - a[1].vlrC)
+      .map(([nome, c]) => `<tr>
+        <td>${nome}</td>
+        <td class="td-num">${fmtBRL(c.vlrC)}</td><td class="td-num">${fmtBRL(c.icmsC)}</td>
+        <td class="td-num">${fmtBRL(c.pisC)}</td><td class="td-num">${fmtBRL(c.cofC)}</td>
+        <td class="td-num">${fmtBRL(c.liqC)}</td><td class="td-num">${fmtBRL(c.vlrV)}</td>
+        <td class="td-num">${fmtBRL(c.icmsV)}</td>
+        <td class="td-num" ${c.vlrExp>0?'style="color:var(--ok);font-weight:bold"':''}>${c.vlrExp>0?fmtBRL(c.vlrExp):'—'}</td>
+      </tr>`).join('');
+
+    const totCats = Object.values(cats);
+    document.getElementById('apuracaoCatFoot').innerHTML = `<tr style="font-weight:bold;border-top:2px solid var(--accent)">
+      <td>TOTAL</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.vlrC,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.icmsC,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.pisC,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.cofC,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.liqC,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.vlrV,0))}</td>
+      <td class="td-num">${fmtBRL(totCats.reduce((s,c)=>s+c.icmsV,0))}</td>
+      <td class="td-num" style="color:var(--ok)">${fmtBRL(totCats.reduce((s,c)=>s+c.vlrExp,0))}</td>
+    </tr>`;
+
+    // ── Créditos Acumulados (visão exportador) ──
+    const pctExport = tVlrV > 0 ? (tExport / tVlrV * 100) : 0;
+    document.getElementById('apuracaoCreditos').innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px">
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">ICMS — Credito Acumulado Exportacao</div>
+          <div style="font-size:20px;font-weight:700;color:${saldoIcms>=0?'var(--ok)':'var(--err)'}">${fmtBRL(saldoIcms)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Exportacao é imune (CF art.155 §2° X "a") — creditos mantidos</div>
+          <div style="font-size:10px;color:var(--accent);margin-top:2px">Opcoes: Transferencia para fornecedores | Ressarcimento via e-CredAc | Venda de creditos</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">PIS + COFINS — Credito Acumulado</div>
+          <div style="font-size:20px;font-weight:700;color:${saldoPisCof>=0?'var(--ok)':'var(--err)'}">${fmtBRL(saldoPisCof)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">PIS: ${fmtBRL(saldoPis)} | COFINS: ${fmtBRL(saldoCof)}</div>
+          <div style="font-size:10px;color:var(--accent);margin-top:2px">Opcoes: Compensacao via PER/DCOMP | Ressarcimento em especie</div>
+        </div>
+        <div style="background:var(--surface);border:1px solid var(--border);border-radius:4px;padding:16px">
+          <div style="font-size:11px;color:var(--muted);margin-bottom:8px">Proporcao de Exportacao</div>
+          <div style="font-size:20px;font-weight:700;color:var(--accent)">${pctExport.toFixed(1)}%</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px">Exportacao: ${fmtBRL(tExport)} de ${fmtBRL(tVlrV)} total vendas</div>
+          <div style="font-size:10px;color:var(--accent);margin-top:2px">REINTEGRA: ate ${fmtBRL(tExport*0.001)} (0,1% do FOB)</div>
+        </div>
+      </div>
+    `;
+
+    // ── Análise CST ──
+    const cstAnalise = {};
+    movs.forEach(m => {
+      ['pis','cofins'].forEach(imp => {
+        const cst = m[`cst_${imp}`] || '—';
+        const key = `${imp.toUpperCase()}|${cst}`;
+        if (!cstAnalise[key]) cstAnalise[key] = {imposto:imp.toUpperCase(), cst, itens:0, valor:0, impValor:0};
+        cstAnalise[key].itens++;
+        cstAnalise[key].valor += Number(m.valor_total||0);
+        cstAnalise[key].impValor += Number(m[imp]||0);
+      });
+    });
+    document.getElementById('apuracaoCstBody').innerHTML = Object.values(cstAnalise)
+      .sort((a,b) => a.imposto.localeCompare(b.imposto) || a.cst.localeCompare(b.cst))
+      .map(c => `<tr>
+        <td>${c.imposto}</td><td><strong>${c.cst}</strong></td>
+        <td style="font-size:11px">${CST_PIS_DESC[c.cst]||'—'}</td>
+        <td class="td-num">${c.itens}</td><td class="td-num">${fmtBRL(c.valor)}</td>
+        <td class="td-num">${fmtBRL(c.impValor)}</td>
+      </tr>`).join('');
+
   } catch(e) {
     toast('Erro: ' + e.message, 'error');
+    console.error(e);
   }
+}
+
+async function exportarApuracao() {
+  toast('Exportacao em desenvolvimento...', 'warn');
 }
 
 // ── Toast ────────────────────────────────────────────────────────

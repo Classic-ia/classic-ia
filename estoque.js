@@ -211,6 +211,12 @@ function parseNFeXML(xmlString) {
 
     const imposto = q(det, 'imposto');
     let vICMS = 0, vPIS = 0, vCOFINS = 0;
+    let cstICMS = '', cstPIS = '', cstCOFINS = '';
+    let aliqICMS = 0, aliqPIS = 0, aliqCOFINS = 0;
+    let bcICMS = 0, bcPIS = 0, bcCOFINS = 0;
+    let vIPI = 0, cstIPI = '', aliqIPI = 0;
+    let vICMSST = 0, vFCP = 0, vII = 0;
+    let modBC = '', orig = '';
 
     if (imposto) {
       // ICMS — pode estar em vários sub-elementos
@@ -218,7 +224,22 @@ function parseNFeXML(xmlString) {
       if (icmsEl) {
         for (const child of icmsEl.children) {
           const v = num(child, 'vICMS');
-          if (v) { vICMS = v; break; }
+          if (v) { vICMS = v; }
+          const cst = txt(child, 'CST') || txt(child, 'CSOSN');
+          if (cst) cstICMS = cst;
+          const al = num(child, 'pICMS');
+          if (al) aliqICMS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcICMS = bc;
+          const st = num(child, 'vICMSST');
+          if (st) vICMSST = st;
+          const fc = num(child, 'vFCP');
+          if (fc) vFCP = fc;
+          const mb = txt(child, 'modBC');
+          if (mb) modBC = mb;
+          const or = txt(child, 'orig');
+          if (or) orig = or;
+          if (vICMS || cstICMS) break;
         }
       }
       // PIS
@@ -226,7 +247,14 @@ function parseNFeXML(xmlString) {
       if (pisEl) {
         for (const child of pisEl.children) {
           const v = num(child, 'vPIS');
-          if (v) { vPIS = v; break; }
+          if (v) { vPIS = v; }
+          const cst = txt(child, 'CST');
+          if (cst) cstPIS = cst;
+          const al = num(child, 'pPIS');
+          if (al) aliqPIS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcPIS = bc;
+          if (vPIS || cstPIS) break;
         }
       }
       // COFINS
@@ -234,9 +262,32 @@ function parseNFeXML(xmlString) {
       if (cofinsEl) {
         for (const child of cofinsEl.children) {
           const v = num(child, 'vCOFINS');
-          if (v) { vCOFINS = v; break; }
+          if (v) { vCOFINS = v; }
+          const cst = txt(child, 'CST');
+          if (cst) cstCOFINS = cst;
+          const al = num(child, 'pCOFINS');
+          if (al) aliqCOFINS = al;
+          const bc = num(child, 'vBC');
+          if (bc) bcCOFINS = bc;
+          if (vCOFINS || cstCOFINS) break;
         }
       }
+      // IPI
+      const ipiEl = q(imposto, 'IPI');
+      if (ipiEl) {
+        const ipiTrib = q(ipiEl, 'IPITrib');
+        if (ipiTrib) {
+          vIPI = num(ipiTrib, 'vIPI');
+          cstIPI = txt(ipiTrib, 'CST');
+          aliqIPI = num(ipiTrib, 'pIPI');
+        } else {
+          const ipiNT = q(ipiEl, 'IPINT');
+          if (ipiNT) cstIPI = txt(ipiNT, 'CST');
+        }
+      }
+      // II (Imposto de Importação)
+      const iiEl = q(imposto, 'II');
+      if (iiEl) vII = num(iiEl, 'vII');
     }
 
     const vProd = num(prod, 'vProd');
@@ -247,6 +298,7 @@ function parseNFeXML(xmlString) {
       numero_nf: nNF,
       nitem: nItem,
       data_emissao: dataEmissao,
+      nat_operacao: natOp,
       tipo,
       fornecedor_cliente: parceiro,
       cnpj: parceiroCNPJ,
@@ -257,9 +309,13 @@ function parseNFeXML(xmlString) {
       quantidade: num(prod, 'qCom'),
       valor_unitario: num(prod, 'vUnCom'),
       valor_total: vProd,
-      icms: vICMS,
-      pis: vPIS,
-      cofins: vCOFINS,
+      // Impostos detalhados
+      icms: vICMS, cst_icms: cstICMS, aliq_icms: aliqICMS, bc_icms: bcICMS,
+      icms_st: vICMSST, fcp: vFCP, orig: orig,
+      pis: vPIS, cst_pis: cstPIS, aliq_pis: aliqPIS, bc_pis: bcPIS,
+      cofins: vCOFINS, cst_cofins: cstCOFINS, aliq_cofins: aliqCOFINS, bc_cofins: bcCOFINS,
+      ipi: vIPI, cst_ipi: cstIPI, aliq_ipi: aliqIPI,
+      ii: vII,
       compra_liquida: compraLiquida,
       filial,
       categoria_id: null,
@@ -651,13 +707,20 @@ async function importarItens(itens) {
   for (const i of validos) {
     const payload = {
       chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
-      data_emissao: i.data_emissao, tipo: i.tipo,
+      data_emissao: i.data_emissao, tipo: i.tipo, nat_operacao: i.nat_operacao || null,
       fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
       categoria_id: i.categoria_id, produto_xml: i.produto_xml,
       ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
       quantidade: i.quantidade, valor_unitario: i.valor_unitario,
-      valor_total: i.valor_total, icms: i.icms, pis: i.pis,
-      cofins: i.cofins, compra_liquida: i.compra_liquida,
+      valor_total: i.valor_total,
+      // Impostos detalhados
+      icms: i.icms, cst_icms: i.cst_icms || null, aliq_icms: i.aliq_icms || 0, bc_icms: i.bc_icms || 0,
+      icms_st: i.icms_st || 0, fcp: i.fcp || 0, orig: i.orig || null,
+      pis: i.pis, cst_pis: i.cst_pis || null, aliq_pis: i.aliq_pis || 0, bc_pis: i.bc_pis || 0,
+      cofins: i.cofins, cst_cofins: i.cst_cofins || null, aliq_cofins: i.aliq_cofins || 0, bc_cofins: i.bc_cofins || 0,
+      ipi: i.ipi || 0, cst_ipi: i.cst_ipi || null, aliq_ipi: i.aliq_ipi || 0,
+      ii: i.ii || 0,
+      compra_liquida: i.compra_liquida,
       filial: i.filial || 'MATRIZ'
     };
     try {

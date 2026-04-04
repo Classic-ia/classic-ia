@@ -132,12 +132,26 @@ tbody td{padding:10px;vertical-align:middle;}
 .kpi-lbl{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;margin-top:4px;}
 
 /* RESPONSIVE */
+/* EPI Sub-tabs */
+.epi-subtab{font-size:11px;padding:6px 14px;border-radius:6px;transition:all .2s;}
+.epi-subtab.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+/* EPI Bar Chart */
+.epi-bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:12px;}
+.epi-bar-label{min-width:160px;text-align:right;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.epi-bar-track{flex:1;height:22px;background:var(--surface);border-radius:4px;overflow:hidden;position:relative;}
+.epi-bar-fill{height:100%;border-radius:4px;transition:width .4s ease;display:flex;align-items:center;padding-left:8px;font-size:11px;font-weight:700;color:#fff;white-space:nowrap;}
+.epi-bar-val{min-width:40px;text-align:left;color:var(--muted);font-weight:600;font-size:12px;}
+.epi-colab-summary{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px;margin-bottom:14px;}
+.epi-colab-card{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;}
+.epi-colab-card .val{font-size:22px;font-weight:800;color:var(--accent);}
+.epi-colab-card .lbl{font-size:11px;color:var(--muted);margin-top:2px;}
 @media(max-width:768px){
   .tabs{gap:2px;}
   .tab{padding:6px 10px;font-size:11px;}
   .field-row,.field-row-3{grid-template-columns:1fr;}
   .toolbar{flex-direction:column;}
   .kpi-row{grid-template-columns:1fr 1fr;}
+  #epiTab-analitico{grid-template-columns:1fr !important;}
 }
 </style>
 </head>
@@ -277,35 +291,156 @@ tbody td{padding:10px;vertical-align:middle;}
 
 <!-- ═══ ABA: EPIs ═══ -->
 <div class="tab-content" id="tab-epis">
+  <!-- KPIs principais -->
   <div class="kpi-row">
     <div class="kpi-card"><div class="kpi-val" id="kpiEpiEntregues">—</div><div class="kpi-lbl">Entregas Mês</div></div>
-    <div class="kpi-card"><div class="kpi-val" id="kpiEpiPendentes">—</div><div class="kpi-lbl">Pendentes</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiPendentes">—</div><div class="kpi-lbl">Em Uso (Ativos)</div></div>
     <div class="kpi-card"><div class="kpi-val" id="kpiEpiVencidos">—</div><div class="kpi-lbl">Vencidos</div></div>
     <div class="kpi-card"><div class="kpi-val" id="kpiEpiPercent">—</div><div class="kpi-lbl">% Conformidade</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiVencer30">—</div><div class="kpi-lbl">Vencem 30 dias</div></div>
+    <div class="kpi-card"><div class="kpi-val" id="kpiEpiTotalAno">—</div><div class="kpi-lbl">Total Ano</div></div>
   </div>
-  <div class="toolbar">
-    <input class="search-box" id="searchEpi" placeholder="Buscar..." oninput="filtrarEpis()">
-    <select class="filter-select" id="filterEpiTipo" onchange="filtrarEpis()">
-      <option value="">Todos EPIs</option>
-      <option value="Capacete">Capacete</option>
-      <option value="Luva">Luva</option>
-      <option value="Bota">Bota</option>
-      <option value="Óculos">Óculos</option>
-      <option value="Protetor Auricular">Protetor Auricular</option>
-      <option value="Avental">Avental</option>
-      <option value="Mangote">Mangote</option>
-    </select>
-    <button class="btn btn-primary" onclick="abrirModalEpi()">+ Registrar Entrega</button>
+
+  <!-- Sub-abas: Entregas | Analítico | Por Colaborador | Alertas -->
+  <div style="display:flex;gap:4px;margin-bottom:12px;flex-wrap:wrap;">
+    <button class="btn btn-outline epi-subtab active" data-epitab="entregas" onclick="switchEpiTab('entregas')">Entregas</button>
+    <button class="btn btn-outline epi-subtab" data-epitab="analitico" onclick="switchEpiTab('analitico')">Analitico / Ranking</button>
+    <button class="btn btn-outline epi-subtab" data-epitab="colaborador" onclick="switchEpiTab('colaborador')">Por Colaborador</button>
+    <button class="btn btn-outline epi-subtab" data-epitab="alertas" onclick="switchEpiTab('alertas')">Alertas & Vencimentos</button>
   </div>
-  <div class="card">
-    <div class="card-title">Entregas de EPI</div>
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Funcionário</th><th>EPI</th><th>CA</th><th>Entrega</th><th>Validade</th><th>Devolvido</th><th>Status</th><th>Ações</th>
-        </tr></thead>
-        <tbody id="tbEpis"></tbody>
-      </table>
+
+  <!-- SUB-ABA: ENTREGAS (tabela original + filtros) -->
+  <div class="epi-tab-content" id="epiTab-entregas">
+    <div class="toolbar">
+      <input class="search-box" id="searchEpi" placeholder="Buscar funcionario..." oninput="filtrarEpis()">
+      <select class="filter-select" id="filterEpiTipo" onchange="filtrarEpis()">
+        <option value="">Todos EPIs</option>
+        <option value="Capacete">Capacete</option>
+        <option value="Luva">Luva</option>
+        <option value="Bota">Bota</option>
+        <option value="Botina">Botina</option>
+        <option value="Oculos">Oculos</option>
+        <option value="Protetor Auricular">Protetor Auricular</option>
+        <option value="Respirador">Respirador</option>
+        <option value="Avental">Avental</option>
+        <option value="Mangote">Mangote</option>
+        <option value="Perneira">Perneira</option>
+        <option value="Cinto">Cinto</option>
+      </select>
+      <select class="filter-select" id="filterEpiStatus" onchange="filtrarEpis()">
+        <option value="">Todos Status</option>
+        <option value="ativo">Ativo</option>
+        <option value="vencido">Vencido</option>
+        <option value="vence30">Vence em 30 dias</option>
+        <option value="devolvido">Devolvido</option>
+      </select>
+      <button class="btn btn-primary" onclick="abrirModalEpi()">+ Registrar Entrega</button>
+    </div>
+    <div class="card">
+      <div class="card-title">Entregas de EPI</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>Funcionario</th><th>Setor</th><th>EPI</th><th>CA</th><th>Qtd</th><th>Entrega</th><th>Validade</th><th>Devolvido</th><th>Status</th><th>Acoes</th>
+          </tr></thead>
+          <tbody id="tbEpis"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUB-ABA: ANALÍTICO / RANKING -->
+  <div class="epi-tab-content" id="epiTab-analitico" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <!-- Ranking: EPI mais consumido -->
+      <div class="card">
+        <div class="card-title">Ranking — EPI Mais Consumido</div>
+        <div id="rankingEpiConsumo"></div>
+      </div>
+      <!-- Consumo por Setor -->
+      <div class="card">
+        <div class="card-title">Consumo por Setor</div>
+        <div id="rankingEpiSetor"></div>
+      </div>
+      <!-- Evolução mensal -->
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">Evolucao Mensal de Entregas (ultimos 12 meses)</div>
+        <div id="epiEvolucaoMensal"></div>
+      </div>
+      <!-- Média de reposição -->
+      <div class="card">
+        <div class="card-title">Frequencia Media de Reposicao</div>
+        <div id="epiFreqReposicao"></div>
+      </div>
+      <!-- Funcionários com mais EPIs -->
+      <div class="card">
+        <div class="card-title">Top 10 — Funcionarios com Mais Entregas</div>
+        <div id="rankingEpiFuncionario"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUB-ABA: POR COLABORADOR -->
+  <div class="epi-tab-content" id="epiTab-colaborador" style="display:none;">
+    <div class="toolbar">
+      <select class="filter-select" id="epiColabSelect" onchange="renderEpiColaborador()" style="min-width:280px;">
+        <option value="">Selecione um funcionario...</option>
+      </select>
+      <button class="btn btn-outline" onclick="exportarFichaEpi()">Exportar Ficha EPI</button>
+    </div>
+    <div id="epiColabResumo"></div>
+    <div class="card" style="margin-top:12px;">
+      <div class="card-title">Historico de Entregas</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr>
+            <th>EPI</th><th>CA</th><th>Qtd</th><th>Entrega</th><th>Validade</th><th>Devolvido</th><th>Status</th><th>Dias em Uso</th>
+          </tr></thead>
+          <tbody id="tbEpiColab"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- SUB-ABA: ALERTAS & VENCIMENTOS -->
+  <div class="epi-tab-content" id="epiTab-alertas" style="display:none;">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+      <div class="card">
+        <div class="card-title" style="color:#e74c3c;">EPIs Vencidos — Acao Imediata</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Funcionario</th><th>EPI</th><th>Venceu em</th><th>Dias Vencido</th></tr></thead>
+            <tbody id="tbEpiVencidos"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title" style="color:#f39c12;">Vencem em 30 Dias</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Funcionario</th><th>EPI</th><th>Vence em</th><th>Dias Restantes</th></tr></thead>
+            <tbody id="tbEpiVencer30"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title" style="color:#f39c12;">Vencem em 60 Dias</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Funcionario</th><th>Setor</th><th>EPI</th><th>Vence em</th><th>Dias Restantes</th></tr></thead>
+            <tbody id="tbEpiVencer60"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">Funcionarios Sem EPI Registrado</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Funcionario</th><th>Setor</th><th>Cargo</th><th>Admissao</th></tr></thead>
+            <tbody id="tbFuncSemEpi"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1231,28 +1366,37 @@ function filtrarTreinamentos() {
 }
 
 // ── EPIs ─────────────────────────────────────────────────
+function epiStatus(e) {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const dias = e.data_validade ? diasEntre(hoje, e.data_validade) : 999;
+  if (e.data_devolucao) return { label: 'Devolvido', badge: 'badge-muted', dias, key: 'devolvido' };
+  if (dias < 0) return { label: 'Vencido', badge: 'badge-red', dias, key: 'vencido' };
+  if (dias <= 30) return { label: 'Vence em ' + dias + 'd', badge: 'badge-yellow', dias, key: 'vence30' };
+  return { label: 'Ativo', badge: 'badge-green', dias, key: 'ativo' };
+}
+
+function setorFunc(fid) {
+  const f = FUNCIONARIOS.find(x => x.id === fid);
+  return f ? (f.setor || f.departamento || '—') : '—';
+}
+
 function renderEpis(lista) {
   const tb = document.getElementById('tbEpis');
   if (!lista) lista = EPIS;
-  const hoje = new Date().toISOString().slice(0, 10);
 
   tb.innerHTML = lista.map(e => {
-    const dias = e.data_validade ? diasEntre(hoje, e.data_validade) : 999;
-    let statusHtml;
-    if (e.data_devolucao) statusHtml = '<span class="badge badge-muted">Devolvido</span>';
-    else if (dias < 0) statusHtml = '<span class="badge badge-red">Vencido</span>';
-    else if (dias <= 30) statusHtml = `<span class="badge badge-yellow">Vence em ${dias}d</span>`;
-    else statusHtml = '<span class="badge badge-green">Ativo</span>';
-
+    const st = epiStatus(e);
     return `<tr>
       <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td style="font-size:11px;color:var(--muted);">${setorFunc(e.funcionario_id)}</td>
       <td>${e.epi_nome || '—'}</td>
       <td style="font-family:monospace;font-size:11px">${e.ca_numero || '—'}</td>
+      <td style="text-align:center">${e.quantidade || 1}</td>
       <td>${fmtData(e.data_entrega)}</td>
       <td>${fmtData(e.data_validade)}</td>
       <td>${e.data_devolucao ? fmtData(e.data_devolucao) : '—'}</td>
-      <td>${statusHtml}</td>
-      <td><button class="btn-icon" onclick="editarEpi('${e.id}')" title="Editar">✏️</button></td>
+      <td><span class="badge ${st.badge}">${st.label}</span></td>
+      <td><button class="btn-icon" onclick="editarEpi('${e.id}')" title="Editar">&#9999;</button></td>
     </tr>`;
   }).join('');
 }
@@ -1260,10 +1404,260 @@ function renderEpis(lista) {
 function filtrarEpis() {
   const busca = document.getElementById('searchEpi').value.toLowerCase();
   const tipo = document.getElementById('filterEpiTipo').value;
+  const status = document.getElementById('filterEpiStatus').value;
   let lista = EPIS;
-  if (busca) lista = lista.filter(e => nomeFunc(e.funcionario_id).toLowerCase().includes(busca));
+  if (busca) lista = lista.filter(e => nomeFunc(e.funcionario_id).toLowerCase().includes(busca) || (e.epi_nome||'').toLowerCase().includes(busca));
   if (tipo) lista = lista.filter(e => (e.epi_nome || '').includes(tipo));
+  if (status) lista = lista.filter(e => epiStatus(e).key === status);
   renderEpis(lista);
+}
+
+// ── EPI Sub-tabs ──────────────────────────────────────────
+function switchEpiTab(tab) {
+  document.querySelectorAll('.epi-subtab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.epi-tab-content').forEach(c => c.style.display = 'none');
+  document.querySelector('.epi-subtab[data-epitab="'+tab+'"]').classList.add('active');
+  document.getElementById('epiTab-' + tab).style.display = '';
+  if (tab === 'analitico') renderEpiAnalitico();
+  if (tab === 'colaborador') prepararEpiColaborador();
+  if (tab === 'alertas') renderEpiAlertas();
+}
+
+// ── Barra horizontal helper ──────────────────────────────
+function epiBarChart(containerId, dados, cor) {
+  const el = document.getElementById(containerId);
+  if (!dados.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Sem dados</div>'; return; }
+  const max = Math.max(...dados.map(d => d.val));
+  el.innerHTML = dados.map(d => {
+    const pct = max > 0 ? (d.val / max * 100) : 0;
+    return `<div class="epi-bar-row">
+      <div class="epi-bar-label" title="${d.label}">${d.label}</div>
+      <div class="epi-bar-track">
+        <div class="epi-bar-fill" style="width:${pct}%;background:${cor || 'var(--accent)'};">${d.val > 0 && pct > 15 ? d.val : ''}</div>
+      </div>
+      <div class="epi-bar-val">${d.val}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── ANALÍTICO / RANKING ──────────────────────────────────
+function renderEpiAnalitico() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const ativos = EPIS.filter(e => !e.data_devolucao);
+
+  // 1. Ranking EPI mais consumido (total entregas por tipo)
+  const porTipo = {};
+  EPIS.forEach(e => {
+    const nome = e.epi_nome || 'Outros';
+    porTipo[nome] = (porTipo[nome] || 0) + (e.quantidade || 1);
+  });
+  const rankTipo = Object.entries(porTipo).map(([label, val]) => ({label, val})).sort((a,b) => b.val - a.val);
+  epiBarChart('rankingEpiConsumo', rankTipo, '#2E6B8A');
+
+  // 2. Consumo por setor
+  const porSetor = {};
+  EPIS.forEach(e => {
+    const setor = setorFunc(e.funcionario_id);
+    porSetor[setor] = (porSetor[setor] || 0) + (e.quantidade || 1);
+  });
+  const rankSetor = Object.entries(porSetor).map(([label, val]) => ({label, val})).sort((a,b) => b.val - a.val);
+  epiBarChart('rankingEpiSetor', rankSetor, '#c8a96e');
+
+  // 3. Evolução mensal (últimos 12 meses)
+  const meses = [];
+  const now = new Date();
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = d.toISOString().slice(0, 7);
+    const label = d.toLocaleDateString('pt-BR', {month:'short', year:'2-digit'});
+    const val = EPIS.filter(e => (e.data_entrega || '').startsWith(key)).reduce((s,e) => s + (e.quantidade || 1), 0);
+    meses.push({label, val});
+  }
+  epiBarChart('epiEvolucaoMensal', meses, '#27ae60');
+
+  // 4. Frequência média de reposição (dias entre entregas do mesmo tipo para mesmo funcionário)
+  const reposicao = {};
+  EPIS.forEach(e => {
+    const chave = e.funcionario_id + '|' + (e.epi_nome || '');
+    if (!reposicao[chave]) reposicao[chave] = [];
+    reposicao[chave].push(e.data_entrega);
+  });
+  const freqPorTipo = {};
+  Object.entries(reposicao).forEach(([chave, datas]) => {
+    if (datas.length < 2) return;
+    const sorted = datas.sort();
+    const tipo = chave.split('|')[1];
+    if (!freqPorTipo[tipo]) freqPorTipo[tipo] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const d = diasEntre(sorted[i-1], sorted[i]);
+      if (d > 0) freqPorTipo[tipo].push(d);
+    }
+  });
+  const rankFreq = Object.entries(freqPorTipo)
+    .filter(([,arr]) => arr.length > 0)
+    .map(([label, arr]) => ({ label, val: Math.round(arr.reduce((s,v) => s+v, 0) / arr.length) }))
+    .sort((a,b) => a.val - b.val);
+  const freqEl = document.getElementById('epiFreqReposicao');
+  if (rankFreq.length === 0) {
+    freqEl.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px;">Necessario ter 2+ entregas do mesmo EPI para o mesmo funcionario.</div>';
+  } else {
+    freqEl.innerHTML = '<div style="font-size:11px;color:var(--muted);margin-bottom:8px;">Media de dias entre entregas (menor = mais reposicao)</div>' +
+      rankFreq.map(d => `<div class="epi-bar-row">
+        <div class="epi-bar-label">${d.label}</div>
+        <div class="epi-bar-track">
+          <div class="epi-bar-fill" style="width:${Math.min(100, d.val / 3.65)}%;background:#e67e22;">${d.val}d</div>
+        </div>
+        <div class="epi-bar-val">${d.val} dias</div>
+      </div>`).join('');
+  }
+
+  // 5. Top 10 funcionários com mais entregas
+  const porFunc = {};
+  EPIS.forEach(e => {
+    const nome = nomeFunc(e.funcionario_id);
+    porFunc[nome] = (porFunc[nome] || 0) + (e.quantidade || 1);
+  });
+  const rankFunc = Object.entries(porFunc).map(([label, val]) => ({label, val})).sort((a,b) => b.val - a.val).slice(0, 10);
+  epiBarChart('rankingEpiFuncionario', rankFunc, '#8e44ad');
+}
+
+// ── POR COLABORADOR ──────────────────────────────────────
+function prepararEpiColaborador() {
+  const sel = document.getElementById('epiColabSelect');
+  const current = sel.value;
+  const funcsComEpi = new Set(EPIS.map(e => e.funcionario_id));
+  const funcsOrdenados = FUNCIONARIOS
+    .filter(f => f.status === 'ativo')
+    .sort((a,b) => (a.nome_completo||a.nome||'').localeCompare(b.nome_completo||b.nome||''));
+
+  sel.innerHTML = '<option value="">Selecione um funcionario...</option>' +
+    funcsOrdenados.map(f => {
+      const tem = funcsComEpi.has(f.id) ? '' : ' (sem EPI)';
+      return `<option value="${f.id}">${f.nome_completo || f.nome}${tem}</option>`;
+    }).join('');
+  if (current) { sel.value = current; renderEpiColaborador(); }
+}
+
+function renderEpiColaborador() {
+  const fid = document.getElementById('epiColabSelect').value;
+  const resumo = document.getElementById('epiColabResumo');
+  const tb = document.getElementById('tbEpiColab');
+  if (!fid) { resumo.innerHTML = ''; tb.innerHTML = ''; return; }
+
+  const entregas = EPIS.filter(e => e.funcionario_id === fid).sort((a,b) => (b.data_entrega||'').localeCompare(a.data_entrega||''));
+  const hoje = new Date().toISOString().slice(0, 10);
+  const ativos = entregas.filter(e => !e.data_devolucao && epiStatus(e).key !== 'vencido');
+  const vencidos = entregas.filter(e => !e.data_devolucao && epiStatus(e).key === 'vencido');
+  const devolvidos = entregas.filter(e => e.data_devolucao);
+  const totalQtd = entregas.reduce((s,e) => s + (e.quantidade || 1), 0);
+  const tipos = new Set(entregas.map(e => e.epi_nome));
+
+  resumo.innerHTML = `<div class="epi-colab-summary">
+    <div class="epi-colab-card"><div class="val">${totalQtd}</div><div class="lbl">Total Entregas</div></div>
+    <div class="epi-colab-card"><div class="val">${tipos.size}</div><div class="lbl">Tipos de EPI</div></div>
+    <div class="epi-colab-card"><div class="val" style="color:var(--green);">${ativos.length}</div><div class="lbl">Ativos</div></div>
+    <div class="epi-colab-card"><div class="val" style="color:#e74c3c;">${vencidos.length}</div><div class="lbl">Vencidos</div></div>
+    <div class="epi-colab-card"><div class="val" style="color:var(--muted);">${devolvidos.length}</div><div class="lbl">Devolvidos</div></div>
+  </div>`;
+
+  tb.innerHTML = entregas.map(e => {
+    const st = epiStatus(e);
+    const diasUso = e.data_devolucao
+      ? diasEntre(e.data_entrega, e.data_devolucao)
+      : diasEntre(e.data_entrega, hoje);
+    return `<tr>
+      <td>${e.epi_nome || '—'}</td>
+      <td style="font-family:monospace;font-size:11px">${e.ca_numero || '—'}</td>
+      <td style="text-align:center">${e.quantidade || 1}</td>
+      <td>${fmtData(e.data_entrega)}</td>
+      <td>${fmtData(e.data_validade)}</td>
+      <td>${e.data_devolucao ? fmtData(e.data_devolucao) : '—'}</td>
+      <td><span class="badge ${st.badge}">${st.label}</span></td>
+      <td style="text-align:center">${diasUso >= 0 ? diasUso + 'd' : '—'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportarFichaEpi() {
+  const fid = document.getElementById('epiColabSelect').value;
+  if (!fid) { alert('Selecione um funcionario'); return; }
+  const func = FUNCIONARIOS.find(f => f.id === fid);
+  const nome = func ? (func.nome_completo || func.nome) : 'Funcionario';
+  const entregas = EPIS.filter(e => e.funcionario_id === fid).sort((a,b) => (a.data_entrega||'').localeCompare(b.data_entrega||''));
+
+  let csv = 'EPI;CA;Quantidade;Data Entrega;Data Validade;Data Devolucao;Status\n';
+  entregas.forEach(e => {
+    const st = epiStatus(e);
+    csv += `${e.epi_nome||''};${e.ca_numero||''};${e.quantidade||1};${e.data_entrega||''};${e.data_validade||''};${e.data_devolucao||''};${st.label}\n`;
+  });
+
+  const blob = new Blob(['\ufeff' + csv], {type:'text/csv;charset=utf-8;'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ficha_epi_' + nome.replace(/\s+/g,'_') + '.csv';
+  a.click();
+}
+
+// ── ALERTAS & VENCIMENTOS ────────────────────────────────
+function renderEpiAlertas() {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const ativos = EPIS.filter(e => !e.data_devolucao);
+
+  // Vencidos
+  const vencidos = ativos.filter(e => e.data_validade && e.data_validade < hoje)
+    .sort((a,b) => (a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('tbEpiVencidos').innerHTML = vencidos.map(e => {
+    const dias = Math.abs(diasEntre(hoje, e.data_validade));
+    return `<tr style="background:rgba(231,76,60,.08);">
+      <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td>${e.epi_nome||'—'}</td>
+      <td>${fmtData(e.data_validade)}</td>
+      <td style="color:#e74c3c;font-weight:700;">${dias} dias</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="color:var(--green);text-align:center;padding:16px;">Nenhum EPI vencido!</td></tr>';
+
+  // Vencem em 30 dias
+  const vencer30 = ativos.filter(e => {
+    if (!e.data_validade || e.data_validade < hoje) return false;
+    return diasEntre(hoje, e.data_validade) <= 30;
+  }).sort((a,b) => (a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('tbEpiVencer30').innerHTML = vencer30.map(e => {
+    const dias = diasEntre(hoje, e.data_validade);
+    return `<tr style="background:rgba(243,156,18,.06);">
+      <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td>${e.epi_nome||'—'}</td>
+      <td>${fmtData(e.data_validade)}</td>
+      <td style="color:#f39c12;font-weight:700;">${dias} dias</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--muted);">Nenhum EPI vencendo em 30 dias</td></tr>';
+
+  // Vencem em 60 dias
+  const vencer60 = ativos.filter(e => {
+    if (!e.data_validade || e.data_validade < hoje) return false;
+    const d = diasEntre(hoje, e.data_validade);
+    return d > 30 && d <= 60;
+  }).sort((a,b) => (a.data_validade||'').localeCompare(b.data_validade||''));
+  document.getElementById('tbEpiVencer60').innerHTML = vencer60.map(e => {
+    const dias = diasEntre(hoje, e.data_validade);
+    return `<tr>
+      <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td>${setorFunc(e.funcionario_id)}</td>
+      <td>${e.epi_nome||'—'}</td>
+      <td>${fmtData(e.data_validade)}</td>
+      <td>${dias} dias</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--muted);">Nenhum EPI vencendo entre 30-60 dias</td></tr>';
+
+  // Funcionários sem EPI
+  const funcsComEpi = new Set(EPIS.map(e => e.funcionario_id));
+  const semEpi = FUNCIONARIOS.filter(f => f.status === 'ativo' && !funcsComEpi.has(f.id))
+    .sort((a,b) => (a.nome_completo||a.nome||'').localeCompare(b.nome_completo||b.nome||''));
+  document.getElementById('tbFuncSemEpi').innerHTML = semEpi.map(f => `<tr>
+    <td><strong>${f.nome_completo || f.nome || '—'}</strong></td>
+    <td>${f.setor || f.departamento || '—'}</td>
+    <td>${f.cargo || '—'}</td>
+    <td>${fmtData(f.data_admissao)}</td>
+  </tr>`).join('') || '<tr><td colspan="4" style="text-align:center;padding:16px;color:var(--green);">Todos os funcionarios tem EPI registrado!</td></tr>';
 }
 
 // ── ACIDENTES ────────────────────────────────────────────
@@ -1439,6 +1833,8 @@ function calcularKPIs() {
   const epiMes = EPIS.filter(e => (e.data_entrega || '').startsWith(mesAtual));
   const epiPendentes = EPIS.filter(e => !e.data_devolucao && (!e.data_validade || e.data_validade >= hoje));
   const epiVencidos = EPIS.filter(e => !e.data_devolucao && e.data_validade && e.data_validade < hoje);
+  const epiVencer30 = EPIS.filter(e => !e.data_devolucao && e.data_validade && e.data_validade >= hoje && diasEntre(hoje, e.data_validade) <= 30);
+  const epiAno = EPIS.filter(e => (e.data_entrega || '').startsWith(anoAtual));
   const epiTotal = epiPendentes.length + epiVencidos.length;
   const epiPercent = epiTotal > 0 ? ((epiPendentes.length / epiTotal) * 100).toFixed(0) : '100';
 
@@ -1446,6 +1842,8 @@ function calcularKPIs() {
   document.getElementById('kpiEpiPendentes').textContent = epiPendentes.length;
   document.getElementById('kpiEpiVencidos').textContent = epiVencidos.length;
   document.getElementById('kpiEpiPercent').textContent = epiPercent + '%';
+  document.getElementById('kpiEpiVencer30').textContent = epiVencer30.length;
+  document.getElementById('kpiEpiTotalAno').textContent = epiAno.length;
 
   // ACIDENTES
   const acidAno = ACIDENTES.filter(a => (a.data_ocorrencia || '').startsWith(anoAtual));

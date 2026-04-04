@@ -718,8 +718,9 @@ function _buildPayload(i) {
 }
 
 async function importarItens(itens, onProgress) {
-  const validos = itens.filter(i => i.categoria_id);
-  if (!validos.length) throw new Error('Nenhum item com categoria mapeada.');
+  // Import ALL items (including unmapped ones with categoria_id=null)
+  const validos = itens.filter(i => i.chave_nfe && i.produto_xml);
+  if (!validos.length) throw new Error('Nenhum item válido para importar.');
 
   let inseridos = 0, duplicados = 0, erros = 0;
   const BATCH = 100;
@@ -1144,12 +1145,11 @@ async function buscarNovosXMLs() {
       } catch { erros++; }
     }
 
-    // Importar todos os itens mapeados
+    // Importar TODOS os itens (mapeados e não mapeados)
     const todosItens = allParsedNFs.flatMap(nf => nf.itens);
-    const mapeados = todosItens.filter(i => i.categoria_id);
     const naoMapeados = todosItens.filter(i => !i.categoria_id);
 
-    if (infoEl) infoEl.textContent = `Importando ${mapeados.length} itens (${naoMapeados.length} sem categoria)...`;
+    if (infoEl) infoEl.textContent = `Importando ${todosItens.length} itens (${naoMapeados.length} sem categoria)...`;
 
     // Show progress bar
     const progressDiv = document.getElementById('pastaAutoProgress');
@@ -1158,8 +1158,8 @@ async function buscarNovosXMLs() {
     if (progressDiv) progressDiv.style.display = 'block';
 
     let resultado = { inseridos: 0, duplicados: 0, erros: 0 };
-    if (mapeados.length) {
-      resultado = await importarItens(mapeados, (current, total, ins, dup, err) => {
+    if (todosItens.length) {
+      resultado = await importarItens(todosItens, (current, total, ins, dup, err) => {
         const pct = Math.round(current / total * 100);
         if (progressBar) progressBar.style.width = pct + '%';
         if (progressPct) progressPct.textContent = `${pct}% — ${current}/${total} (${ins} novos, ${dup} dup, ${err} erros)`;

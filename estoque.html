@@ -125,6 +125,24 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 .badge-saida{background:rgba(239,68,68,0.15);color:var(--err)}
 .badge-warn{background:rgba(234,179,8,0.15);color:var(--warn)}
 .badge-ok{background:rgba(34,197,94,0.15);color:var(--ok)}
+.badge-unmapped{background:rgba(234,179,8,0.15);color:var(--warn);font-size:9px;padding:2px 6px;border-radius:3px}
+
+/* NF Group Row */
+.nf-row{cursor:pointer;transition:background 0.15s}
+.nf-row:hover{background:var(--surface2)!important}
+.nf-row td{padding:10px 8px;border-bottom:1px solid var(--border)}
+.nf-toggle{display:inline-block;width:18px;text-align:center;color:var(--muted);font-size:12px;transition:transform 0.2s}
+.nf-toggle.open{transform:rotate(90deg)}
+.nf-detail-row td{padding:0!important;border-bottom:1px solid var(--border)}
+.nf-detail-table{width:100%;background:var(--surface2);border-collapse:collapse}
+.nf-detail-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+.nf-detail-table td{font-size:12px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.nf-status-ok{color:var(--ok)}
+.nf-status-dev{color:var(--warn)}
+.nf-status-exp{color:var(--accent)}
+.nf-page-btn{padding:4px 12px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px}
+.nf-page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nf-page-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 
 /* Buttons */
 .btn{
@@ -457,6 +475,13 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <span class="filter-label">NF / Produto</span>
       <input type="text" class="filter-input" id="filtBusca" placeholder="Buscar NF ou produto...">
     </div>
+    <div class="filter-group">
+      <span class="filter-label">Visualizar</span>
+      <select class="filter-select" id="filtVisao" onchange="filtrarMovimentacoes()">
+        <option value="nf">Por Nota Fiscal</option>
+        <option value="itens">Por Itens</option>
+      </select>
+    </div>
     <div class="filter-group" style="align-self:flex-end">
       <button class="btn" onclick="filtrarMovimentacoes()">Filtrar</button>
     </div>
@@ -467,7 +492,29 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
 
   <div id="movTotais" class="kpi-row"></div>
 
-  <div style="overflow-x:auto">
+  <!-- Visao por NF (agrupada) -->
+  <div id="movVisaoNF" style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:30px"></th>
+          <th>NF</th>
+          <th>CNPJ</th>
+          <th>Fornecedor / Cliente</th>
+          <th>Tipo</th>
+          <th>Data Emissao</th>
+          <th style="text-align:right">Valor Total</th>
+          <th style="text-align:center">Itens</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="movBodyNF"></tbody>
+    </table>
+    <div id="movPaginacao" style="display:flex;justify-content:center;gap:8px;padding:16px 0"></div>
+  </div>
+
+  <!-- Visao por Itens (detalhada) -->
+  <div id="movVisaoItens" style="overflow-x:auto;display:none">
     <table>
       <thead>
         <tr>
@@ -481,6 +528,7 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <tbody id="movBody"></tbody>
     </table>
   </div>
+
   <div id="movEmpty" class="empty" style="display:none">
     <div class="empty-icon">&#128230;</div>
     Nenhuma movimentacao encontrada. Importe XMLs na aba Upload.
@@ -1621,24 +1669,28 @@ function limparPreview() {
 }
 
 async function executarImportacao() {
-  const mapeados = allParsedItens.filter(i => i._mapped);
-  if (!mapeados.length) {
-    toast('Nenhum item mapeado para importar. Configure o mapeamento primeiro.', 'error');
+  // Import ALL items (mapped and unmapped) - unmapped will have categoria_id=null
+  if (!allParsedItens.length) {
+    toast('Nenhum item para importar.', 'error');
     return;
   }
+
+  const mapeados = allParsedItens.filter(i => i._mapped).length;
+  const naoMapeados = allParsedItens.filter(i => !i._mapped).length;
 
   const btn = document.getElementById('btnImportar');
   btn.disabled = true;
   btn.textContent = 'Importando... 0%';
 
   try {
-    const r = await importarItens(mapeados, (current, total, ins, dup, err) => {
+    const r = await importarItens(allParsedItens, (current, total, ins, dup, err) => {
       const pct = Math.round(current / total * 100);
       btn.textContent = `Importando... ${pct}% (${current}/${total})`;
     });
     let msg = `${r.inseridos} inserido(s)`;
     if (r.duplicados) msg += `, ${r.duplicados} ja existente(s)`;
     if (r.erros) msg += `, ${r.erros} erro(s)`;
+    if (naoMapeados) msg += ` (${naoMapeados} sem categoria)`;
     toast(msg, r.erros ? 'warn' : 'ok');
     if (r.inseridos > 0) limparPreview();
   } catch(e) {
@@ -1881,34 +1933,213 @@ async function filtrarMovimentacoes() {
   }
 }
 
+let _movCurrentPage = 1;
+const _movPageSize = 50;
+let _movAllNFs = [];
+
 function renderMovimentacoes(movs) {
-  const body = document.getElementById('movBody');
   const empty = document.getElementById('movEmpty');
   const totais = document.getElementById('movTotais');
+  const visao = document.getElementById('filtVisao')?.value || 'nf';
 
   if (!movs.length) {
-    body.innerHTML = '';
+    document.getElementById('movBody').innerHTML = '';
+    document.getElementById('movBodyNF').innerHTML = '';
+    document.getElementById('movPaginacao').innerHTML = '';
     empty.style.display = 'block';
     totais.innerHTML = '';
+    document.getElementById('movVisaoNF').style.display = 'none';
+    document.getElementById('movVisaoItens').style.display = 'none';
     return;
   }
   empty.style.display = 'none';
 
-  // Classificar
+  // KPIs
   const ent = movs.filter(m => m.tipo === 'entrada');
   const sai = movs.filter(m => m.tipo === 'saida');
   const devs = movs.filter(m => { const n=(m.nat_operacao||'').toUpperCase(); return n.includes('DEVOLUC')||n.includes('DEVOLUÇ'); });
   const exps = movs.filter(m => (m.cfop||'').startsWith('7'));
+  const semCat = movs.filter(m => !m.categoria_id);
+  const nfsUnicas = new Set(movs.map(m => m.chave_nfe)).size;
 
   totais.innerHTML = `
-    <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Registros</div></div>
+    <div class="kpi"><div class="kpi-value">${nfsUnicas}</div><div class="kpi-label">Notas Fiscais</div></div>
+    <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Itens</div></div>
     <div class="kpi"><div class="kpi-value">${ent.length}</div><div class="kpi-label">Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${sai.length}</div><div class="kpi-label">Saidas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(ent.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(sai.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Saidas</div></div>
     ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
     ${exps.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--ok)">${exps.length}</div><div class="kpi-label">Exportações</div></div>` : ''}
+    ${semCat.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${semCat.length}</div><div class="kpi-label">Sem Categoria</div></div>` : ''}
   `;
+
+  if (visao === 'nf') {
+    document.getElementById('movVisaoNF').style.display = 'block';
+    document.getElementById('movVisaoItens').style.display = 'none';
+    renderMovimentacoesNF(movs);
+  } else {
+    document.getElementById('movVisaoNF').style.display = 'none';
+    document.getElementById('movVisaoItens').style.display = 'block';
+    renderMovimentacoesItens(movs);
+  }
+}
+
+function renderMovimentacoesNF(movs) {
+  // Agrupar por chave_nfe
+  const grupos = {};
+  movs.forEach(m => {
+    const key = m.chave_nfe || m.numero_nf;
+    if (!grupos[key]) {
+      grupos[key] = {
+        chave_nfe: m.chave_nfe,
+        numero_nf: m.numero_nf,
+        data_emissao: m.data_emissao,
+        tipo: m.tipo,
+        fornecedor_cliente: m.fornecedor_cliente,
+        cnpj: m.cnpj,
+        nat_operacao: m.nat_operacao,
+        itens: [],
+        valor_total: 0,
+        semCategoria: 0
+      };
+    }
+    grupos[key].itens.push(m);
+    grupos[key].valor_total += Number(m.valor_total || 0);
+    if (!m.categoria_id) grupos[key].semCategoria++;
+  });
+
+  _movAllNFs = Object.values(grupos).sort((a, b) => {
+    if (a.data_emissao > b.data_emissao) return -1;
+    if (a.data_emissao < b.data_emissao) return 1;
+    return 0;
+  });
+
+  _movCurrentPage = 1;
+  _renderNFPage();
+}
+
+function _renderNFPage() {
+  const body = document.getElementById('movBodyNF');
+  const pagDiv = document.getElementById('movPaginacao');
+  const totalPages = Math.ceil(_movAllNFs.length / _movPageSize);
+  const start = (_movCurrentPage - 1) * _movPageSize;
+  const pageNFs = _movAllNFs.slice(start, start + _movPageSize);
+
+  body.innerHTML = pageNFs.map((nf, idx) => {
+    const globalIdx = start + idx;
+    const nat = (nf.nat_operacao || '').toUpperCase();
+    const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+    const isExp = nf.itens.some(m => (m.cfop || '').startsWith('7'));
+    const rowBg = isDev ? 'background:rgba(234,179,8,0.04)' : isExp ? 'background:rgba(34,197,94,0.04)' : '';
+
+    let statusHtml = '';
+    if (isDev) statusHtml = '<span class="nf-status-dev">DEVOLUÇÃO</span>';
+    else if (isExp) statusHtml = '<span class="nf-status-exp">EXPORTAÇÃO</span>';
+    else statusHtml = '<span class="nf-status-ok">&#10003;</span>';
+    if (nf.semCategoria > 0) statusHtml += ` <span class="badge-unmapped">${nf.semCategoria} s/ cat</span>`;
+
+    const tipoBadge = `<span class="badge ${nf.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${nf.tipo}</span>`;
+
+    return `<tr class="nf-row" style="${rowBg}" onclick="toggleNFDetail(${globalIdx}, this)">
+      <td><span class="nf-toggle" id="nfTgl${globalIdx}">&#9654;</span></td>
+      <td style="font-weight:600">${nf.numero_nf}</td>
+      <td style="font-size:11px;color:var(--text2)">${nf.cnpj || '—'}</td>
+      <td style="font-size:12px">${(nf.fornecedor_cliente || '').substring(0, 40)}</td>
+      <td>${tipoBadge}</td>
+      <td>${fmtData(nf.data_emissao)}</td>
+      <td class="td-num" style="font-weight:600">${fmtBRL(nf.valor_total)}</td>
+      <td style="text-align:center">${nf.itens.length}</td>
+      <td>${statusHtml}</td>
+    </tr>
+    <tr class="nf-detail-row" id="nfDet${globalIdx}" style="display:none">
+      <td colspan="9"></td>
+    </tr>`;
+  }).join('');
+
+  // Paginação
+  if (totalPages > 1) {
+    let pagHtml = '';
+    if (_movCurrentPage > 1) pagHtml += `<button class="nf-page-btn" onclick="_movGoPage(${_movCurrentPage - 1})">&laquo;</button>`;
+    const startP = Math.max(1, _movCurrentPage - 3);
+    const endP = Math.min(totalPages, _movCurrentPage + 3);
+    for (let p = startP; p <= endP; p++) {
+      pagHtml += `<button class="nf-page-btn ${p === _movCurrentPage ? 'active' : ''}" onclick="_movGoPage(${p})">${p}</button>`;
+    }
+    if (_movCurrentPage < totalPages) pagHtml += `<button class="nf-page-btn" onclick="_movGoPage(${_movCurrentPage + 1})">&raquo;</button>`;
+    pagHtml += `<span style="font-size:11px;color:var(--muted);padding:6px">${_movAllNFs.length} NFs</span>`;
+    pagDiv.innerHTML = pagHtml;
+  } else {
+    pagDiv.innerHTML = `<span style="font-size:11px;color:var(--muted)">${_movAllNFs.length} NFs</span>`;
+  }
+}
+
+function _movGoPage(p) {
+  _movCurrentPage = p;
+  _renderNFPage();
+}
+
+function toggleNFDetail(idx, row) {
+  const detRow = document.getElementById('nfDet' + idx);
+  const toggle = document.getElementById('nfTgl' + idx);
+  if (!detRow) return;
+
+  if (detRow.style.display === 'none') {
+    detRow.style.display = '';
+    toggle.classList.add('open');
+
+    const nf = _movAllNFs[idx];
+    detRow.querySelector('td').innerHTML = `
+      <table class="nf-detail-table">
+        <thead>
+          <tr>
+            <th>Produto</th><th>Categoria</th><th>NCM</th><th>CFOP</th>
+            <th>Nat. Operacao</th><th style="text-align:right">Qtde</th><th>Und</th>
+            <th style="text-align:right">Vlr Unit</th><th style="text-align:right">Vlr Total</th>
+            <th style="text-align:right">ICMS</th><th style="text-align:right">PIS</th>
+            <th style="text-align:right">COFINS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${nf.itens.map(m => {
+            const catNome = m.estoque_categorias?.nome;
+            const catCell = catNome ? catNome : '<span class="badge-unmapped">Sem categoria</span>';
+            return `<tr>
+              <td>${(m.produto_xml || '').substring(0, 50)}</td>
+              <td>${catCell}</td>
+              <td style="font-size:11px">${m.ncm || '—'}</td>
+              <td style="font-size:11px">${m.cfop || '—'}</td>
+              <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao || '—').substring(0, 30)}</td>
+              <td class="td-num">${fmtNum(m.quantidade)}</td>
+              <td style="font-size:10px">${m.unidade || '—'}</td>
+              <td class="td-num">${fmtNum(m.valor_unitario)}</td>
+              <td class="td-num">${fmtNum(m.valor_total)}</td>
+              <td class="td-num">${fmtNum(m.icms)}</td>
+              <td class="td-num">${fmtNum(m.pis)}</td>
+              <td class="td-num">${fmtNum(m.cofins)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid var(--border);font-weight:600">
+            <td colspan="5" style="text-align:right;padding:8px">TOTAL (${nf.itens.length} itens)</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.quantidade||0), 0))}</td>
+            <td></td><td></td>
+            <td class="td-num">${fmtNum(nf.valor_total)}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.icms||0), 0))}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.pis||0), 0))}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.cofins||0), 0))}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  } else {
+    detRow.style.display = 'none';
+    toggle.classList.remove('open');
+  }
+}
+
+function renderMovimentacoesItens(movs) {
+  const body = document.getElementById('movBody');
 
   body.innerHTML = movs.map(m => {
     const nat = (m.nat_operacao||'').toUpperCase();
@@ -1918,6 +2149,7 @@ function renderMovimentacoes(movs) {
     let tipoBadge = `<span class="badge ${m.tipo==='entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span>`;
     if (isDev) tipoBadge += ' <span style="font-size:9px;color:var(--warn);font-weight:bold">DEV</span>';
     if (isExp) tipoBadge += ' <span style="font-size:9px;color:var(--ok);font-weight:bold">EXP</span>';
+    const catNome = m.estoque_categorias?.nome || (m.categoria_id ? '—' : '<span class="badge-unmapped">Sem cat</span>');
 
     return `<tr style="${rowStyle}">
     <td>${fmtData(m.data_emissao)}</td>
@@ -1925,7 +2157,7 @@ function renderMovimentacoes(movs) {
     <td style="font-size:11px">${m.cfop||'—'}</td>
     <td>${tipoBadge}</td>
     <td style="font-size:11px">${(m.fornecedor_cliente||'').substring(0,35)}</td>
-    <td style="font-size:11px">${m.estoque_categorias?.nome || '—'}</td>
+    <td style="font-size:11px">${catNome}</td>
     <td style="font-size:11px">${(m.produto_xml||'').substring(0,40)}</td>
     <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao||'—').substring(0,25)}</td>
     <td class="td-num">${fmtNum(m.quantidade)}</td>

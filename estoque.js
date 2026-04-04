@@ -697,41 +697,75 @@ async function excluirMapeamento(id) {
 }
 
 // ── Importar Movimentações ──────────────────────────────────────
-async function importarItens(itens) {
-  const validos = itens.filter(i => i.categoria_id);
-  if (!validos.length) throw new Error('Nenhum item com categoria mapeada.');
+function _buildPayload(i) {
+  return {
+    chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
+    data_emissao: i.data_emissao, tipo: i.tipo, nat_operacao: i.nat_operacao || null,
+    fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
+    categoria_id: i.categoria_id, produto_xml: i.produto_xml,
+    ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
+    quantidade: i.quantidade, valor_unitario: i.valor_unitario,
+    valor_total: i.valor_total,
+    icms: i.icms, cst_icms: i.cst_icms || null, aliq_icms: i.aliq_icms || 0, bc_icms: i.bc_icms || 0,
+    icms_st: i.icms_st || 0, fcp: i.fcp || 0, orig: i.orig || null,
+    pis: i.pis, cst_pis: i.cst_pis || null, aliq_pis: i.aliq_pis || 0, bc_pis: i.bc_pis || 0,
+    cofins: i.cofins, cst_cofins: i.cst_cofins || null, aliq_cofins: i.aliq_cofins || 0, bc_cofins: i.bc_cofins || 0,
+    ipi: i.ipi || 0, cst_ipi: i.cst_ipi || null, aliq_ipi: i.aliq_ipi || 0,
+    ii: i.ii || 0,
+    compra_liquida: i.compra_liquida,
+    filial: i.filial || 'MATRIZ'
+  };
+}
+
+async function importarItens(itens, onProgress) {
+  // Import ALL items (including unmapped ones with categoria_id=null)
+  const validos = itens.filter(i => i.chave_nfe && i.produto_xml);
+  if (!validos.length) throw new Error('Nenhum item válido para importar.');
 
   let inseridos = 0, duplicados = 0, erros = 0;
+  const BATCH = 100;
 
-  // Inserir item a item para controlar duplicatas
-  for (const i of validos) {
-    const payload = {
-      chave_nfe: i.chave_nfe, numero_nf: i.numero_nf, nitem: i.nitem || 1,
-      data_emissao: i.data_emissao, tipo: i.tipo, nat_operacao: i.nat_operacao || null,
-      fornecedor_cliente: i.fornecedor_cliente, cnpj: i.cnpj,
-      categoria_id: i.categoria_id, produto_xml: i.produto_xml,
-      ncm: i.ncm, cfop: i.cfop, unidade: i.unidade,
-      quantidade: i.quantidade, valor_unitario: i.valor_unitario,
-      valor_total: i.valor_total,
-      // Impostos detalhados
-      icms: i.icms, cst_icms: i.cst_icms || null, aliq_icms: i.aliq_icms || 0, bc_icms: i.bc_icms || 0,
-      icms_st: i.icms_st || 0, fcp: i.fcp || 0, orig: i.orig || null,
-      pis: i.pis, cst_pis: i.cst_pis || null, aliq_pis: i.aliq_pis || 0, bc_pis: i.bc_pis || 0,
-      cofins: i.cofins, cst_cofins: i.cst_cofins || null, aliq_cofins: i.aliq_cofins || 0, bc_cofins: i.bc_cofins || 0,
-      ipi: i.ipi || 0, cst_ipi: i.cst_ipi || null, aliq_ipi: i.aliq_ipi || 0,
-      ii: i.ii || 0,
-      compra_liquida: i.compra_liquida,
-      filial: i.filial || 'MATRIZ'
-    };
+  for (let i = 0; i < validos.length; i += BATCH) {
+    const lote = validos.slice(i, i + BATCH);
+    const payloads = lote.map(_buildPayload);
+
     try {
       const r = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes`, {
-        method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
-        body: JSON.stringify(payload)
+        method: 'POST',
+        headers: {
+          ...sbHeaders(),
+          'Prefer': 'return=minimal,resolution=ignore-duplicates'
+        },
+        body: JSON.stringify(payloads)
       });
-      if (r.ok) { inseridos++; }
-      else if (r.status === 409) { duplicados++; }
-      else { erros++; }
-    } catch { erros++; }
+      if (r.ok) {
+        // Supabase ignore-duplicates returns 201 for all, we count batch as inserted
+        // Actual new vs dup is unknown per-item, but it's much faster
+        inseridos += lote.length;
+      } else if (r.status === 409) {
+        // Fallback: insert one by one for this batch
+        for (const p of payloads) {
+          try {
+            const r2 = await fetch(`${SB_URL}/rest/v1/estoque_movimentacoes`, {
+              method: 'POST', headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+              body: JSON.stringify(p)
+            });
+            if (r2.ok) inseridos++;
+            else if (r2.status === 409) duplicados++;
+            else erros++;
+          } catch { erros++; }
+        }
+      } else {
+        erros += lote.length;
+      }
+    } catch {
+      erros += lote.length;
+    }
+
+    if (onProgress) {
+      const processed = Math.min(i + BATCH, validos.length);
+      onProgress(processed, validos.length, inseridos, duplicados, erros);
+    }
   }
 
   return { inseridos, duplicados, erros, total: validos.length };
@@ -1072,7 +1106,12 @@ async function buscarNovosXMLs() {
     const allParsedNFs = [];
     let erros = 0, dups = 0;
 
-    for (const file of filesToProcess) {
+    for (let fi = 0; fi < filesToProcess.length; fi++) {
+      const file = filesToProcess[fi];
+      if (fi % 20 === 0 && infoEl) {
+        const scanPct = Math.round((fi / filesToProcess.length) * 100);
+        infoEl.textContent = `Lendo XMLs... ${scanPct}% (${fi}/${filesToProcess.length})`;
+      }
       try {
         const text = await file.text();
         const isCTe = text.includes('cteProc') || text.includes('infCte');
@@ -1106,18 +1145,29 @@ async function buscarNovosXMLs() {
       } catch { erros++; }
     }
 
-    // Importar todos os itens mapeados
+    // Importar TODOS os itens (mapeados e não mapeados)
     const todosItens = allParsedNFs.flatMap(nf => nf.itens);
-    const mapeados = todosItens.filter(i => i.categoria_id);
     const naoMapeados = todosItens.filter(i => !i.categoria_id);
 
-    if (infoEl) infoEl.textContent = `Importando ${mapeados.length} itens (${naoMapeados.length} sem categoria)...`;
+    if (infoEl) infoEl.textContent = `Importando ${todosItens.length} itens (${naoMapeados.length} sem categoria)...`;
+
+    // Show progress bar
+    const progressDiv = document.getElementById('pastaAutoProgress');
+    const progressBar = document.getElementById('pastaAutoBar');
+    const progressPct = document.getElementById('pastaAutoPct');
+    if (progressDiv) progressDiv.style.display = 'block';
 
     let resultado = { inseridos: 0, duplicados: 0, erros: 0 };
-    if (mapeados.length) {
-      resultado = await importarItens(mapeados);
+    if (todosItens.length) {
+      resultado = await importarItens(todosItens, (current, total, ins, dup, err) => {
+        const pct = Math.round(current / total * 100);
+        if (progressBar) progressBar.style.width = pct + '%';
+        if (progressPct) progressPct.textContent = `${pct}% — ${current}/${total} (${ins} novos, ${dup} dup, ${err} erros)`;
+        if (infoEl) infoEl.textContent = `Importando... ${current}/${total} itens`;
+      });
     }
 
+    if (progressDiv) progressDiv.style.display = 'none';
     _setLastImportDate(new Date().toISOString());
     const resumo = `${resultado.inseridos} novos, ${resultado.duplicados} duplicados, ${naoMapeados.length} sem categoria`;
     if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo}`;

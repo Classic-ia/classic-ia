@@ -125,6 +125,24 @@ tr:hover td{background:rgba(200,169,110,0.03)}
 .badge-saida{background:rgba(239,68,68,0.15);color:var(--err)}
 .badge-warn{background:rgba(234,179,8,0.15);color:var(--warn)}
 .badge-ok{background:rgba(34,197,94,0.15);color:var(--ok)}
+.badge-unmapped{background:rgba(234,179,8,0.15);color:var(--warn);font-size:9px;padding:2px 6px;border-radius:3px}
+
+/* NF Group Row */
+.nf-row{cursor:pointer;transition:background 0.15s}
+.nf-row:hover{background:var(--surface2)!important}
+.nf-row td{padding:10px 8px;border-bottom:1px solid var(--border)}
+.nf-toggle{display:inline-block;width:18px;text-align:center;color:var(--muted);font-size:12px;transition:transform 0.2s}
+.nf-toggle.open{transform:rotate(90deg)}
+.nf-detail-row td{padding:0!important;border-bottom:1px solid var(--border)}
+.nf-detail-table{width:100%;background:var(--surface2);border-collapse:collapse}
+.nf-detail-table th{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:0.05em;padding:6px 8px;border-bottom:1px solid var(--border);text-align:left}
+.nf-detail-table td{font-size:12px;padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.03)}
+.nf-status-ok{color:var(--ok)}
+.nf-status-dev{color:var(--warn)}
+.nf-status-exp{color:var(--accent)}
+.nf-page-btn{padding:4px 12px;border:1px solid var(--border);border-radius:3px;background:var(--surface);color:var(--text2);cursor:pointer;font-size:12px}
+.nf-page-btn:hover{border-color:var(--accent);color:var(--accent)}
+.nf-page-btn.active{background:var(--accent);color:var(--bg);border-color:var(--accent)}
 
 /* Buttons */
 .btn{
@@ -379,6 +397,12 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
         <div style="font-size:12px;color:var(--muted)">Pasta monitorada:</div>
         <div style="font-size:13px;font-weight:500" id="pastaAutoNome"></div>
         <div style="font-size:11px;color:var(--muted)" id="pastaAutoInfo"></div>
+        <div id="pastaAutoProgress" style="display:none;margin-top:6px">
+          <div style="background:var(--border);border-radius:4px;height:8px;overflow:hidden">
+            <div id="pastaAutoBar" style="background:var(--accent);height:100%;width:0%;transition:width 0.3s"></div>
+          </div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px" id="pastaAutoPct">0%</div>
+        </div>
       </div>
       <div style="display:flex;gap:8px">
         <button class="btn btn-primary btn-sm" onclick="buscarNovosXMLs()">Buscar Novos XMLs</button>
@@ -433,6 +457,31 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <span class="filter-label">Fornecedor</span>
       <input type="text" class="filter-input" id="filtFornecedor" placeholder="Buscar...">
     </div>
+    <div class="filter-group">
+      <span class="filter-label">CFOP</span>
+      <input type="text" class="filter-input" id="filtCfop" placeholder="Ex: 5101" style="width:80px">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Operacao</span>
+      <select class="filter-select" id="filtOperacao">
+        <option value="">Todas</option>
+        <option value="devolucao">Devoluções</option>
+        <option value="exportacao">Exportações (CFOP 7xxx)</option>
+        <option value="transferencia">Transferências</option>
+        <option value="normal">Normais (sem devol/transf)</option>
+      </select>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">NF / Produto</span>
+      <input type="text" class="filter-input" id="filtBusca" placeholder="Buscar NF ou produto...">
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Visualizar</span>
+      <select class="filter-select" id="filtVisao" onchange="filtrarMovimentacoes()">
+        <option value="nf">Por Nota Fiscal</option>
+        <option value="itens">Por Itens</option>
+      </select>
+    </div>
     <div class="filter-group" style="align-self:flex-end">
       <button class="btn" onclick="filtrarMovimentacoes()">Filtrar</button>
     </div>
@@ -443,12 +492,34 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
 
   <div id="movTotais" class="kpi-row"></div>
 
-  <div style="overflow-x:auto">
+  <!-- Visao por NF (agrupada) -->
+  <div id="movVisaoNF" style="overflow-x:auto">
     <table>
       <thead>
         <tr>
-          <th>Data</th><th>NF</th><th>Tipo</th><th>Fornec./Cliente</th>
-          <th>Categoria</th><th>Produto</th><th style="text-align:right">Qtde</th>
+          <th style="width:30px"></th>
+          <th>NF</th>
+          <th>CNPJ</th>
+          <th>Fornecedor / Cliente</th>
+          <th>Tipo</th>
+          <th>Data Emissao</th>
+          <th style="text-align:right">Valor Total</th>
+          <th style="text-align:center">Itens</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="movBodyNF"></tbody>
+    </table>
+    <div id="movPaginacao" style="display:flex;justify-content:center;gap:8px;padding:16px 0"></div>
+  </div>
+
+  <!-- Visao por Itens (detalhada) -->
+  <div id="movVisaoItens" style="overflow-x:auto;display:none">
+    <table>
+      <thead>
+        <tr>
+          <th>Data</th><th>NF</th><th>CFOP</th><th>Tipo</th><th>Fornec./Cliente</th>
+          <th>Categoria</th><th>Produto</th><th>Nat. Operacao</th><th style="text-align:right">Qtde</th>
           <th style="text-align:right">Vlr Unit</th><th style="text-align:right">Vlr Total</th>
           <th style="text-align:right">ICMS</th><th style="text-align:right">PIS</th>
           <th style="text-align:right">COFINS</th><th style="text-align:right">Liq.</th>
@@ -457,6 +528,7 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <tbody id="movBody"></tbody>
     </table>
   </div>
+
   <div id="movEmpty" class="empty" style="display:none">
     <div class="empty-icon">&#128230;</div>
     Nenhuma movimentacao encontrada. Importe XMLs na aba Upload.
@@ -515,6 +587,47 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       </div>
       <div id="listaMapeamentos" style="margin-top:16px"></div>
     </div>
+  </div>
+
+  <!-- Conversao de Unidades -->
+  <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+    <div class="map-panel-title">Conversao de Unidades por Categoria</div>
+    <p style="font-size:11px;color:var(--muted);margin-bottom:12px">
+      Quando um XML traz uma unidade diferente da categoria (ex: entrada em KG mas categoria em PC), defina o fator de conversao. O sistema converte automaticamente na posicao de estoque.
+    </p>
+    <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:12px">
+      <div class="filter-group">
+        <span class="filter-label">Categoria</span>
+        <select class="filter-select" id="convCategoria" style="min-width:150px"></select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Unidade XML (origem)</span>
+        <select class="filter-select" id="convUnidadeOrigem">
+          <option value="KG">KG</option><option value="PC">PC</option><option value="UN">UN</option>
+          <option value="PRS">PRS</option><option value="MT">MT</option><option value="LT">LT</option>
+          <option value="M2">M2</option><option value="CX">CX</option><option value="SC">SC</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Fator (1 und XML = X und categoria)</span>
+        <input type="number" step="0.0001" class="filter-input" id="convFator" placeholder="Ex: 0.04 (1 KG = 0.04 PC)" style="width:180px">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="adicionarConversao()">Adicionar</button>
+    </div>
+    <div id="listaConversoes"></div>
+  </div>
+
+  <!-- Produtos Nao Mapeados -->
+  <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="map-panel-title">Produtos Nao Mapeados (aguardando categoria)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm" onclick="carregarNaoMapeados()">Atualizar Lista</button>
+        <button class="btn btn-sm btn-primary" onclick="autoMapearSugestoes()">Auto-mapear Sugestoes</button>
+      </div>
+    </div>
+    <div id="naoMapeadosInfo" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+    <div id="listaNaoMapeados"></div>
   </div>
 </div>
 
@@ -736,6 +849,8 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <select class="filter-select" id="apuracaoFilial">
         <option value="">Todas</option>
         <option value="MATRIZ">Matriz</option>
+        <option value="FILIAL SP">Filial SP</option>
+        <option value="FILIAL RS">Filial RS</option>
       </select>
     </div>
     <div class="filter-group" style="align-self:flex-end">
@@ -1136,7 +1251,7 @@ function setupTabs() {
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
 
       if (tab.dataset.tab === 'movimentacoes') filtrarMovimentacoes();
-      if (tab.dataset.tab === 'mapeamento') renderMapeamento();
+      if (tab.dataset.tab === 'mapeamento') { renderMapeamento(); renderConversoes(); carregarNaoMapeados(); }
       if (tab.dataset.tab === 'dashboard') renderDashboard();
       if (tab.dataset.tab === 'apuracao') { carregarContratos(); carregarCambios(); carregarDrawbacks(); }
     });
@@ -1347,6 +1462,13 @@ async function baixarXmlsOneDrive(token, pastaId) {
 
 async function processarArquivos(files) {
   let novos = 0, dups = 0, erros = 0, zips = 0;
+  const zone = document.getElementById('uploadZone');
+  const origText = zone?.querySelector('p')?.innerHTML || '';
+
+  function updateStatus(msg) {
+    const p = zone?.querySelector('p');
+    if (p) p.innerHTML = msg;
+  }
 
   // Expandir ZIPs em XMLs individuais
   const xmlFiles = [];
@@ -1354,12 +1476,15 @@ async function processarArquivos(files) {
     const fname = file.name.toLowerCase();
     if (fname.endsWith('.zip')) {
       try {
+        updateStatus(`Descompactando ${file.name}...`);
         const zip = await JSZip.loadAsync(file);
         const entries = Object.entries(zip.files);
+        let zi = 0;
         for (const [name, entry] of entries) {
+          zi++;
           if (entry.dir || !name.toLowerCase().endsWith('.xml')) continue;
-          // Ignorar XMLs de evento (cancelamento, carta correção)
           if (name.toLowerCase().includes('evento')) continue;
+          if (zi % 100 === 0) updateStatus(`Descompactando ${file.name}... ${Math.round(zi/entries.length*100)}% (${xmlFiles.length} XMLs)`);
           const content = await entry.async('string');
           xmlFiles.push({ name: name.split('/').pop(), text: content });
         }
@@ -1372,7 +1497,6 @@ async function processarArquivos(files) {
       const text = await file.text();
       xmlFiles.push({ name: file.name, text });
     } else if (fname.endsWith('.xls') || fname.endsWith('.xlsx')) {
-      // Detectar tipo: NF Stock ou CTe
       try {
         const data = await file.arrayBuffer();
         const wb = XLSX.read(data);
@@ -1381,7 +1505,6 @@ async function processarArquivos(files) {
         let xlsItens = [];
         if (tipo === 'cte') {
           xlsItens = parseCTeXLS(wb);
-          // Para CTe, resolver categoria pelo nome especial _catNome
           xlsItens.forEach(item => {
             const cat = _categorias.find(c => c.nome === item._catNome);
             if (cat) { item.categoria_id = cat.id; item._mapped = true; }
@@ -1427,16 +1550,16 @@ async function processarArquivos(files) {
 
   if (zips) toast(`Descompactando ${zips} ZIP(s)... ${xmlFiles.length} XMLs encontrados`, 'ok');
 
-  // Processar cada XML (NFe ou CTe)
-  for (const xf of xmlFiles) {
+  // Processar cada XML (NFe ou CTe) — sem verificar duplicata individual (batch import cuida disso)
+  for (let xi = 0; xi < xmlFiles.length; xi++) {
+    const xf = xmlFiles[xi];
+    if (xi % 50 === 0) updateStatus(`Processando XMLs... ${Math.round(xi/xmlFiles.length*100)}% (${xi}/${xmlFiles.length})`);
     try {
-      // Detectar: CTe ou NFe
       const isCTe = xf.text.includes('cteProc') || xf.text.includes('infCte');
       let nf;
       if (isCTe) {
         nf = parseCTeXML(xf.text);
         if (nf) {
-          // Resolver categoria pelo _catNome
           for (const item of nf.itens) {
             const cat = _categorias.find(c => c.nome === item._catNome);
             if (cat) { item.categoria_id = cat.id; item._mapped = true; }
@@ -1449,12 +1572,11 @@ async function processarArquivos(files) {
 
       if (allParsedNFs.find(n => n.chaveNFe === nf.chaveNFe)) { dups++; continue; }
 
-      const jaExiste = await verificarDuplicata(nf.chaveNFe);
-      if (jaExiste) { dups++; continue; }
-
       for (const item of nf.itens) {
-        item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
-        item._mapped = !!item.categoria_id;
+        if (!item._mapped) {
+          item.categoria_id = resolverCategoria(item.produto_xml, item.ncm, item.cfop);
+          item._mapped = !!item.categoria_id;
+        }
       }
 
       nf._fileName = xf.name;
@@ -1466,6 +1588,10 @@ async function processarArquivos(files) {
       erros++;
     }
   }
+
+  // Restore upload zone text
+  const p = zone?.querySelector('p');
+  if (p) p.innerHTML = origText;
 
   if (novos) renderPreview();
   let msg = `${novos} NF(s) carregada(s)`;
@@ -1543,21 +1669,28 @@ function limparPreview() {
 }
 
 async function executarImportacao() {
-  const mapeados = allParsedItens.filter(i => i._mapped);
-  if (!mapeados.length) {
-    toast('Nenhum item mapeado para importar. Configure o mapeamento primeiro.', 'error');
+  // Import ALL items (mapped and unmapped) - unmapped will have categoria_id=null
+  if (!allParsedItens.length) {
+    toast('Nenhum item para importar.', 'error');
     return;
   }
 
+  const mapeados = allParsedItens.filter(i => i._mapped).length;
+  const naoMapeados = allParsedItens.filter(i => !i._mapped).length;
+
   const btn = document.getElementById('btnImportar');
   btn.disabled = true;
-  btn.textContent = 'Importando...';
+  btn.textContent = 'Importando... 0%';
 
   try {
-    const r = await importarItens(mapeados);
+    const r = await importarItens(allParsedItens, (current, total, ins, dup, err) => {
+      const pct = Math.round(current / total * 100);
+      btn.textContent = `Importando... ${pct}% (${current}/${total})`;
+    });
     let msg = `${r.inseridos} inserido(s)`;
     if (r.duplicados) msg += `, ${r.duplicados} ja existente(s)`;
     if (r.erros) msg += `, ${r.erros} erro(s)`;
+    if (naoMapeados) msg += ` (${naoMapeados} sem categoria)`;
     toast(msg, r.erros ? 'warn' : 'ok');
     if (r.inseridos > 0) limparPreview();
   } catch(e) {
@@ -1755,22 +1888,68 @@ async function filtrarMovimentacoes() {
   };
 
   try {
-    const movs = await carregarMovimentacoes(filtros);
+    let movs = await carregarMovimentacoes(filtros);
+
+    // Filtro CFOP
+    const cfopFiltro = (document.getElementById('filtCfop')?.value || '').trim();
+    if (cfopFiltro) movs = movs.filter(m => (m.cfop || '').startsWith(cfopFiltro));
+
+    // Filtro Operação
+    const opFiltro = document.getElementById('filtOperacao')?.value || '';
+    if (opFiltro === 'devolucao') {
+      movs = movs.filter(m => {
+        const nat = (m.nat_operacao || '').toUpperCase();
+        return nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+      });
+    } else if (opFiltro === 'exportacao') {
+      movs = movs.filter(m => (m.cfop || '').startsWith('7'));
+    } else if (opFiltro === 'transferencia') {
+      const cfopsTransf = ['5151','5152','6151','6152','1151','1152','5901','5902','6901','6902'];
+      movs = movs.filter(m => cfopsTransf.includes(m.cfop));
+    } else if (opFiltro === 'normal') {
+      const cfopsTransf = ['5151','5152','6151','6152','1151','1152','5901','5902','6901','6902'];
+      movs = movs.filter(m => {
+        const nat = (m.nat_operacao || '').toUpperCase();
+        const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+        const isTransf = cfopsTransf.includes(m.cfop);
+        const isExp = (m.cfop || '').startsWith('7');
+        return !isDev && !isTransf && !isExp;
+      });
+    }
+
+    // Filtro busca (NF ou produto)
+    const busca = (document.getElementById('filtBusca')?.value || '').toUpperCase().trim();
+    if (busca) {
+      movs = movs.filter(m =>
+        (m.numero_nf || '').includes(busca) ||
+        (m.produto_xml || '').toUpperCase().includes(busca) ||
+        (m.chave_nfe || '').includes(busca)
+      );
+    }
+
     renderMovimentacoes(movs);
   } catch(e) {
     toast('Erro ao carregar: ' + e.message, 'error');
   }
 }
 
+let _movCurrentPage = 1;
+const _movPageSize = 50;
+let _movAllNFs = [];
+
 function renderMovimentacoes(movs) {
-  const body = document.getElementById('movBody');
   const empty = document.getElementById('movEmpty');
   const totais = document.getElementById('movTotais');
+  const visao = document.getElementById('filtVisao')?.value || 'nf';
 
   if (!movs.length) {
-    body.innerHTML = '';
+    document.getElementById('movBody').innerHTML = '';
+    document.getElementById('movBodyNF').innerHTML = '';
+    document.getElementById('movPaginacao').innerHTML = '';
     empty.style.display = 'block';
     totais.innerHTML = '';
+    document.getElementById('movVisaoNF').style.display = 'none';
+    document.getElementById('movVisaoItens').style.display = 'none';
     return;
   }
   empty.style.display = 'none';
@@ -1778,21 +1957,209 @@ function renderMovimentacoes(movs) {
   // KPIs
   const ent = movs.filter(m => m.tipo === 'entrada');
   const sai = movs.filter(m => m.tipo === 'saida');
+  const devs = movs.filter(m => { const n=(m.nat_operacao||'').toUpperCase(); return n.includes('DEVOLUC')||n.includes('DEVOLUÇ'); });
+  const exps = movs.filter(m => (m.cfop||'').startsWith('7'));
+  const semCat = movs.filter(m => !m.categoria_id);
+  const nfsUnicas = new Set(movs.map(m => m.chave_nfe)).size;
+
   totais.innerHTML = `
-    <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Registros</div></div>
+    <div class="kpi"><div class="kpi-value">${nfsUnicas}</div><div class="kpi-label">Notas Fiscais</div></div>
+    <div class="kpi"><div class="kpi-value">${movs.length}</div><div class="kpi-label">Itens</div></div>
     <div class="kpi"><div class="kpi-value">${ent.length}</div><div class="kpi-label">Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${sai.length}</div><div class="kpi-label">Saidas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(ent.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Entradas</div></div>
     <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(sai.reduce((s,m) => s + Number(m.valor_total||0), 0))}</div><div class="kpi-label">Vlr Saidas</div></div>
+    ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
+    ${exps.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--ok)">${exps.length}</div><div class="kpi-label">Exportações</div></div>` : ''}
+    ${semCat.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${semCat.length}</div><div class="kpi-label">Sem Categoria</div></div>` : ''}
   `;
 
-  body.innerHTML = movs.map(m => `<tr>
+  if (visao === 'nf') {
+    document.getElementById('movVisaoNF').style.display = 'block';
+    document.getElementById('movVisaoItens').style.display = 'none';
+    renderMovimentacoesNF(movs);
+  } else {
+    document.getElementById('movVisaoNF').style.display = 'none';
+    document.getElementById('movVisaoItens').style.display = 'block';
+    renderMovimentacoesItens(movs);
+  }
+}
+
+function renderMovimentacoesNF(movs) {
+  // Agrupar por chave_nfe
+  const grupos = {};
+  movs.forEach(m => {
+    const key = m.chave_nfe || m.numero_nf;
+    if (!grupos[key]) {
+      grupos[key] = {
+        chave_nfe: m.chave_nfe,
+        numero_nf: m.numero_nf,
+        data_emissao: m.data_emissao,
+        tipo: m.tipo,
+        fornecedor_cliente: m.fornecedor_cliente,
+        cnpj: m.cnpj,
+        nat_operacao: m.nat_operacao,
+        itens: [],
+        valor_total: 0,
+        semCategoria: 0
+      };
+    }
+    grupos[key].itens.push(m);
+    grupos[key].valor_total += Number(m.valor_total || 0);
+    if (!m.categoria_id) grupos[key].semCategoria++;
+  });
+
+  _movAllNFs = Object.values(grupos).sort((a, b) => {
+    if (a.data_emissao > b.data_emissao) return -1;
+    if (a.data_emissao < b.data_emissao) return 1;
+    return 0;
+  });
+
+  _movCurrentPage = 1;
+  _renderNFPage();
+}
+
+function _renderNFPage() {
+  const body = document.getElementById('movBodyNF');
+  const pagDiv = document.getElementById('movPaginacao');
+  const totalPages = Math.ceil(_movAllNFs.length / _movPageSize);
+  const start = (_movCurrentPage - 1) * _movPageSize;
+  const pageNFs = _movAllNFs.slice(start, start + _movPageSize);
+
+  body.innerHTML = pageNFs.map((nf, idx) => {
+    const globalIdx = start + idx;
+    const nat = (nf.nat_operacao || '').toUpperCase();
+    const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+    const isExp = nf.itens.some(m => (m.cfop || '').startsWith('7'));
+    const rowBg = isDev ? 'background:rgba(234,179,8,0.04)' : isExp ? 'background:rgba(34,197,94,0.04)' : '';
+
+    let statusHtml = '';
+    if (isDev) statusHtml = '<span class="nf-status-dev">DEVOLUÇÃO</span>';
+    else if (isExp) statusHtml = '<span class="nf-status-exp">EXPORTAÇÃO</span>';
+    else statusHtml = '<span class="nf-status-ok">&#10003;</span>';
+    if (nf.semCategoria > 0) statusHtml += ` <span class="badge-unmapped">${nf.semCategoria} s/ cat</span>`;
+
+    const tipoBadge = `<span class="badge ${nf.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${nf.tipo}</span>`;
+
+    return `<tr class="nf-row" style="${rowBg}" onclick="toggleNFDetail(${globalIdx}, this)">
+      <td><span class="nf-toggle" id="nfTgl${globalIdx}">&#9654;</span></td>
+      <td style="font-weight:600">${nf.numero_nf}</td>
+      <td style="font-size:11px;color:var(--text2)">${nf.cnpj || '—'}</td>
+      <td style="font-size:12px">${(nf.fornecedor_cliente || '').substring(0, 40)}</td>
+      <td>${tipoBadge}</td>
+      <td>${fmtData(nf.data_emissao)}</td>
+      <td class="td-num" style="font-weight:600">${fmtBRL(nf.valor_total)}</td>
+      <td style="text-align:center">${nf.itens.length}</td>
+      <td>${statusHtml}</td>
+    </tr>
+    <tr class="nf-detail-row" id="nfDet${globalIdx}" style="display:none">
+      <td colspan="9"></td>
+    </tr>`;
+  }).join('');
+
+  // Paginação
+  if (totalPages > 1) {
+    let pagHtml = '';
+    if (_movCurrentPage > 1) pagHtml += `<button class="nf-page-btn" onclick="_movGoPage(${_movCurrentPage - 1})">&laquo;</button>`;
+    const startP = Math.max(1, _movCurrentPage - 3);
+    const endP = Math.min(totalPages, _movCurrentPage + 3);
+    for (let p = startP; p <= endP; p++) {
+      pagHtml += `<button class="nf-page-btn ${p === _movCurrentPage ? 'active' : ''}" onclick="_movGoPage(${p})">${p}</button>`;
+    }
+    if (_movCurrentPage < totalPages) pagHtml += `<button class="nf-page-btn" onclick="_movGoPage(${_movCurrentPage + 1})">&raquo;</button>`;
+    pagHtml += `<span style="font-size:11px;color:var(--muted);padding:6px">${_movAllNFs.length} NFs</span>`;
+    pagDiv.innerHTML = pagHtml;
+  } else {
+    pagDiv.innerHTML = `<span style="font-size:11px;color:var(--muted)">${_movAllNFs.length} NFs</span>`;
+  }
+}
+
+function _movGoPage(p) {
+  _movCurrentPage = p;
+  _renderNFPage();
+}
+
+function toggleNFDetail(idx, row) {
+  const detRow = document.getElementById('nfDet' + idx);
+  const toggle = document.getElementById('nfTgl' + idx);
+  if (!detRow) return;
+
+  if (detRow.style.display === 'none') {
+    detRow.style.display = '';
+    toggle.classList.add('open');
+
+    const nf = _movAllNFs[idx];
+    detRow.querySelector('td').innerHTML = `
+      <table class="nf-detail-table">
+        <thead>
+          <tr>
+            <th>Produto</th><th>Categoria</th><th>NCM</th><th>CFOP</th>
+            <th>Nat. Operacao</th><th style="text-align:right">Qtde</th><th>Und</th>
+            <th style="text-align:right">Vlr Unit</th><th style="text-align:right">Vlr Total</th>
+            <th style="text-align:right">ICMS</th><th style="text-align:right">PIS</th>
+            <th style="text-align:right">COFINS</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${nf.itens.map(m => {
+            const catNome = m.estoque_categorias?.nome;
+            const catCell = catNome ? catNome : '<span class="badge-unmapped">Sem categoria</span>';
+            return `<tr>
+              <td>${(m.produto_xml || '').substring(0, 50)}</td>
+              <td>${catCell}</td>
+              <td style="font-size:11px">${m.ncm || '—'}</td>
+              <td style="font-size:11px">${m.cfop || '—'}</td>
+              <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao || '—').substring(0, 30)}</td>
+              <td class="td-num">${fmtNum(m.quantidade)}</td>
+              <td style="font-size:10px">${m.unidade || '—'}</td>
+              <td class="td-num">${fmtNum(m.valor_unitario)}</td>
+              <td class="td-num">${fmtNum(m.valor_total)}</td>
+              <td class="td-num">${fmtNum(m.icms)}</td>
+              <td class="td-num">${fmtNum(m.pis)}</td>
+              <td class="td-num">${fmtNum(m.cofins)}</td>
+            </tr>`;
+          }).join('')}
+        </tbody>
+        <tfoot>
+          <tr style="border-top:2px solid var(--border);font-weight:600">
+            <td colspan="5" style="text-align:right;padding:8px">TOTAL (${nf.itens.length} itens)</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.quantidade||0), 0))}</td>
+            <td></td><td></td>
+            <td class="td-num">${fmtNum(nf.valor_total)}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.icms||0), 0))}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.pis||0), 0))}</td>
+            <td class="td-num">${fmtNum(nf.itens.reduce((s,m) => s + Number(m.cofins||0), 0))}</td>
+          </tr>
+        </tfoot>
+      </table>`;
+  } else {
+    detRow.style.display = 'none';
+    toggle.classList.remove('open');
+  }
+}
+
+function renderMovimentacoesItens(movs) {
+  const body = document.getElementById('movBody');
+
+  body.innerHTML = movs.map(m => {
+    const nat = (m.nat_operacao||'').toUpperCase();
+    const isDev = nat.includes('DEVOLUC') || nat.includes('DEVOLUÇ');
+    const isExp = (m.cfop||'').startsWith('7');
+    const rowStyle = isDev ? 'background:rgba(234,179,8,0.06)' : isExp ? 'background:rgba(34,197,94,0.06)' : '';
+    let tipoBadge = `<span class="badge ${m.tipo==='entrada'?'badge-entrada':'badge-saida'}">${m.tipo}</span>`;
+    if (isDev) tipoBadge += ' <span style="font-size:9px;color:var(--warn);font-weight:bold">DEV</span>';
+    if (isExp) tipoBadge += ' <span style="font-size:9px;color:var(--ok);font-weight:bold">EXP</span>';
+    const catNome = m.estoque_categorias?.nome || (m.categoria_id ? '—' : '<span class="badge-unmapped">Sem cat</span>');
+
+    return `<tr style="${rowStyle}">
     <td>${fmtData(m.data_emissao)}</td>
     <td>${m.numero_nf}</td>
-    <td><span class="badge ${m.tipo === 'entrada' ? 'badge-entrada' : 'badge-saida'}">${m.tipo}</span></td>
-    <td>${m.fornecedor_cliente}</td>
-    <td>${m.estoque_categorias?.nome || '—'}</td>
-    <td>${m.produto_xml}</td>
+    <td style="font-size:11px">${m.cfop||'—'}</td>
+    <td>${tipoBadge}</td>
+    <td style="font-size:11px">${(m.fornecedor_cliente||'').substring(0,35)}</td>
+    <td style="font-size:11px">${catNome}</td>
+    <td style="font-size:11px">${(m.produto_xml||'').substring(0,40)}</td>
+    <td style="font-size:10px;color:var(--muted)">${(m.nat_operacao||'—').substring(0,25)}</td>
     <td class="td-num">${fmtNum(m.quantidade)}</td>
     <td class="td-num">${fmtNum(m.valor_unitario)}</td>
     <td class="td-num">${fmtNum(m.valor_total)}</td>
@@ -1800,7 +2167,8 @@ function renderMovimentacoes(movs) {
     <td class="td-num">${fmtNum(m.pis)}</td>
     <td class="td-num">${fmtNum(m.cofins)}</td>
     <td class="td-num">${fmtNum(m.compra_liquida)}</td>
-  </tr>`).join('');
+  </tr>`;
+  }).join('');
 }
 
 // ── Mapeamento ──────────────────────────────────────────────────
@@ -1916,6 +2284,317 @@ async function removerMapeamento(id) {
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
 }
 
+// ── Conversao de Unidades ─────────────────────────────────────
+function _getConversoes() {
+  return JSON.parse(localStorage.getItem('cq_conversoes') || '[]');
+}
+
+function _saveConversoes(list) {
+  localStorage.setItem('cq_conversoes', JSON.stringify(list));
+}
+
+function renderConversoes() {
+  const list = _getConversoes();
+  const container = document.getElementById('listaConversoes');
+  if (!container) return;
+
+  // Popular select de categorias
+  const sel = document.getElementById('convCategoria');
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = _categorias.map(c => `<option value="${c.id}" data-und="${c.unidade}">${c.nome} (${c.unidade})</option>`).join('');
+  }
+
+  if (!list.length) {
+    container.innerHTML = '<div style="font-size:11px;color:var(--muted)">Nenhuma conversao cadastrada. Unidades dos XMLs serao usadas diretamente.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map((c, i) => {
+    const cat = _categorias.find(x => x.id === c.catId);
+    return `<div class="map-item">
+      <div>
+        <div class="map-item-name">${cat ? cat.nome : c.catId}</div>
+        <div class="map-item-badge">1 ${c.undOrigem} = ${c.fator} ${cat ? cat.unidade : '?'}</div>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="removerConversao(${i})">&#10005;</button>
+    </div>`;
+  }).join('');
+}
+
+function adicionarConversao() {
+  const catId = document.getElementById('convCategoria').value;
+  const undOrigem = document.getElementById('convUnidadeOrigem').value;
+  const fator = parseFloat(document.getElementById('convFator').value);
+  if (!catId || !undOrigem || !fator || fator <= 0) { toast('Preencha todos os campos', 'warn'); return; }
+
+  const list = _getConversoes();
+  // Remover duplicata se existir
+  const idx = list.findIndex(c => c.catId === catId && c.undOrigem === undOrigem);
+  if (idx >= 0) list.splice(idx, 1);
+  list.push({ catId, undOrigem, fator });
+  _saveConversoes(list);
+  document.getElementById('convFator').value = '';
+  renderConversoes();
+  toast(`Conversao adicionada: 1 ${undOrigem} = ${fator}`, 'ok');
+}
+
+function removerConversao(idx) {
+  const list = _getConversoes();
+  list.splice(idx, 1);
+  _saveConversoes(list);
+  renderConversoes();
+  toast('Conversao removida', 'ok');
+}
+
+// Aplicar conversão: converte quantidade de undOrigem para unidade da categoria
+function converterQuantidade(catId, quantidade, undMovimento) {
+  const cat = _categorias.find(c => c.id === catId);
+  if (!cat) return quantidade;
+  // Se mesma unidade, não converter
+  if (undMovimento === cat.unidade) return quantidade;
+  // Buscar conversão
+  const conversoes = _getConversoes();
+  const conv = conversoes.find(c => c.catId === catId && c.undOrigem === undMovimento);
+  if (conv) return quantidade * conv.fator;
+  // Sem conversão definida, retorna original
+  return quantidade;
+}
+
+// ── Produtos Nao Mapeados ────────────────────────────────────
+let _naoMapeados = [];
+
+async function carregarNaoMapeados() {
+  const infoEl = document.getElementById('naoMapeadosInfo');
+  if (infoEl) infoEl.textContent = 'Carregando movimentacoes sem categoria...';
+
+  // Buscar movimentações sem categoria
+  try {
+    const movs = await sbFetchAll('estoque_movimentacoes?select=id,produto_xml,ncm,cfop,tipo,fornecedor_cliente,valor_total&categoria_id=is.null&order=produto_xml.asc');
+    _naoMapeados = movs;
+
+    // Agrupar por produto_xml (normalizado)
+    const grupos = {};
+    movs.forEach(m => {
+      const key = (m.produto_xml || '').toUpperCase().trim();
+      if (!grupos[key]) grupos[key] = { nome: m.produto_xml, ncm: m.ncm, cfop: m.cfop, tipo: m.tipo, count: 0, valor: 0, fornecedores: new Set() };
+      grupos[key].count++;
+      grupos[key].valor += Number(m.valor_total || 0);
+      if (m.fornecedor_cliente) grupos[key].fornecedores.add(m.fornecedor_cliente.substring(0, 30));
+      if (!grupos[key].ncm && m.ncm) grupos[key].ncm = m.ncm;
+      if (!grupos[key].cfop && m.cfop) grupos[key].cfop = m.cfop;
+    });
+
+    const lista = Object.values(grupos).sort((a, b) => b.count - a.count);
+
+    if (infoEl) infoEl.textContent = `${movs.length} movimentacoes sem categoria em ${lista.length} produtos distintos`;
+
+    const container = document.getElementById('listaNaoMapeados');
+    if (!lista.length) {
+      container.innerHTML = '<div style="text-align:center;color:var(--ok);padding:20px">Todos os itens estao mapeados!</div>';
+      return;
+    }
+
+    // Gerar sugestões automáticas
+    const sugestoes = {};
+    lista.forEach(g => {
+      const sug = _sugerirCategoria(g.nome, g.ncm, g.cfop);
+      if (sug) sugestoes[g.nome.toUpperCase().trim()] = sug;
+    });
+
+    const optsCat = _categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+    container.innerHTML = lista.slice(0, 100).map(g => {
+      const key = g.nome.toUpperCase().trim();
+      const sug = sugestoes[key];
+      const sugLabel = sug ? ` — Sugestao: <strong style="color:var(--ok)">${sug.nome}</strong>` : '';
+      return `<div class="map-item" style="flex-wrap:wrap;gap:8px">
+        <div style="flex:1;min-width:200px">
+          <div class="map-item-name">${g.nome}</div>
+          <div class="map-item-badge">${g.count}x | ${fmtBRL(g.valor)} | NCM: ${g.ncm||'—'} | CFOP: ${g.cfop||'—'} | ${g.tipo}${sugLabel}</div>
+          <div style="font-size:10px;color:var(--muted)">${[...g.fornecedores].slice(0,3).join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="filter-select" style="min-width:150px;padding:4px 8px;font-size:11px" id="mapNM_${encodeURIComponent(key)}">
+            <option value="">Selecionar categoria</option>
+            ${sug ? `<option value="${sug.id}" selected>${sug.nome}</option>` : ''}
+            ${optsCat}
+          </select>
+          <button class="btn btn-sm btn-primary" onclick="mapearNaoMapeado('${key.replace(/'/g,"\\'")}')">Mapear</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    if (lista.length > 100) {
+      container.innerHTML += `<div style="text-align:center;color:var(--muted);padding:12px">Mostrando 100 de ${lista.length} — mapeie os maiores primeiro</div>`;
+    }
+  } catch (e) {
+    if (infoEl) infoEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+function _sugerirCategoria(prodNome, ncm, cfop) {
+  const prod = (prodNome || '').toUpperCase().trim();
+
+  // Palavras-chave → categoria
+  const regras = [
+    { palavras: ['COURO BOVINO', 'COURO BOV', 'WET BLUE', 'WETBLUE'], cat: 'Couro Bovino' },
+    { palavras: ['COURO BUBALINO', 'BUBALINO'], cat: 'Couro Bubalino' },
+    { palavras: ['ACABADO', 'SEMI ACABADO', 'SEMI-ACABADO', 'CRUST'], cat: 'ACABADO' },
+    { palavras: ['QUIMICO', 'QUÍMICA', 'QUIMICA', 'CROMO', 'TANINO', 'RESINA', 'CORANTE', 'PIGMENTO', 'ACIDO', 'SULFATO', 'CLORETO'], cat: 'QUIMICOS' },
+    { palavras: ['SEBO', 'GRAXA', 'GORDURA'], cat: 'Sebo' },
+    { palavras: ['SAL ', 'SAL GROSSO', 'CLORETO DE SODIO'], cat: 'Sal' },
+    { palavras: ['EMBALAGEM', 'PALET', 'PALETE', 'FILME STRETCH', 'CAIXA PAPELAO', 'FITA ADESIVA'], cat: 'Embalagens' },
+    { palavras: ['FRETE', 'TRANSPORTE'], cat: cfop && cfop.startsWith('1') ? 'Fretes Compras' : 'Fretes Vendas' },
+    { palavras: ['BUCHO', 'TRIPA', 'TRIPARIA'], cat: 'BUCHO BOVINO' },
+    { palavras: ['RASPA', 'APARAS', 'RETALHO'], cat: 'Raspas' },
+    { palavras: ['SERVIC', 'MANUTENC', 'CONSERTO', 'REPARO'], cat: 'Servicos' },
+    { palavras: ['ENERGIA', 'ELETRIC'], cat: 'Energia' },
+    { palavras: ['COMBUSTIVEL', 'DIESEL', 'GASOLINA', 'ETANOL', 'GAS '], cat: 'Combustiveis' },
+    { palavras: ['LENHA', 'CAVACO', 'BIOMASSA'], cat: 'Lenha/Biomassa' },
+    { palavras: ['COURO VERDE', 'COURO SALGADO', 'COURO FRESCO'], cat: 'Couro verde' },
+    { palavras: ['SEMI ACABADO', 'SEMI-ACABADO', 'SEMIACABADO'], cat: 'Semi' },
+    { palavras: ['WET BLUE', 'WET-BLUE', 'WETBLUE'], cat: 'Wet Blue' },
+    { palavras: ['BEXIGA'], cat: 'Bexiga' },
+    { palavras: ['AORTA'], cat: 'AORTA' },
+    { palavras: ['ESOFAGO', 'ESÔFAGO'], cat: 'Esofago' },
+    { palavras: ['TENDAO', 'TENDÃO'], cat: 'Tendao' },
+    { palavras: ['ORELHA'], cat: 'Orelha' },
+    { palavras: ['DEVOLUC', 'DEVOLUÇ'], cat: 'Devolucoes' },
+    { palavras: ['MAQUINA', 'EQUIPAMENTO', 'ATIVO IMOB'], cat: 'Ativo Imobilizado' },
+  ];
+
+  for (const regra of regras) {
+    for (const p of regra.palavras) {
+      if (prod.includes(p)) {
+        const cat = _categorias.find(c => c.nome.toUpperCase() === regra.cat.toUpperCase());
+        if (cat) return { id: cat.id, nome: cat.nome };
+      }
+    }
+  }
+
+  // NCM-based fallback
+  if (ncm) {
+    const ncmRegras = [
+      { prefixo: '4104', cat: 'Wet Blue' },       // couro bovino wet blue
+      { prefixo: '4107', cat: 'ACABADO' },         // couro preparado/acabado
+      { prefixo: '4101', cat: 'Couro verde' },     // couro bruto
+      { prefixo: '4105', cat: 'Couro Bovino' },    // couro ovino
+      { prefixo: '2501', cat: 'SAL' },             // sal
+      { prefixo: '3824', cat: 'QUIMICOS' },        // preparações químicas
+      { prefixo: '3402', cat: 'QUIMICOS' },        // agentes orgânicos
+      { prefixo: '2710', cat: 'Combustiveis' },    // óleos combustíveis
+      { prefixo: '2711', cat: 'Combustiveis' },    // gás
+      { prefixo: '4415', cat: 'Embalagens' },      // paletes de madeira
+      { prefixo: '1502', cat: 'Sebo' },            // gordura bovina
+    ];
+    for (const r of ncmRegras) {
+      if (ncm.startsWith(r.prefixo)) {
+        const cat = _categorias.find(c => c.nome.toUpperCase() === r.cat.toUpperCase());
+        if (cat) return { id: cat.id, nome: cat.nome };
+      }
+    }
+  }
+
+  // CFOP-based fallback
+  if (cfop) {
+    const cfopCat = {
+      '5151': 'TRANSFERENCIA', '5152': 'TRANSFERENCIA', '6151': 'TRANSFERENCIA', '6152': 'TRANSFERENCIA',
+      '1151': 'TRANSFERENCIA', '1152': 'TRANSFERENCIA',
+      '5901': 'TRANSFERENCIA', '5902': 'TRANSFERENCIA', '6901': 'TRANSFERENCIA', '6902': 'TRANSFERENCIA',
+      '1551': 'Ativo Imobilizado', '2551': 'Ativo Imobilizado',
+      '1201': 'Devolucoes', '1202': 'Devolucoes', '2201': 'Devolucoes', '2202': 'Devolucoes',
+      '5201': 'Devolucoes', '5202': 'Devolucoes', '6201': 'Devolucoes',
+    };
+    if (cfopCat[cfop]) {
+      const cat = _categorias.find(c => c.nome.toUpperCase() === cfopCat[cfop].toUpperCase());
+      if (cat) return { id: cat.id, nome: cat.nome };
+    }
+  }
+
+  return null;
+}
+
+async function mapearNaoMapeado(prodKey) {
+  const sel = document.getElementById('mapNM_' + encodeURIComponent(prodKey));
+  if (!sel || !sel.value) { toast('Selecione uma categoria', 'warn'); return; }
+  const catId = sel.value;
+
+  try {
+    // Criar mapeamento por descrição
+    await criarMapeamento(prodKey, 'descricao', catId);
+
+    // Atualizar movimentações existentes sem categoria que tem essa descrição
+    const movIds = _naoMapeados
+      .filter(m => (m.produto_xml || '').toUpperCase().trim() === prodKey)
+      .map(m => m.id);
+
+    if (movIds.length) {
+      // Atualizar em lotes de 50
+      for (let i = 0; i < movIds.length; i += 50) {
+        const batch = movIds.slice(i, i + 50);
+        const idsParam = batch.map(id => `"${id}"`).join(',');
+        await sbFetch(`estoque_movimentacoes?id=in.(${idsParam})`, {
+          method: 'PATCH',
+          body: JSON.stringify({ categoria_id: catId })
+        });
+      }
+    }
+
+    await carregarMapeamentos();
+    toast(`Mapeado: ${prodKey} → ${nomeCategoria(catId)} (${movIds.length} movimentacoes atualizadas)`, 'ok');
+
+    // Remover da lista visual
+    const item = sel.closest('.map-item');
+    if (item) item.style.display = 'none';
+
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function autoMapearSugestoes() {
+  if (!_naoMapeados.length) {
+    await carregarNaoMapeados();
+  }
+
+  // Agrupar
+  const grupos = {};
+  _naoMapeados.forEach(m => {
+    const key = (m.produto_xml || '').toUpperCase().trim();
+    if (!grupos[key]) grupos[key] = { nome: m.produto_xml, ncm: m.ncm, cfop: m.cfop, ids: [] };
+    grupos[key].ids.push(m.id);
+  });
+
+  let mapeados = 0, movsAtualizadas = 0;
+
+  for (const [key, g] of Object.entries(grupos)) {
+    const sug = _sugerirCategoria(g.nome, g.ncm, g.cfop);
+    if (!sug) continue;
+
+    try {
+      // Criar mapeamento
+      await criarMapeamento(key, 'descricao', sug.id);
+      mapeados++;
+
+      // Atualizar movimentações
+      for (let i = 0; i < g.ids.length; i += 50) {
+        const batch = g.ids.slice(i, i + 50);
+        const idsParam = batch.map(id => `"${id}"`).join(',');
+        await sbFetch(`estoque_movimentacoes?id=in.(${idsParam})`, {
+          method: 'PATCH',
+          body: JSON.stringify({ categoria_id: sug.id })
+        });
+        movsAtualizadas += batch.length;
+      }
+    } catch (e) {
+      // Mapeamento já existe, tentar só atualizar movimentações
+      if (e.message && e.message.includes('409')) continue;
+    }
+  }
+
+  await carregarMapeamentos();
+  toast(`Auto-mapeamento: ${mapeados} produtos, ${movsAtualizadas} movimentacoes atualizadas`, 'ok');
+  await carregarNaoMapeados();
+}
+
 // ── Dashboard ───────────────────────────────────────────────────
 let chartSaldo = null, chartMensal = null, chartPreco = null;
 
@@ -1958,20 +2637,64 @@ async function renderDashboard() {
       carregarComparativo(), carregarDuplicatas()
     ]);
 
-    // ── KPIs (calculados a partir das movimentacoes para evitar problemas de tipo) ──
+    // ── Pré-computar agrupamentos ──
+    _dashMovs = movs;
+    const catMovs = {};
+    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
+
+    // ── KPIs ──
     const totalEstoque = saldos.reduce((s,r) => s + Number(r.saldo_atual||0), 0);
     const valorEntradas = movs.filter(m=>m.tipo==='entrada').reduce((s,m) => s + Number(m.valor_total||0), 0);
     const valorSaidas = movs.filter(m=>m.tipo==='saida').reduce((s,m) => s + Number(m.valor_total||0), 0);
     const totalNfs = saldos.reduce((s,r) => s + Number(r.total_nfs||0), 0);
     const totalCats = saldos.filter(s => Number(s.total_entrada) > 0 || Number(s.total_saida) > 0).length;
 
+    // Valor do estoque (saldo * CMP)
+    let vlrEstoqueTotal = 0;
+    saldos.forEach(s => {
+      const sa = Number(s.saldo_atual||0);
+      const cms = (catMovs[s.id] || []);
+      const cmp = cms.length ? custoMedioPonderado(cms) : 0;
+      if (sa > 0 && cmp > 0) vlrEstoqueTotal += sa * cmp;
+    });
+
+    // Devoluções e exportações
+    const devs = movs.filter(m => { const n=(m.nat_operacao||'').toUpperCase(); return n.includes('DEVOLUC')||n.includes('DEVOLUÇ'); });
+    const exps = movs.filter(m => (m.cfop||'').startsWith('7'));
+
+    // Comparativo mês anterior (se período é mês atual)
+    let trendHtml = '';
+    if (mensal.length >= 2) {
+      const mesesOrd = [...new Set(mensal.map(m=>m.mes))].sort();
+      if (mesesOrd.length >= 2) {
+        const mesAtual = mesesOrd[mesesOrd.length-1];
+        const mesAnt = mesesOrd[mesesOrd.length-2];
+        const entAtu = mensal.filter(m=>m.mes===mesAtual&&m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const entAnt = mensal.filter(m=>m.mes===mesAnt&&m.tipo==='entrada').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const saiAtu = mensal.filter(m=>m.mes===mesAtual&&m.tipo==='saida').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const saiAnt = mensal.filter(m=>m.mes===mesAnt&&m.tipo==='saida').reduce((s,m)=>s+Number(m.valor_total||0),0);
+        const varEnt = entAnt > 0 ? ((entAtu-entAnt)/entAnt*100) : 0;
+        const varSai = saiAnt > 0 ? ((saiAtu-saiAnt)/saiAnt*100) : 0;
+        const arrowEnt = varEnt > 0 ? '&#9650;' : varEnt < 0 ? '&#9660;' : '&#9644;';
+        const arrowSai = varSai > 0 ? '&#9650;' : varSai < 0 ? '&#9660;' : '&#9644;';
+        const corEnt = varEnt > 5 ? 'var(--ok)' : varEnt < -5 ? 'var(--err)' : 'var(--muted)';
+        const corSai = varSai > 5 ? 'var(--err)' : varSai < -5 ? 'var(--ok)' : 'var(--muted)';
+        trendHtml = `<div style="display:flex;gap:16px;margin-top:8px;justify-content:center;flex-wrap:wrap">
+          <div style="font-size:10px;color:${corEnt}">${arrowEnt} Compras ${varEnt>0?'+':''}${varEnt.toFixed(1)}% vs mês ant.</div>
+          <div style="font-size:10px;color:${corSai}">${arrowSai} Vendas ${varSai>0?'+':''}${varSai.toFixed(1)}% vs mês ant.</div>
+        </div>`;
+      }
+    }
+
     document.getElementById('dashKpis').innerHTML = `
-      <div class="kpi"><div class="kpi-value">${fmtNum(totalEstoque,0)}</div><div class="kpi-label">Saldo Total (Qtde)</div></div>
+      <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(vlrEstoqueTotal)}</div><div class="kpi-label">Valor Estoque</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(valorEntradas)}</div><div class="kpi-label">Total Entradas</div></div>
       <div class="kpi"><div class="kpi-value">${fmtBRLCompacto(valorSaidas)}</div><div class="kpi-label">Total Saidas</div></div>
-      <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs Processadas</div></div>
-      <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias Ativas</div></div>
-    `;
+      ${exps.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--ok)">${fmtBRLCompacto(exps.reduce((s,m)=>s+Number(m.valor_total||0),0))}</div><div class="kpi-label">Exportações</div></div>` : ''}
+      ${devs.length ? `<div class="kpi"><div class="kpi-value" style="color:var(--warn)">${devs.length}</div><div class="kpi-label">Devoluções</div></div>` : ''}
+      <div class="kpi"><div class="kpi-value">${totalNfs}</div><div class="kpi-label">NFs</div></div>
+      <div class="kpi"><div class="kpi-value">${totalCats}</div><div class="kpi-label">Categorias</div></div>
+    ` + trendHtml;
 
     // ── Alertas estoque minimo ──
     const alertaDiv = document.getElementById('dashAlertas');
@@ -1986,10 +2709,7 @@ async function renderDashboard() {
     } else { alertaDiv.style.display = 'none'; }
 
     // ── Tabela de saldos com CMP ──
-    _dashMovs = movs; // guardar para detalhe de categoria
     const body = document.getElementById('dashSaldoBody');
-    const catMovs = {};
-    movs.forEach(m => { if (!catMovs[m.categoria_id]) catMovs[m.categoria_id] = []; catMovs[m.categoria_id].push(m); });
 
     body.innerHTML = saldos.map(s => {
       const sa = Number(s.saldo_atual||0);
@@ -2219,11 +2939,12 @@ async function calcularPosicao() {
     for (const m of movs) {
       if (!m.categoria_id || !posicao[m.categoria_id]) continue;
       const p = posicao[m.categoria_id];
+      const qtdConvertida = converterQuantidade(m.categoria_id, Number(m.quantidade || 0), m.unidade);
       if (m.tipo === 'entrada') {
-        p.entradas += Number(m.quantidade || 0);
+        p.entradas += qtdConvertida;
         p.vlr_ent += Number(m.valor_total || 0);
       } else {
-        p.saidas += Number(m.quantidade || 0);
+        p.saidas += qtdConvertida;
         p.vlr_sai += Number(m.valor_total || 0);
       }
     }

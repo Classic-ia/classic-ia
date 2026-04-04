@@ -156,5 +156,7 @@ INSERT INTO estoque_categorias (nome, unidade) VALUES
   ('SAL', 'KG'),
   ('EMBALAGEM', 'UN'),
   ('Fretes Vendas', 'UN'),
+  ('Fretes Compras', 'UN'),
+  ('Couro Bubalino', 'PC'),
   ('Servicos', 'UN')
 ON CONFLICT (nome) DO NOTHING;

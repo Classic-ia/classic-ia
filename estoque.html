@@ -516,6 +516,19 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <div id="listaMapeamentos" style="margin-top:16px"></div>
     </div>
   </div>
+
+  <!-- Produtos Nao Mapeados -->
+  <div style="margin-top:24px;border-top:1px solid var(--border);padding-top:20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div class="map-panel-title">Produtos Nao Mapeados (aguardando categoria)</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <button class="btn btn-sm" onclick="carregarNaoMapeados()">Atualizar Lista</button>
+        <button class="btn btn-sm btn-primary" onclick="autoMapearSugestoes()">Auto-mapear Sugestoes</button>
+      </div>
+    </div>
+    <div id="naoMapeadosInfo" style="font-size:12px;color:var(--muted);margin-bottom:12px"></div>
+    <div id="listaNaoMapeados"></div>
+  </div>
 </div>
 
 <!-- ═══ TAB: DASHBOARD ═══════════════════════════════════════ -->
@@ -736,6 +749,8 @@ tr.clickable-row:hover{background:rgba(200,169,110,0.08)}
       <select class="filter-select" id="apuracaoFilial">
         <option value="">Todas</option>
         <option value="MATRIZ">Matriz</option>
+        <option value="FILIAL SP">Filial SP</option>
+        <option value="FILIAL RS">Filial RS</option>
       </select>
     </div>
     <div class="filter-group" style="align-self:flex-end">
@@ -1136,7 +1151,7 @@ function setupTabs() {
       document.getElementById(`tab-${tab.dataset.tab}`).classList.add('active');
 
       if (tab.dataset.tab === 'movimentacoes') filtrarMovimentacoes();
-      if (tab.dataset.tab === 'mapeamento') renderMapeamento();
+      if (tab.dataset.tab === 'mapeamento') { renderMapeamento(); carregarNaoMapeados(); }
       if (tab.dataset.tab === 'dashboard') renderDashboard();
       if (tab.dataset.tab === 'apuracao') { carregarContratos(); carregarCambios(); carregarDrawbacks(); }
     });
@@ -1914,6 +1929,192 @@ async function removerMapeamento(id) {
     renderMapeamento();
     toast('Mapeamento removido');
   } catch(e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+// ── Produtos Nao Mapeados ────────────────────────────────────
+let _naoMapeados = [];
+
+async function carregarNaoMapeados() {
+  const infoEl = document.getElementById('naoMapeadosInfo');
+  if (infoEl) infoEl.textContent = 'Carregando movimentacoes sem categoria...';
+
+  // Buscar movimentações sem categoria
+  try {
+    const movs = await sbFetchAll('estoque_movimentacoes?select=id,produto_xml,ncm,cfop,tipo,fornecedor_cliente,valor_total&categoria_id=is.null&order=produto_xml.asc');
+    _naoMapeados = movs;
+
+    // Agrupar por produto_xml (normalizado)
+    const grupos = {};
+    movs.forEach(m => {
+      const key = (m.produto_xml || '').toUpperCase().trim();
+      if (!grupos[key]) grupos[key] = { nome: m.produto_xml, ncm: m.ncm, cfop: m.cfop, tipo: m.tipo, count: 0, valor: 0, fornecedores: new Set() };
+      grupos[key].count++;
+      grupos[key].valor += Number(m.valor_total || 0);
+      if (m.fornecedor_cliente) grupos[key].fornecedores.add(m.fornecedor_cliente.substring(0, 30));
+      if (!grupos[key].ncm && m.ncm) grupos[key].ncm = m.ncm;
+      if (!grupos[key].cfop && m.cfop) grupos[key].cfop = m.cfop;
+    });
+
+    const lista = Object.values(grupos).sort((a, b) => b.count - a.count);
+
+    if (infoEl) infoEl.textContent = `${movs.length} movimentacoes sem categoria em ${lista.length} produtos distintos`;
+
+    const container = document.getElementById('listaNaoMapeados');
+    if (!lista.length) {
+      container.innerHTML = '<div style="text-align:center;color:var(--ok);padding:20px">Todos os itens estao mapeados!</div>';
+      return;
+    }
+
+    // Gerar sugestões automáticas
+    const sugestoes = {};
+    lista.forEach(g => {
+      const sug = _sugerirCategoria(g.nome, g.ncm, g.cfop);
+      if (sug) sugestoes[g.nome.toUpperCase().trim()] = sug;
+    });
+
+    const optsCat = _categorias.map(c => `<option value="${c.id}">${c.nome}</option>`).join('');
+
+    container.innerHTML = lista.slice(0, 100).map(g => {
+      const key = g.nome.toUpperCase().trim();
+      const sug = sugestoes[key];
+      const sugLabel = sug ? ` — Sugestao: <strong style="color:var(--ok)">${sug.nome}</strong>` : '';
+      return `<div class="map-item" style="flex-wrap:wrap;gap:8px">
+        <div style="flex:1;min-width:200px">
+          <div class="map-item-name">${g.nome}</div>
+          <div class="map-item-badge">${g.count}x | ${fmtBRL(g.valor)} | NCM: ${g.ncm||'—'} | CFOP: ${g.cfop||'—'} | ${g.tipo}${sugLabel}</div>
+          <div style="font-size:10px;color:var(--muted)">${[...g.fornecedores].slice(0,3).join(', ')}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <select class="filter-select" style="min-width:150px;padding:4px 8px;font-size:11px" id="mapNM_${encodeURIComponent(key)}">
+            <option value="">Selecionar categoria</option>
+            ${sug ? `<option value="${sug.id}" selected>${sug.nome}</option>` : ''}
+            ${optsCat}
+          </select>
+          <button class="btn btn-sm btn-primary" onclick="mapearNaoMapeado('${key.replace(/'/g,"\\'")}')">Mapear</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    if (lista.length > 100) {
+      container.innerHTML += `<div style="text-align:center;color:var(--muted);padding:12px">Mostrando 100 de ${lista.length} — mapeie os maiores primeiro</div>`;
+    }
+  } catch (e) {
+    if (infoEl) infoEl.textContent = 'Erro: ' + e.message;
+  }
+}
+
+function _sugerirCategoria(prodNome, ncm, cfop) {
+  const prod = (prodNome || '').toUpperCase().trim();
+
+  // Palavras-chave → categoria
+  const regras = [
+    { palavras: ['COURO BOVINO', 'COURO BOV', 'WET BLUE', 'WETBLUE'], cat: 'Couro Bovino' },
+    { palavras: ['COURO BUBALINO', 'BUBALINO'], cat: 'Couro Bubalino' },
+    { palavras: ['ACABADO', 'SEMI ACABADO', 'SEMI-ACABADO', 'CRUST'], cat: 'ACABADO' },
+    { palavras: ['QUIMICO', 'QUÍMICA', 'QUIMICA', 'CROMO', 'TANINO', 'RESINA', 'CORANTE', 'PIGMENTO', 'ACIDO', 'SULFATO', 'CLORETO'], cat: 'QUIMICOS' },
+    { palavras: ['SEBO', 'GRAXA', 'GORDURA'], cat: 'Sebo' },
+    { palavras: ['SAL ', 'SAL GROSSO', 'CLORETO DE SODIO'], cat: 'Sal' },
+    { palavras: ['EMBALAGEM', 'PALET', 'PALETE', 'FILME STRETCH', 'CAIXA PAPELAO', 'FITA ADESIVA'], cat: 'Embalagens' },
+    { palavras: ['FRETE', 'TRANSPORTE'], cat: cfop && cfop.startsWith('1') ? 'Fretes Compras' : 'Fretes Vendas' },
+    { palavras: ['BUCHO', 'TRIPA', 'TRIPARIA'], cat: 'BUCHO BOVINO' },
+    { palavras: ['RASPA', 'APARAS', 'RETALHO'], cat: 'Raspas' },
+    { palavras: ['SERVIC', 'MANUTENC', 'CONSERTO', 'REPARO'], cat: 'Servicos' },
+    { palavras: ['ENERGIA', 'ELETRIC'], cat: 'Energia' },
+    { palavras: ['COMBUSTIVEL', 'DIESEL', 'GASOLINA', 'ETANOL', 'GAS '], cat: 'Combustiveis' },
+    { palavras: ['LENHA', 'CAVACO', 'BIOMASSA'], cat: 'Lenha/Biomassa' },
+  ];
+
+  for (const regra of regras) {
+    for (const p of regra.palavras) {
+      if (prod.includes(p)) {
+        const cat = _categorias.find(c => c.nome.toUpperCase() === regra.cat.toUpperCase());
+        if (cat) return { id: cat.id, nome: cat.nome };
+      }
+    }
+  }
+
+  return null;
+}
+
+async function mapearNaoMapeado(prodKey) {
+  const sel = document.getElementById('mapNM_' + encodeURIComponent(prodKey));
+  if (!sel || !sel.value) { toast('Selecione uma categoria', 'warn'); return; }
+  const catId = sel.value;
+
+  try {
+    // Criar mapeamento por descrição
+    await criarMapeamento(prodKey, 'descricao', catId);
+
+    // Atualizar movimentações existentes sem categoria que tem essa descrição
+    const movIds = _naoMapeados
+      .filter(m => (m.produto_xml || '').toUpperCase().trim() === prodKey)
+      .map(m => m.id);
+
+    if (movIds.length) {
+      // Atualizar em lotes de 50
+      for (let i = 0; i < movIds.length; i += 50) {
+        const batch = movIds.slice(i, i + 50);
+        const idsParam = batch.map(id => `"${id}"`).join(',');
+        await sbFetch(`estoque_movimentacoes?id=in.(${idsParam})`, {
+          method: 'PATCH',
+          body: JSON.stringify({ categoria_id: catId })
+        });
+      }
+    }
+
+    await carregarMapeamentos();
+    toast(`Mapeado: ${prodKey} → ${nomeCategoria(catId)} (${movIds.length} movimentacoes atualizadas)`, 'ok');
+
+    // Remover da lista visual
+    const item = sel.closest('.map-item');
+    if (item) item.style.display = 'none';
+
+  } catch (e) { toast('Erro: ' + e.message, 'error'); }
+}
+
+async function autoMapearSugestoes() {
+  if (!_naoMapeados.length) {
+    await carregarNaoMapeados();
+  }
+
+  // Agrupar
+  const grupos = {};
+  _naoMapeados.forEach(m => {
+    const key = (m.produto_xml || '').toUpperCase().trim();
+    if (!grupos[key]) grupos[key] = { nome: m.produto_xml, ncm: m.ncm, cfop: m.cfop, ids: [] };
+    grupos[key].ids.push(m.id);
+  });
+
+  let mapeados = 0, movsAtualizadas = 0;
+
+  for (const [key, g] of Object.entries(grupos)) {
+    const sug = _sugerirCategoria(g.nome, g.ncm, g.cfop);
+    if (!sug) continue;
+
+    try {
+      // Criar mapeamento
+      await criarMapeamento(key, 'descricao', sug.id);
+      mapeados++;
+
+      // Atualizar movimentações
+      for (let i = 0; i < g.ids.length; i += 50) {
+        const batch = g.ids.slice(i, i + 50);
+        const idsParam = batch.map(id => `"${id}"`).join(',');
+        await sbFetch(`estoque_movimentacoes?id=in.(${idsParam})`, {
+          method: 'PATCH',
+          body: JSON.stringify({ categoria_id: sug.id })
+        });
+        movsAtualizadas += batch.length;
+      }
+    } catch (e) {
+      // Mapeamento já existe, tentar só atualizar movimentações
+      if (e.message && e.message.includes('409')) continue;
+    }
+  }
+
+  await carregarMapeamentos();
+  toast(`Auto-mapeamento: ${mapeados} produtos, ${movsAtualizadas} movimentacoes atualizadas`, 'ok');
+  await carregarNaoMapeados();
 }
 
 // ── Dashboard ───────────────────────────────────────────────────

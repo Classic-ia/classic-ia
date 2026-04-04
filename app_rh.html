@@ -364,9 +364,12 @@ function traduzPerfil(p) {
 
 // ── Auto-sync Convenia (background, silencioso) ──
 async function autoSyncConvenia() {
-  const token = localStorage.getItem('classic_convenia_token') ||
-    (JSON.parse(localStorage.getItem('convenia_config') || '{}').token);
-  if (!token) return; // sem token configurado, pular
+  const CONVENIA_DEFAULT_TOKEN = 'd61e15d5-c74f-45fb-be91-143412a9cf80';
+  const token = localStorage.getItem('classic_convenia_token') || CONVENIA_DEFAULT_TOKEN;
+  // Salvar token padrao se nao existir
+  if (!localStorage.getItem('classic_convenia_token')) {
+    localStorage.setItem('classic_convenia_token', CONVENIA_DEFAULT_TOKEN);
+  }
 
   const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
   const LS_LAST_SYNC = 'convenia_last_auto_sync';
@@ -427,12 +430,104 @@ async function autoSyncConvenia() {
       } catch (e) { /* silencioso */ }
     }
 
+    // Atualizar dados de funcionarios ja sincronizados (cargo, setor, status, foto, email)
+    let updated = 0;
+    for (const emp of empList) {
+      const empId = String(emp.id || emp.uuid || '');
+      const match = (local || []).find(f => f.convenia_id === empId);
+      if (!match) continue;
+
+      const patch = {};
+      const cargo = emp.role || emp.position || emp.cargo || null;
+      const setor = (emp.department && emp.department.name) || emp.setor || null;
+      const depto = (emp.department && emp.department.name) || null;
+      const email = emp.email || null;
+      const foto = emp.avatar || emp.photo_url || emp.foto_url || null;
+      const statusConv = (function(s) {
+        if (!s) return null;
+        s = String(s).toLowerCase();
+        if (s.includes('ativ') || s === 'active' || s === 'working') return 'ativo';
+        if (s.includes('deslig') || s === 'terminated' || s === 'inactive') return 'inativo';
+        if (s.includes('afasta') || s === 'on_leave') return 'afastado';
+        if (s.includes('feria') || s === 'vacation') return 'ferias';
+        return null;
+      })(emp.status);
+
+      if (cargo) patch.cargo = cargo;
+      if (setor) patch.setor = setor;
+      if (depto) patch.departamento = depto;
+      if (email) patch.email = email;
+      if (foto) patch.foto_url = foto;
+      if (statusConv) patch.status = statusConv;
+
+      if (Object.keys(patch).length > 0) {
+        try {
+          await RH_API.patch('rh_funcionarios?id=eq.' + match.id, patch);
+          updated++;
+        } catch (e) { /* silencioso */ }
+      }
+    }
+
+    // Importar afastamentos do Convenia como ausencias
+    let leaves = 0;
+    try {
+      const ausenciasLocal = await RH_API.get('rh_ausencias?select=id,funcionario_id,data_inicio,tipo_ausencia&limit=500');
+      const ausSet = new Set((ausenciasLocal || []).map(a => a.funcionario_id + '|' + a.data_inicio));
+
+      for (const emp of empList.slice(0, 30)) { // limitar para nao sobrecarregar
+        const empId = String(emp.id || emp.uuid || '');
+        const funcLocal = (local || []).find(f => f.convenia_id === empId);
+        if (!funcLocal) continue;
+
+        try {
+          const leavesRes = await fetch(CONVENIA_BASE + '/employees/' + (emp.id || emp.uuid) + '/leaves', {
+            headers: { 'token': token, 'Accept': 'application/json' }
+          });
+          if (!leavesRes.ok) continue;
+          const leavesData = await leavesRes.json();
+          const leaveList = leavesData.data || leavesData || [];
+
+          for (const l of leaveList) {
+            const dataInicio = l.start_date || l.begin || null;
+            if (!dataInicio) continue;
+            const chave = funcLocal.id + '|' + dataInicio;
+            if (ausSet.has(chave)) continue;
+
+            const tipoMap = {
+              'medical': 'atestado', 'sick': 'atestado', 'atestado': 'atestado',
+              'vacation': 'falta_justificada', 'ferias': 'falta_justificada',
+              'maternity': 'licenca_maternidade', 'maternidade': 'licenca_maternidade',
+              'paternity': 'licenca_paternidade', 'paternidade': 'licenca_paternidade',
+              'leave': 'afastamento_inss', 'afastamento': 'afastamento_inss'
+            };
+            const tipoRaw = String(l.type || l.reason || l.tipo || '').toLowerCase();
+            const tipo = tipoMap[tipoRaw] || 'falta_justificada';
+
+            const ausPayload = {
+              funcionario_id: funcLocal.id,
+              data_inicio: dataInicio,
+              data_fim: l.end_date || l.finish || null,
+              tipo_ausencia: tipo,
+              motivo: l.reason || l.description || 'Importado do Convenia',
+              cid: l.cid || null
+            };
+            try {
+              await RH_API.post('rh_ausencias', ausPayload, 'return=minimal');
+              leaves++;
+              ausSet.add(chave);
+            } catch (e) { /* silencioso */ }
+          }
+        } catch (e) { /* endpoint pode nao existir */ }
+      }
+    } catch (e) { console.warn('[Convenia] Erro ao importar afastamentos:', e.message); }
+
     localStorage.setItem(LS_LAST_SYNC, String(Date.now()));
-    if (imported > 0) {
-      console.info('[Convenia] Auto-sync: ' + imported + ' novos funcionarios importados.');
-      carregarKPIs(); // atualizar KPIs com novos dados
+    const total = imported + updated + leaves;
+    if (total > 0) {
+      console.info('[Convenia] Auto-sync: ' + imported + ' novos, ' + updated + ' atualizados, ' + leaves + ' afastamentos.');
+      carregarKPIs();
     } else {
-      console.info('[Convenia] Auto-sync: tudo sincronizado, 0 novos.');
+      console.info('[Convenia] Auto-sync: tudo sincronizado, 0 alteracoes.');
     }
   } catch (e) {
     console.warn('[Convenia] Auto-sync erro:', e.message);

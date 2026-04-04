@@ -2583,7 +2583,7 @@ function _renderNFPage() {
       <td>${statusHtml}</td>
       <td onclick="event.stopPropagation()" style="text-align:center;white-space:nowrap">
         <div class="nf-actions">
-          ${nf.chave_nfe ? `<button class="nf-act-btn" title="Consultar SEFAZ" onclick="consultarSefaz('${nf.chave_nfe}')">&#128269;</button>` : ''}
+          ${nf.chave_nfe ? `<button class="nf-act-btn" title="Consultar Status SEFAZ" onclick="consultarSefaz('${nf.chave_nfe}')" id="sefazBtn${globalIdx}">&#128269;</button>` : ''}
           ${nf.chave_nfe ? `<button class="nf-act-btn" title="Copiar Chave NFe" onclick="navigator.clipboard.writeText('${nf.chave_nfe}');toast('Chave copiada!')">&#128203;</button>` : ''}
           <button class="nf-act-btn" title="Imprimir NF" onclick="imprimirNF(${globalIdx})">&#128424;</button>
           <button class="nf-act-btn" title="Exportar Excel" onclick="exportarNFExcel(${globalIdx})">&#128229;</button>
@@ -2834,8 +2834,106 @@ async function exportarMovFiltradas() {
 }
 
 // ── Consultar SEFAZ ─────────────────────────────────────────────
-function consultarSefaz(chave) {
+async function consultarSefaz(chave) {
+  if (!chave || chave.length !== 44) {
+    toast('Chave NFe inválida', 'error');
+    return;
+  }
+
+  // Tentar consulta automática via Edge Function
+  try {
+    toast('Consultando SEFAZ...');
+    const sess = {}; try { Object.assign(sess, JSON.parse(localStorage.getItem('cq_sess_v2') || '{}')); } catch(_) {}
+    const r = await fetch(`${SB_URL}/functions/v1/consulta-nfe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + (sess.access_token || SB_KEY),
+        'apikey': SB_KEY
+      },
+      body: JSON.stringify({ chave_nfe: chave })
+    });
+
+    const data = await r.json();
+
+    if (r.ok && data.status) {
+      _mostrarStatusSefaz(chave, data);
+      return;
+    }
+
+    // Se Edge Function não está configurada, fallback para portal
+    if (data.instrucoes || data.error?.includes('certificado')) {
+      toast('Certificado não configurado. Abrindo portal SEFAZ...', 'warn');
+    }
+  } catch(e) {
+    // Edge Function indisponível, fallback silencioso
+  }
+
+  // Fallback: abrir portal SEFAZ manualmente
   window.open('https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&tipoConteudo=XbSeqxE8pl8=&nfe=' + chave, '_blank');
+}
+
+function _mostrarStatusSefaz(chave, data) {
+  // Encontrar o NF e mostrar status inline
+  const idx = _movAllNFs.findIndex(nf => nf.chave_nfe === chave);
+
+  // Determinar cor do status
+  let cor = 'var(--ok)', icone = '✓';
+  if (data.status_codigo === '101' || data.status_codigo === '151' || data.status_codigo === '155') {
+    cor = 'var(--err)'; icone = '✕';
+  } else if (data.status_codigo === '110' || data.status_codigo?.startsWith('3')) {
+    cor = 'var(--warn)'; icone = '⚠';
+  } else if (data.status_codigo !== '100' && data.status_codigo !== '150') {
+    cor = 'var(--muted)'; icone = '?';
+  }
+
+  // Mostrar modal com resultado
+  const modal = document.createElement('div');
+  modal.className = 'modal show';
+  modal.style.zIndex = '9999';
+  modal.innerHTML = `
+    <div class="modal-content" style="max-width:500px">
+      <div class="modal-title" style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:24px;color:${cor}">${icone}</span>
+        Status SEFAZ — NF ${_movAllNFs[idx]?.numero_nf || ''}
+      </div>
+      <div style="padding:16px 0">
+        <div class="nf-detail-info-row" style="margin-bottom:10px">
+          <span class="nf-detail-label">Status:</span>
+          <strong style="color:${cor};font-size:16px">${escHtml(data.status)}</strong>
+        </div>
+        <div class="nf-detail-info-row" style="margin-bottom:10px">
+          <span class="nf-detail-label">Código:</span>
+          <span>${escHtml(data.status_codigo)}</span>
+        </div>
+        <div class="nf-detail-info-row" style="margin-bottom:10px">
+          <span class="nf-detail-label">Motivo:</span>
+          <span style="font-size:12px">${escHtml(data.motivo)}</span>
+        </div>
+        ${data.protocolo ? `<div class="nf-detail-info-row" style="margin-bottom:10px">
+          <span class="nf-detail-label">Protocolo:</span>
+          <code class="nf-chave">${escHtml(data.protocolo)}</code>
+        </div>` : ''}
+        ${data.data_recebimento ? `<div class="nf-detail-info-row" style="margin-bottom:10px">
+          <span class="nf-detail-label">Data Receb.:</span>
+          <span>${escHtml(data.data_recebimento)}</span>
+        </div>` : ''}
+        <div class="nf-detail-info-row">
+          <span class="nf-detail-label">Chave:</span>
+          <code class="nf-chave" style="font-size:10px">${escHtml(chave)}</code>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn" onclick="this.closest('.modal').remove()">Fechar</button>
+        <button class="btn btn-secondary" onclick="window.open('https://www.nfe.fazenda.gov.br/portal/consultaRecaptcha.aspx?tipoConsulta=completa&tipoConteudo=XbSeqxE8pl8=&nfe=${chave}','_blank')">Abrir Portal SEFAZ</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  // Atualizar badge de status na linha da NF
+  if (idx >= 0) {
+    _movAllNFs[idx]._sefazStatus = data;
+  }
 }
 
 // ── Imprimir NF ─────────────────────────────────────────────────

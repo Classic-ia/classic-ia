@@ -1002,6 +1002,27 @@ function _setLastImportDate(iso) {
   localStorage.setItem('cq_pasta_auto_last', iso);
 }
 
+// Track imported file names to skip on reimport
+function _getImportedFiles() {
+  try { return JSON.parse(localStorage.getItem('cq_imported_files') || '{}'); } catch { return {}; }
+}
+
+function _addImportedFiles(fileNames) {
+  const imported = _getImportedFiles();
+  fileNames.forEach(n => { imported[n] = Date.now(); });
+  // Keep max 20000 entries to avoid localStorage overflow
+  const keys = Object.keys(imported);
+  if (keys.length > 20000) {
+    const sorted = keys.sort((a,b) => imported[a] - imported[b]);
+    sorted.slice(0, keys.length - 15000).forEach(k => delete imported[k]);
+  }
+  localStorage.setItem('cq_imported_files', JSON.stringify(imported));
+}
+
+function _clearImportedFiles() {
+  localStorage.removeItem('cq_imported_files');
+}
+
 // Recursivamente coleta XMLs de uma pasta e subpastas
 async function _coletarXMLs(dirHandle, maxFiles = 5000) {
   const xmlFiles = [];
@@ -1081,23 +1102,26 @@ async function buscarNovosXMLs() {
       return;
     }
 
-    // Filtrar por data de modificação se tiver lastImport
-    const lastImport = _getLastImportDate();
+    // Filtrar arquivos já importados por nome
+    const imported = _getImportedFiles();
     let filesToProcess = [];
+    let skipped = 0;
+
+    if (infoEl) infoEl.textContent = `Verificando ${xmlEntries.length} XMLs...`;
 
     for (const entry of xmlEntries) {
+      if (imported[entry.name]) { skipped++; continue; }
       const file = await entry.getFile();
-      if (lastImport && file.lastModified <= new Date(lastImport).getTime()) continue;
       filesToProcess.push(file);
     }
 
     if (!filesToProcess.length) {
-      if (infoEl) infoEl.textContent = `Nenhum XML novo desde última importação. (${xmlEntries.length} XMLs na pasta)`;
+      if (infoEl) infoEl.textContent = `Nenhum XML novo. (${xmlEntries.length} na pasta, ${skipped} já importados)`;
       toast('Nenhum XML novo encontrado', 'ok');
       return;
     }
 
-    if (infoEl) infoEl.textContent = `Processando ${filesToProcess.length} XMLs novos de ${xmlEntries.length} total...`;
+    if (infoEl) infoEl.textContent = `Processando ${filesToProcess.length} XMLs novos (${skipped} já importados)...`;
 
     // Garantir categorias e mapeamentos carregados
     if (!_categorias.length) await carregarCategorias();
@@ -1169,8 +1193,12 @@ async function buscarNovosXMLs() {
 
     if (progressDiv) progressDiv.style.display = 'none';
     _setLastImportDate(new Date().toISOString());
+
+    // Registrar arquivos importados para não reimportar
+    _addImportedFiles(filesToProcess.map(f => f.name));
+
     const resumo = `${resultado.inseridos} novos, ${resultado.duplicados} duplicados, ${naoMapeados.length} sem categoria`;
-    if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo}`;
+    if (infoEl) infoEl.textContent = `Última busca: ${new Date().toLocaleString('pt-BR')} — ${resumo} (${skipped + filesToProcess.length} total na pasta)`;
     toast(`Importação automática: ${resumo}`, resultado.inseridos > 0 ? 'ok' : 'info');
 
     // Atualizar dashboard se houver novos
@@ -1183,12 +1211,34 @@ async function buscarNovosXMLs() {
   }
 }
 
+async function trocarPastaAuto() {
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read' });
+    await _savePastaHandle(handle);
+    localStorage.setItem('cq_pasta_auto_nome', handle.name);
+    // Manter arquivos importados — só troca a pasta
+    _atualizarPastaAutoUI(handle.name);
+    toast(`Pasta trocada para "${handle.name}"`, 'ok');
+  } catch (e) {
+    if (e.name !== 'AbortError') toast('Erro: ' + e.message, 'erro');
+  }
+}
+
+async function reimportarTudo() {
+  _clearImportedFiles();
+  localStorage.removeItem('cq_pasta_auto_last');
+  toast('Registro limpo. Clique em "Buscar Novos XMLs" para reimportar tudo.', 'ok');
+  const infoEl = document.getElementById('pastaAutoInfo');
+  if (infoEl) infoEl.textContent = 'Registro limpo — pronto para reimportar tudo.';
+}
+
 async function desconfigurarPastaAuto() {
   await _removePastaHandle();
   localStorage.removeItem('cq_pasta_auto_nome');
   localStorage.removeItem('cq_pasta_auto_last');
+  _clearImportedFiles();
   _atualizarPastaAutoUI(null);
-  toast('Pasta automática removida', 'ok');
+  toast('Pasta removida', 'ok');
 }
 
 // Verificar se há pasta configurada ao iniciar

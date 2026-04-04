@@ -213,6 +213,12 @@ input.error {
     text-decoration:underline;padding:4px;
   ">⚙️ Modo demonstração (sem servidor)</button>
 </div>
+<div style="text-align:center;margin-top:16px;">
+  <a href="login_rh.html" style="font-size:11px;color:#1e3a52;text-decoration:none;transition:color 0.2s;"
+     onmouseover="this.style.color='#2E6B8A'" onmouseout="this.style.color='#1e3a52'">
+    Ir para RH & Seguranca do Trabalho
+  </a>
+</div>
 <div class="version">Classic CQ · v2025 · Jardim Alegre/PR</div>
 </div>
 
@@ -224,20 +230,22 @@ input.error {
   if (s) el.src = s; else el.style.display = 'none';
 
   // Se já tem sessão no localStorage → ir para o sistema
-  // (o app.html vai validar a sessão e redirecionar de volta se inválida)
+  // Verificar token E timestamp para evitar redirect loop
   try {
     const raw = localStorage.getItem('cq_sess_v2');
     if (raw) {
       const sess = JSON.parse(raw);
       if (sess.token && sess.user && sess.ts) {
-        // Verificar se não expirou pelo timestamp local (1h)
         const umHora = 60 * 60 * 1000;
         const idade  = Date.now() - (sess.ts || 0);
-        if (idade < umHora) {
+        // Só redirecionar se tem access_token (JWT) válido E não expirou localmente
+        // Sessões demo (sem access_token) passam direto pois são validadas de outra forma
+        const temJwt = !!sess.access_token;
+        const isDemoToken = sess.token && sess.token.startsWith('demo-');
+        if (idade < umHora && (temJwt || isDemoToken)) {
           window.location.href = 'app.html';
-          return; // parar execução
+          return;
         } else {
-          // Expirou localmente — limpar
           localStorage.removeItem('cq_sess_v2');
         }
       } else {

@@ -427,8 +427,13 @@ const CQAuth = (function () {
       return null;
     }
 
-    // 3. Renovar JWT se necessário e revalidar perfil do banco
-    if (_authToken) {
+    // 3. Sessão demo — aceitar diretamente sem validação do servidor
+    if (_token && _token.startsWith('demo-')) {
+      console.info('[CQAuth] Sessão demo ativa — sem validação do servidor.');
+      // Aceitar perfil do localStorage como está
+    }
+    // 4. Renovar JWT se necessário e revalidar perfil do banco
+    else if (_authToken) {
       // Tentar refresh do token para garantir que está válido
       const refreshed = await _refreshToken();
       if (!refreshed) {

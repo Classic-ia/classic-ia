@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Integrações — Classic RH & SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
+<style>
+:root {
+  --bg: #07111c; --surface: #0d1b2a; --surface2: #112233; --surface3: #1a3040;
+  --border: #1e3a52; --accent: #c8a96e; --accent2: #e8c98e;
+  --text: #e8f0f5; --muted: #5d7f95;
+  --ok: #27ae60; --warn: #f39c12; --err: #e74c3c; --info: #2E6B8A;
+  --convenia: #e85d26; --buscaepi: #4f8ef7; --atak: #a855f7; --secullum: #10b981;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image: linear-gradient(rgba(46,107,138,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(46,107,138,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Header */
+.header { position: sticky; top: 0; z-index: 100; background: rgba(7,17,28,.92); backdrop-filter: blur(12px); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; align-items: center; justify-content: space-between; }
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn { background: var(--surface2); border: 1px solid var(--border); color: var(--muted); padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px; text-decoration: none; transition: .2s; font-family: 'DM Sans', sans-serif; }
+.back-btn:hover { color: var(--text); border-color: var(--accent); }
+.page-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.page-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+/* KPI */
+.kpi-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px,1fr)); gap: 12px; margin-bottom: 24px; }
+.kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 16px; text-align: center; }
+.kpi-val { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 24px; color: var(--accent); }
+.kpi-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-top: 4px; }
+
+/* Section */
+.section-title { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px; }
+
+/* Connector Card */
+.conn-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 14px; margin-bottom: 28px; }
+.conn-card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; transition: .25s; position: relative; overflow: hidden; }
+.conn-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,.3); }
+.conn-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px; }
+.conn-card.online::before { background: var(--ok); }
+.conn-card.offline::before { background: var(--err); }
+.conn-card.warning::before { background: var(--warn); }
+.conn-card.paused::before { background: var(--muted); }
+.conn-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.conn-icon { width: 44px; height: 44px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 22px; flex-shrink: 0; }
+.conn-name { font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px; }
+.conn-desc { font-size: 11px; color: var(--muted); }
+.conn-status { display: inline-block; padding: 2px 10px; border-radius: 20px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; }
+.st-online { background: rgba(39,174,96,.15); color: var(--ok); }
+.st-offline { background: rgba(231,76,60,.15); color: var(--err); }
+.st-warning { background: rgba(243,156,18,.15); color: var(--warn); }
+.st-paused { background: rgba(93,127,149,.15); color: var(--muted); }
+
+/* Stats row inside card */
+.conn-stats { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; margin: 12px 0; }
+.conn-stat { text-align: center; }
+.conn-stat-val { font-family: 'DM Mono', monospace; font-size: 16px; font-weight: 700; }
+.conn-stat-lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+
+/* Actions */
+.conn-actions { display: flex; gap: 8px; margin-top: 14px; }
+.btn { padding: 7px 16px; border-radius: 8px; border: none; cursor: pointer; font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600; transition: .2s; }
+.btn:hover { transform: translateY(-1px); }
+.btn-primary { background: var(--accent); color: #0a0e1a; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-sm { padding: 5px 12px; font-size: 11px; }
+.btn-convenia { background: var(--convenia); color: #fff; }
+.btn-sync { background: var(--ok); color: #fff; }
+.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+/* Log */
+.log-section { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px; margin-bottom: 24px; }
+.log-list { max-height: 280px; overflow-y: auto; }
+.log-item { display: flex; align-items: flex-start; gap: 10px; padding: 8px 10px; border-radius: 8px; margin-bottom: 4px; font-size: 12px; background: var(--surface2); }
+.log-dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 4px; flex-shrink: 0; }
+.log-dot.ok { background: var(--ok); } .log-dot.err { background: var(--err); } .log-dot.warn { background: var(--warn); } .log-dot.info { background: var(--info); }
+.log-time { font-family: 'DM Mono', monospace; font-size: 10px; color: var(--muted); white-space: nowrap; }
+.log-msg { flex: 1; }
+
+/* Errors table */
+.err-table { width: 100%; border-collapse: collapse; }
+.err-table th { text-align: left; padding: 8px 10px; font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); border-bottom: 1px solid var(--border); }
+.err-table td { padding: 8px 10px; font-size: 12px; border-bottom: 1px solid rgba(255,255,255,.04); }
+
+/* Tag */
+.tag { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 10px; font-weight: 600; }
+.tag-ok { background: rgba(39,174,96,.15); color: var(--ok); }
+.tag-err { background: rgba(231,76,60,.15); color: var(--err); }
+.tag-warn { background: rgba(243,156,18,.15); color: var(--warn); }
+.tag-info { background: rgba(46,107,138,.15); color: var(--info); }
+
+/* Spinner */
+.spinner { width: 16px; height: 16px; border: 2px solid var(--surface3); border-top-color: var(--accent); border-radius: 50%; animation: spin .7s linear infinite; display: inline-block; vertical-align: middle; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Toast */
+#toast { position: fixed; bottom: 20px; right: 20px; z-index: 999; display: flex; flex-direction: column; gap: 6px; }
+.toast-msg { background: var(--surface); border: 1px solid var(--accent); color: var(--text); padding: 10px 16px; border-radius: 10px; font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.4); animation: slideIn .3s ease; max-width: 340px; }
+@keyframes slideIn { from { opacity: 0; transform: translateX(20px); } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 4px; }
+
+@media (max-width: 768px) { .conn-grid { grid-template-columns: 1fr; } .kpi-row { grid-template-columns: 1fr 1fr; } }
+</style>
+</head>
+<body>
+
+<div id="toast"></div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-btn">← Voltar</a>
+    <div>
+      <div class="page-title">Integrações</div>
+      <div class="page-sub">Conectores, sincronização e monitoramento</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpis">
+    <div class="kpi"><div class="kpi-val" id="k-conectores">—</div><div class="kpi-lbl">Conectores</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-online">—</div><div class="kpi-lbl">Online</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-fila">—</div><div class="kpi-lbl">Fila Pendente</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-erros">—</div><div class="kpi-lbl">Erros</div></div>
+    <div class="kpi"><div class="kpi-val" id="k-24h">—</div><div class="kpi-lbl">Syncs 24h</div></div>
+  </div>
+
+  <!-- CONECTORES -->
+  <div class="section-title">Conectores</div>
+  <div class="conn-grid" id="connGrid">
+    <div style="text-align:center;padding:40px;color:var(--muted)"><div class="spinner"></div> Carregando conectores...</div>
+  </div>
+
+  <!-- EXECUÇÕES RECENTES -->
+  <div class="section-title">Execuções Recentes</div>
+  <div class="log-section">
+    <div class="log-list" id="execList">
+      <div style="text-align:center;padding:20px;color:var(--muted)">Carregando...</div>
+    </div>
+  </div>
+
+  <!-- ERROS PENDENTES -->
+  <div class="section-title">Erros Pendentes</div>
+  <div class="log-section">
+    <div id="errosSection">
+      <div style="text-align:center;padding:20px;color:var(--muted)">Carregando...</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ════════════════════════════════════════════════════════════════
+// INTEGRACOES.JS — Dashboard de conectores
+// Usa tabelas: integ_conector, integ_execucao, integ_fila, stg_erros_importacao
+// Usa Edge Function: integ-convenia-proxy
+// ════════════════════════════════════════════════════════════════
+
+const COLORS = { convenia: '#e85d26', buscaepi: '#4f8ef7', atak: '#a855f7', secullum: '#10b981' };
+const ICONS  = { convenia: '🔗', buscaepi: '🛡️', atak: '📊', secullum: '⏱️' };
+const DESCS  = {
+  convenia: 'RH: funcionários, afastamentos, férias, documentos',
+  buscaepi: 'SST: EPIs, CAs, entregas, ordens de serviço',
+  atak: 'ERP: centros de custo, estrutura, financeiro',
+  secullum: 'Ponto: importação de cartão ponto e frequência',
+};
+
+let conectores = [];
+let filaStats = {};
+
+// ═══ INIT ═══
+document.addEventListener('DOMContentLoaded', async () => {
+  await RHAuth.init();
+  await carregarDados();
+});
+
+async function carregarDados() {
+  await Promise.all([carregarConectores(), carregarExecucoes(), carregarErros(), carregarFilaStats()]);
+  atualizarKPIs();
+}
+
+// ═══ CONECTORES ═══
+async function carregarConectores() {
+  try {
+    conectores = await RH_API.get('integ_conector?order=nome');
+    renderConectores();
+  } catch { document.getElementById('connGrid').innerHTML = '<div style="color:var(--err);text-align:center;padding:20px">Erro ao carregar conectores</div>'; }
+}
+
+function renderConectores() {
+  const grid = document.getElementById('connGrid');
+  if (!conectores.length) { grid.innerHTML = '<div style="text-align:center;padding:40px;color:var(--muted)">Nenhum conector configurado</div>'; return; }
+
+  grid.innerHTML = conectores.map(c => {
+    const color = COLORS[c.nome] || 'var(--accent)';
+    const icon = ICONS[c.nome] || '🔌';
+    const desc = DESCS[c.nome] || c.tipo;
+    const statusClass = c.status === 'ativo' ? 'online' : c.status === 'pausado' ? 'paused' : c.status === 'erro' ? 'offline' : 'warning';
+    const statusLabel = c.status === 'ativo' ? 'Online' : c.status === 'pausado' ? 'Pausado' : c.status === 'erro' ? 'Erro' : c.status;
+    const stClass = c.status === 'ativo' ? 'st-online' : c.status === 'pausado' ? 'st-paused' : c.status === 'erro' ? 'st-offline' : 'st-warning';
+    const fila = filaStats[c.id] || { pendente: 0, retry: 0, erro: 0 };
+    const lastSync = c.ultimo_heartbeat ? timeAgo(c.ultimo_heartbeat) : 'Nunca';
+
+    return `
+    <div class="conn-card ${statusClass}" data-id="${c.id}">
+      <div class="conn-top">
+        <div class="conn-icon" style="background:${color}22;">${icon}</div>
+        <div style="flex:1">
+          <div class="conn-name" style="color:${color}">${capitalize(c.nome)}</div>
+          <div class="conn-desc">${desc}</div>
+        </div>
+        <span class="conn-status ${stClass}">${statusLabel}</span>
+      </div>
+      <div class="conn-stats">
+        <div class="conn-stat">
+          <div class="conn-stat-val">${c.sync_intervalo_minutos}m</div>
+          <div class="conn-stat-lbl">Intervalo</div>
+        </div>
+        <div class="conn-stat">
+          <div class="conn-stat-val">${lastSync}</div>
+          <div class="conn-stat-lbl">Último Sync</div>
+        </div>
+        <div class="conn-stat">
+          <div class="conn-stat-val" style="color:${fila.pendente + fila.retry > 0 ? 'var(--warn)' : 'var(--ok)'}">${fila.pendente + fila.retry}</div>
+          <div class="conn-stat-lbl">Na Fila</div>
+        </div>
+      </div>
+      <div class="conn-actions">
+        <button class="btn btn-primary btn-sm" onclick="syncConector('${c.nome}')" id="btn-sync-${c.nome}">
+          🔄 Sincronizar
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="testarConector('${c.nome}')" id="btn-test-${c.nome}">
+          🔍 Testar
+        </button>
+        ${c.sync_habilitado
+          ? `<button class="btn btn-secondary btn-sm" onclick="toggleSync('${c.nome}', false)">⏸ Pausar</button>`
+          : `<button class="btn btn-sync btn-sm" onclick="toggleSync('${c.nome}', true)">▶ Ativar</button>`
+        }
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══ EXECUÇÕES RECENTES ═══
+async function carregarExecucoes() {
+  try {
+    const execs = await RH_API.get('integ_execucao?order=inicio.desc&limit=15&select=id,conector_id,tipo_entidade,modo,inicio,fim,status,registros_lidos,registros_erro,duracao_ms');
+    renderExecucoes(execs);
+  } catch { document.getElementById('execList').innerHTML = '<div style="color:var(--err)">Erro ao carregar</div>'; }
+}
+
+function renderExecucoes(execs) {
+  const el = document.getElementById('execList');
+  if (!execs.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted)">Nenhuma execução registrada</div>'; return; }
+
+  el.innerHTML = execs.map(e => {
+    const conector = conectores.find(c => c.id === e.conector_id);
+    const nome = conector ? capitalize(conector.nome) : '?';
+    const color = conector ? COLORS[conector.nome] || 'var(--accent)' : 'var(--muted)';
+    const dotClass = e.status === 'sucesso' ? 'ok' : e.status === 'erro_total' ? 'err' : e.status === 'erro_parcial' ? 'warn' : 'info';
+    const dur = e.duracao_ms ? `${(e.duracao_ms / 1000).toFixed(1)}s` : '';
+
+    return `<div class="log-item">
+      <div class="log-dot ${dotClass}"></div>
+      <span class="log-time">${fmtDateTime(e.inicio)}</span>
+      <span class="log-msg">
+        <strong style="color:${color}">${nome}</strong> · ${e.tipo_entidade} · ${e.modo}
+        ${e.registros_lidos ? ` · ${e.registros_lidos} lidos` : ''}
+        ${e.registros_erro ? ` · <span style="color:var(--err)">${e.registros_erro} erros</span>` : ''}
+        ${dur ? ` · ${dur}` : ''}
+      </span>
+      <span class="tag tag-${dotClass}">${e.status}</span>
+    </div>`;
+  }).join('');
+}
+
+// ═══ ERROS PENDENTES ═══
+async function carregarErros() {
+  try {
+    const erros = await RH_API.get('stg_erros_importacao?resolvido=eq.false&order=created_at.desc&limit=20');
+    renderErros(erros);
+  } catch { document.getElementById('errosSection').innerHTML = '<div style="color:var(--err)">Erro ao carregar</div>'; }
+}
+
+function renderErros(erros) {
+  const el = document.getElementById('errosSection');
+  if (!erros.length) { el.innerHTML = '<div style="text-align:center;padding:20px;color:var(--ok)">✅ Nenhum erro pendente</div>'; return; }
+
+  el.innerHTML = `<table class="err-table">
+    <thead><tr><th>Data</th><th>Tabela</th><th>Tipo</th><th>Severidade</th><th>Mensagem</th></tr></thead>
+    <tbody>${erros.map(e => `<tr>
+      <td class="log-time">${fmtDateTime(e.created_at)}</td>
+      <td>${e.tabela_staging || '—'}</td>
+      <td><span class="tag tag-${e.severidade === 'critico' ? 'err' : e.severidade === 'erro' ? 'warn' : 'info'}">${e.tipo_erro}</span></td>
+      <td>${e.severidade}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(e.mensagem)}">${esc(e.mensagem)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
+}
+
+// ═══ FILA STATS ═══
+async function carregarFilaStats() {
+  try {
+    const fila = await RH_API.get('integ_fila?select=conector_id,status');
+    filaStats = {};
+    for (const f of fila) {
+      if (!filaStats[f.conector_id]) filaStats[f.conector_id] = { pendente: 0, retry: 0, erro: 0 };
+      if (f.status === 'pendente') filaStats[f.conector_id].pendente++;
+      else if (f.status === 'retry') filaStats[f.conector_id].retry++;
+      else if (f.status === 'erro') filaStats[f.conector_id].erro++;
+    }
+  } catch {}
+}
+
+// ═══ KPIs ═══
+function atualizarKPIs() {
+  document.getElementById('k-conectores').textContent = conectores.length;
+  document.getElementById('k-online').textContent = conectores.filter(c => c.status === 'ativo').length;
+
+  let totalFila = 0, totalErros = 0;
+  for (const id in filaStats) {
+    totalFila += filaStats[id].pendente + filaStats[id].retry;
+    totalErros += filaStats[id].erro;
+  }
+  document.getElementById('k-fila').textContent = totalFila;
+  document.getElementById('k-fila').style.color = totalFila > 0 ? 'var(--warn)' : 'var(--ok)';
+  document.getElementById('k-erros').textContent = totalErros;
+  document.getElementById('k-erros').style.color = totalErros > 0 ? 'var(--err)' : 'var(--ok)';
+
+  // Syncs 24h via execuções (count from integ_execucao loaded)
+  document.getElementById('k-24h').textContent = '—';
+}
+
+// ═══ AÇÕES ═══
+async function syncConector(nome) {
+  const btn = document.getElementById(`btn-sync-${nome}`);
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> Sincronizando...';
+  btn.disabled = true;
+
+  try {
+    if (nome === 'convenia') {
+      const jwt = RHAuth.getAuthToken();
+      const res = await fetch(`${SB_URL}/functions/v1/integ-convenia-proxy`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json', 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'sync_funcionarios' }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        toast(`Convenia sincronizado! ${data.total_lidos || 0} registros lidos`);
+      } else {
+        toast(`Erro: ${data.error}`, 'err');
+      }
+    } else {
+      toast(`Sync ${nome} ainda não implementado via Edge Function`, 'warn');
+    }
+  } catch (e) {
+    toast(`Erro: ${e.message}`, 'err');
+  }
+
+  btn.innerHTML = orig;
+  btn.disabled = false;
+  setTimeout(() => carregarDados(), 1000);
+}
+
+async function testarConector(nome) {
+  const btn = document.getElementById(`btn-test-${nome}`);
+  const orig = btn.innerHTML;
+  btn.innerHTML = '<span class="spinner"></span> Testando...';
+  btn.disabled = true;
+
+  try {
+    if (nome === 'convenia') {
+      const jwt = RHAuth.getAuthToken();
+      const res = await fetch(`${SB_URL}/functions/v1/integ-convenia-proxy`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${jwt}`, 'Content-Type': 'application/json', 'apikey': SB_KEY },
+        body: JSON.stringify({ action: 'test' }),
+      });
+      const data = await res.json();
+      toast(data.success ? `${capitalize(nome)}: Conexão OK ✅` : `${capitalize(nome)}: ${data.error}`, data.success ? 'ok' : 'err');
+    } else {
+      toast(`Teste ${nome} ainda não implementado`, 'warn');
+    }
+  } catch (e) {
+    toast(`Erro: ${e.message}`, 'err');
+  }
+
+  btn.innerHTML = orig;
+  btn.disabled = false;
+  setTimeout(() => carregarConectores(), 500);
+}
+
+async function toggleSync(nome, habilitar) {
+  try {
+    await RH_API.fetch(`integ_conector?nome=eq.${nome}`, {
+      method: 'PATCH',
+      headers: { 'Prefer': 'return=minimal' },
+      body: { sync_habilitado: habilitar },
+    });
+    toast(`${capitalize(nome)}: sync ${habilitar ? 'ativado' : 'pausado'}`);
+    await carregarConectores();
+  } catch (e) { toast(`Erro: ${e.message}`, 'err'); }
+}
+
+// ═══ HELPERS ═══
+function capitalize(s) { return s ? s.charAt(0).toUpperCase() + s.slice(1) : ''; }
+function esc(s) { return (s || '').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function fmtDateTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function timeAgo(iso) {
+  if (!iso) return 'Nunca';
+  const diff = (Date.now() - new Date(iso).getTime()) / 60000;
+  if (diff < 1) return 'Agora';
+  if (diff < 60) return `${Math.round(diff)}m`;
+  if (diff < 1440) return `${Math.round(diff / 60)}h`;
+  return `${Math.round(diff / 1440)}d`;
+}
+
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  const t = document.createElement('div');
+  t.className = 'toast-msg';
+  t.style.borderColor = type === 'err' ? 'var(--err)' : type === 'warn' ? 'var(--warn)' : 'var(--ok)';
+  t.textContent = msg;
+  el.appendChild(t);
+  setTimeout(() => t.remove(), 4000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,1599 @@
+<!--
+  Classic RH - Ocorrencias (Atestados e Advertencias)
+
+  IMPORTANTE: Esta pagina requer a criacao da tabela rh_ocorrencias no Supabase:
+
+  CREATE TABLE rh_ocorrencias (
+    id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    colaborador_id UUID REFERENCES rh_colaboradores(id),
+    tipo          TEXT NOT NULL CHECK (tipo IN ('atestado','advertencia_verbal','advertencia_escrita','suspensao')),
+    data_inicio   DATE NOT NULL,
+    data_fim      DATE,
+    dias          INTEGER DEFAULT 1,
+    competencia   TEXT,
+    observacoes   TEXT,
+    arquivo_nome  TEXT,
+    criado_em     TIMESTAMPTZ DEFAULT now(),
+    atualizado_em TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_ocorrencias_colaborador ON rh_ocorrencias(colaborador_id);
+  CREATE INDEX idx_ocorrencias_competencia ON rh_ocorrencias(competencia);
+  CREATE INDEX idx_ocorrencias_tipo ON rh_ocorrencias(tipo);
+
+  -- RLS
+  ALTER TABLE rh_ocorrencias ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_ocorrencias_all" ON rh_ocorrencias FOR ALL USING (true) WITH CHECK (true);
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Ocorrencias</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
+<style>
+:root {
+  --bg: #07111c; --surface: #0d1b2a; --surface2: #112233;
+  --border: #1e3a52; --accent: #c8a96e; --accent2: #e8c98e;
+  --text: #e8f0f5; --muted: #5d7f95;
+  --ok: #27ae60; --warn: #f39c12; --err: #e74c3c; --info: #2E6B8A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(46,107,138,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(46,107,138,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active {
+  background: var(--info); color: white;
+}
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Section */
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+/* Form Controls */
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group textarea {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  min-height: 120px; resize: vertical; width: 100%;
+}
+
+/* Buttons */
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-warn { background: var(--warn); color: #111; }
+.btn-warn:hover:not(:disabled) { background: #f5b041; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed var(--border); border-radius: 12px;
+  padding: 40px 20px; text-align: center;
+  cursor: pointer; transition: all .3s;
+  margin-bottom: 14px;
+}
+.drop-zone:hover, .drop-zone.dragover {
+  border-color: var(--accent); background: rgba(200,169,110,.05);
+}
+.drop-zone-icon { font-size: 36px; margin-bottom: 10px; color: var(--muted); }
+.drop-zone-text { font-size: 13px; color: var(--muted); line-height: 1.6; }
+.drop-zone-text strong { color: var(--text); }
+.drop-zone-hint { font-size: 10px; color: var(--muted); margin-top: 6px; opacity: .7; }
+
+/* Table */
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+}
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-err { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-info { background: rgba(46,107,138,.15); color: var(--info); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+
+/* KPI row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 12px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 22px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 9px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 3px;
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Search input */
+.search-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.search-result-item:hover { background: rgba(46,107,138,.12); }
+.search-result-item:last-child { border-bottom: none; }
+
+/* Match indicator */
+.match-yes { color: var(--ok); font-weight: 600; }
+.match-no { color: var(--err); font-weight: 600; }
+.match-partial { color: var(--warn); font-weight: 600; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+}
+
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#128203;</div>
+    <div>
+      <div class="header-title">Ocorrencias</div>
+      <div class="header-sub">Atestados e Advertencias</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="atestados">Atestados</button>
+    <button class="tab-btn" data-tab="advertencias">Advertencias</button>
+    <button class="tab-btn" data-tab="manual">Lancamento Manual</button>
+    <button class="tab-btn" data-tab="resumo">Resumo Mensal</button>
+  </div>
+
+  <!-- ============ TAB: ATESTADOS ============ -->
+  <div id="tab-atestados" class="tab-pane active">
+    <div class="section">
+      <div class="section-title">Importar Atestados</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Abra a pasta de atestados do mes, selecione todos os arquivos e arraste aqui,
+        OU cole a listagem dos arquivos abaixo.
+        O sistema le apenas os <strong style="color:var(--text)">nomes dos arquivos</strong> para extrair dados.
+      </p>
+
+      <div class="form-row" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="atestado-categoria">
+            <option value="ate_2_dias">Ate 2 dias</option>
+            <option value="3_dias_ou_mais">3 dias ou mais</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Competencia (mes/ano)</label>
+          <input type="month" id="atestado-competencia">
+        </div>
+      </div>
+
+      <!-- Drop Zone -->
+      <div class="drop-zone" id="atestado-drop">
+        <div class="drop-zone-icon">&#128194;</div>
+        <div class="drop-zone-text">
+          Arraste os arquivos PDF aqui<br>
+          ou <strong>clique para selecionar</strong>
+        </div>
+        <div class="drop-zone-hint">Somente os nomes dos arquivos serao lidos</div>
+      </div>
+      <input type="file" id="atestado-file-input" multiple accept=".pdf,.PDF" style="display:none;">
+
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>OU cole a listagem de arquivos (um por linha)</label>
+        <textarea id="atestado-texto" placeholder="JESSICA CARDOZO 19022026 a 21022026.pdf&#10;MARCOS SILVA 05032026.pdf&#10;..."></textarea>
+      </div>
+
+      <button class="btn btn-info" id="btn-importar-atestados">Importar</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="section" id="atestado-preview-section" style="display:none;">
+      <div class="section-title">Pre-visualizacao - Atestados</div>
+      <div id="atestado-count" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome (arquivo)</th>
+              <th>Data Inicio</th>
+              <th>Data Fim</th>
+              <th>Dias</th>
+              <th>Categoria</th>
+              <th>Match (colaborador)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="atestado-preview-body"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px;">
+        <button class="btn btn-ok" id="btn-salvar-atestados">Salvar no banco</button>
+        <button class="btn btn-outline" id="btn-limpar-atestados">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: ADVERTENCIAS ============ -->
+  <div id="tab-advertencias" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Importar Advertencias</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Abra a pasta de advertencias do mes, selecione todos os arquivos e arraste aqui,
+        OU cole a listagem dos arquivos abaixo.
+      </p>
+
+      <div class="form-row" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Competencia (mes/ano)</label>
+          <input type="month" id="adv-competencia">
+        </div>
+      </div>
+
+      <!-- Drop Zone -->
+      <div class="drop-zone" id="adv-drop">
+        <div class="drop-zone-icon">&#128194;</div>
+        <div class="drop-zone-text">
+          Arraste os arquivos PDF aqui<br>
+          ou <strong>clique para selecionar</strong>
+        </div>
+        <div class="drop-zone-hint">Somente os nomes dos arquivos serao lidos</div>
+      </div>
+      <input type="file" id="adv-file-input" multiple accept=".pdf,.PDF" style="display:none;">
+
+      <div class="form-group" style="margin-bottom:16px;">
+        <label>OU cole a listagem de arquivos (um por linha)</label>
+        <textarea id="adv-texto" placeholder="ADVERTENCIA GUSTAVO 03032026.pdf&#10;ADVERTENCIA MARIA 10032026.pdf&#10;..."></textarea>
+      </div>
+
+      <button class="btn btn-info" id="btn-importar-adv">Importar</button>
+    </div>
+
+    <!-- Preview -->
+    <div class="section" id="adv-preview-section" style="display:none;">
+      <div class="section-title">Pre-visualizacao - Advertencias</div>
+      <div id="adv-count" style="font-size:12px;color:var(--muted);margin-bottom:10px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome (arquivo)</th>
+              <th>Data</th>
+              <th>Tipo</th>
+              <th>Match (colaborador)</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="adv-preview-body"></tbody>
+        </table>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:10px;">
+        <button class="btn btn-ok" id="btn-salvar-adv">Salvar no banco</button>
+        <button class="btn btn-outline" id="btn-limpar-adv">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: LANCAMENTO MANUAL ============ -->
+  <div id="tab-manual" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Registro Manual de Ocorrencia</div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group" style="flex:1;min-width:250px;position:relative;">
+          <label>Colaborador</label>
+          <input type="text" id="manual-colab-search" class="search-input"
+                 placeholder="Digite o nome do colaborador..." autocomplete="off">
+          <div class="search-results" id="manual-colab-results"></div>
+          <input type="hidden" id="manual-colab-id">
+          <input type="hidden" id="manual-colab-nome">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="manual-tipo">
+            <option value="atestado">Atestado Medico</option>
+            <option value="advertencia_verbal">Advertencia Verbal</option>
+            <option value="advertencia_escrita">Advertencia Escrita</option>
+            <option value="suspensao">Suspensao</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data Inicio</label>
+          <input type="date" id="manual-data-inicio">
+        </div>
+        <div class="form-group" id="manual-fim-group">
+          <label>Data Fim</label>
+          <input type="date" id="manual-data-fim">
+        </div>
+        <div class="form-group">
+          <label>Dias</label>
+          <input type="number" id="manual-dias" min="1" value="1" style="width:70px;">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group" style="flex:1;min-width:250px;">
+          <label>Competencia</label>
+          <input type="month" id="manual-competencia">
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-bottom:14px;">
+        <label>Observacoes</label>
+        <textarea id="manual-obs" style="min-height:60px;" placeholder="Observacoes adicionais..."></textarea>
+      </div>
+
+      <button class="btn btn-ok" id="btn-salvar-manual">Salvar</button>
+    </div>
+
+    <!-- Recentes -->
+    <div class="section">
+      <div class="section-title">Registros Recentes</div>
+      <div id="manual-recentes-loading" class="empty-state"><span class="spinner"></span> Carregando...</div>
+      <div id="manual-recentes-empty" class="empty-state" style="display:none;">Nenhum registro recente.</div>
+      <div class="table-wrap" id="manual-recentes-wrap" style="display:none;">
+        <table>
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Tipo</th>
+              <th>Data Inicio</th>
+              <th>Data Fim</th>
+              <th>Dias</th>
+              <th>Competencia</th>
+              <th>Observacoes</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="manual-recentes-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: RESUMO MENSAL ============ -->
+  <div id="tab-resumo" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Filtro</div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Competencia</label>
+          <input type="month" id="resumo-competencia">
+        </div>
+        <button class="btn btn-info" id="btn-gerar-resumo">Gerar Resumo</button>
+      </div>
+    </div>
+
+    <!-- KPIs -->
+    <div class="kpi-row" id="resumo-kpis" style="display:none;">
+      <div class="kpi-card">
+        <div class="kpi-value" id="kpi-total-atestados">0</div>
+        <div class="kpi-label">Atestados (dias)</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" id="kpi-total-adv">0</div>
+        <div class="kpi-label">Advertencias</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" id="kpi-colaboradores">0</div>
+        <div class="kpi-label">Colaboradores com Ocorrencias</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-value" id="kpi-perde" style="color:var(--err);">0%</div>
+        <div class="kpi-label">Perdem Assiduidade</div>
+      </div>
+    </div>
+
+    <!-- Tabela resumo -->
+    <div class="section" id="resumo-table-section" style="display:none;">
+      <div class="section-title">Detalhamento por Colaborador</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Setor</th>
+              <th>Atestados (dias)</th>
+              <th>Advertencias (qtd)</th>
+              <th>Suspensoes (dias)</th>
+              <th>Impacto Assiduidade</th>
+            </tr>
+          </thead>
+          <tbody id="resumo-body"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &amp; SST v2026.03 // Ocorrencias</div>
+
+<script>
+(function() {
+  'use strict';
+
+  // ============================
+  // Estado global
+  // ============================
+  let colaboradores = [];
+  let atestadoParsed = [];
+  let advParsed = [];
+
+  // ============================
+  // Inicializacao
+  // ============================
+  async function init() {
+    const user = await RHAuth.init();
+    if (!user) return;
+
+    initTabs();
+    initDropZones();
+    initManualForm();
+    setDefaultCompetencias();
+    await carregarColaboradores();
+    await carregarRecentes();
+  }
+
+  function setDefaultCompetencias() {
+    const now = new Date();
+    const val = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    ['atestado-competencia', 'adv-competencia', 'manual-competencia', 'resumo-competencia'].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = val;
+    });
+    // Data inicio padrao
+    const hoje = now.toISOString().split('T')[0];
+    const di = document.getElementById('manual-data-inicio');
+    if (di) di.value = hoje;
+  }
+
+  // ============================
+  // Tabs
+  // ============================
+  function initTabs() {
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+        if (btn.dataset.tab === 'manual') carregarRecentes();
+      });
+    });
+  }
+
+  // ============================
+  // Colaboradores
+  // ============================
+  async function carregarColaboradores() {
+    try {
+      colaboradores = await RH_API.get('rh_colaboradores?select=id,nome,cargo,status&status=eq.ativo&order=nome');
+      if (!Array.isArray(colaboradores)) colaboradores = [];
+    } catch (e) {
+      console.warn('Erro ao carregar colaboradores:', e);
+      colaboradores = [];
+    }
+  }
+
+  // ============================
+  // Normalizacao de texto
+  // ============================
+  function normalize(str) {
+    return (str || '')
+      .toUpperCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[^A-Z0-9 ]/g, '')
+      .trim();
+  }
+
+  function matchColaborador(nomeArquivo) {
+    const normNome = normalize(nomeArquivo);
+    if (!normNome || colaboradores.length === 0) return null;
+
+    // Tenta match exato
+    let best = null;
+    let bestScore = 0;
+
+    for (const c of colaboradores) {
+      const normColab = normalize(c.nome);
+      // Match exato
+      if (normNome === normColab) return { ...c, matchType: 'exato' };
+
+      // Nome do arquivo contem o nome completo do colaborador
+      if (normNome.includes(normColab)) {
+        const score = normColab.length;
+        if (score > bestScore) { bestScore = score; best = { ...c, matchType: 'contem' }; }
+      }
+
+      // Nome do colaborador contem o nome do arquivo
+      if (normColab.includes(normNome) && normNome.length >= 3) {
+        const score = normNome.length;
+        if (score > bestScore) { bestScore = score; best = { ...c, matchType: 'parcial' }; }
+      }
+
+      // Match por primeiro + ultimo nome
+      const partsArq = normNome.split(/\s+/);
+      const partsColab = normColab.split(/\s+/);
+      if (partsArq.length >= 2 && partsColab.length >= 2) {
+        const first = partsArq[0] === partsColab[0];
+        const last = partsArq[partsArq.length - 1] === partsColab[partsColab.length - 1];
+        if (first && last) {
+          const score = partsColab[0].length + partsColab[partsColab.length - 1].length + 10;
+          if (score > bestScore) { bestScore = score; best = { ...c, matchType: 'nome_sobrenome' }; }
+        }
+        // Match somente primeiro nome (menor confianca)
+        if (first && partsArq[0].length >= 4) {
+          const score = partsArq[0].length;
+          if (score > bestScore) { bestScore = score; best = { ...c, matchType: 'primeiro_nome' }; }
+        }
+      }
+    }
+
+    return best;
+  }
+
+  // ============================
+  // Parser de datas DDMMAAAA
+  // ============================
+  function parseDateDDMMAA(str) {
+    if (!str || str.length < 8) return null;
+    const clean = str.replace(/[^0-9]/g, '');
+    if (clean.length < 8) return null;
+    const dd = clean.substring(0, 2);
+    const mm = clean.substring(2, 4);
+    const yyyy = clean.substring(4, 8);
+    const d = new Date(parseInt(yyyy), parseInt(mm) - 1, parseInt(dd));
+    if (isNaN(d.getTime())) return null;
+    return d;
+  }
+
+  function formatDate(d) {
+    if (!d) return '-';
+    return String(d.getDate()).padStart(2, '0') + '/' +
+           String(d.getMonth() + 1).padStart(2, '0') + '/' +
+           d.getFullYear();
+  }
+
+  function formatDateISO(d) {
+    if (!d) return null;
+    return d.getFullYear() + '-' +
+           String(d.getMonth() + 1).padStart(2, '0') + '-' +
+           String(d.getDate()).padStart(2, '0');
+  }
+
+  function calcDias(d1, d2) {
+    if (!d1) return 1;
+    if (!d2) return 1;
+    const diff = Math.abs(d2.getTime() - d1.getTime());
+    return Math.floor(diff / (1000 * 60 * 60 * 24)) + 1;
+  }
+
+  // ============================
+  // Parser de atestados
+  // ============================
+  function parseAtestadoFilename(filename) {
+    // Remove extensao
+    let name = filename.replace(/\.(pdf|PDF)$/i, '').trim();
+
+    // Padrao: NOME DDMMAAAA a DDMMAAAA
+    const rangeMatch = name.match(/^(.+?)\s+(\d{8})\s*[aA]\s*(\d{8})$/);
+    if (rangeMatch) {
+      return {
+        nomeArquivo: rangeMatch[1].trim(),
+        dataInicio: parseDateDDMMAA(rangeMatch[2]),
+        dataFim: parseDateDDMMAA(rangeMatch[3]),
+        raw: filename
+      };
+    }
+
+    // Padrao: NOME DDMMAAAA
+    const singleMatch = name.match(/^(.+?)\s+(\d{8})$/);
+    if (singleMatch) {
+      return {
+        nomeArquivo: singleMatch[1].trim(),
+        dataInicio: parseDateDDMMAA(singleMatch[2]),
+        dataFim: null,
+        raw: filename
+      };
+    }
+
+    // Fallback: tenta extrair qualquer data de 8 digitos
+    const anyDate = name.match(/(\d{8})/g);
+    if (anyDate && anyDate.length >= 1) {
+      const parts = name.split(/\d{8}/);
+      const nomePart = parts[0].replace(/\s*[aA]\s*$/, '').trim();
+      return {
+        nomeArquivo: nomePart || name,
+        dataInicio: parseDateDDMMAA(anyDate[0]),
+        dataFim: anyDate.length >= 2 ? parseDateDDMMAA(anyDate[1]) : null,
+        raw: filename
+      };
+    }
+
+    return null;
+  }
+
+  // ============================
+  // Parser de advertencias
+  // ============================
+  function parseAdvertenciaFilename(filename) {
+    let name = filename.replace(/\.(pdf|PDF)$/i, '').trim();
+
+    // Padrao: ADVERTENCIA NOME DDMMAAAA
+    const match = name.match(/^ADVERTI?E?NCIA\s+(.+?)\s+(\d{8})$/i);
+    if (match) {
+      return {
+        nomeArquivo: match[1].trim(),
+        data: parseDateDDMMAA(match[2]),
+        raw: filename
+      };
+    }
+
+    // Fallback: sem prefixo ADVERTENCIA
+    const fallback = name.match(/^(.+?)\s+(\d{8})$/);
+    if (fallback) {
+      let nomePart = fallback[1].replace(/^ADVERTI?E?NCIA\s*/i, '').trim();
+      return {
+        nomeArquivo: nomePart,
+        data: parseDateDDMMAA(fallback[2]),
+        raw: filename
+      };
+    }
+
+    return null;
+  }
+
+  // ============================
+  // Drop zones & file inputs
+  // ============================
+  function initDropZones() {
+    // Atestados
+    const aDrop = document.getElementById('atestado-drop');
+    const aInput = document.getElementById('atestado-file-input');
+
+    aDrop.addEventListener('click', () => aInput.click());
+    aDrop.addEventListener('dragover', e => { e.preventDefault(); aDrop.classList.add('dragover'); });
+    aDrop.addEventListener('dragleave', () => aDrop.classList.remove('dragover'));
+    aDrop.addEventListener('drop', e => {
+      e.preventDefault();
+      aDrop.classList.remove('dragover');
+      handleAtestadoFiles(e.dataTransfer.files);
+    });
+    aInput.addEventListener('change', e => handleAtestadoFiles(e.target.files));
+
+    document.getElementById('btn-importar-atestados').addEventListener('click', importarAtestados);
+    document.getElementById('btn-salvar-atestados').addEventListener('click', salvarAtestados);
+    document.getElementById('btn-limpar-atestados').addEventListener('click', () => {
+      atestadoParsed = [];
+      document.getElementById('atestado-preview-section').style.display = 'none';
+      document.getElementById('atestado-texto').value = '';
+    });
+
+    // Advertencias
+    const dDrop = document.getElementById('adv-drop');
+    const dInput = document.getElementById('adv-file-input');
+
+    dDrop.addEventListener('click', () => dInput.click());
+    dDrop.addEventListener('dragover', e => { e.preventDefault(); dDrop.classList.add('dragover'); });
+    dDrop.addEventListener('dragleave', () => dDrop.classList.remove('dragover'));
+    dDrop.addEventListener('drop', e => {
+      e.preventDefault();
+      dDrop.classList.remove('dragover');
+      handleAdvFiles(e.dataTransfer.files);
+    });
+    dInput.addEventListener('change', e => handleAdvFiles(e.target.files));
+
+    document.getElementById('btn-importar-adv').addEventListener('click', importarAdvertencias);
+    document.getElementById('btn-salvar-adv').addEventListener('click', salvarAdvertencias);
+    document.getElementById('btn-limpar-adv').addEventListener('click', () => {
+      advParsed = [];
+      document.getElementById('adv-preview-section').style.display = 'none';
+      document.getElementById('adv-texto').value = '';
+    });
+  }
+
+  function handleAtestadoFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const names = Array.from(fileList).map(f => f.name);
+    const textarea = document.getElementById('atestado-texto');
+    textarea.value = names.join('\n');
+    toast('ok', names.length + ' arquivo(s) carregado(s). Clique em Importar.');
+  }
+
+  function handleAdvFiles(fileList) {
+    if (!fileList || fileList.length === 0) return;
+    const names = Array.from(fileList).map(f => f.name);
+    const textarea = document.getElementById('adv-texto');
+    textarea.value = names.join('\n');
+    toast('ok', names.length + ' arquivo(s) carregado(s). Clique em Importar.');
+  }
+
+  // ============================
+  // Importar atestados
+  // ============================
+  function importarAtestados() {
+    const texto = document.getElementById('atestado-texto').value.trim();
+    if (!texto) { toast('warn', 'Nenhum arquivo informado. Arraste arquivos ou cole a listagem.'); return; }
+
+    const categoria = document.getElementById('atestado-categoria').value;
+    const competencia = document.getElementById('atestado-competencia').value;
+    const linhas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    atestadoParsed = [];
+
+    for (const linha of linhas) {
+      const parsed = parseAtestadoFilename(linha);
+      if (!parsed || !parsed.dataInicio) {
+        atestadoParsed.push({
+          nomeArquivo: linha,
+          dataInicio: null,
+          dataFim: null,
+          dias: 0,
+          categoria: categoria,
+          competencia: competencia,
+          match: null,
+          erro: 'Formato nao reconhecido',
+          raw: linha
+        });
+        continue;
+      }
+
+      let dataFim = parsed.dataFim;
+      let dias = calcDias(parsed.dataInicio, parsed.dataFim);
+
+      // Se nao tem data fim, calcular com base na categoria
+      if (!dataFim && parsed.dataInicio) {
+        if (categoria === 'ate_2_dias') {
+          dias = 1;
+          dataFim = new Date(parsed.dataInicio.getTime());
+        } else {
+          // 3 dias ou mais — padrao 3 dias se nao tem fim
+          dias = 3;
+          dataFim = new Date(parsed.dataInicio.getTime() + (dias - 1) * 86400000);
+        }
+      }
+
+      const match = matchColaborador(parsed.nomeArquivo);
+
+      atestadoParsed.push({
+        nomeArquivo: parsed.nomeArquivo,
+        dataInicio: parsed.dataInicio,
+        dataFim: dataFim,
+        dias: dias,
+        categoria: categoria,
+        competencia: competencia,
+        match: match,
+        erro: null,
+        raw: parsed.raw
+      });
+    }
+
+    renderAtestadoPreview();
+  }
+
+  function renderAtestadoPreview() {
+    const section = document.getElementById('atestado-preview-section');
+    const tbody = document.getElementById('atestado-preview-body');
+    const countEl = document.getElementById('atestado-count');
+
+    if (atestadoParsed.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    const matched = atestadoParsed.filter(a => a.match).length;
+    const erros = atestadoParsed.filter(a => a.erro).length;
+    countEl.textContent = atestadoParsed.length + ' registro(s) | ' + matched + ' com match | ' + erros + ' erro(s)';
+
+    tbody.innerHTML = atestadoParsed.map((a, i) => {
+      const catLabel = a.categoria === '3_dias_ou_mais' ? '3 dias ou mais' : 'Ate 2 dias';
+      let matchHtml = '';
+      if (a.erro) {
+        matchHtml = '<span class="match-no">' + a.erro + '</span>';
+      } else if (a.match) {
+        const cls = (a.match.matchType === 'exato' || a.match.matchType === 'contem') ? 'match-yes' : 'match-partial';
+        matchHtml = '<span class="' + cls + '">' + escHtml(a.match.nome) + '</span>';
+      } else {
+        matchHtml = '<select class="input" style="min-width:200px;padding:4px 8px;font-size:11px;" onchange="OC.selecionarColabAtestado(' + i + ', this.value)">' +
+          '<option value="">-- Selecionar colaborador --</option>' +
+          colaboradores.map(c => '<option value="' + c.id + '">' + escHtml(c.nome) + (c.cargo ? ' (' + escHtml(c.cargo) + ')' : '') + '</option>').join('') +
+          '</select>' +
+          '<div style="font-size:10px;color:var(--warn);margin-top:2px;">Nome: ' + escHtml(a.nomeArquivo) + '</div>';
+      }
+
+      return '<tr' + (a.erro ? ' style="opacity:.6"' : '') + '>' +
+        '<td>' + escHtml(a.nomeArquivo) + '</td>' +
+        '<td class="mono">' + formatDate(a.dataInicio) + '</td>' +
+        '<td class="mono">' + formatDate(a.dataFim) + '</td>' +
+        '<td class="num">' + a.dias + '</td>' +
+        '<td><span class="badge badge-info">' + catLabel + '</span></td>' +
+        '<td>' + matchHtml + '</td>' +
+        '<td><button class="btn btn-sm btn-outline" onclick="OC.removeAtestado(' + i + ')">X</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function removeAtestado(index) {
+    atestadoParsed.splice(index, 1);
+    renderAtestadoPreview();
+  }
+
+  // ============================
+  // Salvar atestados
+  // ============================
+  async function salvarAtestados() {
+    const validos = atestadoParsed.filter(a => !a.erro && a.match);
+    if (validos.length === 0) {
+      toast('warn', 'Nenhum registro valido com match para salvar.');
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-atestados');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+    let ok = 0;
+    let errs = 0;
+
+    for (const a of validos) {
+      const payload = {
+        colaborador_id: a.match.id,
+        tipo: 'atestado',
+        data_inicio: formatDateISO(a.dataInicio),
+        data_fim: formatDateISO(a.dataFim) || formatDateISO(a.dataInicio),
+        dias: a.dias,
+        competencia: a.competencia,
+        observacoes: a.categoria === '3_dias_ou_mais' ? '3 dias ou mais' : 'Ate 2 dias',
+        arquivo_nome: a.raw,
+        criado_em: new Date().toISOString(),
+        atualizado_em: new Date().toISOString()
+      };
+
+      try {
+        const res = await RH_API.post('rh_ocorrencias', payload, 'return=minimal');
+        if (res.ok) ok++;
+        else errs++;
+      } catch (e) {
+        errs++;
+      }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar no banco';
+
+    if (ok > 0) toast('ok', ok + ' atestado(s) salvo(s) com sucesso.' + (errs > 0 ? ' ' + errs + ' erro(s).' : ''));
+    else toast('err', 'Erro ao salvar atestados.');
+
+    if (ok > 0) {
+      atestadoParsed = [];
+      document.getElementById('atestado-preview-section').style.display = 'none';
+      document.getElementById('atestado-texto').value = '';
+      await RHAuth.log('importar_atestados', { quantidade: ok });
+    }
+  }
+
+  // ============================
+  // Importar advertencias
+  // ============================
+  function importarAdvertencias() {
+    const texto = document.getElementById('adv-texto').value.trim();
+    if (!texto) { toast('warn', 'Nenhum arquivo informado.'); return; }
+
+    const competencia = document.getElementById('adv-competencia').value;
+    const linhas = texto.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    advParsed = [];
+
+    for (const linha of linhas) {
+      const parsed = parseAdvertenciaFilename(linha);
+      if (!parsed || !parsed.data) {
+        advParsed.push({
+          nomeArquivo: linha,
+          data: null,
+          match: null,
+          erro: 'Formato nao reconhecido',
+          raw: linha
+        });
+        continue;
+      }
+
+      const match = matchColaborador(parsed.nomeArquivo);
+
+      advParsed.push({
+        nomeArquivo: parsed.nomeArquivo,
+        data: parsed.data,
+        match: match,
+        erro: null,
+        raw: parsed.raw,
+        competencia: competencia
+      });
+    }
+
+    renderAdvPreview();
+  }
+
+  function renderAdvPreview() {
+    const section = document.getElementById('adv-preview-section');
+    const tbody = document.getElementById('adv-preview-body');
+    const countEl = document.getElementById('adv-count');
+
+    if (advParsed.length === 0) {
+      section.style.display = 'none';
+      return;
+    }
+
+    section.style.display = 'block';
+    const matched = advParsed.filter(a => a.match).length;
+    const erros = advParsed.filter(a => a.erro).length;
+    countEl.textContent = advParsed.length + ' registro(s) | ' + matched + ' com match | ' + erros + ' erro(s)';
+
+    tbody.innerHTML = advParsed.map((a, i) => {
+      let matchHtml = '';
+      if (a.erro) {
+        matchHtml = '<span class="match-no">' + a.erro + '</span>';
+      } else if (a.match) {
+        const cls = (a.match.matchType === 'exato' || a.match.matchType === 'contem') ? 'match-yes' : 'match-partial';
+        matchHtml = '<span class="' + cls + '">' + escHtml(a.match.nome) + '</span>';
+      } else {
+        matchHtml = '<select class="input" style="min-width:200px;padding:4px 8px;font-size:11px;" onchange="OC.selecionarColabAdv(' + i + ', this.value)">' +
+          '<option value="">-- Selecionar colaborador --</option>' +
+          colaboradores.map(c => '<option value="' + c.id + '">' + escHtml(c.nome) + (c.cargo ? ' (' + escHtml(c.cargo) + ')' : '') + '</option>').join('') +
+          '</select>' +
+          '<div style="font-size:10px;color:var(--warn);margin-top:2px;">Nome: ' + escHtml(a.nomeArquivo) + '</div>';
+      }
+
+      return '<tr' + (a.erro ? ' style="opacity:.6"' : '') + '>' +
+        '<td>' + escHtml(a.nomeArquivo) + '</td>' +
+        '<td class="mono">' + formatDate(a.data) + '</td>' +
+        '<td><span class="badge badge-warn">Advertencia Escrita</span></td>' +
+        '<td>' + matchHtml + '</td>' +
+        '<td><button class="btn btn-sm btn-outline" onclick="OC.removeAdv(' + i + ')">X</button></td>' +
+        '</tr>';
+    }).join('');
+  }
+
+  function removeAdv(index) {
+    advParsed.splice(index, 1);
+    renderAdvPreview();
+  }
+
+  // ============================
+  // Salvar advertencias
+  // ============================
+  async function salvarAdvertencias() {
+    const validos = advParsed.filter(a => !a.erro && a.match);
+    if (validos.length === 0) {
+      toast('warn', 'Nenhum registro valido com match para salvar.');
+      return;
+    }
+
+    const btn = document.getElementById('btn-salvar-adv');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+    let ok = 0;
+    let errs = 0;
+
+    for (const a of validos) {
+      const payload = {
+        colaborador_id: a.match.id,
+        tipo: 'advertencia_escrita',
+        data_inicio: formatDateISO(a.data),
+        data_fim: formatDateISO(a.data),
+        dias: 0,
+        competencia: a.competencia,
+        observacoes: null,
+        arquivo_nome: a.raw,
+        criado_em: new Date().toISOString(),
+        atualizado_em: new Date().toISOString()
+      };
+
+      try {
+        const res = await RH_API.post('rh_ocorrencias', payload, 'return=minimal');
+        if (res.ok) ok++;
+        else errs++;
+      } catch (e) {
+        errs++;
+      }
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar no banco';
+
+    if (ok > 0) toast('ok', ok + ' advertencia(s) salva(s) com sucesso.' + (errs > 0 ? ' ' + errs + ' erro(s).' : ''));
+    else toast('err', 'Erro ao salvar advertencias.');
+
+    if (ok > 0) {
+      advParsed = [];
+      document.getElementById('adv-preview-section').style.display = 'none';
+      document.getElementById('adv-texto').value = '';
+      await RHAuth.log('importar_advertencias', { quantidade: ok });
+    }
+  }
+
+  // ============================
+  // Lancamento Manual
+  // ============================
+  function initManualForm() {
+    const searchInput = document.getElementById('manual-colab-search');
+    const resultsDiv = document.getElementById('manual-colab-results');
+    let debounceTimer;
+
+    searchInput.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const q = normalize(searchInput.value);
+        if (q.length < 2) { resultsDiv.classList.remove('open'); return; }
+
+        const filtered = colaboradores.filter(c => normalize(c.nome).includes(q)).slice(0, 10);
+        if (filtered.length === 0) { resultsDiv.classList.remove('open'); return; }
+
+        resultsDiv.innerHTML = filtered.map(c =>
+          '<div class="search-result-item" data-id="' + c.id + '" data-nome="' + escAttr(c.nome) + '">' +
+          escHtml(c.nome) + ' <span style="color:var(--muted);font-size:10px;">(' + escHtml(c.setor || '') + ')</span>' +
+          '</div>'
+        ).join('');
+        resultsDiv.classList.add('open');
+      }, 200);
+    });
+
+    resultsDiv.addEventListener('click', e => {
+      const item = e.target.closest('.search-result-item');
+      if (!item) return;
+      document.getElementById('manual-colab-id').value = item.dataset.id;
+      document.getElementById('manual-colab-nome').value = item.dataset.nome;
+      searchInput.value = item.dataset.nome;
+      resultsDiv.classList.remove('open');
+    });
+
+    document.addEventListener('click', e => {
+      if (!e.target.closest('#manual-colab-search') && !e.target.closest('#manual-colab-results')) {
+        resultsDiv.classList.remove('open');
+      }
+    });
+
+    // Tipo change -> mostrar/ocultar data fim
+    const tipoSelect = document.getElementById('manual-tipo');
+    tipoSelect.addEventListener('change', () => {
+      const isAtestado = tipoSelect.value === 'atestado' || tipoSelect.value === 'suspensao';
+      document.getElementById('manual-fim-group').style.display = isAtestado ? 'flex' : 'none';
+    });
+
+    // Auto-calc dias
+    const dataInicio = document.getElementById('manual-data-inicio');
+    const dataFim = document.getElementById('manual-data-fim');
+    const diasInput = document.getElementById('manual-dias');
+
+    function autoCalcDias() {
+      if (dataInicio.value && dataFim.value) {
+        const d1 = new Date(dataInicio.value);
+        const d2 = new Date(dataFim.value);
+        if (d2 >= d1) {
+          diasInput.value = calcDias(d1, d2);
+        }
+      }
+    }
+    dataInicio.addEventListener('change', autoCalcDias);
+    dataFim.addEventListener('change', autoCalcDias);
+
+    // Salvar
+    document.getElementById('btn-salvar-manual').addEventListener('click', salvarManual);
+
+    // Resumo
+    document.getElementById('btn-gerar-resumo').addEventListener('click', gerarResumo);
+  }
+
+  async function salvarManual() {
+    const colabId = document.getElementById('manual-colab-id').value;
+    const tipo = document.getElementById('manual-tipo').value;
+    const dataInicio = document.getElementById('manual-data-inicio').value;
+    const dataFim = document.getElementById('manual-data-fim').value;
+    const dias = parseInt(document.getElementById('manual-dias').value) || 1;
+    const competencia = document.getElementById('manual-competencia').value;
+    const obs = document.getElementById('manual-obs').value.trim();
+
+    if (!colabId) { toast('warn', 'Selecione um colaborador.'); return; }
+    if (!dataInicio) { toast('warn', 'Informe a data de inicio.'); return; }
+
+    const btn = document.getElementById('btn-salvar-manual');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+    const isAtestado = tipo === 'atestado' || tipo === 'suspensao';
+    const payload = {
+      colaborador_id: colabId,
+      tipo: tipo,
+      data_inicio: dataInicio,
+      data_fim: isAtestado ? (dataFim || dataInicio) : dataInicio,
+      dias: isAtestado ? dias : 0,
+      competencia: competencia,
+      observacoes: obs || null,
+      arquivo_nome: null,
+      criado_em: new Date().toISOString(),
+      atualizado_em: new Date().toISOString()
+    };
+
+    try {
+      const res = await RH_API.post('rh_ocorrencias', payload, 'return=minimal');
+      if (res.ok) {
+        toast('ok', 'Ocorrencia registrada com sucesso.');
+        // Reset form
+        document.getElementById('manual-colab-search').value = '';
+        document.getElementById('manual-colab-id').value = '';
+        document.getElementById('manual-colab-nome').value = '';
+        document.getElementById('manual-obs').value = '';
+        await RHAuth.log('registrar_ocorrencia_manual', { tipo, colaborador_id: colabId });
+        await carregarRecentes();
+      } else {
+        toast('err', 'Erro ao salvar ocorrencia.');
+      }
+    } catch (e) {
+      toast('err', 'Erro ao salvar: ' + e.message);
+    }
+
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar';
+  }
+
+  // ============================
+  // Recentes
+  // ============================
+  async function carregarRecentes() {
+    const loadingEl = document.getElementById('manual-recentes-loading');
+    const emptyEl = document.getElementById('manual-recentes-empty');
+    const wrapEl = document.getElementById('manual-recentes-wrap');
+    const tbody = document.getElementById('manual-recentes-body');
+
+    loadingEl.style.display = 'block';
+    emptyEl.style.display = 'none';
+    wrapEl.style.display = 'none';
+
+    try {
+      const data = await RH_API.get(
+        'rh_ocorrencias?select=*,rh_colaboradores(nome,setor)&order=criado_em.desc&limit=30'
+      );
+      loadingEl.style.display = 'none';
+
+      if (!Array.isArray(data) || data.length === 0) {
+        emptyEl.style.display = 'block';
+        return;
+      }
+
+      wrapEl.style.display = 'block';
+      tbody.innerHTML = data.map(r => {
+        const nomColab = r.rh_colaboradores ? r.rh_colaboradores.nome : '(desconhecido)';
+        const tipoLabel = tipoToLabel(r.tipo);
+        const tipoClass = tipoBadgeClass(r.tipo);
+        const di = r.data_inicio ? r.data_inicio.split('-').reverse().join('/') : '-';
+        const df = r.data_fim ? r.data_fim.split('-').reverse().join('/') : '-';
+
+        return '<tr>' +
+          '<td>' + escHtml(nomColab) + '</td>' +
+          '<td><span class="badge ' + tipoClass + '">' + tipoLabel + '</span></td>' +
+          '<td class="mono">' + di + '</td>' +
+          '<td class="mono">' + df + '</td>' +
+          '<td class="num">' + (r.dias || 0) + '</td>' +
+          '<td class="mono">' + (r.competencia || '-') + '</td>' +
+          '<td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + escHtml(r.observacoes || '') + '</td>' +
+          '<td><button class="btn btn-sm btn-outline" onclick="OC.deleteOcorrencia(\'' + r.id + '\')">X</button></td>' +
+          '</tr>';
+      }).join('');
+
+    } catch (e) {
+      loadingEl.style.display = 'none';
+      emptyEl.style.display = 'block';
+      console.warn('Erro ao carregar recentes:', e);
+    }
+  }
+
+  function tipoToLabel(tipo) {
+    const map = {
+      'atestado': 'Atestado',
+      'advertencia_verbal': 'Adv. Verbal',
+      'advertencia_escrita': 'Adv. Escrita',
+      'suspensao': 'Suspensao'
+    };
+    return map[tipo] || tipo;
+  }
+
+  function tipoBadgeClass(tipo) {
+    const map = {
+      'atestado': 'badge-info',
+      'advertencia_verbal': 'badge-warn',
+      'advertencia_escrita': 'badge-err',
+      'suspensao': 'badge-err'
+    };
+    return map[tipo] || 'badge-info';
+  }
+
+  async function deleteOcorrencia(id) {
+    if (!confirm('Deseja excluir este registro?')) return;
+    try {
+      const res = await RH_API.delete('rh_ocorrencias?id=eq.' + id);
+      if (res.ok) {
+        toast('ok', 'Registro excluido.');
+        await carregarRecentes();
+      } else {
+        toast('err', 'Erro ao excluir.');
+      }
+    } catch (e) {
+      toast('err', 'Erro: ' + e.message);
+    }
+  }
+
+  // ============================
+  // Resumo Mensal
+  // ============================
+  async function gerarResumo() {
+    const comp = document.getElementById('resumo-competencia').value;
+    if (!comp) { toast('warn', 'Selecione a competencia.'); return; }
+
+    const btn = document.getElementById('btn-gerar-resumo');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Gerando...';
+
+    try {
+      // Carregar ocorrencias do mes
+      const ocorrencias = await RH_API.get(
+        'rh_ocorrencias?select=*,rh_colaboradores(nome,setor)&competencia=eq.' + comp
+      );
+
+      // Carregar todos os colaboradores ativos
+      const todosColabs = await RH_API.get(
+        'rh_colaboradores?select=id,nome,setor,status&status=eq.ativo&order=nome'
+      );
+
+      btn.disabled = false;
+      btn.innerHTML = 'Gerar Resumo';
+
+      if (!Array.isArray(todosColabs)) {
+        toast('err', 'Erro ao carregar colaboradores.');
+        return;
+      }
+
+      // Agregar por colaborador
+      const mapa = {}; // colaborador_id -> { diasAtestado, qtdAdv, diasSuspensao }
+      if (Array.isArray(ocorrencias)) {
+        for (const oc of ocorrencias) {
+          const cid = oc.colaborador_id;
+          if (!mapa[cid]) {
+            mapa[cid] = { diasAtestado: 0, qtdAdv: 0, diasSuspensao: 0 };
+          }
+          if (oc.tipo === 'atestado') {
+            mapa[cid].diasAtestado += (oc.dias || 0);
+          } else if (oc.tipo === 'advertencia_verbal' || oc.tipo === 'advertencia_escrita') {
+            mapa[cid].qtdAdv += 1;
+          } else if (oc.tipo === 'suspensao') {
+            mapa[cid].diasSuspensao += (oc.dias || 0);
+          }
+        }
+      }
+
+      // Montar tabela
+      let totalDiasAtestado = 0;
+      let totalAdv = 0;
+      let totalComOcorrencias = 0;
+      let totalPerde = 0;
+
+      const linhas = todosColabs.map(c => {
+        const stats = mapa[c.id] || { diasAtestado: 0, qtdAdv: 0, diasSuspensao: 0 };
+        const temOcorrencia = stats.diasAtestado > 0 || stats.qtdAdv > 0 || stats.diasSuspensao > 0;
+        if (temOcorrencia) totalComOcorrencias++;
+
+        totalDiasAtestado += stats.diasAtestado;
+        totalAdv += stats.qtdAdv;
+
+        // Regra: >3 dias atestado OR qualquer advertencia/suspensao = PERDE
+        let impacto = 'OK';
+        let motivo = '';
+        const perde = stats.diasAtestado > 3 || stats.qtdAdv > 0 || stats.diasSuspensao > 0;
+        if (perde) {
+          totalPerde++;
+          const motivos = [];
+          if (stats.diasAtestado > 3) motivos.push('Atestado > 3 dias');
+          if (stats.qtdAdv > 0) motivos.push(stats.qtdAdv + ' advertencia(s)');
+          if (stats.diasSuspensao > 0) motivos.push('Suspensao ' + stats.diasSuspensao + ' dia(s)');
+          motivo = motivos.join(', ');
+          impacto = 'PERDE';
+        }
+
+        return {
+          nome: c.nome,
+          setor: c.setor || '-',
+          diasAtestado: stats.diasAtestado,
+          qtdAdv: stats.qtdAdv,
+          diasSuspensao: stats.diasSuspensao,
+          impacto,
+          motivo,
+          temOcorrencia
+        };
+      });
+
+      // Ordenar: quem perde primeiro, depois por nome
+      linhas.sort((a, b) => {
+        if (a.impacto === 'PERDE' && b.impacto !== 'PERDE') return -1;
+        if (a.impacto !== 'PERDE' && b.impacto === 'PERDE') return 1;
+        if (a.temOcorrencia && !b.temOcorrencia) return -1;
+        if (!a.temOcorrencia && b.temOcorrencia) return 1;
+        return a.nome.localeCompare(b.nome);
+      });
+
+      // KPIs
+      document.getElementById('resumo-kpis').style.display = 'grid';
+      document.getElementById('kpi-total-atestados').textContent = totalDiasAtestado;
+      document.getElementById('kpi-total-adv').textContent = totalAdv;
+      document.getElementById('kpi-colaboradores').textContent = totalComOcorrencias;
+      const pctPerde = todosColabs.length > 0 ? ((totalPerde / todosColabs.length) * 100).toFixed(1) : '0.0';
+      document.getElementById('kpi-perde').textContent = pctPerde + '%';
+
+      // Tabela
+      document.getElementById('resumo-table-section').style.display = 'block';
+      const tbody = document.getElementById('resumo-body');
+      tbody.innerHTML = linhas.map(l => {
+        const impactoHtml = l.impacto === 'OK'
+          ? '<span class="badge badge-ok">OK</span>'
+          : '<span class="badge badge-err">PERDE</span> <span style="font-size:10px;color:var(--muted);">' + escHtml(l.motivo) + '</span>';
+
+        return '<tr' + (!l.temOcorrencia ? ' style="opacity:.5;"' : '') + '>' +
+          '<td>' + escHtml(l.nome) + '</td>' +
+          '<td>' + escHtml(l.setor) + '</td>' +
+          '<td class="num">' + l.diasAtestado + '</td>' +
+          '<td class="num">' + l.qtdAdv + '</td>' +
+          '<td class="num">' + l.diasSuspensao + '</td>' +
+          '<td>' + impactoHtml + '</td>' +
+          '</tr>';
+      }).join('');
+
+    } catch (e) {
+      btn.disabled = false;
+      btn.innerHTML = 'Gerar Resumo';
+      toast('err', 'Erro ao gerar resumo: ' + e.message);
+    }
+  }
+
+  // ============================
+  // Utilitarios
+  // ============================
+  function escHtml(str) {
+    const d = document.createElement('div');
+    d.textContent = str || '';
+    return d.innerHTML;
+  }
+
+  function escAttr(str) {
+    return (str || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
+
+  function toast(type, msg) {
+    const el = document.getElementById('toast');
+    el.className = 'toast ' + type;
+    el.textContent = msg;
+    el.style.display = 'block';
+    setTimeout(() => { el.style.display = 'none'; }, 4000);
+  }
+
+  // Selecionar colaborador manualmente para atestado sem match
+  function selecionarColabAtestado(index, colabId) {
+    if (!colabId) { atestadoParsed[index].match = null; return; }
+    const c = colaboradores.find(x => x.id === colabId);
+    if (c) {
+      atestadoParsed[index].match = { ...c, matchType: 'manual' };
+      toast('ok', 'Colaborador selecionado: ' + c.nome);
+      renderAtestadoPreview();
+    }
+  }
+
+  // Selecionar colaborador manualmente para advertencia sem match
+  function selecionarColabAdv(index, colabId) {
+    if (!colabId) { advParsed[index].match = null; return; }
+    const c = colaboradores.find(x => x.id === colabId);
+    if (c) {
+      advParsed[index].match = { ...c, matchType: 'manual' };
+      toast('ok', 'Colaborador selecionado: ' + c.nome);
+      renderAdvPreview();
+    }
+  }
+
+  // Expor funcoes globais necessarias para onclick inline
+  window.OC = {
+    removeAtestado,
+    removeAdv,
+    deleteOcorrencia,
+    selecionarColabAtestado,
+    selecionarColabAdv
+  };
+
+  // ============================
+  // Start
+  // ============================
+  init();
+
+})();
+</script>
+</body>
+</html>

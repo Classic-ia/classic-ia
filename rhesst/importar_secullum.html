@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Importar Secullum</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.0/package/dist/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg: #07111c; --surface: #0d1b2a; --surface2: #112233;
+  --border: #1e3a52; --accent: #c8a96e; --accent2: #e8c98e;
+  --text: #e8f0f5; --muted: #5d7f95;
+  --ok: #27ae60; --warn: #f39c12; --err: #e74c3c; --info: #2E6B8A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(46,107,138,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(46,107,138,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* Section */
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+/* Form Controls */
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus {
+  border-color: var(--accent);
+}
+
+/* Buttons */
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-warn { background: var(--warn); color: #111; }
+.btn-warn:hover:not(:disabled) { background: #f5b041; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+
+/* Upload zones */
+.upload-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+}
+.upload-zone {
+  border: 2px dashed var(--border); border-radius: 12px;
+  padding: 28px 20px; text-align: center;
+  transition: all .3s; cursor: pointer; position: relative;
+}
+.upload-zone:hover, .upload-zone.dragover {
+  border-color: var(--accent); background: rgba(200,169,110,.04);
+}
+.upload-zone.loaded {
+  border-color: var(--ok); border-style: solid; background: rgba(39,174,96,.04);
+}
+.upload-zone-icon { font-size: 32px; margin-bottom: 8px; display: block; }
+.upload-zone-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--text); margin-bottom: 4px;
+}
+.upload-zone-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.upload-zone-file {
+  font-family: 'DM Mono', monospace; font-size: 11px;
+  color: var(--ok); margin-top: 8px; display: none;
+}
+.upload-zone.loaded .upload-zone-file { display: block; }
+.upload-zone input[type="file"] {
+  position: absolute; inset: 0; opacity: 0; cursor: pointer;
+}
+.upload-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em; margin-top: 6px;
+}
+.badge-primary { background: rgba(200,169,110,.15); color: var(--accent); }
+.badge-optional { background: rgba(93,127,149,.12); color: var(--muted); }
+
+/* Period display */
+.period-display {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 14px; font-family: 'DM Mono', monospace; font-size: 13px;
+  color: var(--accent);
+}
+
+/* Table */
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+}
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; }
+td.money { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; color: var(--ok); }
+td.money.zero { color: var(--muted); }
+
+/* Status badges */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-err { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-muted { background: rgba(93,127,149,.12); color: var(--muted); }
+
+/* KPI row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 12px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 22px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 9px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 3px;
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+/* Spinner */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Match indicator */
+.match-dot {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+  margin-right: 6px; vertical-align: middle;
+}
+.match-dot.ok { background: var(--ok); }
+.match-dot.warn { background: var(--warn); }
+.match-dot.err { background: var(--err); }
+
+/* History list */
+.history-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border: 1px solid var(--border);
+  border-radius: 8px; margin-bottom: 8px;
+  background: var(--bg); transition: border-color .2s;
+}
+.history-item:hover { border-color: var(--accent); }
+.history-date {
+  font-family: 'DM Mono', monospace; font-size: 11px; color: var(--accent);
+  white-space: nowrap;
+}
+.history-info { flex: 1; font-size: 12px; color: var(--muted); }
+.history-count {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 16px; color: var(--text);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .upload-grid { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+}
+
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted);
+  font-size: 13px;
+}
+.empty-state-icon { font-size: 40px; margin-bottom: 10px; display: block; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 16px;
+  border-bottom: 1px solid var(--border); padding-bottom: 0;
+}
+.tab-btn {
+  padding: 8px 16px; border: none; background: none;
+  color: var(--muted); font-family: 'DM Sans', sans-serif;
+  font-size: 12px; font-weight: 600; cursor: pointer;
+  border-bottom: 2px solid transparent; transition: all .2s;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Painel</a>
+    <div class="header-icon">&#128229;</div>
+    <div>
+      <div class="header-title">Importar Secullum</div>
+      <div class="header-sub">Importar dados de ponto eletronico</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<div class="main">
+
+  <!-- Upload Section -->
+  <div class="section">
+    <div class="section-title">1. Carregar Arquivos do Secullum</div>
+    <div class="upload-grid">
+      <div class="upload-zone" id="zone-extrato">
+        <input type="file" accept=".xlsx,.xls" id="file-extrato">
+        <span class="upload-zone-icon">&#128196;</span>
+        <div class="upload-zone-title">Extrato de Totais</div>
+        <div class="upload-zone-desc">Relatorio principal com totais mensais por colaborador</div>
+        <span class="upload-badge badge-primary">Principal</span>
+        <div class="upload-zone-file" id="file-extrato-name"></div>
+      </div>
+      <div class="upload-zone" id="zone-espelho">
+        <input type="file" accept=".xlsx,.xls" id="file-espelho">
+        <span class="upload-zone-icon">&#128203;</span>
+        <div class="upload-zone-title">Espelho de Ponto</div>
+        <div class="upload-zone-desc">Detalhamento diario: atrasos, atestados, ferias</div>
+        <span class="upload-badge badge-optional">Opcional</span>
+        <div class="upload-zone-file" id="file-espelho-name"></div>
+      </div>
+      <div class="upload-zone" id="zone-cartao">
+        <input type="file" accept=".xlsx,.xls" id="file-cartao">
+        <span class="upload-zone-icon">&#128195;</span>
+        <div class="upload-zone-title">Cartao Ponto</div>
+        <div class="upload-zone-desc">Alternativa ao Extrato: cartao individual com totais</div>
+        <span class="upload-badge badge-optional">Opcional</span>
+        <div class="upload-zone-file" id="file-cartao-name"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Period & Competencia -->
+  <div class="section" id="section-periodo" style="display:none">
+    <div class="section-title">2. Periodo e Competencia</div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Periodo Detectado</label>
+        <div class="period-display" id="periodo-detectado">--</div>
+      </div>
+      <div class="form-group">
+        <label>Competencia (Mes/Ano)</label>
+        <div style="display:flex;gap:8px;">
+          <select id="comp-mes" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;outline:none;">
+            <option value="01">Janeiro</option>
+            <option value="02">Fevereiro</option>
+            <option value="03">Marco</option>
+            <option value="04">Abril</option>
+            <option value="05">Maio</option>
+            <option value="06">Junho</option>
+            <option value="07">Julho</option>
+            <option value="08">Agosto</option>
+            <option value="09">Setembro</option>
+            <option value="10">Outubro</option>
+            <option value="11">Novembro</option>
+            <option value="12">Dezembro</option>
+          </select>
+          <select id="comp-ano" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:9px 12px;outline:none;">
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpis" style="display:none">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Registros Lidos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-matched">--</div>
+      <div class="kpi-label">Vinculados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-unmatched">--</div>
+      <div class="kpi-label">Sem Vinculo</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-faltas">--</div>
+      <div class="kpi-label">Total Faltas (dias)</div>
+    </div>
+  </div>
+
+  <!-- Matching Section -->
+  <div class="section" id="section-matching" style="display:none">
+    <div class="section-title">3. Vinculacao com Colaboradores</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:14px;">
+      Comparacao automatica por nome normalizado (sem acentos, maiusculo). Verifique os registros sem vinculo.
+    </p>
+
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="all" onclick="filterTab(this,'all')">Todos</button>
+      <button class="tab-btn" data-tab="matched" onclick="filterTab(this,'matched')">Vinculados</button>
+      <button class="tab-btn" data-tab="unmatched" onclick="filterTab(this,'unmatched')">Sem Vinculo</button>
+    </div>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Folha</th>
+            <th>Nome (Secullum)</th>
+            <th>Nome (Sistema)</th>
+            <th>Vinculo</th>
+            <th style="text-align:right">Faltas (h)</th>
+            <th style="text-align:right">Faltas (dias)</th>
+            <th style="text-align:right">DSR</th>
+            <th style="text-align:right">DSR Deb</th>
+            <th style="text-align:right">Noturno</th>
+            <th style="text-align:right">BH Cred</th>
+            <th style="text-align:right">BH Deb</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbody-preview"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Import Actions -->
+  <div class="section" id="section-actions" style="display:none">
+    <div class="section-title">4. Importar para Apuracao</div>
+    <div class="form-row" style="align-items:center;">
+      <button class="btn btn-ok" id="btn-import" onclick="executarImportacao()" disabled>
+        Importar Dados Vinculados
+      </button>
+      <button class="btn btn-outline" onclick="limparTudo()">Limpar Tudo</button>
+      <span id="import-status" style="font-size:12px;color:var(--muted);"></span>
+    </div>
+  </div>
+
+  <!-- Import History -->
+  <div class="section">
+    <div class="section-title">Historico de Importacoes</div>
+    <div id="history-list">
+      <div class="empty-state">
+        <span class="empty-state-icon">&#128197;</span>
+        Carregando historico...
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Classic RH &amp; SST v2026.03 — Classic Importacao e Exportacao de Couros Ltda</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ══════════════════════════════════════════════════
+// State
+// ══════════════════════════════════════════════════
+let parsedExtrato = [];
+let parsedCartao = [];
+let parsedEspelho = [];
+let colaboradores = [];
+let matchedRows = [];
+let periodoDetectado = '';
+let currentTab = 'all';
+
+// ══════════════════════════════════════════════════
+// Init
+// ══════════════════════════════════════════════════
+(async () => {
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor'] });
+  if (!user) return;
+
+  // Populate year selector
+  const anoSel = document.getElementById('comp-ano');
+  const anoAtual = new Date().getFullYear();
+  for (let y = anoAtual; y >= anoAtual - 3; y--) {
+    const opt = document.createElement('option');
+    opt.value = y; opt.textContent = y;
+    anoSel.appendChild(opt);
+  }
+  // Default competencia to current month
+  document.getElementById('comp-mes').value = String(new Date().getMonth() + 1).padStart(2, '0');
+
+  // Load colaboradores
+  try {
+    colaboradores = await RH_API.get('rh_colaboradores?select=id,nome,cpf,status&order=nome');
+    if (!Array.isArray(colaboradores)) colaboradores = [];
+  } catch (e) {
+    console.warn('Erro ao carregar colaboradores:', e.message);
+  }
+
+  setupUploadZones();
+  carregarHistorico();
+})();
+
+// ══════════════════════════════════════════════════
+// Upload Zones
+// ══════════════════════════════════════════════════
+function setupUploadZones() {
+  const zones = [
+    { id: 'zone-extrato', fileId: 'file-extrato', nameId: 'file-extrato-name', handler: parseExtrato },
+    { id: 'zone-espelho', fileId: 'file-espelho', nameId: 'file-espelho-name', handler: parseEspelho },
+    { id: 'zone-cartao',  fileId: 'file-cartao',  nameId: 'file-cartao-name',  handler: parseCartao },
+  ];
+
+  zones.forEach(z => {
+    const zone = document.getElementById(z.id);
+    const input = document.getElementById(z.fileId);
+    const nameEl = document.getElementById(z.nameId);
+
+    // Drag events
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('dragover');
+      const file = e.dataTransfer.files[0];
+      if (file) handleFile(file, zone, nameEl, z.handler);
+    });
+
+    // Click/file input
+    input.addEventListener('change', e => {
+      const file = e.target.files[0];
+      if (file) handleFile(file, zone, nameEl, z.handler);
+    });
+  });
+}
+
+function handleFile(file, zone, nameEl, handler) {
+  if (!file.name.match(/\.xlsx?$/i)) {
+    toast('Apenas arquivos .xlsx sao aceitos', 'err');
+    return;
+  }
+  zone.classList.add('loaded');
+  nameEl.textContent = file.name + ' (' + (file.size / 1024).toFixed(0) + ' KB)';
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = new Uint8Array(e.target.result);
+      const wb = XLSX.read(data, { type: 'array', codepage: 65001 });
+      handler(wb);
+    } catch (err) {
+      console.error('Erro ao ler arquivo:', err);
+      toast('Erro ao ler arquivo: ' + err.message, 'err');
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+// ══════════════════════════════════════════════════
+// Normalize name for matching
+// ══════════════════════════════════════════════════
+function normalizeName(name) {
+  if (!name) return '';
+  return name.toString()
+    .toUpperCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Z0-9 ]/g, '')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+// ══════════════════════════════════════════════════
+// Parse Secullum hours format: "140:00" or "3,00" or number
+// ══════════════════════════════════════════════════
+function parseHours(val) {
+  if (val == null || val === '') return 0;
+  const s = String(val).trim();
+  if (s === '' || s === '-') return 0;
+
+  // Format "HH:MM"
+  const hm = s.match(/^(-?\d+):(\d{2})$/);
+  if (hm) {
+    const h = parseInt(hm[1], 10);
+    const m = parseInt(hm[2], 10);
+    return h + m / 60;
+  }
+
+  // Format "3,00" (comma decimal)
+  const comma = s.replace('.', '').replace(',', '.');
+  const n = parseFloat(comma);
+  return isNaN(n) ? 0 : n;
+}
+
+function hoursToDays(hours, jornadaDiaria = 8) {
+  if (!hours || hours <= 0) return 0;
+  return hours / jornadaDiaria;
+}
+
+function fmt(n, dec = 2) {
+  if (n == null || isNaN(n)) return '0,00';
+  return n.toFixed(dec).replace('.', ',');
+}
+
+// ══════════════════════════════════════════════════
+// Parser: Extrato de Totais
+// ══════════════════════════════════════════════════
+function parseExtrato(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+  // Extract period from row 2 (index 1 or 2)
+  periodoDetectado = '';
+  for (let i = 0; i < Math.min(5, raw.length); i++) {
+    const rowStr = (raw[i] || []).join(' ');
+    const pm = rowStr.match(/Per[ií]odo[:\s]*(\d{2}\/\d{2}\/\d{4})\s*at[ée]\s*(\d{2}\/\d{2}\/\d{4})/i);
+    if (pm) {
+      periodoDetectado = pm[1] + ' ate ' + pm[2];
+      // Auto-detect competencia from end date
+      autoDetectCompetencia(pm[2]);
+      break;
+    }
+  }
+
+  parsedExtrato = [];
+  // Data starts at row 7 (index 6), header at row 5 (index 4)
+  const startRow = 6;
+  for (let i = startRow; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row || !row[0] || !row[2]) continue;
+
+    const folha = String(row[0]).trim();
+    const nome = String(row[2]).trim();
+
+    // Skip if folha is not a number (likely a header or footer)
+    if (!/^\d+$/.test(folha)) continue;
+    if (!nome || nome.length < 2) continue;
+
+    const faltasHoras = parseHours(row[26]);   // Column AA - FALTAS
+    const dsr = parseHours(row[29]);           // Column AD - DSR
+    const dsrDeb = parseHours(row[32]);        // Column AG - DSR.DEB
+    const noturno = parseHours(row[34]);       // Column AI - NOT.
+    const bhCred = parseHours(row[10]);        // Column K - BCRED
+    const bhDeb = parseHours(row[12]);         // Column M - BDEB
+    const dsrDebAlt = parseHours(row[8]);      // Column I - DSR DEB (alt format)
+
+    parsedExtrato.push({
+      folha,
+      nome,
+      faltasHoras,
+      faltasDias: hoursToDays(faltasHoras),
+      dsr,
+      dsrDeb: dsrDeb || dsrDebAlt,
+      noturno,
+      bhCred,
+      bhDeb,
+      fonte: 'extrato',
+    });
+  }
+
+  if (parsedExtrato.length === 0) {
+    toast('Nenhum registro encontrado no Extrato de Totais. Verifique o formato do arquivo.', 'warn');
+    return;
+  }
+
+  toast(parsedExtrato.length + ' registros lidos do Extrato de Totais', 'ok');
+  showPeriodo();
+  executarMatching(parsedExtrato);
+}
+
+// ══════════════════════════════════════════════════
+// Parser: Cartao Ponto
+// ══════════════════════════════════════════════════
+function parseCartao(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+  parsedCartao = [];
+  let i = 0;
+
+  while (i < raw.length) {
+    // Find employee name row - look for a row with a name before the DATA header
+    let nome = '';
+    let folha = '';
+    let blockStart = -1;
+
+    // Scan for block: look for "DATA" header row
+    while (i < raw.length) {
+      const row = raw[i];
+      const rowStr = (row || []).join(' ').toUpperCase();
+
+      // Detect name row (has name but no DATA header yet)
+      if (row && row[0] && typeof row[0] === 'string') {
+        const cell = row[0].toString().trim().toUpperCase();
+        if (cell === 'DATA') {
+          blockStart = i;
+          break;
+        }
+        // Try to detect employee name from prior rows
+        if (cell.length > 3 && !cell.match(/^(TOTAL|PERIODO|DATA|PAGINA|EMPRESA|SECULLUM|RELAT)/)) {
+          // Could be the name row
+          const nomeMatch = rowStr.match(/NOME[:\s]*([A-Z][A-Z\s]+)/);
+          if (nomeMatch) {
+            nome = nomeMatch[1].trim();
+          } else if (cell.length > 5 && /^[A-Z]/.test(cell)) {
+            nome = cell;
+          }
+          // Look for N FOLHA
+          const folhaMatch = rowStr.match(/(?:FOLHA|REGISTRO)[:\s]*(\d+)/);
+          if (folhaMatch) folha = folhaMatch[1];
+        }
+      }
+      i++;
+    }
+
+    if (blockStart < 0) break;
+
+    // Now look for the TOTAIS row after the DATA header
+    i = blockStart + 1;
+    let totaisRow = null;
+    let lateCount = 0;
+
+    while (i < raw.length && i < blockStart + 65) {
+      const row = raw[i];
+      if (!row) { i++; continue; }
+
+      const cell0 = String(row[0] || '').trim().toUpperCase();
+
+      // Check for TOTAIS row
+      if (cell0 === 'TOTAIS' || cell0 === 'TOTAL') {
+        totaisRow = row;
+        i++;
+        break;
+      }
+
+      // Count late arrivals (check ENTRADA 1 vs 08:00)
+      if (row[1]) {
+        const entrada = String(row[1]).trim();
+        const entMatch = entrada.match(/(\d{2}):(\d{2})/);
+        if (entMatch) {
+          const entMinutes = parseInt(entMatch[1]) * 60 + parseInt(entMatch[2]);
+          const refMinutes = 8 * 60 + 10; // 08:10 (10 min tolerance)
+          if (entMinutes > refMinutes) lateCount++;
+        }
+      }
+
+      i++;
+    }
+
+    if (!totaisRow || !nome) { continue; }
+
+    // Extract from TOTAIS row
+    // Columns after DATA header: NORMAIS(7), FALTAS(8), EX50%(9), EX100%(10), DSR DEB(11), NOT.(12), EXNOT(13), AJUSTE(14), CARGA(15), BCRED(16), BDEB(17), BSALDO(18)
+    const normais = parseHours(totaisRow[7]);
+    const faltasHoras = parseHours(totaisRow[8]);
+    const ex50 = parseHours(totaisRow[9]);
+    const ex100 = parseHours(totaisRow[10]);
+    const dsrDeb = parseHours(totaisRow[11]);
+    const noturno = parseHours(totaisRow[12]);
+    const carga = parseHours(totaisRow[15]);
+    const bhCred = parseHours(totaisRow[16]);
+    const bhDeb = parseHours(totaisRow[17]);
+
+    parsedCartao.push({
+      folha,
+      nome,
+      faltasHoras,
+      faltasDias: hoursToDays(faltasHoras),
+      dsr: 0,
+      dsrDeb,
+      noturno,
+      bhCred,
+      bhDeb,
+      normais,
+      ex50,
+      ex100,
+      carga,
+      atrasos: lateCount,
+      fonte: 'cartao',
+    });
+  }
+
+  if (parsedCartao.length === 0) {
+    toast('Nenhum registro encontrado no Cartao Ponto. Verifique o formato.', 'warn');
+    return;
+  }
+
+  toast(parsedCartao.length + ' registros lidos do Cartao Ponto', 'ok');
+
+  // If no extrato loaded, use cartao as primary
+  if (parsedExtrato.length === 0) {
+    showPeriodo();
+    executarMatching(parsedCartao);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Parser: Espelho de Ponto
+// ══════════════════════════════════════════════════
+function parseEspelho(wb) {
+  const sheet = wb.Sheets[wb.SheetNames[0]];
+  const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+  parsedEspelho = [];
+  let currentEmployee = null;
+
+  for (let i = 0; i < raw.length; i++) {
+    const row = raw[i];
+    if (!row) continue;
+
+    const rowStr = (row || []).join(' ');
+
+    // Detect employee row: has NOME and CPF
+    const nomeStr = String(row[0] || '').trim();
+    const cpfStr = String(row[29] || '').trim();
+
+    if (nomeStr.length > 3 && cpfStr.match(/\d{3}\.\d{3}\.\d{3}/)) {
+      if (currentEmployee) parsedEspelho.push(currentEmployee);
+
+      currentEmployee = {
+        nome: nomeStr,
+        cpf: cpfStr.replace(/[^\d]/g, ''),
+        admissao: String(row[39] || '').trim(),
+        funcao: String(row[42] || '').trim(),
+        diasAtestado: 0,
+        diasFerias: 0,
+        faltasHoras: 0,
+        atrasos: 0,
+      };
+      continue;
+    }
+
+    if (!currentEmployee) continue;
+
+    // Check for daily rows
+    const dateStr = String(row[0] || '').trim();
+    if (dateStr.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+      // Check for ferias
+      const entryStr = (row[1] || '').toString() + ' ' + (row[2] || '').toString();
+      if (entryStr.toUpperCase().includes('FERIAS') || entryStr.toUpperCase().includes('FÉRIAS')) {
+        currentEmployee.diasFerias++;
+      }
+
+      // Check for atestado in motivo columns (col 36+)
+      const motivo = String(row[36] || '').toUpperCase();
+      if (motivo.includes('ATESTADO') || motivo.includes('MEDICO') || motivo.includes('MÉDICO')) {
+        currentEmployee.diasAtestado++;
+      }
+
+      // Check for late arrival
+      if (row[1]) {
+        const entrada = String(row[1]).trim();
+        const entMatch = entrada.match(/(\d{2}):(\d{2})/);
+        if (entMatch) {
+          const entMinutes = parseInt(entMatch[1]) * 60 + parseInt(entMatch[2]);
+          const refMinutes = 8 * 60 + 10;
+          if (entMinutes > refMinutes) currentEmployee.atrasos++;
+        }
+      }
+    }
+  }
+
+  if (currentEmployee) parsedEspelho.push(currentEmployee);
+
+  if (parsedEspelho.length === 0) {
+    toast('Nenhum registro encontrado no Espelho de Ponto.', 'warn');
+    return;
+  }
+
+  toast(parsedEspelho.length + ' colaboradores lidos do Espelho de Ponto', 'ok');
+
+  // If we already have matched rows, enrich with espelho data
+  if (matchedRows.length > 0) {
+    enriquecerComEspelho();
+    renderPreview();
+  }
+}
+
+function enriquecerComEspelho() {
+  if (parsedEspelho.length === 0) return;
+
+  matchedRows.forEach(mr => {
+    const nameNorm = normalizeName(mr.nome);
+    const espelhoMatch = parsedEspelho.find(e => normalizeName(e.nome) === nameNorm);
+    if (espelhoMatch) {
+      mr.diasAtestado = espelhoMatch.diasAtestado || 0;
+      mr.diasFerias = espelhoMatch.diasFerias || 0;
+      mr.atrasos = espelhoMatch.atrasos || 0;
+      mr.cpfEspelho = espelhoMatch.cpf || '';
+    }
+  });
+}
+
+// ══════════════════════════════════════════════════
+// Auto-detect competencia from period end date
+// ══════════════════════════════════════════════════
+function autoDetectCompetencia(dateStr) {
+  const parts = dateStr.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (!parts) return;
+  const mes = parts[2]; // month from end date
+  const ano = parts[3];
+  document.getElementById('comp-mes').value = mes;
+  const anoSel = document.getElementById('comp-ano');
+  // Ensure year option exists
+  let found = false;
+  for (const opt of anoSel.options) {
+    if (opt.value === ano) { found = true; break; }
+  }
+  if (!found) {
+    const opt = document.createElement('option');
+    opt.value = ano; opt.textContent = ano;
+    anoSel.appendChild(opt);
+  }
+  anoSel.value = ano;
+}
+
+function showPeriodo() {
+  document.getElementById('section-periodo').style.display = '';
+  document.getElementById('periodo-detectado').textContent = periodoDetectado || 'Nao detectado';
+}
+
+// ══════════════════════════════════════════════════
+// Matching
+// ══════════════════════════════════════════════════
+function executarMatching(parsedData) {
+  matchedRows = parsedData.map(p => {
+    const nameNorm = normalizeName(p.nome);
+    let match = null;
+    let matchType = 'nenhum';
+
+    // Exact normalized match
+    const exact = colaboradores.find(c => normalizeName(c.nome) === nameNorm);
+    if (exact) {
+      match = exact;
+      matchType = 'exato';
+    } else {
+      // Partial match: check if normalized name contains or is contained
+      const partial = colaboradores.filter(c => {
+        const cn = normalizeName(c.nome);
+        return cn.includes(nameNorm) || nameNorm.includes(cn);
+      });
+      if (partial.length === 1) {
+        match = partial[0];
+        matchType = 'parcial';
+      } else if (partial.length > 1) {
+        match = partial[0];
+        matchType = 'ambiguo';
+      }
+    }
+
+    return {
+      ...p,
+      colaboradorId: match ? match.id : null,
+      colaboradorNome: match ? match.nome : '',
+      colaboradorStatus: match ? match.status : '',
+      matchType,
+      diasAtestado: 0,
+      diasFerias: 0,
+      atrasos: 0,
+    };
+  });
+
+  // Enrich with espelho if available
+  if (parsedEspelho.length > 0) {
+    enriquecerComEspelho();
+  }
+
+  renderPreview();
+  renderKPIs();
+
+  document.getElementById('section-matching').style.display = '';
+  document.getElementById('section-actions').style.display = '';
+  document.getElementById('kpis').style.display = '';
+
+  const matchedCount = matchedRows.filter(r => r.matchType !== 'nenhum').length;
+  document.getElementById('btn-import').disabled = matchedCount === 0;
+}
+
+function renderKPIs() {
+  const total = matchedRows.length;
+  const matched = matchedRows.filter(r => r.matchType !== 'nenhum').length;
+  const unmatched = total - matched;
+  const totalFaltasDias = matchedRows.reduce((s, r) => s + (r.faltasDias || 0), 0);
+
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-matched').textContent = matched;
+  document.getElementById('kpi-unmatched').textContent = unmatched;
+  document.getElementById('kpi-unmatched').style.color = unmatched > 0 ? 'var(--err)' : 'var(--ok)';
+  document.getElementById('kpi-faltas').textContent = fmt(totalFaltasDias);
+}
+
+function renderPreview() {
+  const tbody = document.getElementById('tbody-preview');
+  const filtered = currentTab === 'all' ? matchedRows
+    : currentTab === 'matched' ? matchedRows.filter(r => r.matchType !== 'nenhum')
+    : matchedRows.filter(r => r.matchType === 'nenhum');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:30px;color:var(--muted);">Nenhum registro nesta categoria</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(r => {
+    const matchDot = r.matchType === 'exato' ? 'ok'
+      : r.matchType === 'parcial' ? 'warn'
+      : r.matchType === 'ambiguo' ? 'warn'
+      : 'err';
+    const matchLabel = r.matchType === 'exato' ? 'Exato'
+      : r.matchType === 'parcial' ? 'Parcial'
+      : r.matchType === 'ambiguo' ? 'Ambiguo'
+      : 'Nenhum';
+    const badgeCls = r.matchType === 'nenhum' ? 'badge-err'
+      : r.matchType === 'exato' ? 'badge-ok'
+      : 'badge-warn';
+
+    const statusBadge = r.colaboradorStatus === 'ativo'
+      ? '<span class="badge badge-ok">Ativo</span>'
+      : r.colaboradorStatus === 'inativo'
+      ? '<span class="badge badge-err">Inativo</span>'
+      : r.matchType === 'nenhum'
+      ? '<span class="badge badge-muted">--</span>'
+      : '<span class="badge badge-muted">' + (r.colaboradorStatus || '--') + '</span>';
+
+    return `<tr data-match="${r.matchType}">
+      <td class="num">${r.folha || '--'}</td>
+      <td>${escHtml(r.nome)}</td>
+      <td>${r.colaboradorNome ? escHtml(r.colaboradorNome) : '<span style="color:var(--err)">--</span>'}</td>
+      <td><span class="match-dot ${matchDot}"></span><span class="badge ${badgeCls}">${matchLabel}</span></td>
+      <td class="num">${fmt(r.faltasHoras)}</td>
+      <td class="num" style="font-weight:600;${r.faltasDias > 0 ? 'color:var(--err)' : ''}">${fmt(r.faltasDias)}</td>
+      <td class="num">${fmt(r.dsr)}</td>
+      <td class="num">${fmt(r.dsrDeb)}</td>
+      <td class="num">${fmt(r.noturno)}</td>
+      <td class="num">${fmt(r.bhCred)}</td>
+      <td class="num">${fmt(r.bhDeb)}</td>
+      <td>${statusBadge}</td>
+    </tr>`;
+  }).join('');
+}
+
+function filterTab(btn, tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderPreview();
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+// ══════════════════════════════════════════════════
+// Import to DB
+// ══════════════════════════════════════════════════
+async function executarImportacao() {
+  const btn = document.getElementById('btn-import');
+  const status = document.getElementById('import-status');
+  btn.disabled = true;
+  status.innerHTML = '<span class="spinner"></span> Importando...';
+
+  const competencia = document.getElementById('comp-ano').value + '-' + document.getElementById('comp-mes').value;
+  const vinculados = matchedRows.filter(r => r.colaboradorId && r.matchType !== 'nenhum');
+
+  if (vinculados.length === 0) {
+    toast('Nenhum registro vinculado para importar.', 'warn');
+    btn.disabled = false;
+    status.textContent = '';
+    return;
+  }
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const row of vinculados) {
+    try {
+      // Check if record already exists
+      const existing = await RH_API.get(
+        `rh_apuracao_mensal?colaborador_id=eq.${row.colaboradorId}&competencia=eq.${competencia}&select=id`
+      );
+
+      const payload = {
+        colaborador_id: row.colaboradorId,
+        competencia,
+        faltas_horas: parseFloat(row.faltasHoras.toFixed(2)) || 0,
+        faltas_dias: parseFloat(row.faltasDias.toFixed(2)) || 0,
+        dsr_horas: parseFloat(row.dsr.toFixed(2)) || 0,
+        dsr_debito_horas: parseFloat(row.dsrDeb.toFixed(2)) || 0,
+        adicional_noturno_horas: parseFloat(row.noturno.toFixed(2)) || 0,
+        banco_horas_credito: parseFloat(row.bhCred.toFixed(2)) || 0,
+        banco_horas_debito: parseFloat(row.bhDeb.toFixed(2)) || 0,
+        dias_atestado: row.diasAtestado || 0,
+        fonte_importacao: 'secullum_' + row.fonte,
+        importado_em: new Date().toISOString(),
+      };
+
+      // Calculate dias_trabalhados estimate: ~22 working days minus faltas
+      const diasUteis = 22;
+      payload.dias_trabalhados = Math.max(0, diasUteis - (payload.faltas_dias || 0) - (row.diasAtestado || 0) - (row.diasFerias || 0));
+      payload.faltas_injustificadas = payload.faltas_dias;
+
+      if (existing && existing.length > 0) {
+        // Update existing
+        const res = await RH_API.patch(
+          `rh_apuracao_mensal?id=eq.${existing[0].id}`,
+          payload
+        );
+        if (res.ok) successCount++;
+        else errorCount++;
+      } else {
+        // Insert new
+        const res = await RH_API.post('rh_apuracao_mensal', payload, 'return=minimal');
+        if (res.ok) successCount++;
+        else errorCount++;
+      }
+    } catch (e) {
+      console.error('Erro importando ' + row.nome + ':', e);
+      errorCount++;
+    }
+
+    status.innerHTML = `<span class="spinner"></span> Importando... ${successCount + errorCount}/${vinculados.length}`;
+  }
+
+  // Log the import
+  await RHAuth.log('importar_secullum', {
+    competencia,
+    periodo: periodoDetectado,
+    total_registros: vinculados.length,
+    sucesso: successCount,
+    erros: errorCount,
+  });
+
+  // Save import history
+  try {
+    await RH_API.post('rh_import_log', {
+      tipo: 'secullum',
+      competencia,
+      periodo: periodoDetectado,
+      registros: vinculados.length,
+      sucesso: successCount,
+      erros: errorCount,
+      usuario_id: RHAuth.getUser()?.id,
+      usuario_nome: RHAuth.getUser()?.nome,
+      criado_em: new Date().toISOString(),
+    }, 'return=minimal');
+  } catch (e) {
+    console.warn('Erro ao salvar log de importacao:', e.message);
+  }
+
+  btn.disabled = false;
+  status.textContent = '';
+
+  if (errorCount === 0) {
+    toast('Importacao concluida: ' + successCount + ' registros importados com sucesso.', 'ok');
+  } else {
+    toast('Importacao concluida: ' + successCount + ' OK, ' + errorCount + ' erros.', 'warn');
+  }
+
+  carregarHistorico();
+}
+
+// ══════════════════════════════════════════════════
+// Load import history
+// ══════════════════════════════════════════════════
+async function carregarHistorico() {
+  const container = document.getElementById('history-list');
+  try {
+    const logs = await RH_API.get('rh_import_log?tipo=eq.secullum&order=criado_em.desc&limit=10');
+    if (!Array.isArray(logs) || logs.length === 0) {
+      container.innerHTML = '<div class="empty-state"><span class="empty-state-icon">&#128197;</span>Nenhuma importacao registrada</div>';
+      return;
+    }
+
+    container.innerHTML = logs.map(log => {
+      const data = log.criado_em ? new Date(log.criado_em).toLocaleString('pt-BR') : '--';
+      const comp = log.competencia || '--';
+      const per = log.periodo || '';
+      const okCount = log.sucesso || 0;
+      const errCount = log.erros || 0;
+      const total = log.registros || 0;
+      const usuario = log.usuario_nome || '';
+
+      return `<div class="history-item">
+        <div class="history-count">${total}</div>
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--text);font-weight:600;">Competencia ${comp}</div>
+          <div style="font-size:11px;color:var(--muted);">${per ? 'Periodo: ' + per : ''}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:2px;">
+            ${okCount} importados${errCount > 0 ? ', <span style="color:var(--err)">' + errCount + ' erros</span>' : ''}
+            ${usuario ? ' — por ' + escHtml(usuario) : ''}
+          </div>
+        </div>
+        <div class="history-date">${data}</div>
+      </div>`;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state"><span class="empty-state-icon">&#128197;</span>Erro ao carregar historico</div>';
+    console.warn('Erro ao carregar historico:', e.message);
+  }
+}
+
+// ══════════════════════════════════════════════════
+// Clear
+// ══════════════════════════════════════════════════
+function limparTudo() {
+  parsedExtrato = [];
+  parsedCartao = [];
+  parsedEspelho = [];
+  matchedRows = [];
+  periodoDetectado = '';
+  currentTab = 'all';
+
+  // Reset upload zones
+  document.querySelectorAll('.upload-zone').forEach(z => z.classList.remove('loaded'));
+  document.querySelectorAll('.upload-zone-file').forEach(f => { f.textContent = ''; f.style.display = 'none'; });
+  document.querySelectorAll('.upload-zone input[type="file"]').forEach(inp => { inp.value = ''; });
+
+  // Hide sections
+  document.getElementById('section-periodo').style.display = 'none';
+  document.getElementById('section-matching').style.display = 'none';
+  document.getElementById('section-actions').style.display = 'none';
+  document.getElementById('kpis').style.display = 'none';
+
+  document.getElementById('tbody-preview').innerHTML = '';
+  document.getElementById('periodo-detectado').textContent = '--';
+
+  toast('Dados limpos.', 'ok');
+}
+
+// ══════════════════════════════════════════════════
+// Toast
+// ══════════════════════════════════════════════════
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Alertas - Classic RH &amp; SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
+<style>
+:root {
+  --bg: #07111c; --surface: #0d1b2a; --surface2: #112233;
+  --border: #1e3a52; --accent: #c8a96e; --accent2: #e8c98e;
+  --text: #e8f0f5; --muted: #5d7f95;
+  --ok: #27ae60; --warn: #f39c12; --err: #e74c3c; --info: #2E6B8A;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+body::before {
+  content: ''; position: fixed; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(46,107,138,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(46,107,138,.04) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+.main { max-width: 1100px; margin: 0 auto; padding: 24px 20px; }
+
+/* Timestamp */
+.refresh-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 10px;
+}
+.refresh-info {
+  font-size: 11px; color: var(--muted); font-family: 'DM Mono', monospace;
+}
+.refresh-dot {
+  display: inline-block; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--ok); margin-right: 6px; vertical-align: middle;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; } 50% { opacity: .4; }
+}
+
+/* KPI Summary */
+.kpi-summary {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi-box {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 16px; text-align: center;
+  transition: border-color .2s;
+}
+.kpi-box.urgente { border-left: 4px solid var(--err); }
+.kpi-box.atencao { border-left: 4px solid var(--warn); }
+.kpi-box.ok { border-left: 4px solid var(--ok); }
+.kpi-num {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 32px;
+}
+.kpi-num.red { color: var(--err); }
+.kpi-num.orange { color: var(--warn); }
+.kpi-num.green { color: var(--ok); }
+.kpi-lbl {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 10px; margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.filter-btn {
+  padding: 7px 16px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface); color: var(--muted); font-size: 12px;
+  font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all .2s;
+  font-weight: 500;
+}
+.filter-btn:hover { border-color: var(--accent); color: var(--text); }
+.filter-btn.active { background: var(--accent); color: #0d1b2a; border-color: var(--accent); font-weight: 700; }
+.filter-btn .count {
+  display: inline-block; min-width: 18px; height: 18px; line-height: 18px;
+  border-radius: 9px; font-size: 10px; font-weight: 700; text-align: center;
+  margin-left: 6px;
+}
+.filter-btn.active .count { background: rgba(0,0,0,.2); color: #0d1b2a; }
+
+/* Section */
+.alert-section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; margin-bottom: 16px; overflow: hidden;
+}
+.section-header {
+  padding: 14px 18px; display: flex; align-items: center;
+  justify-content: space-between; cursor: pointer;
+  transition: background .2s; user-select: none;
+}
+.section-header:hover { background: rgba(200,169,110,.03); }
+.section-left { display: flex; align-items: center; gap: 10px; }
+.section-icon {
+  width: 32px; height: 32px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 15px; flex-shrink: 0;
+}
+.section-icon.red { background: rgba(231,76,60,.12); color: var(--err); }
+.section-icon.orange { background: rgba(243,156,18,.12); color: var(--warn); }
+.section-icon.blue { background: rgba(46,107,138,.15); color: var(--info); }
+.section-icon.green { background: rgba(39,174,96,.12); color: var(--ok); }
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  color: var(--text);
+}
+.section-subtitle { font-size: 11px; color: var(--muted); margin-top: 1px; }
+.section-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 11px; font-weight: 600;
+}
+.section-badge .dot {
+  width: 8px; height: 8px; border-radius: 50%;
+}
+.dot-red { background: var(--err); }
+.dot-orange { background: var(--warn); }
+.dot-green { background: var(--ok); }
+.section-chevron {
+  color: var(--muted); font-size: 16px; transition: transform .2s;
+  margin-left: 12px;
+}
+.alert-section.open .section-chevron { transform: rotate(180deg); }
+.section-body {
+  max-height: 0; overflow: hidden; transition: max-height .35s ease;
+}
+.alert-section.open .section-body { max-height: 2000px; }
+.section-content { padding: 0 18px 18px; }
+
+/* Alert cards */
+.alert-list { display: flex; flex-direction: column; gap: 8px; }
+.alert-card {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px; border-radius: 8px;
+  background: var(--bg); border: 1px solid rgba(30,58,82,.4);
+  transition: border-color .2s;
+}
+.alert-card:hover { border-color: var(--accent); }
+.alert-card.urgente { border-left: 3px solid var(--err); }
+.alert-card.atencao { border-left: 3px solid var(--warn); }
+.alert-card.ok-card { border-left: 3px solid var(--ok); }
+
+.alert-level {
+  width: 36px; height: 36px; border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; flex-shrink: 0;
+  font-family: 'DM Mono', monospace;
+}
+.level-red { background: rgba(231,76,60,.12); color: var(--err); }
+.level-orange { background: rgba(243,156,18,.12); color: var(--warn); }
+.level-green { background: rgba(39,174,96,.12); color: var(--ok); }
+
+.alert-info { flex: 1; min-width: 0; }
+.alert-name {
+  font-size: 13px; font-weight: 600; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.alert-detail {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.alert-detail strong { color: var(--text); font-weight: 500; }
+
+.alert-meta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0;
+}
+.alert-days {
+  font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 600;
+}
+.days-red { color: var(--err); }
+.days-orange { color: var(--warn); }
+.days-green { color: var(--ok); }
+.alert-date {
+  font-size: 10px; color: var(--muted); font-family: 'DM Mono', monospace;
+}
+
+.alert-action {
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 6px;
+  background: transparent; color: var(--accent); font-size: 11px;
+  font-family: 'DM Sans', sans-serif; font-weight: 600;
+  cursor: pointer; transition: all .2s; text-decoration: none;
+  white-space: nowrap; flex-shrink: 0;
+}
+.alert-action:hover {
+  background: var(--accent); color: #0d1b2a; border-color: var(--accent);
+}
+
+/* Empty state */
+.empty-section {
+  text-align: center; padding: 24px; color: var(--muted); font-size: 12px;
+}
+.empty-section .icon-ok { font-size: 24px; margin-bottom: 6px; color: var(--ok); }
+
+/* Placeholder info */
+.info-box {
+  background: rgba(46,107,138,.08); border: 1px solid rgba(46,107,138,.2);
+  border-radius: 8px; padding: 14px 16px; font-size: 12px; color: var(--muted);
+  line-height: 1.6;
+}
+.info-box strong { color: var(--text); }
+
+/* Loading */
+.loading-state {
+  text-align: center; padding: 60px 20px; color: var(--muted); font-size: 13px;
+}
+.loading-spinner {
+  width: 32px; height: 32px; border: 3px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .8s linear infinite; margin: 0 auto 14px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kpi-summary { grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .kpi-num { font-size: 24px; }
+  .alert-card { flex-wrap: wrap; gap: 8px; }
+  .alert-meta { flex-direction: row; align-items: center; gap: 8px; }
+  .header { flex-wrap: wrap; gap: 8px; }
+}
+@media (max-width: 480px) {
+  .kpi-summary { grid-template-columns: 1fr; }
+  .filter-bar { gap: 6px; }
+  .filter-btn { padding: 6px 10px; font-size: 11px; }
+  .alert-card { padding: 10px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Painel</a>
+    <div>
+      <div class="header-title">Central de Alertas RH</div>
+      <div class="header-sub">Verificacao diaria — o que precisa de atencao hoje</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<div class="main">
+
+  <!-- Loading -->
+  <div id="loading-state" class="loading-state">
+    <div class="loading-spinner"></div>
+    Carregando alertas...
+  </div>
+
+  <!-- Content (hidden until loaded) -->
+  <div id="content" style="display:none;">
+
+    <!-- Refresh bar -->
+    <div class="refresh-bar">
+      <div class="refresh-info">
+        <span class="refresh-dot"></span>
+        Atualizado em <span id="last-refresh">--</span> — auto-refresh a cada 5 min
+      </div>
+    </div>
+
+    <!-- KPI Summary -->
+    <div class="kpi-summary">
+      <div class="kpi-box urgente">
+        <div class="kpi-num red" id="kpi-urgente">0</div>
+        <div class="kpi-lbl">Urgentes</div>
+      </div>
+      <div class="kpi-box atencao">
+        <div class="kpi-num orange" id="kpi-atencao">0</div>
+        <div class="kpi-lbl">Atencao</div>
+      </div>
+      <div class="kpi-box ok">
+        <div class="kpi-num green" id="kpi-ok">0</div>
+        <div class="kpi-lbl">OK</div>
+      </div>
+    </div>
+
+    <!-- Filter bar -->
+    <div class="filter-bar">
+      <button class="filter-btn active" data-filter="todos">Todos <span class="count" id="fc-todos">0</span></button>
+      <button class="filter-btn" data-filter="urgente">Urgentes <span class="count" id="fc-urgente">0</span></button>
+      <button class="filter-btn" data-filter="atencao">Atencao <span class="count" id="fc-atencao">0</span></button>
+    </div>
+
+    <!-- Alert sections container -->
+    <div id="sections-container"></div>
+
+  </div>
+</div>
+
+<div class="footer">Classic RH &amp; SST v2026.03 — Classic Importacao e Exportacao de Couros Ltda</div>
+
+<script>
+(async () => {
+
+  // ── Auth ──
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','visualizador'] });
+  if (!user) return;
+
+  // ── State ──
+  let allAlerts = [];
+  let activeFilter = 'todos';
+  const HOJE = new Date();
+  HOJE.setHours(0, 0, 0, 0);
+
+  // ── Utility ──
+  function diffDays(dateStr) {
+    if (!dateStr) return null;
+    const d = new Date(dateStr + 'T00:00:00');
+    return Math.ceil((d - HOJE) / (1000 * 60 * 60 * 24));
+  }
+
+  function fmtDate(d) {
+    if (!d) return '--';
+    const parts = d.split('-');
+    if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+    return d;
+  }
+
+  function fmtDateObj(d) {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const yy = d.getFullYear();
+    return dd + '/' + mm + '/' + yy;
+  }
+
+  function toISODate(d) {
+    const dd = String(d.getDate()).padStart(2, '0');
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    return d.getFullYear() + '-' + mm + '-' + dd;
+  }
+
+  function addDays(dateStr, days) {
+    const d = new Date(dateStr + 'T00:00:00');
+    d.setDate(d.getDate() + days);
+    return d;
+  }
+
+  function esc(s) {
+    if (!s) return '';
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  // ── Load all data ──
+  async function loadData() {
+    const [colaboradores, asos, treinamentos] = await Promise.all([
+      RH_API.get('rh_colaboradores?status=eq.ativo&select=id,nome,categoria,data_admissao,data_nascimento,cargo,unidade'),
+      RH_API.get('rh_asos?select=id,colaborador_id,tipo_aso,data_realizacao,data_vencimento,status'),
+      RH_API.get('rh_treinamentos?select=id,colaborador_id,treinamento,data_realizacao,data_vencimento,status'),
+    ]);
+
+    // Build colaborador map
+    const colabMap = {};
+    colaboradores.forEach(c => { colabMap[c.id] = c; });
+
+    allAlerts = [];
+
+    // ── (a) Contratos de Experiencia ──
+    processContratosExperiencia(colaboradores);
+
+    // ── (b) ASOs ──
+    processASOs(asos, colabMap);
+
+    // ── (c) Treinamentos ──
+    processTreinamentos(treinamentos, colabMap);
+
+    // ── (d) Ferias (periodo concessivo) ──
+    processFeriasPeriodo(colaboradores);
+
+    // ── (e) Aniversariantes ──
+    processAniversariantes(colaboradores);
+
+    renderAll();
+  }
+
+  // ── (a) Contratos de Experiencia ──
+  function processContratosExperiencia(colaboradores) {
+    // Filtrar por data_admissao nos ultimos 90 dias (periodo de experiencia)
+    const experiencia = colaboradores.filter(c => {
+      if (!c.data_admissao) return false;
+      const admDate = new Date(c.data_admissao + 'T00:00:00');
+      const diasDesdeAdmissao = Math.ceil((HOJE - admDate) / (1000 * 60 * 60 * 24));
+      return diasDesdeAdmissao >= 0 && diasDesdeAdmissao <= 90;
+    });
+
+    experiencia.forEach(c => {
+      const admissao = c.data_admissao;
+
+      // Primeiro vencimento: 45 dias
+      const venc45 = addDays(admissao, 45);
+      const dias45 = Math.ceil((venc45 - HOJE) / (1000 * 60 * 60 * 24));
+
+      // Segundo vencimento (maximo): 90 dias
+      const venc90 = addDays(admissao, 90);
+      const dias90 = Math.ceil((venc90 - HOJE) / (1000 * 60 * 60 * 24));
+
+      // Se ja passou dos 90 dias, nao alertar (contrato ja encerrou ou foi efetivado)
+      if (dias90 < 0) return;
+
+      // Determinar qual vencimento alertar
+      // Se ainda nao passou do primeiro periodo (45 dias)
+      if (dias45 >= 0 && dias45 <= 30) {
+        let nivel = 'ok';
+        if (dias45 <= 7) nivel = 'urgente';
+        else if (dias45 <= 30) nivel = 'atencao';
+
+        allAlerts.push({
+          categoria: 'contrato',
+          nivel,
+          nome: c.nome,
+          detalhe: '1o periodo experiencia (45 dias) vence em ' + fmtDateObj(venc45),
+          dataRef: toISODate(venc45),
+          dias: dias45,
+          link: 'colaboradores.html',
+          linkLabel: 'Ver colaborador',
+        });
+      }
+
+      // Alertar para o vencimento do segundo periodo (90 dias)
+      if (dias90 >= 0 && dias90 <= 30) {
+        let nivel = 'ok';
+        if (dias90 <= 7) nivel = 'urgente';
+        else if (dias90 <= 30) nivel = 'atencao';
+
+        allAlerts.push({
+          categoria: 'contrato',
+          nivel,
+          nome: c.nome,
+          detalhe: '2o periodo experiencia (90 dias) vence em ' + fmtDateObj(venc90) + ' — DECISAO: efetivar ou desligar',
+          dataRef: toISODate(venc90),
+          dias: dias90,
+          link: 'colaboradores.html',
+          linkLabel: 'Ver colaborador',
+        });
+      }
+    });
+  }
+
+  // ── (b) ASOs ──
+  function processASOs(asos, colabMap) {
+    asos.forEach(a => {
+      const colab = colabMap[a.colaborador_id];
+      if (!colab) return; // colaborador inativo ou inexistente
+      if (!a.data_vencimento) return;
+
+      const dias = diffDays(a.data_vencimento);
+      if (dias === null) return;
+
+      // Vencido ou vencendo em 30 dias
+      if (dias > 30) return;
+
+      let nivel = 'ok';
+      if (dias <= 0) nivel = 'urgente';
+      else if (dias <= 30) nivel = 'atencao';
+
+      const statusTxt = dias <= 0
+        ? 'VENCIDO ha ' + Math.abs(dias) + ' dia(s)'
+        : 'Vence em ' + dias + ' dia(s)';
+
+      allAlerts.push({
+        categoria: 'aso',
+        nivel,
+        nome: colab.nome,
+        detalhe: (a.tipo_aso || 'ASO').toUpperCase() + ' — ' + statusTxt,
+        dataRef: a.data_vencimento,
+        dias: dias,
+        link: 'colaboradores.html',
+        linkLabel: 'Ver ASO',
+      });
+    });
+  }
+
+  // ── (c) Treinamentos ──
+  function processTreinamentos(treinamentos, colabMap) {
+    treinamentos.forEach(t => {
+      const colab = colabMap[t.colaborador_id];
+      if (!colab) return;
+      if (!t.data_vencimento) return;
+
+      const dias = diffDays(t.data_vencimento);
+      if (dias === null) return;
+
+      // Vencido ou vencendo em 30 dias
+      if (dias > 30) return;
+
+      let nivel = 'ok';
+      if (dias <= 0) nivel = 'urgente';
+      else if (dias <= 30) nivel = 'atencao';
+
+      const statusTxt = dias <= 0
+        ? 'VENCIDO ha ' + Math.abs(dias) + ' dia(s)'
+        : 'Vence em ' + dias + ' dia(s)';
+
+      allAlerts.push({
+        categoria: 'treinamento',
+        nivel,
+        nome: colab.nome,
+        detalhe: (t.treinamento || 'Treinamento') + ' — ' + statusTxt,
+        dataRef: t.data_vencimento,
+        dias: dias,
+        link: 'colaboradores.html',
+        linkLabel: 'Ver treinamento',
+      });
+    });
+  }
+
+  // ── (d) Ferias — Periodo Concessivo ──
+  function processFeriasPeriodo(colaboradores) {
+    colaboradores.forEach(c => {
+      if (!c.data_admissao) return;
+
+      const admissao = new Date(c.data_admissao + 'T00:00:00');
+      const hojeMs = HOJE.getTime();
+
+      // Calcular periodos aquisitivos a partir da admissao
+      // Periodo aquisitivo N: admissao + N*12 meses ate admissao + (N+1)*12 meses
+      // Periodo concessivo correspondente: admissao + (N+1)*12 ate admissao + (N+2)*12
+
+      // Quantos anos completos desde admissao?
+      let anosCompletos = 0;
+      let check = new Date(admissao);
+      while (true) {
+        let next = new Date(check);
+        next.setFullYear(next.getFullYear() + 1);
+        if (next <= HOJE) {
+          anosCompletos++;
+          check = next;
+        } else {
+          break;
+        }
+      }
+
+      // Se menos de 1 ano, ainda nao tem periodo concessivo
+      if (anosCompletos < 1) return;
+
+      // Periodo concessivo mais recente que pode estar vencendo:
+      // Aquisitivo: admissao + (anosCompletos-1)*12m a admissao + anosCompletos*12m
+      // Concessivo: admissao + anosCompletos*12m a admissao + (anosCompletos+1)*12m
+      const fimConcessivo = new Date(admissao);
+      fimConcessivo.setFullYear(admissao.getFullYear() + anosCompletos + 1);
+
+      const diasParaFim = Math.ceil((fimConcessivo - HOJE) / (1000 * 60 * 60 * 24));
+
+      // Se ja passou, o periodo venceu (ferias nao gozadas = problema serio)
+      // Alertar se <= 60 dias para vencer
+      if (diasParaFim > 60) return;
+
+      let nivel = 'ok';
+      if (diasParaFim <= 0) nivel = 'urgente';
+      else if (diasParaFim <= 30) nivel = 'urgente';
+      else if (diasParaFim <= 60) nivel = 'atencao';
+
+      const statusTxt = diasParaFim <= 0
+        ? 'PERIODO CONCESSIVO VENCIDO ha ' + Math.abs(diasParaFim) + ' dia(s) — RISCO TRABALHISTA'
+        : 'Periodo concessivo vence em ' + diasParaFim + ' dia(s)';
+
+      const periodoRef = anosCompletos + 'o periodo aquisitivo';
+
+      allAlerts.push({
+        categoria: 'ferias',
+        nivel,
+        nome: c.nome,
+        detalhe: periodoRef + ' — ' + statusTxt,
+        dataRef: toISODate(fimConcessivo),
+        dias: diasParaFim,
+        link: 'colaboradores.html',
+        linkLabel: 'Ver colaborador',
+      });
+    });
+  }
+
+  // ── (e) Aniversariantes do Mes ──
+  function processAniversariantes(colaboradores) {
+    const mesAtual = HOJE.getMonth() + 1; // 1-12
+    colaboradores.forEach(c => {
+      if (!c.data_nascimento) return;
+      const parts = c.data_nascimento.split('-');
+      const mesNasc = parseInt(parts[1]);
+      if (mesNasc !== mesAtual) return;
+
+      const diaNasc = parseInt(parts[2]);
+      const anoNasc = parseInt(parts[0]);
+      const idade = HOJE.getFullYear() - anoNasc;
+      const diaHoje = HOJE.getDate();
+      const diasPara = diaNasc - diaHoje;
+
+      let nivel = 'ok';
+      if (diasPara >= 0 && diasPara <= 3) nivel = 'atencao';
+      if (diasPara === 0) nivel = 'urgente';
+
+      allAlerts.push({
+        categoria: 'aniversario',
+        nivel,
+        nome: c.nome,
+        detalhe: fmtDate(c.data_nascimento) + ' — completa ' + idade + ' anos',
+        dataRef: HOJE.getFullYear() + '-' + String(mesAtual).padStart(2,'0') + '-' + String(diaNasc).padStart(2,'0'),
+        dias: diasPara,
+        link: 'colaboradores.html',
+        linkLabel: 'Ver colaborador',
+      });
+    });
+  }
+
+  // ── Render ──
+  function renderAll() {
+    // Sort: urgente first, then by dias ascending
+    allAlerts.sort((a, b) => {
+      const order = { urgente: 0, atencao: 1, ok: 2 };
+      if (order[a.nivel] !== order[b.nivel]) return order[a.nivel] - order[b.nivel];
+      return a.dias - b.dias;
+    });
+
+    // KPIs
+    const urgentes = allAlerts.filter(a => a.nivel === 'urgente').length;
+    const atencao = allAlerts.filter(a => a.nivel === 'atencao').length;
+    const ok = allAlerts.filter(a => a.nivel === 'ok').length;
+
+    document.getElementById('kpi-urgente').textContent = urgentes;
+    document.getElementById('kpi-atencao').textContent = atencao;
+    document.getElementById('kpi-ok').textContent = ok;
+
+    // Filter counts
+    document.getElementById('fc-todos').textContent = allAlerts.length;
+    document.getElementById('fc-urgente').textContent = urgentes;
+    document.getElementById('fc-atencao').textContent = atencao;
+
+    // Render sections
+    renderSections();
+
+    // Update timestamp
+    const now = new Date();
+    document.getElementById('last-refresh').textContent =
+      String(now.getHours()).padStart(2, '0') + ':' +
+      String(now.getMinutes()).padStart(2, '0') + ':' +
+      String(now.getSeconds()).padStart(2, '0');
+
+    // Show content
+    document.getElementById('loading-state').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+  }
+
+  function getFilteredAlerts(categoria) {
+    let filtered = allAlerts.filter(a => a.categoria === categoria);
+    if (activeFilter === 'urgente') filtered = filtered.filter(a => a.nivel === 'urgente');
+    else if (activeFilter === 'atencao') filtered = filtered.filter(a => a.nivel === 'atencao');
+    return filtered;
+  }
+
+  function renderSections() {
+    const container = document.getElementById('sections-container');
+
+    const sections = [
+      {
+        id: 'contrato',
+        title: 'Contratos de Experiencia Vencendo',
+        subtitle: 'Admitidos nos ultimos 90 dias — periodos de 45 e 90 dias',
+        icon: '&#128196;',
+        iconClass: 'orange',
+      },
+      {
+        id: 'aso',
+        title: 'ASOs Vencidos / Vencendo',
+        subtitle: 'Atestados de Saude Ocupacional',
+        icon: '&#9764;',
+        iconClass: 'red',
+      },
+      {
+        id: 'treinamento',
+        title: 'Treinamentos Vencidos / Vencendo',
+        subtitle: 'Treinamentos obrigatorios e NRs',
+        icon: '&#9998;',
+        iconClass: 'blue',
+      },
+      {
+        id: 'ferias',
+        title: 'Ferias — Periodo Concessivo',
+        subtitle: 'Colaboradores que precisam tirar ferias',
+        icon: '&#9992;',
+        iconClass: 'green',
+      },
+      {
+        id: 'aniversario',
+        title: 'Aniversariantes do Mes',
+        subtitle: 'Datas de nascimento dos colaboradores',
+        icon: '&#9733;',
+        iconClass: 'blue',
+      },
+    ];
+
+    let html = '';
+
+    sections.forEach(sec => {
+      const alerts = getFilteredAlerts(sec.id);
+      const urgCount = alerts.filter(a => a.nivel === 'urgente').length;
+      const atcCount = alerts.filter(a => a.nivel === 'atencao').length;
+      const totalCount = alerts.length;
+
+      // Determine badge
+      let badgeHtml = '';
+      if (urgCount > 0) {
+        badgeHtml = '<span class="section-badge"><span class="dot dot-red"></span><span style="color:var(--err)">' + urgCount + ' urgente(s)</span></span>';
+        if (atcCount > 0) badgeHtml += ' <span class="section-badge" style="margin-left:8px"><span class="dot dot-orange"></span><span style="color:var(--warn)">' + atcCount + ' atencao</span></span>';
+      } else if (atcCount > 0) {
+        badgeHtml = '<span class="section-badge"><span class="dot dot-orange"></span><span style="color:var(--warn)">' + atcCount + ' atencao</span></span>';
+      } else {
+        badgeHtml = '<span class="section-badge"><span class="dot dot-green"></span><span style="color:var(--ok)">Tudo em dia</span></span>';
+      }
+
+      // Auto-open if has alerts
+      const openClass = totalCount > 0 ? ' open' : '';
+
+      html += '<div class="alert-section' + openClass + '" data-section="' + sec.id + '">';
+      html += '<div class="section-header" onclick="toggleSection(this)">';
+      html += '<div class="section-left">';
+      html += '<div class="section-icon ' + sec.iconClass + '">' + sec.icon + '</div>';
+      html += '<div><div class="section-title">' + sec.title + '</div>';
+      html += '<div class="section-subtitle">' + sec.subtitle + '</div></div>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;">' + badgeHtml;
+      html += '<span class="section-chevron">&#9660;</span>';
+      html += '</div>';
+      html += '</div>';
+
+      html += '<div class="section-body"><div class="section-content">';
+
+      if (alerts.length === 0) {
+        html += '<div class="empty-section">';
+        html += '<div class="icon-ok">&#10003;</div>';
+        html += 'Nenhum alerta nesta categoria';
+        html += '</div>';
+      } else {
+        html += '<div class="alert-list">';
+        alerts.forEach(a => {
+          const cardClass = a.nivel === 'urgente' ? 'urgente' : (a.nivel === 'atencao' ? 'atencao' : 'ok-card');
+          const levelClass = a.nivel === 'urgente' ? 'level-red' : (a.nivel === 'atencao' ? 'level-orange' : 'level-green');
+          const daysClass = a.nivel === 'urgente' ? 'days-red' : (a.nivel === 'atencao' ? 'days-orange' : 'days-green');
+
+          let daysLabel;
+          if (a.dias < 0) {
+            daysLabel = Math.abs(a.dias) + 'd atras';
+          } else if (a.dias === 0) {
+            daysLabel = 'HOJE';
+          } else {
+            daysLabel = a.dias + 'd';
+          }
+
+          let levelLabel;
+          if (a.dias <= 0) levelLabel = '!!';
+          else if (a.dias <= 7) levelLabel = '!';
+          else levelLabel = a.dias + 'd';
+
+          html += '<div class="alert-card ' + cardClass + '">';
+          html += '<div class="alert-level ' + levelClass + '">' + levelLabel + '</div>';
+          html += '<div class="alert-info">';
+          html += '<div class="alert-name">' + esc(a.nome) + '</div>';
+          html += '<div class="alert-detail">' + esc(a.detalhe) + '</div>';
+          html += '</div>';
+          html += '<div class="alert-meta">';
+          html += '<div class="alert-days ' + daysClass + '">' + daysLabel + '</div>';
+          html += '<div class="alert-date">' + fmtDate(a.dataRef) + '</div>';
+          html += '</div>';
+          html += '<a href="' + a.link + '" class="alert-action">' + a.linkLabel + '</a>';
+          html += '</div>';
+        });
+        html += '</div>';
+      }
+
+      html += '</div></div>';
+      html += '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  // ── Section toggle ──
+  window.toggleSection = function(header) {
+    header.closest('.alert-section').classList.toggle('open');
+  };
+
+  // ── Filter buttons ──
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      activeFilter = btn.dataset.filter;
+      renderSections();
+    });
+  });
+
+  // ── Initial load ──
+  await loadData();
+
+  // ── Auto-refresh every 5 minutes ──
+  setInterval(async () => {
+    allAlerts = [];
+    await loadData();
+  }, 5 * 60 * 1000);
+
+})();
+</script>
+</body>
+</html>

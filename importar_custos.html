@@ -32,8 +32,14 @@
 
 .mapping-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 12px;
+}
+@media (max-width: 768px) {
+  .mapping-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .mapping-grid { grid-template-columns: 1fr; }
 }
 .mapping-grid label {
   font-size: 13px;
@@ -107,11 +113,38 @@
   flex-wrap: wrap;
 }
 .totals-bar strong { color: var(--text-primary); }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity .3s, transform .3s;
+  max-width: 420px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.toast-success { background: #16a34a; }
+.toast.toast-error { background: #dc2626; }
+.toast.toast-warning { background: #d97706; }
+.toast.toast-info { background: #2563eb; }
 </style>
 </head>
 <body class="page-bg">
 <div id="shell"></div>
 <div id="shell-content" class="content-area page-padding">
+
+  <!-- Nav -->
+  <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+    <a href="dashboard_custos.html" class="btn btn-ghost btn-sm">&#8592; Dashboard de Custos</a>
+  </div>
 
   <!-- Upload Section -->
   <div class="card mb-6">
@@ -119,7 +152,7 @@
     <div class="card-body">
       <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
         <div>
-          <label class="text-sm" style="color:var(--text-secondary)">Competencia</label><br>
+          <label class="text-sm" style="color:var(--text-secondary)">Competencia (mes/ano)</label><br>
           <input type="month" id="competencia" required>
         </div>
       </div>
@@ -131,9 +164,10 @@
           <line x1="12" y1="3" x2="12" y2="15"/>
         </svg>
         <p class="font-medium" style="margin:0 0 4px">Arraste arquivo Excel ou CSV aqui</p>
-        <p class="text-muted text-sm" style="margin:0">Formatos aceitos: .xlsx, .xls, .csv</p>
+        <p class="text-muted text-sm" style="margin:0">Formatos aceitos: .xlsx, .xls, .csv &mdash; ou clique para selecionar</p>
         <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
       </div>
+      <p class="text-sm text-muted" id="fileName" style="margin-top:8px;display:none"></p>
     </div>
   </div>
 
@@ -141,7 +175,7 @@
   <div class="card mb-6" id="mappingCard" style="display:none">
     <div class="card-header"><h3>Mapeamento de Colunas</h3></div>
     <div class="card-body">
-      <p class="text-sm text-muted" style="margin:0 0 16px">Associe as colunas do arquivo aos campos do sistema.</p>
+      <p class="text-sm text-muted" style="margin:0 0 16px">Associe as colunas do arquivo aos campos do sistema. Campos com <strong>*</strong> sao obrigatorios.</p>
       <div class="mapping-grid" id="mappingGrid"></div>
       <div style="margin-top:16px">
         <h4 class="text-sm font-medium" style="margin:0 0 8px">Pre-visualizacao (primeiras 5 linhas)</h4>
@@ -217,9 +251,10 @@
         </div>
       </div>
 
-      <div class="totals-bar mb-4">
-        <span><strong id="totCount">0</strong> registros</span>
+      <div class="totals-bar mb-4" id="totalsBar">
+        <span><strong id="totCount">0</strong> colaboradores</span>
         <span>Custo total: <strong id="totCost">R$ 0,00</strong></span>
+        <span>Media por colaborador: <strong id="totAvg">R$ 0,00</strong></span>
       </div>
 
       <div class="data-table-wrapper">
@@ -228,21 +263,23 @@
             <tr>
               <th>Colaborador</th>
               <th>CPF</th>
+              <th>Matricula</th>
               <th>Cargo</th>
               <th>Setor</th>
+              <th>Filial</th>
               <th>Competencia</th>
-              <th>Salario Base</th>
-              <th>Horas Extras</th>
-              <th>VT</th>
-              <th>VA</th>
-              <th>Plano Saude</th>
-              <th>FGTS</th>
-              <th>INSS Empresa</th>
-              <th>Custo Total</th>
+              <th style="text-align:right">Salario Base</th>
+              <th style="text-align:right">Horas Extras</th>
+              <th style="text-align:right">VT</th>
+              <th style="text-align:right">VA</th>
+              <th style="text-align:right">Plano Saude</th>
+              <th style="text-align:right">FGTS</th>
+              <th style="text-align:right">INSS Empresa</th>
+              <th style="text-align:right;font-weight:700">Custo Total</th>
             </tr>
           </thead>
           <tbody id="costBody">
-            <tr><td colspan="13" class="text-muted" style="text-align:center;padding:32px">Carregando...</td></tr>
+            <tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>
           </tbody>
         </table>
       </div>
@@ -250,49 +287,91 @@
   </div>
 
 </div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
 <script>
 (async () => {
   const user = await Shell.init({ page: 'importar_custos', title: 'Custos por Colaborador' });
   if (!user) return;
   API.setPerfil(user.perfil);
 
-  /* ── Field definitions for mapping ── */
-  const FIELDS = [
-    { key: 'nome_colaborador', label: 'Nome do Colaborador', required: true },
-    { key: 'cpf',              label: 'CPF',                 required: true },
-    { key: 'cargo',            label: 'Cargo',               required: false },
-    { key: 'setor',            label: 'Setor',               required: false },
-    { key: 'salario_base',     label: 'Salario Base',        required: false },
-    { key: 'horas_extras',     label: 'Horas Extras',        required: false },
-    { key: 'vale_transporte',  label: 'Vale Transporte',     required: false },
-    { key: 'vale_alimentacao', label: 'Vale Alimentacao',    required: false },
-    { key: 'plano_saude',      label: 'Plano de Saude',      required: false },
-    { key: 'fgts',             label: 'FGTS',                required: false },
-    { key: 'inss_empresa',     label: 'INSS Empresa',        required: false },
-    { key: 'custo_total',      label: 'Custo Total',         required: false }
+  /* ── Toast helper ── */
+  function showToast(msg, type) {
+    type = type || 'info';
+    var container = document.getElementById('toastContainer');
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    requestAnimationFrame(function() { el.classList.add('show'); });
+    setTimeout(function() {
+      el.classList.remove('show');
+      setTimeout(function() { el.remove(); }, 300);
+    }, 4000);
+  }
+
+  /* ── Field definitions ── */
+  var FIELDS = [
+    { key: 'nome_colaborador',          label: 'Nome do Colaborador',       required: true },
+    { key: 'cpf',                       label: 'CPF',                       required: true },
+    { key: 'matricula',                 label: 'Matricula',                 required: false },
+    { key: 'cargo',                     label: 'Cargo',                     required: false },
+    { key: 'setor',                     label: 'Setor',                     required: false },
+    { key: 'filial',                    label: 'Filial',                    required: false },
+    { key: 'salario_base',              label: 'Salario Base',              required: false },
+    { key: 'horas_extras',              label: 'Horas Extras',              required: false },
+    { key: 'adicional_noturno',         label: 'Adicional Noturno',         required: false },
+    { key: 'adicional_insalubridade',   label: 'Adicional Insalubridade',   required: false },
+    { key: 'adicional_periculosidade',  label: 'Adicional Periculosidade',  required: false },
+    { key: 'vale_transporte',           label: 'Vale Transporte',           required: false },
+    { key: 'vale_alimentacao',          label: 'Vale Alimentacao',          required: false },
+    { key: 'plano_saude',              label: 'Plano de Saude',             required: false },
+    { key: 'fgts',                      label: 'FGTS',                      required: false },
+    { key: 'inss_empresa',              label: 'INSS Empresa',              required: false },
+    { key: 'outros_proventos',          label: 'Outros Proventos',          required: false },
+    { key: 'outros_descontos',          label: 'Outros Descontos',          required: false },
+    { key: 'custo_total',               label: 'Custo Total',               required: false }
   ];
 
-  /* ── Auto-detect column mappings by header similarity ── */
+  var NUMERIC_FIELDS = [
+    'salario_base', 'horas_extras', 'adicional_noturno', 'adicional_insalubridade',
+    'adicional_periculosidade', 'vale_transporte', 'vale_alimentacao', 'plano_saude',
+    'fgts', 'inss_empresa', 'outros_proventos', 'outros_descontos', 'custo_total'
+  ];
+
+  /* ── Column alias map for auto-detect ── */
+  var ALIASES = {
+    nome_colaborador:         ['nome', 'colaborador', 'funcionario', 'empregado', 'nomecolaborador', 'nomefuncionario', 'nomeempregado'],
+    cpf:                      ['cpf', 'cpfcolaborador', 'cpffuncionario'],
+    matricula:                ['matricula', 'registro', 'mat', 'nrmatricula'],
+    cargo:                    ['cargo', 'funcao', 'ocupacao'],
+    setor:                    ['setor', 'departamento', 'depto', 'area', 'centrocusto'],
+    filial:                   ['filial', 'unidade', 'loja', 'estabelecimento'],
+    salario_base:             ['salariobase', 'salario', 'sal', 'remuneracao', 'remuneracaobase'],
+    horas_extras:             ['horasextras', 'horaextra', 'he', 'extras'],
+    adicional_noturno:        ['adicionalnoturno', 'adnoturno', 'noturno'],
+    adicional_insalubridade:  ['adicionalinsalubridade', 'insalubridade', 'adinsalubridade'],
+    adicional_periculosidade: ['adicionalpericulosidade', 'periculosidade', 'adpericulosidade'],
+    vale_transporte:          ['valetransporte', 'vt', 'transporte'],
+    vale_alimentacao:         ['valealimentacao', 'va', 'alimentacao', 'valerefeicao', 'vr'],
+    plano_saude:              ['planosaude', 'saude', 'planodesaude', 'assistmedica', 'assistenciamedica'],
+    fgts:                     ['fgts', 'fundegarantia'],
+    inss_empresa:             ['inssempresa', 'insspatronal', 'inss', 'contribuicaopatronal'],
+    outros_proventos:         ['outrosproventos', 'proventos', 'outrasverbas'],
+    outros_descontos:         ['outrosdescontos', 'descontos'],
+    custo_total:              ['custototal', 'total', 'custoempregado', 'totalgeral', 'totalcusto']
+  };
+
+  function normalize(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  }
+
   function autoDetect(headers) {
     var mapping = {};
-    var normalize = function(s) { return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, ''); };
-    var aliases = {
-      nome_colaborador: ['nome', 'colaborador', 'funcionario', 'empregado', 'nomecolaborador', 'nomefuncionario'],
-      cpf: ['cpf', 'cpfcolaborador'],
-      cargo: ['cargo', 'funcao'],
-      setor: ['setor', 'departamento', 'depto', 'area'],
-      salario_base: ['salariobase', 'salario', 'sal', 'remuneracao'],
-      horas_extras: ['horasextras', 'horaextra', 'he', 'extras'],
-      vale_transporte: ['valetransporte', 'vt', 'transporte'],
-      vale_alimentacao: ['valealimentacao', 'va', 'alimentacao', 'valerefeicao', 'vr'],
-      plano_saude: ['planosaude', 'saude', 'plandesaude', 'assistmedica'],
-      fgts: ['fgts'],
-      inss_empresa: ['inssempresa', 'insspatronal', 'inss'],
-      custo_total: ['custototal', 'total', 'custoempregado']
-    };
-
     FIELDS.forEach(function(f) {
-      var aliasList = aliases[f.key] || [normalize(f.key)];
+      var aliasList = ALIASES[f.key] || [normalize(f.key)];
       for (var i = 0; i < headers.length; i++) {
         var nh = normalize(headers[i]);
         for (var j = 0; j < aliasList.length; j++) {
@@ -309,6 +388,8 @@
   /* ── State ── */
   var sheetData = [];
   var sheetHeaders = [];
+  var currentFileName = '';
+  var funcionariosCache = null;
 
   /* ── Upload zone ── */
   var uploadZone = document.getElementById('uploadZone');
@@ -326,24 +407,43 @@
 
   /* ── Handle file ── */
   function handleFile(file) {
+    var validExt = /\.(xlsx|xls|csv)$/i;
+    if (!validExt.test(file.name)) {
+      showToast('Formato de arquivo invalido. Use .xlsx, .xls ou .csv.', 'error');
+      return;
+    }
+
+    currentFileName = file.name;
+    var fnEl = document.getElementById('fileName');
+    fnEl.textContent = 'Arquivo: ' + file.name;
+    fnEl.style.display = '';
+
     var reader = new FileReader();
     reader.onload = function(e) {
-      var data = new Uint8Array(e.target.result);
-      var workbook = XLSX.read(data, { type: 'array', cellDates: true });
-      var sheet = workbook.Sheets[workbook.SheetNames[0]];
-      var json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
 
-      if (json.length < 2) { alert('Arquivo vazio ou sem dados.'); return; }
-
-      sheetHeaders = json[0].map(function(h) { return String(h).trim(); });
-      sheetData = [];
-      for (var i = 1; i < json.length; i++) {
-        if (json[i].some(function(c) { return c !== ''; })) {
-          sheetData.push(json[i]);
+        if (json.length < 2) {
+          showToast('Arquivo vazio ou sem dados suficientes.', 'error');
+          return;
         }
-      }
 
-      showMapping();
+        sheetHeaders = json[0].map(function(h) { return String(h).trim(); });
+        sheetData = [];
+        for (var i = 1; i < json.length; i++) {
+          if (json[i].some(function(c) { return c !== ''; })) {
+            sheetData.push(json[i]);
+          }
+        }
+
+        showToast(sheetData.length + ' linhas encontradas no arquivo.', 'success');
+        showMapping();
+      } catch (err) {
+        showToast('Erro ao ler o arquivo: ' + err.message, 'error');
+      }
     };
     reader.readAsArrayBuffer(file);
   }
@@ -371,7 +471,7 @@
 
     mappingGrid.innerHTML = html;
 
-    // Preview
+    // Preview table
     var previewHtml = '<table><thead><tr>';
     sheetHeaders.forEach(function(h) { previewHtml += '<th>' + API.esc(h) + '</th>'; });
     previewHtml += '</tr></thead><tbody>';
@@ -385,6 +485,43 @@
     }
     previewHtml += '</tbody></table>';
     document.getElementById('previewWrapper').innerHTML = previewHtml;
+
+    mappingCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ── Fetch rh_funcionarios for matching ── */
+  async function loadFuncionarios() {
+    if (funcionariosCache) return funcionariosCache;
+    var res = await API.get('rh_funcionarios?select=id,nome,cpf,matricula&limit=5000');
+    if (res.ok && res.data) {
+      funcionariosCache = res.data;
+    } else {
+      funcionariosCache = [];
+    }
+    return funcionariosCache;
+  }
+
+  function cleanCpf(val) {
+    if (!val) return '';
+    return String(val).replace(/[^\d]/g, '').padStart(11, '0');
+  }
+
+  function matchFuncionario(funcionarios, cpf, nome) {
+    if (!funcionarios || !funcionarios.length) return null;
+    // Match by CPF first (most reliable)
+    if (cpf) {
+      for (var i = 0; i < funcionarios.length; i++) {
+        if (cleanCpf(funcionarios[i].cpf) === cpf) return funcionarios[i];
+      }
+    }
+    // Fallback: match by name (case-insensitive)
+    if (nome) {
+      var nomeNorm = nome.toLowerCase().trim();
+      for (var i = 0; i < funcionarios.length; i++) {
+        if (funcionarios[i].nome && funcionarios[i].nome.toLowerCase().trim() === nomeNorm) return funcionarios[i];
+      }
+    }
+    return null;
   }
 
   /* ── Import button ── */
@@ -393,11 +530,16 @@
     document.getElementById('mappingCard').style.display = 'none';
     sheetData = [];
     sheetHeaders = [];
+    currentFileName = '';
+    document.getElementById('fileName').style.display = 'none';
   });
 
   async function startImport() {
     var competencia = document.getElementById('competencia').value;
-    if (!competencia) { alert('Selecione a competencia antes de importar.'); return; }
+    if (!competencia) {
+      showToast('Selecione a competencia antes de importar.', 'warning');
+      return;
+    }
 
     // Gather mapping
     var mapping = {};
@@ -407,12 +549,19 @@
     });
 
     if (!mapping.nome_colaborador && !mapping.cpf) {
-      alert('Mapeie pelo menos o Nome do Colaborador ou CPF.');
+      showToast('Mapeie pelo menos o Nome do Colaborador ou CPF.', 'warning');
       return;
     }
 
+    // Confirm import
+    var confirmMsg = 'Importar ' + sheetData.length + ' linhas para a competencia ' + competencia + '?';
+    if (!confirm(confirmMsg)) return;
+
     var headerIndex = {};
     sheetHeaders.forEach(function(h, i) { headerIndex[h] = i; });
+
+    // Load employees for matching
+    var funcionarios = await loadFuncionarios();
 
     var progressEl = document.getElementById('importProgress');
     var barEl = document.getElementById('importBar');
@@ -420,8 +569,10 @@
     var pctEl = document.getElementById('importPct');
     progressEl.style.display = 'block';
     document.getElementById('statsRow').style.display = '';
+    document.getElementById('btnImport').disabled = true;
 
     var total = sheetData.length, imported = 0, updated = 0, errors = 0;
+    var competenciaDate = competencia + '-01';
 
     function getVal(row, field) {
       var header = mapping[field];
@@ -436,10 +587,8 @@
       return parseFloat(String(val).replace(/\./g, '').replace(',', '.')) || 0;
     }
 
-    function cleanCpf(val) {
-      if (!val) return '';
-      return String(val).replace(/[^\d]/g, '').padStart(11, '0');
-    }
+    // Batch size for progress updates
+    var BATCH = 1;
 
     for (var i = 0; i < sheetData.length; i++) {
       var row = sheetData[i];
@@ -451,36 +600,63 @@
       try {
         var nome = String(getVal(row, 'nome_colaborador') || '').trim();
         var cpf = cleanCpf(getVal(row, 'cpf'));
+        var matricula = String(getVal(row, 'matricula') || '').trim();
 
-        if (!nome && !cpf) { errors++; continue; }
+        if (!nome && !cpf) { errors++; updateStats(); continue; }
+
+        // Match employee
+        var func = matchFuncionario(funcionarios, cpf, nome);
 
         var payload = {
-          competencia: competencia,
-          nome_colaborador: nome,
-          cpf: cpf,
-          cargo: String(getVal(row, 'cargo') || '').trim(),
-          setor: String(getVal(row, 'setor') || '').trim(),
-          salario_base: toNum(getVal(row, 'salario_base')),
-          horas_extras: toNum(getVal(row, 'horas_extras')),
-          vale_transporte: toNum(getVal(row, 'vale_transporte')),
-          vale_alimentacao: toNum(getVal(row, 'vale_alimentacao')),
-          plano_saude: toNum(getVal(row, 'plano_saude')),
-          fgts: toNum(getVal(row, 'fgts')),
-          inss_empresa: toNum(getVal(row, 'inss_empresa'))
+          competencia:                competenciaDate,
+          nome_colaborador:           nome,
+          cpf:                        cpf,
+          matricula:                  matricula || (func ? func.matricula || '' : ''),
+          cargo:                      String(getVal(row, 'cargo') || '').trim(),
+          setor:                      String(getVal(row, 'setor') || '').trim(),
+          filial:                     String(getVal(row, 'filial') || '').trim(),
+          salario_base:               toNum(getVal(row, 'salario_base')),
+          horas_extras:               toNum(getVal(row, 'horas_extras')),
+          adicional_noturno:          toNum(getVal(row, 'adicional_noturno')),
+          adicional_insalubridade:    toNum(getVal(row, 'adicional_insalubridade')),
+          adicional_periculosidade:   toNum(getVal(row, 'adicional_periculosidade')),
+          vale_transporte:            toNum(getVal(row, 'vale_transporte')),
+          vale_alimentacao:           toNum(getVal(row, 'vale_alimentacao')),
+          plano_saude:                toNum(getVal(row, 'plano_saude')),
+          fgts:                       toNum(getVal(row, 'fgts')),
+          inss_empresa:               toNum(getVal(row, 'inss_empresa')),
+          outros_proventos:           toNum(getVal(row, 'outros_proventos')),
+          outros_descontos:           toNum(getVal(row, 'outros_descontos')),
+          arquivo_origem:             currentFileName
         };
 
-        // Calculate custo_total
+        // Link to funcionario if matched
+        if (func) {
+          payload.funcionario_id = func.id;
+        }
+
+        // Auto-calculate custo_total if not mapped or zero
         var custoTotalMapped = toNum(getVal(row, 'custo_total'));
         if (custoTotalMapped > 0) {
           payload.custo_total = custoTotalMapped;
         } else {
-          payload.custo_total = payload.salario_base + payload.horas_extras +
-            payload.vale_transporte + payload.vale_alimentacao +
-            payload.plano_saude + payload.fgts + payload.inss_empresa;
+          payload.custo_total =
+            payload.salario_base +
+            payload.horas_extras +
+            payload.adicional_noturno +
+            payload.adicional_insalubridade +
+            payload.adicional_periculosidade +
+            payload.vale_transporte +
+            payload.vale_alimentacao +
+            payload.plano_saude +
+            payload.fgts +
+            payload.inss_empresa +
+            payload.outros_proventos -
+            payload.outros_descontos;
         }
 
-        // Check if record already exists for this CPF + competencia
-        var existingEndpoint = 'rh_custo_colaborador?competencia=eq.' + encodeURIComponent(competencia);
+        // Upsert: check if record already exists for CPF + competencia
+        var existingEndpoint = 'rh_custo_colaborador?competencia=eq.' + encodeURIComponent(competenciaDate);
         if (cpf) {
           existingEndpoint += '&cpf=eq.' + encodeURIComponent(cpf);
         } else {
@@ -490,34 +666,36 @@
 
         var checkResult = await API.get(existingEndpoint);
         if (checkResult.ok && checkResult.data && checkResult.data.length > 0) {
-          // Update existing
           var updateEndpoint = 'rh_custo_colaborador?id=eq.' + checkResult.data[0].id;
           var patchResult = await API.patch(updateEndpoint, payload);
-          if (patchResult.ok) {
-            updated++;
-          } else {
-            errors++;
-          }
+          if (patchResult.ok) { updated++; } else { errors++; }
         } else {
-          // Insert new
           var insertResult = await API.post('rh_custo_colaborador', payload);
-          if (insertResult.ok) {
-            imported++;
-          } else {
-            errors++;
-          }
+          if (insertResult.ok) { imported++; } else { errors++; }
         }
       } catch (e) {
         errors++;
       }
 
-      document.getElementById('statTotal').textContent = total;
-      document.getElementById('statImported').textContent = imported;
-      document.getElementById('statUpdated').textContent = updated;
-      document.getElementById('statErrors').textContent = errors;
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').textContent = API.fmtNum(total);
+      document.getElementById('statImported').textContent = API.fmtNum(imported);
+      document.getElementById('statUpdated').textContent = API.fmtNum(updated);
+      document.getElementById('statErrors').textContent = API.fmtNum(errors);
     }
 
     labelEl.textContent = 'Importacao concluida!';
+    document.getElementById('btnImport').disabled = false;
+
+    if (errors === 0) {
+      showToast('Importacao concluida com sucesso! ' + imported + ' novos, ' + updated + ' atualizados.', 'success');
+    } else {
+      showToast('Importacao concluida com ' + errors + ' erros. ' + imported + ' novos, ' + updated + ' atualizados.', 'warning');
+    }
+
     document.getElementById('mappingCard').style.display = 'none';
     loadCosts();
   }
@@ -529,19 +707,27 @@
     var search = document.getElementById('filterSearch').value.trim();
 
     var endpoint = 'rh_custo_colaborador?select=*&order=nome_colaborador.asc&limit=500';
-    if (month) endpoint += '&competencia=eq.' + encodeURIComponent(month);
+    if (month) endpoint += '&competencia=eq.' + encodeURIComponent(month + '-01');
     if (setor) endpoint += '&setor=eq.' + encodeURIComponent(setor);
     if (search) {
       endpoint += '&or=(nome_colaborador.ilike.*' + encodeURIComponent(search) + '*,cpf.ilike.*' + encodeURIComponent(search) + '*,cargo.ilike.*' + encodeURIComponent(search) + '*)';
     }
 
-    var result = await API.get(endpoint);
     var tbody = document.getElementById('costBody');
+    tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>';
 
-    if (!result.ok || !result.data || !result.data.length) {
-      tbody.innerHTML = '<tr><td colspan="13" class="text-muted" style="text-align:center;padding:32px">Nenhum registro encontrado.</td></tr>';
-      document.getElementById('totCount').textContent = '0';
-      document.getElementById('totCost').textContent = 'R$ 0,00';
+    var result = await API.get(endpoint);
+
+    if (!result.ok) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px">Erro ao carregar dados.</td></tr>';
+      showToast('Erro ao carregar custos: ' + (result.error || 'erro desconhecido'), 'error');
+      resetTotals();
+      return;
+    }
+
+    if (!result.data || !result.data.length) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px">Nenhum registro encontrado.</td></tr>';
+      resetTotals();
       return;
     }
 
@@ -555,9 +741,11 @@
       rows += '<tr>' +
         '<td>' + API.esc(r.nome_colaborador || '-') + '</td>' +
         '<td>' + API.esc(r.cpf || '-') + '</td>' +
+        '<td>' + API.esc(r.matricula || '-') + '</td>' +
         '<td>' + API.esc(r.cargo || '-') + '</td>' +
         '<td>' + API.esc(r.setor || '-') + '</td>' +
-        '<td>' + API.esc(r.competencia || '-') + '</td>' +
+        '<td>' + API.esc(r.filial || '-') + '</td>' +
+        '<td>' + (r.competencia ? API.fmtData(r.competencia) : '-') + '</td>' +
         '<td style="text-align:right">' + API.fmtMoeda(r.salario_base) + '</td>' +
         '<td style="text-align:right">' + API.fmtMoeda(r.horas_extras) + '</td>' +
         '<td style="text-align:right">' + API.fmtMoeda(r.vale_transporte) + '</td>' +
@@ -570,11 +758,20 @@
     }
 
     tbody.innerHTML = rows;
-    document.getElementById('totCount').textContent = data.length;
+
+    var avg = data.length > 0 ? totalCost / data.length : 0;
+    document.getElementById('totCount').textContent = API.fmtNum(data.length);
     document.getElementById('totCost').textContent = API.fmtMoeda(totalCost);
+    document.getElementById('totAvg').textContent = API.fmtMoeda(avg);
   }
 
-  /* ── Load setores for filter ── */
+  function resetTotals() {
+    document.getElementById('totCount').textContent = '0';
+    document.getElementById('totCost').textContent = 'R$ 0,00';
+    document.getElementById('totAvg').textContent = 'R$ 0,00';
+  }
+
+  /* ── Load setores for filter dropdown ── */
   async function loadSetores() {
     var result = await API.get('rh_custo_colaborador?select=setor&order=setor.asc');
     if (!result.ok || !result.data) return;
@@ -589,12 +786,18 @@
     });
   }
 
+  /* ── Filter events ── */
   document.getElementById('btnFilter').addEventListener('click', loadCosts);
   document.getElementById('btnClearFilter').addEventListener('click', function() {
     document.getElementById('filterMonth').value = '';
     document.getElementById('filterSetor').value = '';
     document.getElementById('filterSearch').value = '';
     loadCosts();
+  });
+
+  // Allow search on Enter key
+  document.getElementById('filterSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loadCosts();
   });
 
   // Initial load

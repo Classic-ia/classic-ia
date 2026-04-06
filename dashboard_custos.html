@@ -1,388 +1,566 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Classic RH - Dashboard de Custos</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="ds.css">
-    <script src="config.js"></script>
-    <script src="rh_auth.js"></script>
-    <script src="api.js"></script>
-    <script src="shell.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-    <style>
-        .chart-container { position: relative; height: 320px; }
-        .chart-container-lg { position: relative; height: 380px; }
-        .charts-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 1.5rem;
-        }
-        @media (max-width: 768px) {
-            .charts-grid { grid-template-columns: 1fr; }
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Dashboard de Custos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+.charts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+}
+@media (max-width: 900px) { .charts-grid { grid-template-columns: 1fr; } }
+.chart-container { position: relative; height: 320px; }
+.chart-container-lg { position: relative; height: 380px; }
+.nav-links {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.nav-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.nav-links a:hover {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px rgba(37,99,235,.1);
+}
+.filter-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+.filter-bar label { font-size: 13px; color: var(--text-secondary); }
+.filter-bar input, .filter-bar select { min-width: 140px; }
+</style>
 </head>
 <body class="page-bg">
-    <div id="shell"></div>
-    <div id="shell-content" class="content-area page-padding">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
 
-        <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap;">
-            <a href="importar_cte.html" class="btn btn-primary btn-sm">Importar CT-e</a>
-            <a href="importar_custos.html" class="btn btn-ghost btn-sm">Importar Custos</a>
-        </div>
+  <!-- Navigation -->
+  <div class="nav-links">
+    <a href="importar_cte.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Importar CT-e
+    </a>
+    <a href="importar_custos.html">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Importar Custos
+    </a>
+  </div>
 
-        <div class="kpi-row mb-6" id="kpi-row">
-            <div class="kpi-card"><div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div><div class="kpi-value" id="kpi-cte-count"><span class="spinner"></span></div><div class="kpi-label">CT-e Importados</div></div>
-            <div class="kpi-card"><div class="kpi-icon green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div class="kpi-value" id="kpi-transporte"><span class="spinner"></span></div><div class="kpi-label">Total Transporte</div></div>
-            <div class="kpi-card"><div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><div class="kpi-value" id="kpi-colab-count"><span class="spinner"></span></div><div class="kpi-label">Colaboradores c/ Custo</div></div>
-            <div class="kpi-card"><div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></div><div class="kpi-value" id="kpi-pessoal"><span class="spinner"></span></div><div class="kpi-label">Custo Pessoal Total</div></div>
-            <div class="kpi-card"><div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></svg></div><div class="kpi-value" id="kpi-geral"><span class="spinner"></span></div><div class="kpi-label">Custo Geral</div></div>
-        </div>
-
-        <div class="charts-grid mb-6" id="charts-grid">
-            <div class="card">
-                <div class="card-header"><span class="font-medium">Custo Transporte por M&ecirc;s</span></div>
-                <div class="card-body"><div class="chart-container"><canvas id="chartTransporteMes"></canvas></div></div>
-            </div>
-            <div class="card">
-                <div class="card-header"><span class="font-medium">CT-e por Rota Top 10</span></div>
-                <div class="card-body"><div class="chart-container"><canvas id="chartRotas"></canvas></div></div>
-            </div>
-            <div class="card">
-                <div class="card-header"><span class="font-medium">Custo por Setor</span></div>
-                <div class="card-body"><div class="chart-container"><canvas id="chartSetor"></canvas></div></div>
-            </div>
-            <div class="card">
-                <div class="card-header"><span class="font-medium">Composi&ccedil;&atilde;o Custo Pessoal</span></div>
-                <div class="card-body"><div class="chart-container"><canvas id="chartComposicao"></canvas></div></div>
-            </div>
-        </div>
-
-        <div class="card mb-6">
-            <div class="card-header"><span class="font-medium">Evolu&ccedil;&atilde;o Mensal: Transporte vs Pessoal</span></div>
-            <div class="card-body"><div class="chart-container-lg"><canvas id="chartEvolucao"></canvas></div></div>
-        </div>
-
-        <div class="card mb-6">
-            <div class="card-header"><span class="font-medium">Top Transportadoras</span></div>
-            <div class="card-body">
-                <div class="data-table-wrapper">
-                    <table class="data-table" id="tbl-transportadoras">
-                        <thead>
-                            <tr>
-                                <th>Transportadora</th>
-                                <th style="text-align:right">Qtd CT-e</th>
-                                <th style="text-align:right">Valor Total</th>
-                                <th style="text-align:right">Peso (kg)</th>
-                                <th style="text-align:right">% do Total</th>
-                            </tr>
-                        </thead>
-                        <tbody><tr><td colspan="5" style="text-align:center"><span class="spinner"></span></td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
-        <div class="card mb-6">
-            <div class="card-header"><span class="font-medium">Top 20 Custos por Colaborador</span></div>
-            <div class="card-body">
-                <div class="data-table-wrapper">
-                    <table class="data-table" id="tbl-colaboradores">
-                        <thead>
-                            <tr>
-                                <th>Colaborador</th>
-                                <th>Cargo</th>
-                                <th>Setor</th>
-                                <th style="text-align:right">Custo Total</th>
-                            </tr>
-                        </thead>
-                        <tbody><tr><td colspan="4" style="text-align:center"><span class="spinner"></span></td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
-
+  <!-- Filter -->
+  <div class="filter-bar">
+    <div>
+      <label>Periodo de</label><br>
+      <input type="month" id="filterFrom">
     </div>
+    <div>
+      <label>ate</label><br>
+      <input type="month" id="filterTo">
+    </div>
+    <div>
+      <button class="btn btn-primary btn-sm" id="btnFilter">Filtrar</button>
+      <button class="btn btn-ghost btn-sm" id="btnClear">Limpar</button>
+    </div>
+  </div>
 
-    <script>
-    (async function() {
-        const user = await Shell.init({ page: 'dashboard_custos', title: 'Dashboard de Custos' });
-        if (!user) return;
-        API.setPerfil(user.perfil);
+  <!-- KPIs -->
+  <div class="kpi-row mb-6">
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="kpi-value" id="kpiCteCount"><span class="spinner"></span></div>
+      <div class="kpi-label">CT-e Emitidos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="kpi-value" id="kpiTransportTotal"><span class="spinner"></span></div>
+      <div class="kpi-label">Total Transporte</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon amber">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </div>
+      <div class="kpi-value" id="kpiEmployees"><span class="spinner"></span></div>
+      <div class="kpi-label">Colaboradores c/ Custo</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon red">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      </div>
+      <div class="kpi-value" id="kpiPersonnelCost"><span class="spinner"></span></div>
+      <div class="kpi-label">Custo Pessoal</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="kpi-value" id="kpiGeneralCost"><span class="spinner"></span></div>
+      <div class="kpi-label">Custo Geral</div>
+    </div>
+  </div>
 
-        /* ---------- helpers ---------- */
-        function fmtK(v) {
-            if (v == null) return '0';
-            var n = Number(v);
-            if (n >= 1000000) return (n / 1000000).toFixed(1).replace('.0', '') + 'M';
-            if (n >= 1000) return (n / 1000).toFixed(1).replace('.0', '') + 'k';
-            return n.toFixed(0);
+  <!-- Charts Row 1 -->
+  <div class="charts-grid mb-6">
+    <div class="card">
+      <div class="card-header"><h3>Custo de Transporte por Mes</h3></div>
+      <div class="card-body"><div class="chart-container"><canvas id="chartTransportMonth"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Top 10 Rotas (CT-e)</h3></div>
+      <div class="card-body"><div class="chart-container"><canvas id="chartRoutes"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Charts Row 2 -->
+  <div class="charts-grid mb-6">
+    <div class="card">
+      <div class="card-header"><h3>Custo por Setor</h3></div>
+      <div class="card-body"><div class="chart-container"><canvas id="chartSector"></canvas></div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3>Composicao de Custos Pessoal</h3></div>
+      <div class="card-body"><div class="chart-container"><canvas id="chartComposition"></canvas></div></div>
+    </div>
+  </div>
+
+  <!-- Chart Row 3: Full width evolution -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Evolucao Mensal: Transporte vs Pessoal</h3></div>
+    <div class="card-body"><div class="chart-container-lg"><canvas id="chartEvolution"></canvas></div></div>
+  </div>
+
+  <!-- Top Transporters -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Principais Transportadoras</h3></div>
+    <div class="card-body">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Transportadora</th>
+              <th>CNPJ</th>
+              <th>UF</th>
+              <th style="text-align:right">Qtd CT-e</th>
+              <th style="text-align:right">Valor Total</th>
+              <th style="text-align:right">Peso Total (kg)</th>
+              <th style="text-align:right">Ticket Medio</th>
+            </tr>
+          </thead>
+          <tbody id="transportBody">
+            <tr><td colspan="7" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Top 20 Employee Costs -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Top 20 Maiores Custos de Colaboradores</h3></div>
+    <div class="card-body">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Colaborador</th>
+              <th>Cargo</th>
+              <th>Setor</th>
+              <th>Competencia</th>
+              <th style="text-align:right">Salario Base</th>
+              <th style="text-align:right">Custo Total</th>
+            </tr>
+          </thead>
+          <tbody id="topCostBody">
+            <tr><td colspan="7" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'dashboard_custos', title: 'Dashboard de Custos' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  /* ── Chart config ── */
+  var charts = {};
+  var COLORS = ['#2563EB','#16A34A','#D97706','#DC2626','#0EA5E9','#8B5CF6','#EC4899','#14B8A6','#F97316','#6366F1'];
+  Chart.defaults.font.family = 'Inter, sans-serif';
+  Chart.defaults.font.size = 12;
+  Chart.defaults.color = '#475569';
+
+  function destroyChart(id) {
+    if (charts[id]) { charts[id].destroy(); charts[id] = null; }
+  }
+
+  /* ── Date filter helpers ── */
+  function getFilters() {
+    return {
+      from: document.getElementById('filterFrom').value,
+      to: document.getElementById('filterTo').value
+    };
+  }
+
+  function cteFilterStr(f) {
+    var s = '';
+    if (f.from) s += '&data_emissao=gte.' + f.from + '-01';
+    if (f.to) {
+      var parts = f.to.split('-');
+      var endDate = new Date(parseInt(parts[0]), parseInt(parts[1]), 0);
+      s += '&data_emissao=lte.' + parts[0] + '-' + parts[1] + '-' + String(endDate.getDate()).padStart(2, '0');
+    }
+    return s;
+  }
+
+  function costFilterStr(f) {
+    var s = '';
+    if (f.from) s += '&competencia=gte.' + f.from;
+    if (f.to) s += '&competencia=lte.' + f.to;
+    return s;
+  }
+
+  /* ── Main load ── */
+  async function loadDashboard() {
+    var filters = getFilters();
+
+    var cteEndpoint = 'rh_cte?select=id,numero_cte,data_emissao,emit_cnpj,emit_razao_social,emit_nome_fantasia,emit_uf,local_origem,local_destino,valor_total,peso_bruto,status&status=eq.autorizado&order=data_emissao.asc&limit=5000' + cteFilterStr(filters);
+    var costEndpoint = 'rh_custo_colaborador?select=*&order=custo_total.desc&limit=5000' + costFilterStr(filters);
+
+    var cteResult = await API.get(cteEndpoint);
+    var costResult = await API.get(costEndpoint);
+
+    var cteData = (cteResult.ok && cteResult.data) ? cteResult.data : [];
+    var costData = (costResult.ok && costResult.data) ? costResult.data : [];
+
+    /* ── KPIs ── */
+    var cteCount = cteData.length;
+    var transportTotal = 0;
+    for (var i = 0; i < cteData.length; i++) transportTotal += Number(cteData[i].valor_total) || 0;
+
+    var uniqueEmployees = {};
+    var personnelCost = 0;
+    for (var i = 0; i < costData.length; i++) {
+      var key = costData[i].cpf || costData[i].nome_colaborador;
+      uniqueEmployees[key] = true;
+      personnelCost += Number(costData[i].custo_total) || 0;
+    }
+    var employeeCount = Object.keys(uniqueEmployees).length;
+    var generalCost = transportTotal + personnelCost;
+
+    document.getElementById('kpiCteCount').textContent = API.fmtNum(cteCount, 0);
+    document.getElementById('kpiTransportTotal').textContent = API.fmtMoeda(transportTotal);
+    document.getElementById('kpiEmployees').textContent = API.fmtNum(employeeCount, 0);
+    document.getElementById('kpiPersonnelCost').textContent = API.fmtMoeda(personnelCost);
+    document.getElementById('kpiGeneralCost').textContent = API.fmtMoeda(generalCost);
+
+    /* ── Chart 1: Transport cost by month (bar) ── */
+    var transportByMonth = {};
+    for (var i = 0; i < cteData.length; i++) {
+      var dt = cteData[i].data_emissao;
+      if (!dt) continue;
+      var ym = dt.substring(0, 7);
+      transportByMonth[ym] = (transportByMonth[ym] || 0) + (Number(cteData[i].valor_total) || 0);
+    }
+    var monthLabels = Object.keys(transportByMonth).sort();
+    var monthValues = monthLabels.map(function(k) { return transportByMonth[k]; });
+
+    destroyChart('chartTransportMonth');
+    charts.chartTransportMonth = new Chart(document.getElementById('chartTransportMonth'), {
+      type: 'bar',
+      data: {
+        labels: monthLabels,
+        datasets: [{
+          label: 'Custo Transporte',
+          data: monthValues,
+          backgroundColor: '#2563EB',
+          borderRadius: 6,
+          maxBarThickness: 48
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { label: function(ctx) { return API.fmtMoeda(ctx.raw); } } }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: function(v) { return API.fmtMoeda(v); } }, grid: { color: '#E2E8F0' } },
+          x: { grid: { display: false } }
         }
+      }
+    });
 
-        var COLORS = {
-            blue:    '#2563EB',
-            green:   '#16A34A',
-            amber:   '#D97706',
-            red:     '#DC2626',
-            purple:  '#7C3AED',
-            teal:    '#0D9488',
-            pink:    '#DB2777',
-            indigo:  '#4F46E5',
-            orange:  '#EA580C',
-            cyan:    '#0891B2'
+    /* ── Chart 2: Top 10 routes (horizontal bar) ── */
+    var routeCounts = {};
+    for (var i = 0; i < cteData.length; i++) {
+      var route = (cteData[i].local_origem || '?') + ' > ' + (cteData[i].local_destino || '?');
+      if (!routeCounts[route]) routeCounts[route] = { count: 0, valor: 0 };
+      routeCounts[route].count++;
+      routeCounts[route].valor += Number(cteData[i].valor_total) || 0;
+    }
+    var routeEntries = Object.entries(routeCounts).sort(function(a, b) { return b[1].count - a[1].count; }).slice(0, 10);
+    var routeLabels = routeEntries.map(function(e) { return e[0]; });
+    var routeValues = routeEntries.map(function(e) { return e[1].count; });
+
+    destroyChart('chartRoutes');
+    charts.chartRoutes = new Chart(document.getElementById('chartRoutes'), {
+      type: 'bar',
+      data: {
+        labels: routeLabels,
+        datasets: [{
+          label: 'Qtd CT-e',
+          data: routeValues,
+          backgroundColor: '#16A34A',
+          borderRadius: 6,
+          maxBarThickness: 24
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: '#E2E8F0' } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+
+    /* ── Chart 3: Cost by sector (doughnut) ── */
+    var sectorCosts = {};
+    for (var i = 0; i < costData.length; i++) {
+      var setor = costData[i].setor || 'Sem Setor';
+      sectorCosts[setor] = (sectorCosts[setor] || 0) + (Number(costData[i].custo_total) || 0);
+    }
+    var sectorEntries = Object.entries(sectorCosts).sort(function(a, b) { return b[1] - a[1]; });
+    var sectorLabels = sectorEntries.map(function(e) { return e[0]; });
+    var sectorValues = sectorEntries.map(function(e) { return e[1]; });
+
+    destroyChart('chartSector');
+    charts.chartSector = new Chart(document.getElementById('chartSector'), {
+      type: 'doughnut',
+      data: {
+        labels: sectorLabels,
+        datasets: [{
+          data: sectorValues,
+          backgroundColor: COLORS.slice(0, sectorLabels.length),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+          tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + API.fmtMoeda(ctx.raw); } } },
+          legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } }
+        }
+      }
+    });
+
+    /* ── Chart 4: Cost composition (doughnut) ── */
+    var composition = {
+      'Salario Base': 0, 'Horas Extras': 0, 'Vale Transporte': 0,
+      'Vale Alimentacao': 0, 'Plano Saude': 0, 'FGTS': 0, 'INSS Empresa': 0
+    };
+    for (var i = 0; i < costData.length; i++) {
+      var r = costData[i];
+      composition['Salario Base'] += Number(r.salario_base) || 0;
+      composition['Horas Extras'] += Number(r.horas_extras) || 0;
+      composition['Vale Transporte'] += Number(r.vale_transporte) || 0;
+      composition['Vale Alimentacao'] += Number(r.vale_alimentacao) || 0;
+      composition['Plano Saude'] += Number(r.plano_saude) || 0;
+      composition['FGTS'] += Number(r.fgts) || 0;
+      composition['INSS Empresa'] += Number(r.inss_empresa) || 0;
+    }
+    var compLabels = Object.keys(composition);
+    var compValues = compLabels.map(function(k) { return composition[k]; });
+
+    destroyChart('chartComposition');
+    charts.chartComposition = new Chart(document.getElementById('chartComposition'), {
+      type: 'doughnut',
+      data: {
+        labels: compLabels,
+        datasets: [{
+          data: compValues,
+          backgroundColor: COLORS.slice(0, compLabels.length),
+          borderWidth: 2,
+          borderColor: '#fff'
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        cutout: '55%',
+        plugins: {
+          tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + API.fmtMoeda(ctx.raw); } } },
+          legend: { position: 'right', labels: { boxWidth: 12, padding: 12 } }
+        }
+      }
+    });
+
+    /* ── Chart 5: Monthly evolution transport vs personnel (line) ── */
+    var costByMonth = {};
+    for (var i = 0; i < costData.length; i++) {
+      var comp = costData[i].competencia;
+      if (!comp) continue;
+      var ym = comp.substring(0, 7);
+      costByMonth[ym] = (costByMonth[ym] || 0) + (Number(costData[i].custo_total) || 0);
+    }
+
+    var allMonths = {};
+    Object.keys(transportByMonth).forEach(function(m) { allMonths[m] = true; });
+    Object.keys(costByMonth).forEach(function(m) { allMonths[m] = true; });
+    var evoLabels = Object.keys(allMonths).sort();
+    var evoTransport = evoLabels.map(function(m) { return transportByMonth[m] || 0; });
+    var evoPersonnel = evoLabels.map(function(m) { return costByMonth[m] || 0; });
+
+    destroyChart('chartEvolution');
+    charts.chartEvolution = new Chart(document.getElementById('chartEvolution'), {
+      type: 'line',
+      data: {
+        labels: evoLabels,
+        datasets: [
+          {
+            label: 'Transporte',
+            data: evoTransport,
+            borderColor: '#2563EB',
+            backgroundColor: 'rgba(37,99,235,.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4
+          },
+          {
+            label: 'Pessoal',
+            data: evoPersonnel,
+            borderColor: '#D97706',
+            backgroundColor: 'rgba(217,119,6,.1)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4
+          }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + API.fmtMoeda(ctx.raw); } } },
+          legend: { labels: { boxWidth: 12 } }
+        },
+        scales: {
+          y: { beginAtZero: true, ticks: { callback: function(v) { return API.fmtMoeda(v); } }, grid: { color: '#E2E8F0' } },
+          x: { grid: { display: false } }
+        }
+      }
+    });
+
+    /* ── Top Transporters table ── */
+    var transporters = {};
+    for (var i = 0; i < cteData.length; i++) {
+      var r = cteData[i];
+      var tKey = r.emit_cnpj || r.emit_razao_social || 'Desconhecido';
+      if (!transporters[tKey]) {
+        transporters[tKey] = {
+          nome: r.emit_nome_fantasia || r.emit_razao_social || '-',
+          cnpj: r.emit_cnpj || '-',
+          uf: r.emit_uf || '-',
+          count: 0, valor: 0, peso: 0
         };
-        var PALETTE = Object.values(COLORS);
+      }
+      transporters[tKey].count++;
+      transporters[tKey].valor += Number(r.valor_total) || 0;
+      transporters[tKey].peso += Number(r.peso_bruto) || 0;
+    }
+    var transporterList = Object.values(transporters).sort(function(a, b) { return b.valor - a.valor; });
+    var tBody = document.getElementById('transportBody');
 
-        function paletteBg(alpha) {
-            return PALETTE.map(function(c) { return c + (alpha || '33'); });
-        }
+    if (!transporterList.length) {
+      tBody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:32px">Nenhum dado disponivel.</td></tr>';
+    } else {
+      var tRows = '';
+      for (var i = 0; i < transporterList.length; i++) {
+        var t = transporterList[i];
+        var ticket = t.count > 0 ? t.valor / t.count : 0;
+        tRows += '<tr>' +
+          '<td>' + API.esc(t.nome) + '</td>' +
+          '<td>' + API.esc(t.cnpj) + '</td>' +
+          '<td>' + API.esc(t.uf) + '</td>' +
+          '<td style="text-align:right">' + API.fmtNum(t.count, 0) + '</td>' +
+          '<td style="text-align:right">' + API.fmtMoeda(t.valor) + '</td>' +
+          '<td style="text-align:right">' + API.fmtNum(t.peso, 2) + '</td>' +
+          '<td style="text-align:right">' + API.fmtMoeda(ticket) + '</td>' +
+          '</tr>';
+      }
+      tBody.innerHTML = tRows;
+    }
 
-        var chartDefaults = {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { labels: { font: { family: 'Inter', size: 12 }, color: '#0F172A' } }
-            }
-        };
+    /* ── Top 20 Employee Costs table ── */
+    var top20 = costData.slice(0, 20);
+    var cBody = document.getElementById('topCostBody');
 
-        /* ---------- chart instances ---------- */
-        var charts = {};
+    if (!top20.length) {
+      cBody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:32px">Nenhum dado disponivel.</td></tr>';
+    } else {
+      var cRows = '';
+      for (var i = 0; i < top20.length; i++) {
+        var c = top20[i];
+        cRows += '<tr>' +
+          '<td>' + (i + 1) + '</td>' +
+          '<td>' + API.esc(c.nome_colaborador || '-') + '</td>' +
+          '<td>' + API.esc(c.cargo || '-') + '</td>' +
+          '<td>' + API.esc(c.setor || '-') + '</td>' +
+          '<td>' + API.esc(c.competencia || '-') + '</td>' +
+          '<td style="text-align:right">' + API.fmtMoeda(c.salario_base) + '</td>' +
+          '<td style="text-align:right;font-weight:600">' + API.fmtMoeda(c.custo_total) + '</td>' +
+          '</tr>';
+      }
+      cBody.innerHTML = cRows;
+    }
+  }
 
-        function makeBarChart(id, labels, data, label, color) {
-            var ctx = document.getElementById(id).getContext('2d');
-            charts[id] = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: label,
-                        data: data,
-                        backgroundColor: color || COLORS.blue,
-                        borderRadius: 4
-                    }]
-                },
-                options: Object.assign({}, chartDefaults, {
-                    plugins: Object.assign({}, chartDefaults.plugins, { legend: { display: false } }),
-                    scales: {
-                        y: { ticks: { callback: function(v) { return fmtK(v); }, color: '#94A3B8', font: { family: 'Inter' } }, grid: { color: '#E2E8F0' } },
-                        x: { ticks: { color: '#94A3B8', font: { family: 'Inter' } }, grid: { display: false } }
-                    }
-                })
-            });
-        }
+  /* ── Filter events ── */
+  document.getElementById('btnFilter').addEventListener('click', loadDashboard);
+  document.getElementById('btnClear').addEventListener('click', function() {
+    document.getElementById('filterFrom').value = '';
+    document.getElementById('filterTo').value = '';
+    loadDashboard();
+  });
 
-        function makeHBarChart(id, labels, data, label, color) {
-            var ctx = document.getElementById(id).getContext('2d');
-            charts[id] = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: label,
-                        data: data,
-                        backgroundColor: color || COLORS.green,
-                        borderRadius: 4
-                    }]
-                },
-                options: Object.assign({}, chartDefaults, {
-                    indexAxis: 'y',
-                    plugins: Object.assign({}, chartDefaults.plugins, { legend: { display: false } }),
-                    scales: {
-                        x: { ticks: { callback: function(v) { return fmtK(v); }, color: '#94A3B8', font: { family: 'Inter' } }, grid: { color: '#E2E8F0' } },
-                        y: { ticks: { color: '#94A3B8', font: { family: 'Inter', size: 11 } }, grid: { display: false } }
-                    }
-                })
-            });
-        }
-
-        function makeDoughnut(id, labels, data, colors) {
-            var ctx = document.getElementById(id).getContext('2d');
-            charts[id] = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        data: data,
-                        backgroundColor: colors || PALETTE.slice(0, labels.length),
-                        borderWidth: 2,
-                        borderColor: '#fff'
-                    }]
-                },
-                options: Object.assign({}, chartDefaults, {
-                    cutout: '55%',
-                    plugins: {
-                        legend: { position: 'right', labels: { font: { family: 'Inter', size: 11 }, color: '#0F172A', padding: 12, boxWidth: 14 } },
-                        tooltip: { callbacks: { label: function(ctx) { return ctx.label + ': ' + API.fmtMoeda(ctx.parsed); } } }
-                    }
-                })
-            });
-        }
-
-        function makeLineChart(id, labels, datasets) {
-            var ctx = document.getElementById(id).getContext('2d');
-            charts[id] = new Chart(ctx, {
-                type: 'line',
-                data: { labels: labels, datasets: datasets },
-                options: Object.assign({}, chartDefaults, {
-                    interaction: { mode: 'index', intersect: false },
-                    scales: {
-                        y: { ticks: { callback: function(v) { return fmtK(v); }, color: '#94A3B8', font: { family: 'Inter' } }, grid: { color: '#E2E8F0' } },
-                        x: { ticks: { color: '#94A3B8', font: { family: 'Inter' } }, grid: { display: false } }
-                    },
-                    plugins: Object.assign({}, chartDefaults.plugins, {
-                        tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + API.fmtMoeda(ctx.parsed.y); } } }
-                    })
-                })
-            });
-        }
-
-        /* ---------- data loading ---------- */
-        async function loadData() {
-            var resCte = await API.get('rh_cte?select=numero_cte,data_emissao,emit_razao_social,emit_nome_fantasia,valor_total,peso_bruto,local_origem,local_destino&order=data_emissao.desc&limit=5000');
-            var resCusto = await API.get('rh_custo_colaborador?select=competencia,nome_colaborador,cargo,setor,salario_base,vale_transporte,vale_alimentacao,plano_saude,fgts,inss_empresa,custo_total&order=custo_total.desc&limit=5000');
-
-            var ctes = (resCte.ok && resCte.data) ? resCte.data : [];
-            var custos = (resCusto.ok && resCusto.data) ? resCusto.data : [];
-
-            /* ---- KPIs ---- */
-            var totalTransporte = ctes.reduce(function(s, r) { return s + (Number(r.valor_total) || 0); }, 0);
-            var totalPessoal = custos.reduce(function(s, r) { return s + (Number(r.custo_total) || 0); }, 0);
-
-            var colabUnicos = {};
-            custos.forEach(function(r) { colabUnicos[r.nome_colaborador] = true; });
-
-            document.getElementById('kpi-cte-count').textContent = API.fmtNum(ctes.length);
-            document.getElementById('kpi-transporte').textContent = API.fmtMoeda(totalTransporte);
-            document.getElementById('kpi-colab-count').textContent = API.fmtNum(Object.keys(colabUnicos).length);
-            document.getElementById('kpi-pessoal').textContent = API.fmtMoeda(totalPessoal);
-            document.getElementById('kpi-geral').textContent = API.fmtMoeda(totalTransporte + totalPessoal);
-
-            /* ---- Chart 1: Custo Transporte por Mes ---- */
-            var mesTransp = {};
-            ctes.forEach(function(r) {
-                var m = (r.data_emissao || '').substring(0, 7);
-                if (m) mesTransp[m] = (mesTransp[m] || 0) + (Number(r.valor_total) || 0);
-            });
-            var mesesT = Object.keys(mesTransp).sort();
-            makeBarChart('chartTransporteMes', mesesT, mesesT.map(function(m) { return mesTransp[m]; }), 'Transporte', COLORS.blue);
-
-            /* ---- Chart 2: CT-e por Rota Top 10 ---- */
-            var rotas = {};
-            ctes.forEach(function(r) {
-                var rota = (r.local_origem || '?') + ' > ' + (r.local_destino || '?');
-                rotas[rota] = (rotas[rota] || 0) + (Number(r.valor_total) || 0);
-            });
-            var rotaArr = Object.entries(rotas).sort(function(a, b) { return b[1] - a[1]; }).slice(0, 10);
-            makeHBarChart('chartRotas', rotaArr.map(function(r) { return r[0]; }), rotaArr.map(function(r) { return r[1]; }), 'Valor', COLORS.green);
-
-            /* ---- Chart 3: Custo por Setor ---- */
-            var setores = {};
-            custos.forEach(function(r) {
-                var s = r.setor || 'Sem setor';
-                setores[s] = (setores[s] || 0) + (Number(r.custo_total) || 0);
-            });
-            var setorArr = Object.entries(setores).sort(function(a, b) { return b[1] - a[1]; });
-            makeDoughnut('chartSetor', setorArr.map(function(r) { return r[0]; }), setorArr.map(function(r) { return r[1]; }));
-
-            /* ---- Chart 4: Composicao Custo Pessoal ---- */
-            var compSalario = 0, compVT = 0, compVA = 0, compSaude = 0, compFGTS = 0, compINSS = 0;
-            custos.forEach(function(r) {
-                compSalario += Number(r.salario_base) || 0;
-                compVT += Number(r.vale_transporte) || 0;
-                compVA += Number(r.vale_alimentacao) || 0;
-                compSaude += Number(r.plano_saude) || 0;
-                compFGTS += Number(r.fgts) || 0;
-                compINSS += Number(r.inss_empresa) || 0;
-            });
-            var compTotal = compSalario + compVT + compVA + compSaude + compFGTS + compINSS;
-            var compOutros = totalPessoal - compTotal;
-            if (compOutros < 0) compOutros = 0;
-            var compLabels = ['Salario', 'Vale Transporte', 'Vale Alimentacao', 'Plano Saude', 'FGTS', 'INSS', 'Outros'];
-            var compData = [compSalario, compVT, compVA, compSaude, compFGTS, compINSS, compOutros];
-            makeDoughnut('chartComposicao', compLabels, compData);
-
-            /* ---- Chart 5: Evolucao Mensal Transporte vs Pessoal ---- */
-            var mesPessoal = {};
-            custos.forEach(function(r) {
-                var m = (r.competencia || '').substring(0, 7);
-                if (m) mesPessoal[m] = (mesPessoal[m] || 0) + (Number(r.custo_total) || 0);
-            });
-            var allMonths = {};
-            Object.keys(mesTransp).forEach(function(m) { allMonths[m] = true; });
-            Object.keys(mesPessoal).forEach(function(m) { allMonths[m] = true; });
-            var meses = Object.keys(allMonths).sort();
-
-            makeLineChart('chartEvolucao', meses, [
-                {
-                    label: 'Transporte',
-                    data: meses.map(function(m) { return mesTransp[m] || 0; }),
-                    borderColor: COLORS.blue,
-                    backgroundColor: COLORS.blue + '22',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 4
-                },
-                {
-                    label: 'Pessoal',
-                    data: meses.map(function(m) { return mesPessoal[m] || 0; }),
-                    borderColor: COLORS.amber,
-                    backgroundColor: COLORS.amber + '22',
-                    fill: true,
-                    tension: 0.3,
-                    pointRadius: 4
-                }
-            ]);
-
-            /* ---- Table: Top Transportadoras ---- */
-            var transp = {};
-            ctes.forEach(function(r) {
-                var nome = r.emit_nome_fantasia || r.emit_razao_social || 'Desconhecido';
-                if (!transp[nome]) transp[nome] = { count: 0, valor: 0, peso: 0 };
-                transp[nome].count++;
-                transp[nome].valor += Number(r.valor_total) || 0;
-                transp[nome].peso += Number(r.peso_bruto) || 0;
-            });
-            var transpArr = Object.entries(transp).sort(function(a, b) { return b[1].valor - a[1].valor; });
-            var tbodyT = document.querySelector('#tbl-transportadoras tbody');
-
-            if (transpArr.length === 0) {
-                tbodyT.innerHTML = '<tr><td colspan="5" class="text-muted" style="text-align:center">Nenhum dado encontrado</td></tr>';
-            } else {
-                tbodyT.innerHTML = transpArr.map(function(t) {
-                    var pct = totalTransporte > 0 ? ((t[1].valor / totalTransporte) * 100).toFixed(1) : '0.0';
-                    return '<tr>' +
-                        '<td>' + API.esc(t[0]) + '</td>' +
-                        '<td style="text-align:right">' + API.fmtNum(t[1].count) + '</td>' +
-                        '<td style="text-align:right">' + API.fmtMoeda(t[1].valor) + '</td>' +
-                        '<td style="text-align:right">' + API.fmtNum(t[1].peso) + '</td>' +
-                        '<td style="text-align:right"><span class="badge badge-success">' + pct + '%</span></td>' +
-                        '</tr>';
-                }).join('');
-            }
-
-            /* ---- Table: Top 20 Custos por Colaborador ---- */
-            var top20 = custos.slice(0, 20);
-            var tbodyC = document.querySelector('#tbl-colaboradores tbody');
-
-            if (top20.length === 0) {
-                tbodyC.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center">Nenhum dado encontrado</td></tr>';
-            } else {
-                tbodyC.innerHTML = top20.map(function(r) {
-                    return '<tr>' +
-                        '<td>' + API.esc(r.nome_colaborador || '') + '</td>' +
-                        '<td>' + API.esc(r.cargo || '') + '</td>' +
-                        '<td>' + API.esc(r.setor || '') + '</td>' +
-                        '<td style="text-align:right">' + API.fmtMoeda(Number(r.custo_total) || 0) + '</td>' +
-                        '</tr>';
-                }).join('');
-            }
-        }
-
-        loadData();
-    })();
-    </script>
+  // Initial load
+  loadDashboard();
+})();
+</script>
 </body>
 </html>

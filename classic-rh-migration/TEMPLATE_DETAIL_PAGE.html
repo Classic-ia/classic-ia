@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - __TITULO__</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- Hero Card -->
+  <div class="card mb-6" id="heroCard">
+    <div class="card-body" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+      <div class="avatar-lg" id="heroAvatar" style="width:64px;height:64px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:24px;font-weight:700;">--</div>
+      <div style="flex:1;min-width:200px;">
+        <h2 id="heroTitle" style="margin:0 0 4px 0;font-size:20px;font-weight:700;color:var(--text-primary);">
+          <span class="skeleton" style="width:200px;height:24px;display:inline-block;"></span>
+        </h2>
+        <div id="heroSubtitle" style="color:var(--text-muted);font-size:14px;">Carregando...</div>
+        <div id="heroBadges" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap;"></div>
+      </div>
+      <div id="heroActions" style="display:flex;gap:8px;">
+        <!-- botoes de acao inseridos via JS conforme permissao -->
+      </div>
+    </div>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-row mb-6" id="kpiRow">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-1"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">__KPI_1__</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-2"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">__KPI_2__</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-3"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">__KPI_3__</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-4"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">__KPI_4__</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="card">
+    <div class="tabs" id="tabsContainer">
+      <button class="tab active" data-tab="resumo">Resumo</button>
+      <button class="tab" data-tab="detalhes">Detalhes</button>
+      <button class="tab" data-tab="historico">Historico</button>
+    </div>
+
+    <!-- Tab: Resumo -->
+    <div class="tab-content active" id="tab-resumo">
+      <div class="card-body" id="resumoBody">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Tab: Detalhes -->
+    <div class="tab-content" id="tab-detalhes" style="display:none;">
+      <div class="card-body" id="detalhesBody">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Tab: Historico -->
+    <div class="tab-content" id="tab-historico" style="display:none;">
+      <div class="card-body" id="historicoBody">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/**
+ * __PAGE_ID__ — __TITULO__
+ * Baseado em: TEMPLATE_DETAIL_PAGE (ref: ficha.html)
+ *
+ * Estrutura obrigatoria:
+ *   initPage (via PageBootstrap)
+ *   bindEvents
+ *   loadData
+ *   render
+ *   handleError (via PageBootstrap)
+ */
+
+let _record = null;
+let _user = null;
+
+// ==============================================================
+// INIT
+// ==============================================================
+PageBootstrap.init({
+  page: '__PAGE_ID__',
+  title: '__TITULO__',
+  breadcrumb: '__BREADCRUMB__',
+  perfisPermitidos: ['administrador', 'rh', 'gestor', 'visualizador'],
+
+  bindEvents,
+  loadData,
+  render,
+});
+
+// ==============================================================
+// BIND EVENTS
+// ==============================================================
+function bindEvents(user) {
+  _user = user;
+
+  // Tabs
+  document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+      tab.classList.add('active');
+      const target = document.getElementById('tab-' + tab.dataset.tab);
+      if (target) target.style.display = '';
+    });
+  });
+}
+
+// ==============================================================
+// LOAD DATA
+// ==============================================================
+async function loadData(user) {
+  // Pegar ID da URL
+  const params = new URLSearchParams(window.location.search);
+  const id = params.get('id');
+
+  if (!id) {
+    throw new Error('ID nao informado na URL');
+  }
+
+  // SUBSTITUIR pelo endpoint/RPC real
+  const res = await API.rpc('__RPC_NAME__', { p_id: id });
+
+  if (!res.ok) {
+    throw new Error(res.error || 'Erro ao carregar registro');
+  }
+
+  _record = res.data;
+  return _record;
+}
+
+// ==============================================================
+// RENDER
+// ==============================================================
+function render(record) {
+  if (!record) {
+    PageBootstrap.showPageError('Registro nao encontrado');
+    return;
+  }
+
+  // Hero
+  const initials = (record.nome || '--').split(' ').slice(0, 2).map(w => w[0]).join('').toUpperCase();
+  document.getElementById('heroAvatar').textContent = initials;
+  document.getElementById('heroTitle').textContent = record.nome || '--';
+  document.getElementById('heroSubtitle').textContent = [record.cargo, record.setor].filter(Boolean).join(' - ') || '--';
+  document.getElementById('heroBadges').innerHTML = `
+    ${record.status ? badgeStatus(record.status) : ''}
+  `;
+
+  // Acoes condicionais
+  if (API.canAccess('editar_funcionario')) {
+    document.getElementById('heroActions').innerHTML = `
+      <button class="btn btn-primary btn-sm" onclick="editRecord()">Editar</button>
+    `;
+  }
+
+  // KPIs
+  setKPI('kpi-1', record.kpi_1 || 0);
+  setKPI('kpi-2', record.kpi_2 || 0);
+  setKPI('kpi-3', record.kpi_3 || 0);
+  setKPI('kpi-4', record.kpi_4 || 0);
+
+  // Tab Resumo
+  renderResumo(record);
+
+  // Tab Detalhes
+  renderDetalhes(record);
+
+  // Tab Historico
+  renderHistorico(record);
+}
+
+// ==============================================================
+// RENDER TABS
+// ==============================================================
+function renderResumo(record) {
+  const el = document.getElementById('resumoBody');
+  el.innerHTML = `
+    <div class="detail-grid">
+      <div class="detail-item">
+        <div class="detail-label">Campo 1</div>
+        <div class="detail-value">${API.esc(record.campo1 || '--')}</div>
+      </div>
+      <div class="detail-item">
+        <div class="detail-label">Campo 2</div>
+        <div class="detail-value">${API.fmtData(record.campo2)}</div>
+      </div>
+    </div>
+  `;
+}
+
+function renderDetalhes(record) {
+  const el = document.getElementById('detalhesBody');
+  // Condicional por perfil
+  if (!API.canAccess('dados_sensiveis')) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);">Acesso restrito ao RH</div>';
+    return;
+  }
+  el.innerHTML = `<p>Detalhes restritos aqui...</p>`;
+}
+
+function renderHistorico(record) {
+  const el = document.getElementById('historicoBody');
+  if (!record.historico || record.historico.length === 0) {
+    el.innerHTML = '<div style="padding:24px;text-align:center;color:var(--text-muted);">Nenhum registro no historico</div>';
+    return;
+  }
+  el.innerHTML = '<p>Timeline de historico aqui...</p>';
+}
+
+// ==============================================================
+// ACOES
+// ==============================================================
+function editRecord() {
+  if (!API.canAccess('editar_funcionario')) {
+    alert('Sem permissao para editar');
+    return;
+  }
+  // Implementar edicao
+}
+
+// ==============================================================
+// HELPERS
+// ==============================================================
+function setKPI(id, value) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = typeof value === 'number' ? API.fmtNum(value) : (value || '--');
+}
+
+function badgeStatus(status) {
+  if (!status) return '<span class="badge badge-gray">--</span>';
+  const map = {
+    'ativo': 'success', 'vigente': 'success', 'ok': 'success', 'concluido': 'success',
+    'pendente': 'warning', 'vencendo': 'warning',
+    'vencido': 'danger', 'inativo': 'danger', 'cancelado': 'danger',
+  };
+  const cls = map[status.toLowerCase()] || 'gray';
+  return `<span class="badge badge-${cls}">${API.esc(status)}</span>`;
+}
+</script>
+</body>
+</html>

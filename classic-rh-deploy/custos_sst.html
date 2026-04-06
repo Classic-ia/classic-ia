@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - Custos SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- KPIs -->
+  <div class="kpi-row mb-6">
+    <div class="kpi-card"><div class="kpi-value" id="kpi-faturas">--</div><div class="kpi-label">Faturas no Periodo</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-valor">--</div><div class="kpi-label">Valor Total</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-vinculados">--</div><div class="kpi-label">Vinculados</div></div>
+    <div class="kpi-card"><div class="kpi-value" id="kpi-divergentes">--</div><div class="kpi-label">Divergentes</div></div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <div>
+          <label class="form-label">Competencia</label>
+          <input type="month" id="filtroComp" class="input" style="max-width:180px;">
+        </div>
+      </div>
+      <div id="actionBtns"></div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="card mb-6">
+    <div style="display:flex;border-bottom:1px solid var(--border);overflow-x:auto;">
+      <button class="tab active" data-tab="faturas" onclick="switchTab(this)">Faturas</button>
+      <button class="tab" data-tab="resumo" onclick="switchTab(this)">Resumo Procedimentos</button>
+      <button class="tab" data-tab="historico" onclick="switchTab(this)">Historico Colaboradores</button>
+      <button class="tab" data-tab="conciliacao" onclick="switchTab(this)">Conciliacao</button>
+    </div>
+
+    <!-- TAB: FATURAS -->
+    <div class="tab-content active" id="tab-faturas">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Competencia</th><th>Fornecedor</th><th>Documento</th>
+            <th>Emissao</th><th>Vencimento</th><th>Valor Total</th><th>Status</th><th>Acoes</th>
+          </tr></thead>
+          <tbody id="tbodyFaturas">
+            <tr><td colspan="8" class="table-empty"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: RESUMO PROCEDIMENTOS -->
+    <div class="tab-content" id="tab-resumo" style="display:none;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);">
+        <select id="filtroFaturaResumo" class="input" style="max-width:400px;">
+          <option value="">Selecione uma fatura...</option>
+        </select>
+      </div>
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Descricao Original</th><th>Nome Padronizado</th><th>Categoria</th>
+            <th>Subtipo</th><th>Vlr Unit.</th><th>Qtd</th><th>Total</th><th>Acoes</th>
+          </tr></thead>
+          <tbody id="tbodyResumo">
+            <tr><td colspan="8" class="table-empty">Selecione uma fatura</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div style="padding:12px 16px;">
+        <button class="btn btn-primary btn-sm" id="btnAddResumo" style="display:none;">+ Adicionar Procedimento</button>
+      </div>
+    </div>
+
+    <!-- TAB: HISTORICO COLABORADORES -->
+    <div class="tab-content" id="tab-historico" style="display:none;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+        <select id="filtroFaturaHist" class="input" style="max-width:400px;">
+          <option value="">Selecione uma fatura...</option>
+        </select>
+        <button class="btn btn-ghost btn-sm" id="btnVincular" style="display:none;" onclick="vincularNomes()">Vincular Nomes</button>
+        <button class="btn btn-ghost btn-sm" id="btnEstimar" style="display:none;" onclick="estimarCustos()">Estimar Custos</button>
+      </div>
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Nome Origem</th><th>Tipo Evento</th><th>Categoria</th>
+            <th>Data</th><th>Vlr Est.</th><th>Vinculo</th><th>Status</th>
+          </tr></thead>
+          <tbody id="tbodyHistorico">
+            <tr><td colspan="7" class="table-empty">Selecione uma fatura</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- TAB: CONCILIACAO -->
+    <div class="tab-content" id="tab-conciliacao" style="display:none;">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr>
+            <th>Fornecedor</th><th>Vlr Fatura</th><th>Qtd Resumo</th><th>Vlr Resumo</th>
+            <th>Qtd Hist.</th><th>Vlr Hist.</th><th>Dif. Valor</th><th>Status</th>
+          </tr></thead>
+          <tbody id="tbodyConciliacao">
+            <tr><td colspan="8" class="table-empty"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Fatura -->
+<div class="modal-overlay" id="modalFatura" style="display:none;">
+  <div class="modal" style="max-width:640px;">
+    <div class="modal-header">
+      <h3 id="modalFaturaTitle">Nova Fatura SST</h3>
+      <button class="modal-close" onclick="closeModalFatura()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div><label class="form-label">Fornecedor *</label><input type="text" id="ffFornecedor" class="input"></div>
+        <div><label class="form-label">CNPJ</label><input type="text" id="ffCnpj" class="input"></div>
+        <div><label class="form-label">Competencia *</label><input type="month" id="ffCompetencia" class="input"></div>
+        <div><label class="form-label">Data Emissao *</label><input type="date" id="ffEmissao" class="input"></div>
+        <div><label class="form-label">Vencimento</label><input type="date" id="ffVencimento" class="input"></div>
+        <div><label class="form-label">Valor Total *</label><input type="number" id="ffValor" class="input" step="0.01" min="0"></div>
+        <div><label class="form-label">N. Documento</label><input type="text" id="ffDocumento" class="input"></div>
+        <div><label class="form-label">N. Contrato</label><input type="text" id="ffContrato" class="input"></div>
+        <div><label class="form-label">Status</label>
+          <select id="ffStatus" class="input">
+            <option value="aberto">Aberto</option><option value="pago">Pago</option><option value="parcial">Parcial</option>
+          </select>
+        </div>
+        <div><label class="form-label">Origem</label>
+          <select id="ffOrigem" class="input">
+            <option value="manual">Manual</option><option value="importacao">Importacao</option>
+          </select>
+        </div>
+        <div style="grid-column:1/-1;"><label class="form-label">Observacoes</label><textarea id="ffObs" class="input" rows="2"></textarea></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModalFatura()">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvarFatura">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Resumo Procedimento -->
+<div class="modal-overlay" id="modalResumo" style="display:none;">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <h3>Adicionar Procedimento</h3>
+      <button class="modal-close" onclick="document.getElementById('modalResumo').style.display='none'">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="grid-column:1/-1;"><label class="form-label">Descricao Original *</label><input type="text" id="rpDescricao" class="input" placeholder="Ex: Audiometria Tonal"></div>
+        <div><label class="form-label">Nome Padronizado</label><input type="text" id="rpNome" class="input"></div>
+        <div><label class="form-label">Categoria *</label>
+          <select id="rpCategoria" class="input">
+            <option value="">Selecione</option><option value="ASO">ASO</option><option value="EXAME">EXAME</option>
+            <option value="TREINAMENTO">TREINAMENTO</option><option value="PPP">PPP</option>
+            <option value="PSICOSSOCIAL">PSICOSSOCIAL</option><option value="OUTRO">OUTRO</option>
+          </select>
+        </div>
+        <div><label class="form-label">Subtipo</label>
+          <select id="rpSubtipo" class="input">
+            <option value="">--</option><option value="admissional">Admissional</option><option value="demissional">Demissional</option>
+            <option value="periodico">Periodico</option><option value="retorno_trabalho">Retorno</option>
+            <option value="mudanca_risco">Mudanca Risco</option><option value="outro">Outro</option>
+          </select>
+        </div>
+        <div><label class="form-label">Valor Unitario *</label><input type="number" id="rpVlrUnit" class="input" step="0.01" min="0"></div>
+        <div><label class="form-label">Quantidade *</label><input type="number" id="rpQtd" class="input" min="1" value="1"></div>
+        <div><label class="form-label">Valor Total</label><input type="number" id="rpTotal" class="input" step="0.01" readonly style="opacity:.7;"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalResumo').style.display='none'">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveResumo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Historico Item -->
+<div class="modal-overlay" id="modalHist" style="display:none;">
+  <div class="modal" style="max-width:540px;">
+    <div class="modal-header">
+      <h3>Adicionar Evento Colaborador</h3>
+      <button class="modal-close" onclick="document.getElementById('modalHist').style.display='none'">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+        <div style="grid-column:1/-1;"><label class="form-label">Nome do Funcionario *</label><input type="text" id="hNome" class="input"></div>
+        <div><label class="form-label">Tipo Evento *</label><input type="text" id="hTipoEvento" class="input" placeholder="Ex: ASO Periodico"></div>
+        <div><label class="form-label">Categoria *</label>
+          <select id="hCategoria" class="input">
+            <option value="">Selecione</option><option value="ASO">ASO</option><option value="EXAME">EXAME</option>
+            <option value="TREINAMENTO">TREINAMENTO</option><option value="PPP">PPP</option>
+            <option value="PSICOSSOCIAL">PSICOSSOCIAL</option><option value="OUTRO">OUTRO</option>
+          </select>
+        </div>
+        <div><label class="form-label">Subtipo</label>
+          <select id="hSubtipo" class="input">
+            <option value="">--</option><option value="admissional">Admissional</option><option value="demissional">Demissional</option>
+            <option value="periodico">Periodico</option><option value="retorno_trabalho">Retorno</option>
+            <option value="mudanca_risco">Mudanca</option><option value="outro">Outro</option>
+          </select>
+        </div>
+        <div><label class="form-label">Data Realizacao</label><input type="date" id="hDataRealizacao" class="input"></div>
+        <div><label class="form-label">Data Faturamento</label><input type="date" id="hDataFaturamento" class="input"></div>
+        <div><label class="form-label">Vinculo</label>
+          <select id="hVinculo" class="input"><option value="">--</option><option value="clt">CLT</option><option value="apac">APAC</option><option value="estagiario">Estagiario</option></select>
+        </div>
+        <div><label class="form-label">NR Relacionada</label><input type="text" id="hNR" class="input" placeholder="Ex: NR-07"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="document.getElementById('modalHist').style.display='none'">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveHistorico()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _faturas = [];
+let _user = null;
+let _selectedFaturaId = null;
+
+PageBootstrap.init({
+  page: 'integracoes',
+  title: 'Custos SST',
+  breadcrumb: 'Sistema > Custos SST',
+  perfisPermitidos: ['administrador','rh'],
+  bindEvents, loadData, render,
+});
+
+// === LIFECYCLE ===
+function bindEvents(user) {
+  _user = user;
+  document.getElementById('filtroComp').addEventListener('change', reloadAll);
+  document.getElementById('filtroFaturaResumo').addEventListener('change', loadResumo);
+  document.getElementById('filtroFaturaHist').addEventListener('change', loadHistorico);
+  document.getElementById('btnSalvarFatura').addEventListener('click', saveFatura);
+
+  document.getElementById('rpVlrUnit').addEventListener('input', () => {
+    const u = parseFloat(document.getElementById('rpVlrUnit').value) || 0;
+    const q = parseFloat(document.getElementById('rpQtd').value) || 1;
+    document.getElementById('rpTotal').value = (u * q).toFixed(2);
+  });
+  document.getElementById('rpQtd').addEventListener('input', () => {
+    const u = parseFloat(document.getElementById('rpVlrUnit').value) || 0;
+    const q = parseFloat(document.getElementById('rpQtd').value) || 1;
+    document.getElementById('rpTotal').value = (u * q).toFixed(2);
+  });
+
+  if (API.canAccess('editar_funcionario')) {
+    document.getElementById('actionBtns').innerHTML = '<button class="btn btn-primary btn-sm" onclick="openModalFatura()">+ Nova Fatura</button>';
+  }
+
+  const now = new Date();
+  document.getElementById('filtroComp').value = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+}
+
+async function loadData() {
+  const comp = document.getElementById('filtroComp').value;
+  let ep = 'sst_faturas_servicos?select=*&order=competencia.desc,fornecedor_nome';
+  if (comp) ep += `&competencia=eq.${comp}-01`;
+  const res = await API.get(ep);
+  _faturas = res.ok ? (res.data || []) : [];
+
+  // KPIs from dashboard RPC
+  const dashRes = await API.rpc('sst_dashboard_custos', comp ? { p_competencia: comp + '-01' } : {});
+  return { faturas: _faturas, dash: dashRes.ok ? dashRes.data : null };
+}
+
+function render(result) {
+  const { faturas, dash } = result;
+  // KPIs
+  if (dash) {
+    const rg = dash.resumo_geral || {};
+    const ig = dash.integracao || {};
+    document.getElementById('kpi-faturas').textContent = rg.total_faturas || 0;
+    document.getElementById('kpi-valor').textContent = API.fmtMoeda(rg.valor_total);
+    document.getElementById('kpi-vinculados').textContent = ig.vinculados || 0;
+    document.getElementById('kpi-divergentes').textContent = ig.divergentes || 0;
+  }
+  renderFaturas(faturas);
+  populateFaturaDropdowns(faturas);
+  loadConciliacao();
+}
+
+async function reloadAll() {
+  const result = await loadData();
+  render(result);
+}
+
+// === TABS ===
+function switchTab(btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+  btn.classList.add('active');
+  document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+}
+
+// === FATURAS ===
+function renderFaturas(faturas) {
+  const tbody = document.getElementById('tbodyFaturas');
+  if (!faturas?.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhuma fatura encontrada</td></tr>';
+    return;
+  }
+  tbody.innerHTML = faturas.map(f => `<tr>
+    <td>${API.fmtData(f.competencia)}</td>
+    <td class="font-medium">${API.esc(f.fornecedor_nome)}</td>
+    <td>${API.esc(f.numero_documento || '--')}</td>
+    <td>${API.fmtData(f.data_emissao)}</td>
+    <td>${API.fmtData(f.vencimento)}</td>
+    <td class="font-medium">${API.fmtMoeda(f.valor_total)}</td>
+    <td>${UI.badge(f.status_pagamento)}</td>
+    <td><button class="btn btn-ghost btn-xs" onclick="deleteFatura('${f.id}')">Excluir</button></td>
+  </tr>`).join('');
+}
+
+function populateFaturaDropdowns(faturas) {
+  const opts = '<option value="">Selecione...</option>' +
+    faturas.map(f => `<option value="${f.id}">${API.esc(f.fornecedor_nome)} - ${API.fmtData(f.competencia)} (${API.fmtMoeda(f.valor_total)})</option>`).join('');
+  document.getElementById('filtroFaturaResumo').innerHTML = opts;
+  document.getElementById('filtroFaturaHist').innerHTML = opts;
+}
+
+// === MODAL FATURA ===
+function openModalFatura() {
+  if (!API.canAccess('editar_funcionario')) { UI.toast('Sem permissao', 'err'); return; }
+  ['ffFornecedor','ffCnpj','ffDocumento','ffContrato','ffObs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('ffCompetencia').value = document.getElementById('filtroComp').value;
+  document.getElementById('ffValor').value = '';
+  document.getElementById('ffStatus').value = 'aberto';
+  document.getElementById('ffOrigem').value = 'manual';
+  document.getElementById('modalFatura').style.display = 'flex';
+}
+function closeModalFatura() { document.getElementById('modalFatura').style.display = 'none'; }
+
+async function saveFatura() {
+  const fornecedor = document.getElementById('ffFornecedor').value.trim();
+  const comp = document.getElementById('ffCompetencia').value;
+  const emissao = document.getElementById('ffEmissao').value;
+  const valor = parseFloat(document.getElementById('ffValor').value);
+  if (!fornecedor || !comp || !emissao || !valor) { UI.toast('Preencha campos obrigatorios', 'warn'); return; }
+
+  const payload = {
+    fornecedor_nome: fornecedor,
+    fornecedor_cnpj: document.getElementById('ffCnpj').value.trim() || null,
+    competencia: comp + '-01',
+    data_emissao: emissao,
+    vencimento: document.getElementById('ffVencimento').value || null,
+    valor_total: valor,
+    numero_documento: document.getElementById('ffDocumento').value.trim() || null,
+    numero_contrato: document.getElementById('ffContrato').value.trim() || null,
+    status_pagamento: document.getElementById('ffStatus').value,
+    origem_lancamento: document.getElementById('ffOrigem').value,
+    observacoes: document.getElementById('ffObs').value.trim() || null,
+  };
+
+  const btn = document.getElementById('btnSalvarFatura');
+  btn.disabled = true;
+  const res = await API.post('sst_faturas_servicos', payload);
+  btn.disabled = false;
+  if (res.ok) { UI.toast('Fatura salva!', 'ok'); closeModalFatura(); reloadAll(); }
+  else UI.toast('Erro: ' + res.error, 'err');
+}
+
+async function deleteFatura(id) {
+  if (!confirm('Excluir esta fatura e todos os dados vinculados?')) return;
+  const res = await API.del(`sst_faturas_servicos?id=eq.${id}`);
+  if (res.ok) { UI.toast('Excluida', 'ok'); reloadAll(); }
+  else UI.toast('Erro: ' + res.error, 'err');
+}
+
+// === RESUMO PROCEDIMENTOS ===
+async function loadResumo() {
+  const faturaId = document.getElementById('filtroFaturaResumo').value;
+  const tbody = document.getElementById('tbodyResumo');
+  const btnAdd = document.getElementById('btnAddResumo');
+  if (!faturaId) { tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Selecione uma fatura</td></tr>'; btnAdd.style.display = 'none'; return; }
+
+  _selectedFaturaId = faturaId;
+  btnAdd.style.display = '';
+  btnAdd.onclick = () => openResumoModal();
+  const res = await API.get(`sst_fatura_resumo_procedimentos?fatura_id=eq.${faturaId}&order=categoria,descricao_original`);
+  const items = res.ok ? (res.data || []) : [];
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhum procedimento cadastrado</td></tr>'; return; }
+
+  tbody.innerHTML = items.map(r => `<tr>
+    <td>${API.esc(r.descricao_original)}</td>
+    <td>${API.esc(r.nome_padronizado || '--')}</td>
+    <td>${UI.badge(r.categoria || '--')}</td>
+    <td>${API.esc(r.subtipo || '--')}</td>
+    <td>${API.fmtMoeda(r.valor_unitario)}</td>
+    <td class="cell-center">${API.fmtNum(r.quantidade)}</td>
+    <td class="font-medium">${API.fmtMoeda(r.valor_total)}</td>
+    <td><button class="btn btn-ghost btn-xs" onclick="deleteResumo('${r.id}')">Excluir</button></td>
+  </tr>`).join('');
+}
+
+function openResumoModal() {
+  ['rpDescricao','rpNome'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('rpCategoria').value = '';
+  document.getElementById('rpSubtipo').value = '';
+  document.getElementById('rpVlrUnit').value = '';
+  document.getElementById('rpQtd').value = '1';
+  document.getElementById('rpTotal').value = '';
+  document.getElementById('modalResumo').style.display = 'flex';
+}
+
+async function saveResumo() {
+  const descricao = document.getElementById('rpDescricao').value.trim();
+  const categoria = document.getElementById('rpCategoria').value;
+  const vlrUnit = parseFloat(document.getElementById('rpVlrUnit').value);
+  const qtd = parseFloat(document.getElementById('rpQtd').value) || 1;
+  if (!descricao || !categoria || !vlrUnit) { UI.toast('Preencha campos obrigatorios', 'warn'); return; }
+
+  const payload = {
+    fatura_id: _selectedFaturaId,
+    descricao_original: descricao,
+    nome_padronizado: document.getElementById('rpNome').value.trim() || null,
+    categoria,
+    subtipo: document.getElementById('rpSubtipo').value || null,
+    valor_unitario: vlrUnit,
+    quantidade: qtd,
+    valor_total: vlrUnit * qtd,
+  };
+  const res = await API.post('sst_fatura_resumo_procedimentos', payload);
+  if (res.ok) { UI.toast('Procedimento adicionado', 'ok'); document.getElementById('modalResumo').style.display = 'none'; loadResumo(); }
+  else UI.toast('Erro: ' + res.error, 'err');
+}
+
+async function deleteResumo(id) {
+  if (!confirm('Excluir?')) return;
+  const res = await API.del(`sst_fatura_resumo_procedimentos?id=eq.${id}`);
+  if (res.ok) { UI.toast('Removido', 'ok'); loadResumo(); }
+}
+
+// === HISTORICO COLABORADORES ===
+async function loadHistorico() {
+  const faturaId = document.getElementById('filtroFaturaHist').value;
+  const tbody = document.getElementById('tbodyHistorico');
+  const btnV = document.getElementById('btnVincular');
+  const btnE = document.getElementById('btnEstimar');
+  if (!faturaId) { tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Selecione uma fatura</td></tr>'; btnV.style.display = 'none'; btnE.style.display = 'none'; return; }
+
+  _selectedFaturaId = faturaId;
+  btnV.style.display = ''; btnE.style.display = '';
+
+  const res = await API.get(`sst_fatura_historico_colaborador?fatura_id=eq.${faturaId}&order=nome_funcionario_origem`);
+  const items = res.ok ? (res.data || []) : [];
+  if (!items.length) {
+    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">Nenhum evento. <button class="btn btn-ghost btn-xs" onclick="openHistModal()">+ Adicionar</button></td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = items.map(h => {
+    const statusColor = h.status_integracao === 'vinculado' ? 'success' : h.status_integracao === 'divergencia_nome' ? 'danger' : 'warning';
+    return `<tr>
+      <td class="font-medium">${API.esc(h.nome_funcionario_origem)}</td>
+      <td>${API.esc(h.tipo_evento)}</td>
+      <td>${UI.badge(h.categoria || '--')}</td>
+      <td>${API.fmtData(h.data_realizacao)}</td>
+      <td>${h.valor_total_estimado ? API.fmtMoeda(h.valor_total_estimado) : '--'}</td>
+      <td>${API.esc(h.vinculo || '--')}</td>
+      <td><span class="badge badge-${statusColor}">${API.esc(h.status_integracao)}</span></td>
+    </tr>`;
+  }).join('');
+
+  // Add button at bottom
+  tbody.innerHTML += `<tr><td colspan="7" style="text-align:center;padding:8px;"><button class="btn btn-ghost btn-xs" onclick="openHistModal()">+ Adicionar Evento</button></td></tr>`;
+}
+
+function openHistModal() {
+  ['hNome','hTipoEvento','hNR'].forEach(id => document.getElementById(id).value = '');
+  ['hCategoria','hSubtipo','hVinculo'].forEach(id => document.getElementById(id).value = '');
+  ['hDataRealizacao','hDataFaturamento'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('modalHist').style.display = 'flex';
+}
+
+async function saveHistorico() {
+  const nome = document.getElementById('hNome').value.trim();
+  const tipo = document.getElementById('hTipoEvento').value.trim();
+  const cat = document.getElementById('hCategoria').value;
+  if (!nome || !tipo || !cat) { UI.toast('Preencha campos obrigatorios', 'warn'); return; }
+
+  const payload = {
+    fatura_id: _selectedFaturaId,
+    nome_funcionario_origem: nome,
+    tipo_evento: tipo,
+    categoria: cat,
+    subtipo: document.getElementById('hSubtipo').value || null,
+    data_realizacao: document.getElementById('hDataRealizacao').value || null,
+    data_faturamento: document.getElementById('hDataFaturamento').value || null,
+    vinculo: document.getElementById('hVinculo').value || null,
+    nr_relacionada: document.getElementById('hNR').value.trim() || null,
+  };
+  const res = await API.post('sst_fatura_historico_colaborador', payload);
+  if (res.ok) { UI.toast('Evento adicionado', 'ok'); document.getElementById('modalHist').style.display = 'none'; loadHistorico(); }
+  else UI.toast('Erro: ' + res.error, 'err');
+}
+
+// === VINCULAR / ESTIMAR ===
+async function vincularNomes() {
+  if (!_selectedFaturaId) return;
+  UI.toast('Vinculando nomes...', 'info');
+  const res = await API.rpc('sst_vincular_historico_por_nome', { p_fatura_id: _selectedFaturaId });
+  if (res.ok) {
+    const d = res.data;
+    UI.toast(`Vinculados: ${d.vinculados}, Divergentes: ${d.divergentes}`, d.divergentes > 0 ? 'warn' : 'ok');
+    loadHistorico();
+  } else UI.toast('Erro: ' + res.error, 'err');
+}
+
+async function estimarCustos() {
+  if (!_selectedFaturaId) return;
+  UI.toast('Estimando custos...', 'info');
+  const res = await API.rpc('sst_estimar_custos_historico', { p_fatura_id: _selectedFaturaId });
+  if (res.ok) {
+    const d = res.data;
+    UI.toast(`Estimados: ${d.estimados}, Sem match: ${d.sem_match}`, d.sem_match > 0 ? 'warn' : 'ok');
+    loadHistorico();
+  } else UI.toast('Erro: ' + res.error, 'err');
+}
+
+// === CONCILIACAO ===
+async function loadConciliacao() {
+  const comp = document.getElementById('filtroComp').value;
+  let ep = 'vw_sst_conciliacao?order=competencia.desc';
+  if (comp) ep += `&competencia=eq.${comp}-01`;
+  const res = await API.get(ep);
+  const items = res.ok ? (res.data || []) : [];
+  const tbody = document.getElementById('tbodyConciliacao');
+  if (!items.length) { tbody.innerHTML = '<tr><td colspan="8" class="table-empty">Nenhuma fatura para conciliar</td></tr>'; return; }
+
+  tbody.innerHTML = items.map(c => {
+    const cls = c.status_conciliacao === 'conciliado' ? 'success' : c.status_conciliacao === 'divergente' ? 'danger' : 'warning';
+    return `<tr>
+      <td class="font-medium">${API.esc(c.fornecedor_nome)}</td>
+      <td>${API.fmtMoeda(c.valor_fatura)}</td>
+      <td class="cell-center">${c.qtd_resumo}</td>
+      <td>${API.fmtMoeda(c.total_resumo)}</td>
+      <td class="cell-center">${c.qtd_historico}</td>
+      <td>${API.fmtMoeda(c.total_historico)}</td>
+      <td style="color:${Math.abs(c.diferenca_valor) > 0.01 ? 'var(--danger)' : 'inherit'}">${API.fmtMoeda(c.diferenca_valor)}</td>
+      <td><span class="badge badge-${cls}">${API.esc(c.status_conciliacao)}</span></td>
+    </tr>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

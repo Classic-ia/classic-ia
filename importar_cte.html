@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Importar CT-e</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --accent: #c8a96e; --accent2: #e8c98e; --text: #f0ede8; --muted: #888;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+  .bg-pattern {
+    position:fixed; inset:0; z-index:0;
+    background-image:
+      repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
+      repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
+  }
+  header {
+    position:sticky; top:0; z-index:100;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:16px 32px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-text { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; letter-spacing:0.05em; }
+  .logo-text span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  #headerUser { font-size:12px; color:var(--muted); }
+  .btn-back {
+    background:transparent; border:1px solid var(--border); border-radius:2px;
+    color:var(--muted); font-size:11px; padding:6px 14px; cursor:pointer;
+    letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s; text-decoration:none;
+  }
+  .btn-back:hover { border-color:var(--accent); color:var(--accent); }
+
+  main { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:48px 24px; }
+
+  .page-title {
+    font-family:'Syne',sans-serif; font-size:28px; font-weight:800; margin-bottom:8px;
+  }
+  .page-title span { color:var(--accent); }
+  .page-sub { font-size:14px; color:var(--muted); margin-bottom:32px; }
+
+  /* Upload Zone */
+  .upload-zone {
+    border:2px dashed var(--border); border-radius:4px; padding:48px;
+    text-align:center; cursor:pointer; transition:all 0.3s;
+    background:var(--surface); margin-bottom:32px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color:var(--accent); background:rgba(200,169,110,0.05);
+  }
+  .upload-zone .uz-icon { font-size:48px; margin-bottom:16px; }
+  .upload-zone .uz-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; margin-bottom:8px; }
+  .upload-zone .uz-desc { font-size:13px; color:var(--muted); }
+  .upload-zone input[type=file] { display:none; }
+
+  /* Progress */
+  .progress-bar { width:100%; height:6px; background:var(--border); border-radius:3px; margin:16px 0; overflow:hidden; display:none; }
+  .progress-fill { height:100%; background:var(--accent); border-radius:3px; transition:width 0.3s; width:0%; }
+
+  /* Stats */
+  .import-stats {
+    display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:32px; display:none;
+  }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:20px; text-align:center;
+  }
+  .stat-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; }
+  .stat-value.green { color:var(--green); }
+  .stat-value.red { color:var(--red); }
+  .stat-value.yellow { color:var(--yellow); }
+  .stat-value.blue { color:var(--blue); }
+  .stat-label { font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+
+  /* Log */
+  .log-container {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:20px; max-height:400px; overflow-y:auto; display:none; margin-bottom:32px;
+  }
+  .log-title {
+    font-family:'Syne',sans-serif; font-size:13px; font-weight:700; letter-spacing:0.1em;
+    text-transform:uppercase; color:var(--accent); margin-bottom:12px;
+  }
+  .log-entry { font-size:12px; padding:4px 0; border-bottom:1px solid rgba(42,42,42,0.5); font-family:monospace; }
+  .log-entry.ok { color:var(--green); }
+  .log-entry.err { color:var(--red); }
+  .log-entry.warn { color:var(--yellow); }
+  .log-entry.info { color:var(--blue); }
+
+  /* Tabela de CT-e importados */
+  .section-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.22em; text-transform:uppercase; color:var(--accent);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::before {
+    content:''; width:3px; height:14px;
+    background:var(--accent); border-radius:1px; display:inline-block;
+  }
+
+  .table-wrap { overflow-x:auto; margin-bottom:32px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th {
+    background:var(--surface); border-bottom:2px solid var(--accent);
+    padding:10px 12px; text-align:left; font-family:'Syne',sans-serif;
+    font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent);
+    position:sticky; top:0;
+  }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:rgba(200,169,110,0.04); }
+  .badge {
+    display:inline-block; font-size:9px; padding:2px 8px; border-radius:2px;
+    letter-spacing:0.08em; text-transform:uppercase;
+  }
+  .badge.autorizado { background:rgba(74,222,128,0.15); color:var(--green); }
+  .badge.cancelado { background:rgba(248,113,113,0.15); color:var(--red); }
+
+  /* Filtros */
+  .filters {
+    display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center;
+  }
+  .filters select, .filters input {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    color:var(--text); font-size:12px; padding:8px 12px; font-family:'DM Sans',sans-serif;
+  }
+  .filters select:focus, .filters input:focus { outline:none; border-color:var(--accent); }
+
+  .btn-primary {
+    background:var(--accent); color:#000; border:none; border-radius:2px;
+    font-size:12px; padding:10px 20px; cursor:pointer; font-weight:600;
+    letter-spacing:0.05em; transition:all 0.2s;
+  }
+  .btn-primary:hover { background:var(--accent2); }
+  .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .totals-bar {
+    display:flex; gap:24px; padding:16px 0; border-top:2px solid var(--accent);
+    margin-top:8px; flex-wrap:wrap;
+  }
+  .total-item { font-size:13px; color:var(--muted); }
+  .total-item strong { color:var(--accent); font-family:'Syne',sans-serif; font-size:16px; }
+
+  @media (max-width:768px) {
+    .import-stats { grid-template-columns:repeat(2,1fr); }
+    header { padding:12px 16px; }
+    main { padding:32px 16px; }
+    .upload-zone { padding:32px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+
+<header>
+  <div class="logo">
+    <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:36px;height:36px;object-fit:contain;border-radius:2px;" onerror="this.style.display='none'">
+    <div class="logo-text">CLASSIC <span>RH</span></div>
+  </div>
+  <div class="header-right">
+    <span id="headerUser"></span>
+    <a href="app_rh.html" class="btn-back">Voltar</a>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">Importar <span>CT-e</span></div>
+  <div class="page-sub">Importe arquivos XML de CT-e (individuais ou ZIP) para controle de custos de transporte.</div>
+
+  <!-- Upload Zone -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="uz-icon">&#128666;</div>
+    <div class="uz-title">Arraste arquivos aqui ou clique para selecionar</div>
+    <div class="uz-desc">Aceita arquivos .xml individuais ou .zip contendo multiplos XMLs de CT-e</div>
+    <input type="file" id="fileInput" multiple accept=".xml,.zip">
+  </div>
+
+  <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <!-- Stats -->
+  <div class="import-stats" id="importStats">
+    <div class="stat-card"><div class="stat-value blue" id="statTotal">0</div><div class="stat-label">Total XMLs</div></div>
+    <div class="stat-card"><div class="stat-value green" id="statOk">0</div><div class="stat-label">Importados</div></div>
+    <div class="stat-card"><div class="stat-value yellow" id="statDup">0</div><div class="stat-label">Duplicados</div></div>
+    <div class="stat-card"><div class="stat-value red" id="statErr">0</div><div class="stat-label">Erros</div></div>
+  </div>
+
+  <!-- Log -->
+  <div class="log-container" id="logContainer">
+    <div class="log-title">Log de Importacao</div>
+    <div id="logEntries"></div>
+  </div>
+
+  <!-- CT-e Listados -->
+  <div class="section-title">CT-e Importados</div>
+
+  <div class="filters">
+    <input type="month" id="filtroMes" title="Filtrar por mes">
+    <select id="filtroStatus">
+      <option value="">Todos status</option>
+      <option value="autorizado">Autorizado</option>
+      <option value="cancelado">Cancelado</option>
+    </select>
+    <input type="text" id="filtroBusca" placeholder="Buscar por emitente, destino..." style="min-width:200px;">
+    <button class="btn-primary" onclick="carregarCtes()">Filtrar</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Numero</th>
+          <th>Data Emissao</th>
+          <th>Emitente</th>
+          <th>Origem</th>
+          <th>Destino</th>
+          <th>Valor Total</th>
+          <th>Peso (kg)</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="tblCte"></tbody>
+    </table>
+  </div>
+
+  <div class="totals-bar" id="totalsBar" style="display:none;">
+    <div class="total-item">Total: <strong id="totalQtd">0</strong> CT-e</div>
+    <div class="total-item">Valor Total: <strong id="totalValor">R$ 0,00</strong></div>
+    <div class="total-item">Peso Total: <strong id="totalPeso">0 kg</strong></div>
+  </div>
+</main>
+
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
+<script>
+// ========== PARSER CT-e XML ==========
+function parseCteXml(xmlStr) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlStr, 'text/xml');
+  if (doc.querySelector('parsererror')) throw new Error('XML invalido');
+
+  // Helper: pega texto do primeiro match em qualquer namespace
+  function txt(parent, tag) {
+    // Tenta com namespace e sem
+    const el = parent.querySelector(tag) ||
+               parent.getElementsByTagName(tag)[0] ||
+               parent.querySelector(`*|${tag}`);
+    return el ? el.textContent.trim() : '';
+  }
+
+  function num(parent, tag) {
+    const v = txt(parent, tag);
+    return v ? parseFloat(v) : null;
+  }
+
+  // Root pode ser cteProc > CTe > infCte ou CTe > infCte
+  const infCte = doc.querySelector('infCte') || doc.querySelector('*|infCte');
+  if (!infCte) throw new Error('Elemento infCte nao encontrado');
+
+  const chave = infCte.getAttribute('Id') || '';
+  const chaveClean = chave.replace(/^CTe/, '');
+
+  const ide = infCte.querySelector('ide') || infCte.getElementsByTagName('ide')[0];
+  const emit = infCte.querySelector('emit') || infCte.getElementsByTagName('emit')[0];
+  const rem = infCte.querySelector('rem') || infCte.getElementsByTagName('rem')[0];
+  const dest = infCte.querySelector('dest') || infCte.getElementsByTagName('dest')[0];
+  const vPrest = infCte.querySelector('vPrest') || infCte.getElementsByTagName('vPrest')[0];
+  const icms = infCte.querySelector('ICMS00') || infCte.querySelector('ICMS20') ||
+               infCte.querySelector('ICMS45') || infCte.querySelector('ICMS60') ||
+               infCte.querySelector('ICMS90') || infCte.querySelector('ICMSOutraUF') ||
+               infCte.getElementsByTagName('ICMS')[0];
+  const infCarga = infCte.querySelector('infCarga') || infCte.getElementsByTagName('infCarga')[0];
+
+  // Protocolo
+  const protCTe = doc.querySelector('protCTe') || doc.getElementsByTagName('protCTe')[0];
+  const protocolo = protCTe ? txt(protCTe, 'nProt') : '';
+
+  // Componentes de valor
+  const comps = [];
+  if (vPrest) {
+    const compEls = vPrest.querySelectorAll('Comp') || vPrest.getElementsByTagName('Comp');
+    compEls.forEach(c => {
+      comps.push({ nome: txt(c, 'xNome'), valor: num(c, 'vComp') });
+    });
+  }
+
+  // Peso - infCarga pode ter infQ
+  let pesoBruto = null, pesoCubado = null, qtdVolumes = null;
+  if (infCarga) {
+    const infQs = infCarga.querySelectorAll('infQ') || infCarga.getElementsByTagName('infQ');
+    infQs.forEach(q => {
+      const cod = txt(q, 'cUnid');
+      const tp = txt(q, 'tpMed');
+      const val = num(q, 'qCarga');
+      if (cod === '01' || tp.toLowerCase().includes('peso bruto') || tp.toLowerCase().includes('peso_bruto')) pesoBruto = val;
+      if (cod === '02' || tp.toLowerCase().includes('cubagem') || tp.toLowerCase().includes('peso cubado')) pesoCubado = val;
+      if (cod === '03' || tp.toLowerCase().includes('volume')) qtdVolumes = val ? Math.round(val) : null;
+      // Fallback: se nenhum tipo matched, pegar o primeiro como peso
+      if (!pesoBruto && val && (tp.toLowerCase().includes('peso') || tp.toLowerCase().includes('kg'))) pesoBruto = val;
+    });
+  }
+
+  // Data emissao
+  let dataEmissao = ide ? (txt(ide, 'dhEmi') || txt(ide, 'dEmi')) : '';
+
+  const result = {
+    chave_acesso: chaveClean || null,
+    numero_cte: ide ? parseInt(txt(ide, 'nCT')) || null : null,
+    serie: ide ? parseInt(txt(ide, 'serie')) || null : null,
+    cfop: ide ? txt(ide, 'CFOP') || txt(ide, 'cfop') : null,
+    nat_operacao: ide ? txt(ide, 'natOp') : null,
+    data_emissao: dataEmissao || null,
+
+    emit_cnpj: emit ? txt(emit, 'CNPJ') : null,
+    emit_razao_social: emit ? txt(emit, 'xNome') : null,
+    emit_nome_fantasia: emit ? txt(emit, 'xFant') : null,
+    emit_uf: emit ? txt(emit, 'UF') : null,
+
+    rem_cnpj: rem ? txt(rem, 'CNPJ') || txt(rem, 'CPF') : null,
+    rem_razao_social: rem ? txt(rem, 'xNome') : null,
+    rem_uf: rem ? txt(rem, 'UF') : null,
+    rem_municipio: rem ? txt(rem, 'xMun') : null,
+
+    dest_cnpj: dest ? txt(dest, 'CNPJ') || txt(dest, 'CPF') : null,
+    dest_razao_social: dest ? txt(dest, 'xNome') : null,
+    dest_uf: dest ? txt(dest, 'UF') : null,
+    dest_municipio: dest ? txt(dest, 'xMun') : null,
+
+    valor_total: vPrest ? num(vPrest, 'vTPrest') : 0,
+    valor_receber: vPrest ? num(vPrest, 'vRec') : 0,
+    valor_icms: icms ? num(icms, 'vICMS') : 0,
+    base_icms: icms ? num(icms, 'vBC') : 0,
+    aliq_icms: icms ? num(icms, 'pICMS') : 0,
+
+    produto_predominante: infCarga ? txt(infCarga, 'proPred') : null,
+    peso_bruto: pesoBruto,
+    peso_cubado: pesoCubado,
+    qtd_volumes: qtdVolumes,
+
+    uf_inicio: ide ? txt(ide, 'UFIni') : null,
+    uf_fim: ide ? txt(ide, 'UFFim') : null,
+    municipio_inicio: ide ? txt(ide, 'xMunIni') : null,
+    municipio_fim: ide ? txt(ide, 'xMunFim') : null,
+    local_origem: ide ? (txt(ide, 'xMunIni') + '/' + txt(ide, 'UFIni')) : null,
+    local_destino: ide ? (txt(ide, 'xMunFim') + '/' + txt(ide, 'UFFim')) : null,
+
+    protocolo_autorizacao: protocolo,
+    status: 'autorizado',
+    componentes: comps,
+  };
+
+  // Tentar extrair periodo das observacoes ou complemento
+  const compl = txt(infCte, 'xObs') || txt(infCte, 'xCompl') || '';
+  const periodoMatch = compl.match(/(?:ref|periodo|per[ií]odo)[.:\s]*(\d{2}[./-]\d{2}[./-]\d{2,4})\s*(?:a|at[eé]|-)\s*(\d{2}[./-]\d{2}[./-]\d{2,4})/i);
+  if (periodoMatch) {
+    result.periodo_ref_inicio = parseDataBr(periodoMatch[1]);
+    result.periodo_ref_fim = parseDataBr(periodoMatch[2]);
+  }
+
+  return result;
+}
+
+function parseDataBr(str) {
+  if (!str) return null;
+  const parts = str.replace(/\./g, '/').replace(/-/g, '/').split('/');
+  if (parts.length === 3) {
+    let [d, m, y] = parts;
+    if (y.length === 2) y = '20' + y;
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return null;
+}
+
+// ========== UPLOAD HANDLING ==========
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  processFiles(e.dataTransfer.files);
+});
+fileInput.addEventListener('change', () => processFiles(fileInput.files));
+
+async function processFiles(files) {
+  if (!files || files.length === 0) return;
+
+  const xmlContents = [];
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  progressBar.style.display = 'block';
+  progressFill.style.width = '10%';
+
+  addLog('Processando ' + files.length + ' arquivo(s)...', 'info');
+
+  for (const file of files) {
+    if (file.name.toLowerCase().endsWith('.zip')) {
+      addLog('Extraindo ZIP: ' + file.name, 'info');
+      try {
+        const zip = await JSZip.loadAsync(file);
+        const xmlFiles = Object.keys(zip.files).filter(n => n.toLowerCase().endsWith('.xml'));
+        addLog('Encontrados ' + xmlFiles.length + ' XMLs no ZIP', 'info');
+        for (const xmlName of xmlFiles) {
+          try {
+            const content = await zip.files[xmlName].async('string');
+            xmlContents.push({ name: xmlName, content });
+          } catch(e) {
+            addLog('Erro lendo ' + xmlName + ': ' + e.message, 'err');
+          }
+        }
+      } catch(e) {
+        addLog('Erro abrindo ZIP: ' + e.message, 'err');
+      }
+    } else if (file.name.toLowerCase().endsWith('.xml')) {
+      try {
+        const content = await file.text();
+        xmlContents.push({ name: file.name, content });
+      } catch(e) {
+        addLog('Erro lendo ' + file.name + ': ' + e.message, 'err');
+      }
+    } else {
+      addLog('Arquivo ignorado (nao e XML/ZIP): ' + file.name, 'warn');
+    }
+  }
+
+  progressFill.style.width = '30%';
+
+  if (xmlContents.length === 0) {
+    addLog('Nenhum XML encontrado para processar.', 'err');
+    progressBar.style.display = 'none';
+    return;
+  }
+
+  await importarXmls(xmlContents, progressFill);
+  progressFill.style.width = '100%';
+  setTimeout(() => { progressBar.style.display = 'none'; }, 2000);
+}
+
+async function importarXmls(xmlList, progressFill) {
+  let total = xmlList.length, ok = 0, dup = 0, err = 0;
+  const erros = [];
+
+  document.getElementById('importStats').style.display = 'grid';
+  document.getElementById('logContainer').style.display = 'block';
+  document.getElementById('statTotal').textContent = total;
+
+  for (let i = 0; i < xmlList.length; i++) {
+    const { name, content } = xmlList[i];
+    const pct = 30 + Math.round((i / total) * 65);
+    progressFill.style.width = pct + '%';
+
+    try {
+      const cte = parseCteXml(content);
+      if (!cte.chave_acesso) throw new Error('Chave de acesso nao encontrada');
+
+      // Salvar XML original
+      cte.xml_original = content;
+      cte.arquivo_origem = name;
+
+      const comps = cte.componentes || [];
+      delete cte.componentes;
+
+      // Tentar inserir
+      try {
+        const inserted = await RH_API.post('rh_cte', cte);
+        if (inserted && inserted.length > 0) {
+          // Inserir componentes
+          if (comps.length > 0) {
+            const compRows = comps.map(c => ({ cte_id: inserted[0].id, nome: c.nome, valor: c.valor }));
+            await RH_API.post('rh_cte_componente', compRows);
+          }
+          ok++;
+          addLog('OK: CT-e ' + (cte.numero_cte || 'S/N') + ' - ' + (cte.emit_razao_social || '').substring(0, 40) + ' - R$ ' + (cte.valor_total || 0).toFixed(2), 'ok');
+        }
+      } catch(e) {
+        if (e.message && e.message.includes('duplicate') || e.message && e.message.includes('unique')) {
+          dup++;
+          addLog('DUPLICADO: CT-e ' + (cte.numero_cte || 'S/N') + ' (chave ja existe)', 'warn');
+        } else {
+          throw e;
+        }
+      }
+    } catch(e) {
+      err++;
+      erros.push({ arquivo: name, erro: e.message });
+      addLog('ERRO: ' + name + ' - ' + e.message, 'err');
+    }
+
+    document.getElementById('statOk').textContent = ok;
+    document.getElementById('statDup').textContent = dup;
+    document.getElementById('statErr').textContent = err;
+  }
+
+  // Log de importacao no banco
+  try {
+    await RH_API.post('rh_cte_importacao_log', {
+      arquivo: xmlList.length === 1 ? xmlList[0].name : xmlList.length + ' arquivos',
+      total_xmls: total,
+      importados: ok,
+      erros: err,
+      duplicados: dup,
+      detalhes_erros: erros
+    });
+  } catch(e) { console.warn('Erro ao salvar log:', e); }
+
+  addLog('--- CONCLUIDO: ' + ok + ' importados, ' + dup + ' duplicados, ' + err + ' erros ---', ok > 0 ? 'ok' : 'err');
+
+  // Recarregar tabela
+  await carregarCtes();
+}
+
+function addLog(msg, cls) {
+  const container = document.getElementById('logContainer');
+  const entries = document.getElementById('logEntries');
+  container.style.display = 'block';
+  const div = document.createElement('div');
+  div.className = 'log-entry ' + (cls || '');
+  div.textContent = new Date().toLocaleTimeString('pt-BR') + ' | ' + msg;
+  entries.prepend(div);
+}
+
+// ========== CARREGAR CT-e ==========
+async function carregarCtes() {
+  const mes = document.getElementById('filtroMes').value;
+  const status = document.getElementById('filtroStatus').value;
+  const busca = document.getElementById('filtroBusca').value.trim().toLowerCase();
+
+  let query = 'rh_cte?select=*&order=data_emissao.desc&limit=500';
+  if (status) query += '&status=eq.' + status;
+  if (mes) {
+    const [y, m] = mes.split('-');
+    const inicio = `${y}-${m}-01`;
+    const fim = new Date(parseInt(y), parseInt(m), 0);
+    const fimStr = `${y}-${m}-${String(fim.getDate()).padStart(2,'0')}`;
+    query += `&data_emissao=gte.${inicio}T00:00:00&data_emissao=lte.${fimStr}T23:59:59`;
+  }
+
+  try {
+    let rows = await RH_API.get(query);
+    if (!rows) rows = [];
+
+    // Filtro de busca local
+    if (busca) {
+      rows = rows.filter(r =>
+        (r.emit_razao_social || '').toLowerCase().includes(busca) ||
+        (r.emit_nome_fantasia || '').toLowerCase().includes(busca) ||
+        (r.dest_razao_social || '').toLowerCase().includes(busca) ||
+        (r.local_origem || '').toLowerCase().includes(busca) ||
+        (r.local_destino || '').toLowerCase().includes(busca) ||
+        (r.numero_cte || '').toString().includes(busca)
+      );
+    }
+
+    renderCtes(rows);
+  } catch(e) {
+    console.error('Erro ao carregar CT-e:', e);
+  }
+}
+
+function renderCtes(rows) {
+  const tbody = document.getElementById('tblCte');
+  const totalsBar = document.getElementById('totalsBar');
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px;">Nenhum CT-e encontrado</td></tr>';
+    totalsBar.style.display = 'none';
+    return;
+  }
+
+  let totalValor = 0, totalPeso = 0;
+
+  tbody.innerHTML = rows.map(r => {
+    totalValor += r.valor_total || 0;
+    totalPeso += r.peso_bruto || 0;
+    const dt = r.data_emissao ? new Date(r.data_emissao).toLocaleDateString('pt-BR') : '-';
+    return `<tr>
+      <td><strong>${r.numero_cte || '-'}</strong></td>
+      <td>${dt}</td>
+      <td>${(r.emit_nome_fantasia || r.emit_razao_social || '-').substring(0, 30)}</td>
+      <td>${r.local_origem || '-'}</td>
+      <td>${r.local_destino || '-'}</td>
+      <td style="text-align:right;font-weight:600;">R$ ${(r.valor_total || 0).toLocaleString('pt-BR', {minimumFractionDigits:2})}</td>
+      <td style="text-align:right;">${r.peso_bruto ? r.peso_bruto.toLocaleString('pt-BR', {minimumFractionDigits:1}) : '-'}</td>
+      <td><span class="badge ${r.status}">${r.status || '-'}</span></td>
+    </tr>`;
+  }).join('');
+
+  totalsBar.style.display = 'flex';
+  document.getElementById('totalQtd').textContent = rows.length;
+  document.getElementById('totalValor').textContent = 'R$ ' + totalValor.toLocaleString('pt-BR', {minimumFractionDigits:2});
+  document.getElementById('totalPeso').textContent = totalPeso.toLocaleString('pt-BR', {minimumFractionDigits:1}) + ' kg';
+}
+
+// ========== INIT ==========
+(async () => {
+  const perfil = await RHAuth.init();
+  if (!perfil) return;
+  document.getElementById('headerUser').textContent =
+    (perfil.nome || perfil.email);
+  await carregarCtes();
+})();
+</script>
+</body>
+</html>

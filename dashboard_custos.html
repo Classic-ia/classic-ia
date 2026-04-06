@@ -1,0 +1,446 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Dashboard de Custos</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --accent: #c8a96e; --accent2: #e8c98e; --text: #f0ede8; --muted: #888;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+    --purple: #a78bfa; --cyan: #22d3ee;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+  .bg-pattern {
+    position:fixed; inset:0; z-index:0;
+    background-image:
+      repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
+      repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
+  }
+  header {
+    position:sticky; top:0; z-index:100;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:16px 32px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-text { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; letter-spacing:0.05em; }
+  .logo-text span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  #headerUser { font-size:12px; color:var(--muted); }
+  .btn-back {
+    background:transparent; border:1px solid var(--border); border-radius:2px;
+    color:var(--muted); font-size:11px; padding:6px 14px; cursor:pointer;
+    letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s; text-decoration:none;
+  }
+  .btn-back:hover { border-color:var(--accent); color:var(--accent); }
+  .btn-accent {
+    background:var(--accent); color:#000; border:none; border-radius:2px;
+    font-size:11px; padding:6px 14px; cursor:pointer;
+    letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s; text-decoration:none; font-weight:600;
+  }
+  .btn-accent:hover { background:var(--accent2); }
+
+  main { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:48px 24px; }
+
+  .page-title { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; margin-bottom:8px; }
+  .page-title span { color:var(--accent); }
+  .page-sub { font-size:14px; color:var(--muted); margin-bottom:32px; }
+
+  /* KPI Strip */
+  .kpi-strip {
+    display:grid; grid-template-columns:repeat(5,1fr); gap:16px; margin-bottom:32px;
+  }
+  .kpi-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:20px; text-align:center; border-top:3px solid var(--accent);
+  }
+  .kpi-card .kpi-value {
+    font-family:'Syne',sans-serif; font-size:24px; font-weight:800; color:var(--accent); line-height:1;
+  }
+  .kpi-card .kpi-label {
+    font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-top:6px;
+  }
+  .kpi-card .kpi-sub { font-size:11px; color:var(--muted); margin-top:4px; }
+
+  .section-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.22em; text-transform:uppercase; color:var(--accent);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::before {
+    content:''; width:3px; height:14px;
+    background:var(--accent); border-radius:1px; display:inline-block;
+  }
+
+  /* Charts grid */
+  .charts-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin-bottom:32px; }
+  .chart-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:24px;
+  }
+  .chart-card.full { grid-column: 1 / -1; }
+  .chart-card h3 {
+    font-family:'Syne',sans-serif; font-size:13px; font-weight:700;
+    color:var(--accent); margin-bottom:16px; letter-spacing:0.1em; text-transform:uppercase;
+  }
+  .chart-wrap { position:relative; height:280px; }
+  .chart-wrap.tall { height:350px; }
+
+  /* Tabela top custos */
+  .table-wrap { overflow-x:auto; margin-bottom:32px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th {
+    background:var(--surface); border-bottom:2px solid var(--accent);
+    padding:10px 12px; text-align:left; font-family:'Syne',sans-serif;
+    font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent);
+  }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:rgba(200,169,110,0.04); }
+
+  .filters { display:flex; gap:12px; margin-bottom:24px; flex-wrap:wrap; align-items:center; }
+  .filters select, .filters input {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    color:var(--text); font-size:12px; padding:8px 12px; font-family:'DM Sans',sans-serif;
+  }
+  .filters select:focus, .filters input:focus { outline:none; border-color:var(--accent); }
+
+  .nav-links {
+    display:flex; gap:12px; margin-bottom:32px; flex-wrap:wrap;
+  }
+  .nav-link {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:12px 20px; text-decoration:none; color:var(--text); font-size:13px;
+    transition:all 0.2s; display:flex; align-items:center; gap:8px;
+  }
+  .nav-link:hover { border-color:var(--accent); color:var(--accent); }
+  .nav-link .nav-icon { font-size:20px; }
+
+  @media (max-width:768px) {
+    .kpi-strip { grid-template-columns:repeat(2,1fr); }
+    .charts-grid { grid-template-columns:1fr; }
+    header { padding:12px 16px; }
+    main { padding:32px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+
+<header>
+  <div class="logo">
+    <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:36px;height:36px;object-fit:contain;border-radius:2px;" onerror="this.style.display='none'">
+    <div class="logo-text">CLASSIC <span>RH</span></div>
+  </div>
+  <div class="header-right">
+    <span id="headerUser"></span>
+    <a href="app_rh.html" class="btn-back">Voltar</a>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">Dashboard de <span>Custos</span></div>
+  <div class="page-sub">Visao consolidada de custos de transporte (CT-e) e gastos por colaborador.</div>
+
+  <div class="nav-links">
+    <a href="importar_cte.html" class="nav-link"><span class="nav-icon">&#128666;</span> Importar CT-e</a>
+    <a href="importar_custos.html" class="nav-link"><span class="nav-icon">&#128200;</span> Importar Custos Colaborador</a>
+  </div>
+
+  <!-- KPIs -->
+  <div class="kpi-strip">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiCteTotal">--</div>
+      <div class="kpi-label">CT-e Importados</div>
+      <div class="kpi-sub" id="kpiCteSub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiCteValor">--</div>
+      <div class="kpi-label">Total Transporte</div>
+      <div class="kpi-sub" id="kpiCteValorSub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiColabTotal">--</div>
+      <div class="kpi-label">Colaboradores c/ Custo</div>
+      <div class="kpi-sub" id="kpiColabSub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiCustoTotal">--</div>
+      <div class="kpi-label">Custo Pessoal Total</div>
+      <div class="kpi-sub" id="kpiCustoSub"></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiCustoGeral">--</div>
+      <div class="kpi-label">Custo Geral</div>
+      <div class="kpi-sub">Transporte + Pessoal</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="section-title">Analises</div>
+
+  <div class="charts-grid">
+    <div class="chart-card">
+      <h3>Custo Transporte por Mes</h3>
+      <div class="chart-wrap"><canvas id="chartCteMes"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>CT-e por Rota (Top 10)</h3>
+      <div class="chart-wrap"><canvas id="chartCteRota"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Custo Pessoal por Setor</h3>
+      <div class="chart-wrap"><canvas id="chartCustoSetor"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>Composicao Custo Pessoal</h3>
+      <div class="chart-wrap"><canvas id="chartComposicao"></canvas></div>
+    </div>
+    <div class="chart-card full">
+      <h3>Evolucao Mensal - Transporte vs Pessoal</h3>
+      <div class="chart-wrap tall"><canvas id="chartEvolucao"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Top custos transporte -->
+  <div class="section-title">Top Transportadoras</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Transportadora</th><th>Qt CT-e</th><th>Valor Total</th><th>Peso Total (kg)</th><th>% do Total</th></tr>
+      </thead>
+      <tbody id="tblTransportadoras"></tbody>
+    </table>
+  </div>
+
+  <!-- Top custos colaborador -->
+  <div class="section-title">Top 20 Custos por Colaborador</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>Colaborador</th><th>Cargo</th><th>Setor</th><th>Custo Total</th></tr>
+      </thead>
+      <tbody id="tblTopColab"></tbody>
+    </table>
+  </div>
+</main>
+
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
+<script>
+const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2});
+const fmtK = v => {
+  if (v >= 1000000) return 'R$ ' + (v/1000000).toFixed(1) + 'M';
+  if (v >= 1000) return 'R$ ' + (v/1000).toFixed(1) + 'k';
+  return fmt(v);
+};
+
+const COLORS = ['#c8a96e','#60a5fa','#4ade80','#f87171','#a78bfa','#22d3ee','#fbbf24','#f472b6','#34d399','#fb923c'];
+
+let chartInstances = {};
+
+function createChart(canvasId, config) {
+  if (chartInstances[canvasId]) chartInstances[canvasId].destroy();
+  const ctx = document.getElementById(canvasId).getContext('2d');
+  Chart.defaults.color = '#888';
+  Chart.defaults.borderColor = '#2a2a2a';
+  chartInstances[canvasId] = new Chart(ctx, config);
+}
+
+async function loadDashboard() {
+  // Carregar dados
+  let ctes = [], custos = [];
+  try { ctes = await RH_API.get('rh_cte?select=*&order=data_emissao.desc&limit=5000') || []; } catch(e) {}
+  try { custos = await RH_API.get('rh_custo_colaborador?select=*&order=custo_total.desc&limit=5000') || []; } catch(e) {}
+
+  // KPIs
+  const cteValorTotal = ctes.reduce((s,r) => s + (r.valor_total || 0), 0);
+  const custoTotal = custos.reduce((s,r) => s + (r.custo_total || 0), 0);
+
+  document.getElementById('kpiCteTotal').textContent = ctes.length;
+  document.getElementById('kpiCteValor').textContent = fmtK(cteValorTotal);
+  document.getElementById('kpiColabTotal').textContent = custos.length;
+  document.getElementById('kpiCustoTotal').textContent = fmtK(custoTotal);
+  document.getElementById('kpiCustoGeral').textContent = fmtK(cteValorTotal + custoTotal);
+
+  // === Chart: CT-e por Mes ===
+  const ctePorMes = {};
+  ctes.forEach(r => {
+    if (!r.data_emissao) return;
+    const m = r.data_emissao.substring(0, 7);
+    ctePorMes[m] = (ctePorMes[m] || 0) + (r.valor_total || 0);
+  });
+  const mesesCte = Object.keys(ctePorMes).sort();
+  createChart('chartCteMes', {
+    type: 'bar',
+    data: {
+      labels: mesesCte.map(m => { const [y,mo] = m.split('-'); return mo + '/' + y; }),
+      datasets: [{
+        label: 'Valor (R$)',
+        data: mesesCte.map(m => ctePorMes[m]),
+        backgroundColor: 'rgba(200,169,110,0.6)',
+        borderColor: '#c8a96e',
+        borderWidth: 1
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{y:{ticks:{callback:v=>fmtK(v)}}} }
+  });
+
+  // === Chart: CT-e por Rota ===
+  const rotaMap = {};
+  ctes.forEach(r => {
+    const rota = (r.local_origem || '?') + ' > ' + (r.local_destino || '?');
+    if (!rotaMap[rota]) rotaMap[rota] = { valor: 0, qtd: 0 };
+    rotaMap[rota].valor += r.valor_total || 0;
+    rotaMap[rota].qtd++;
+  });
+  const topRotas = Object.entries(rotaMap).sort((a,b) => b[1].valor - a[1].valor).slice(0, 10);
+  createChart('chartCteRota', {
+    type: 'bar',
+    data: {
+      labels: topRotas.map(r => r[0].length > 25 ? r[0].substring(0,25)+'...' : r[0]),
+      datasets: [{
+        label: 'Valor (R$)',
+        data: topRotas.map(r => r[1].valor),
+        backgroundColor: COLORS.map(c => c + 'aa'),
+        borderColor: COLORS,
+        borderWidth: 1
+      }]
+    },
+    options: { indexAxis:'y', responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}},
+      scales:{x:{ticks:{callback:v=>fmtK(v)}}} }
+  });
+
+  // === Chart: Custo por Setor ===
+  const setorMap = {};
+  custos.forEach(r => {
+    const s = r.setor || 'Sem Setor';
+    setorMap[s] = (setorMap[s] || 0) + (r.custo_total || 0);
+  });
+  const topSetores = Object.entries(setorMap).sort((a,b) => b[1] - a[1]).slice(0, 8);
+  createChart('chartCustoSetor', {
+    type: 'doughnut',
+    data: {
+      labels: topSetores.map(s => s[0]),
+      datasets: [{
+        data: topSetores.map(s => s[1]),
+        backgroundColor: COLORS,
+        borderColor: '#0a0a0a',
+        borderWidth: 2
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{font:{size:10},padding:8}}} }
+  });
+
+  // === Chart: Composicao Custo Pessoal ===
+  const compLabels = ['Salario Base','Horas Extras','Beneficios','FGTS','INSS','Outros'];
+  const compValues = [0,0,0,0,0,0];
+  custos.forEach(r => {
+    compValues[0] += r.salario_base || 0;
+    compValues[1] += r.horas_extras || 0;
+    compValues[2] += (r.vale_transporte || 0) + (r.vale_alimentacao || 0) + (r.plano_saude || 0);
+    compValues[3] += r.fgts || 0;
+    compValues[4] += r.inss_empresa || 0;
+    compValues[5] += (r.adicional_noturno || 0) + (r.adicional_insalubridade || 0) + (r.adicional_periculosidade || 0) + (r.outros_proventos || 0);
+  });
+  createChart('chartComposicao', {
+    type: 'doughnut',
+    data: {
+      labels: compLabels,
+      datasets: [{
+        data: compValues,
+        backgroundColor: COLORS,
+        borderColor: '#0a0a0a',
+        borderWidth: 2
+      }]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{position:'right',labels:{font:{size:10},padding:8}}} }
+  });
+
+  // === Chart: Evolucao Mensal ===
+  const custoPorMes = {};
+  custos.forEach(r => {
+    if (!r.competencia) return;
+    const m = r.competencia.substring(0, 7);
+    custoPorMes[m] = (custoPorMes[m] || 0) + (r.custo_total || 0);
+  });
+  const allMeses = [...new Set([...Object.keys(ctePorMes), ...Object.keys(custoPorMes)])].sort();
+  createChart('chartEvolucao', {
+    type: 'line',
+    data: {
+      labels: allMeses.map(m => { const [y,mo] = m.split('-'); return mo + '/' + y; }),
+      datasets: [
+        {
+          label: 'Transporte (CT-e)',
+          data: allMeses.map(m => ctePorMes[m] || 0),
+          borderColor: '#60a5fa',
+          backgroundColor: 'rgba(96,165,250,0.1)',
+          fill: true, tension: 0.3, pointRadius: 4
+        },
+        {
+          label: 'Custo Pessoal',
+          data: allMeses.map(m => custoPorMes[m] || 0),
+          borderColor: '#c8a96e',
+          backgroundColor: 'rgba(200,169,110,0.1)',
+          fill: true, tension: 0.3, pointRadius: 4
+        }
+      ]
+    },
+    options: { responsive:true, maintainAspectRatio:false,
+      plugins:{legend:{labels:{font:{size:11}}}},
+      scales:{y:{ticks:{callback:v=>fmtK(v)}}} }
+  });
+
+  // === Tabela Transportadoras ===
+  const transpMap = {};
+  ctes.forEach(r => {
+    const nome = r.emit_nome_fantasia || r.emit_razao_social || 'Desconhecido';
+    if (!transpMap[nome]) transpMap[nome] = { valor:0, peso:0, qtd:0 };
+    transpMap[nome].valor += r.valor_total || 0;
+    transpMap[nome].peso += r.peso_bruto || 0;
+    transpMap[nome].qtd++;
+  });
+  const topTransp = Object.entries(transpMap).sort((a,b) => b[1].valor - a[1].valor);
+  document.getElementById('tblTransportadoras').innerHTML = topTransp.length === 0
+    ? '<tr><td colspan="5" style="text-align:center;color:var(--muted);padding:20px;">Nenhum CT-e importado</td></tr>'
+    : topTransp.map(([nome, d]) => {
+      const pct = cteValorTotal > 0 ? ((d.valor / cteValorTotal) * 100).toFixed(1) : '0';
+      return `<tr>
+        <td><strong>${nome}</strong></td>
+        <td style="text-align:center;">${d.qtd}</td>
+        <td style="text-align:right;font-weight:600;">${fmt(d.valor)}</td>
+        <td style="text-align:right;">${d.peso.toLocaleString('pt-BR',{minimumFractionDigits:1})} kg</td>
+        <td style="text-align:right;">${pct}%</td>
+      </tr>`;
+    }).join('');
+
+  // === Tabela Top Colaboradores ===
+  const top20 = custos.slice(0, 20);
+  document.getElementById('tblTopColab').innerHTML = top20.length === 0
+    ? '<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:20px;">Nenhum custo importado</td></tr>'
+    : top20.map(r => `<tr>
+      <td><strong>${r.nome_colaborador || '-'}</strong></td>
+      <td>${r.cargo || '-'}</td>
+      <td>${r.setor || '-'}</td>
+      <td style="text-align:right;font-weight:700;color:var(--accent);">${fmt(r.custo_total)}</td>
+    </tr>`).join('');
+}
+
+// ========== INIT ==========
+(async () => {
+  const perfil = await RHAuth.init();
+  if (!perfil) return;
+  document.getElementById('headerUser').textContent = perfil.nome || perfil.email;
+  await loadDashboard();
+})();
+</script>
+</body>
+</html>

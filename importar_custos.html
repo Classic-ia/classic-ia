@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Custos por Colaborador</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --bg: #0a0a0a; --surface: #141414; --border: #2a2a2a;
+    --accent: #c8a96e; --accent2: #e8c98e; --text: #f0ede8; --muted: #888;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
+  .bg-pattern {
+    position:fixed; inset:0; z-index:0;
+    background-image:
+      repeating-linear-gradient(0deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px),
+      repeating-linear-gradient(90deg,transparent,transparent 60px,rgba(200,169,110,0.03) 60px,rgba(200,169,110,0.03) 61px);
+  }
+  header {
+    position:sticky; top:0; z-index:100;
+    background:var(--surface); border-bottom:1px solid var(--border);
+    padding:16px 32px; display:flex; align-items:center; justify-content:space-between;
+  }
+  .logo { display:flex; align-items:center; gap:12px; }
+  .logo-text { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; letter-spacing:0.05em; }
+  .logo-text span { color:var(--accent); }
+  .header-right { display:flex; align-items:center; gap:16px; }
+  #headerUser { font-size:12px; color:var(--muted); }
+  .btn-back {
+    background:transparent; border:1px solid var(--border); border-radius:2px;
+    color:var(--muted); font-size:11px; padding:6px 14px; cursor:pointer;
+    letter-spacing:0.1em; text-transform:uppercase; transition:all 0.2s; text-decoration:none;
+  }
+  .btn-back:hover { border-color:var(--accent); color:var(--accent); }
+
+  main { position:relative; z-index:1; max-width:1200px; margin:0 auto; padding:48px 24px; }
+
+  .page-title { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; margin-bottom:8px; }
+  .page-title span { color:var(--accent); }
+  .page-sub { font-size:14px; color:var(--muted); margin-bottom:32px; }
+
+  .upload-zone {
+    border:2px dashed var(--border); border-radius:4px; padding:48px;
+    text-align:center; cursor:pointer; transition:all 0.3s;
+    background:var(--surface); margin-bottom:32px;
+  }
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color:var(--accent); background:rgba(200,169,110,0.05);
+  }
+  .upload-zone .uz-icon { font-size:48px; margin-bottom:16px; }
+  .upload-zone .uz-title { font-family:'Syne',sans-serif; font-size:16px; font-weight:700; margin-bottom:8px; }
+  .upload-zone .uz-desc { font-size:13px; color:var(--muted); }
+  .upload-zone input[type=file] { display:none; }
+
+  .progress-bar { width:100%; height:6px; background:var(--border); border-radius:3px; margin:16px 0; overflow:hidden; display:none; }
+  .progress-fill { height:100%; background:var(--accent); border-radius:3px; transition:width 0.3s; width:0%; }
+
+  .preview-info {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:20px; margin-bottom:24px; display:none;
+  }
+  .preview-info h3 { font-family:'Syne',sans-serif; font-size:14px; font-weight:700; color:var(--accent); margin-bottom:12px; }
+  .mapping-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:16px; }
+  .mapping-row { display:flex; align-items:center; gap:8px; }
+  .mapping-row label { font-size:11px; color:var(--muted); min-width:140px; text-transform:uppercase; letter-spacing:0.08em; }
+  .mapping-row select {
+    flex:1; background:var(--bg); border:1px solid var(--border); border-radius:2px;
+    color:var(--text); font-size:12px; padding:6px 8px;
+  }
+  .mapping-row select:focus { outline:none; border-color:var(--accent); }
+
+  .competencia-input { display:flex; align-items:center; gap:12px; margin-bottom:16px; }
+  .competencia-input label { font-size:12px; color:var(--muted); }
+  .competencia-input input {
+    background:var(--bg); border:1px solid var(--border); border-radius:2px;
+    color:var(--text); font-size:13px; padding:8px 12px;
+  }
+
+  .btn-primary {
+    background:var(--accent); color:#000; border:none; border-radius:2px;
+    font-size:12px; padding:10px 20px; cursor:pointer; font-weight:600;
+    letter-spacing:0.05em; transition:all 0.2s;
+  }
+  .btn-primary:hover { background:var(--accent2); }
+  .btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+
+  .import-stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:32px; display:none; }
+  .stat-card {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    padding:20px; text-align:center;
+  }
+  .stat-value { font-family:'Syne',sans-serif; font-size:28px; font-weight:800; }
+  .stat-value.green { color:var(--green); }
+  .stat-value.red { color:var(--red); }
+  .stat-value.blue { color:var(--blue); }
+  .stat-label { font-size:10px; letter-spacing:0.12em; text-transform:uppercase; color:var(--muted); margin-top:4px; }
+
+  .section-title {
+    font-family:'Syne',sans-serif; font-size:11px; font-weight:700;
+    letter-spacing:0.22em; text-transform:uppercase; color:var(--accent);
+    margin-bottom:16px; padding-bottom:10px; border-bottom:1px solid var(--border);
+    display:flex; align-items:center; gap:10px;
+  }
+  .section-title::before {
+    content:''; width:3px; height:14px;
+    background:var(--accent); border-radius:1px; display:inline-block;
+  }
+
+  .table-wrap { overflow-x:auto; margin-bottom:32px; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th {
+    background:var(--surface); border-bottom:2px solid var(--accent);
+    padding:10px 12px; text-align:left; font-family:'Syne',sans-serif;
+    font-size:10px; letter-spacing:0.1em; text-transform:uppercase; color:var(--accent);
+    position:sticky; top:0;
+  }
+  td { padding:10px 12px; border-bottom:1px solid var(--border); }
+  tr:hover td { background:rgba(200,169,110,0.04); }
+  .text-right { text-align:right; }
+
+  .filters { display:flex; gap:12px; margin-bottom:16px; flex-wrap:wrap; align-items:center; }
+  .filters select, .filters input {
+    background:var(--surface); border:1px solid var(--border); border-radius:2px;
+    color:var(--text); font-size:12px; padding:8px 12px; font-family:'DM Sans',sans-serif;
+  }
+
+  .totals-bar {
+    display:flex; gap:24px; padding:16px 0; border-top:2px solid var(--accent);
+    margin-top:8px; flex-wrap:wrap;
+  }
+  .total-item { font-size:13px; color:var(--muted); }
+  .total-item strong { color:var(--accent); font-family:'Syne',sans-serif; font-size:16px; }
+
+  @media (max-width:768px) {
+    .import-stats { grid-template-columns:1fr; }
+    .mapping-grid { grid-template-columns:1fr; }
+    header { padding:12px 16px; }
+    main { padding:32px 16px; }
+  }
+</style>
+</head>
+<body>
+<div class="bg-pattern"></div>
+
+<header>
+  <div class="logo">
+    <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:36px;height:36px;object-fit:contain;border-radius:2px;" onerror="this.style.display='none'">
+    <div class="logo-text">CLASSIC <span>RH</span></div>
+  </div>
+  <div class="header-right">
+    <span id="headerUser"></span>
+    <a href="dashboard_custos.html" class="btn-back">Dashboard</a>
+    <a href="app_rh.html" class="btn-back">Voltar</a>
+  </div>
+</header>
+
+<main>
+  <div class="page-title">Custos por <span>Colaborador</span></div>
+  <div class="page-sub">Importe a listagem de empregados com gastos mensais (Excel .xlsx ou .csv).</div>
+
+  <div class="upload-zone" id="uploadZone">
+    <div class="uz-icon">&#128200;</div>
+    <div class="uz-title">Arraste a planilha aqui ou clique para selecionar</div>
+    <div class="uz-desc">Aceita .xlsx, .xls ou .csv - O sistema detecta automaticamente as colunas</div>
+    <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+  </div>
+
+  <div class="progress-bar" id="progressBar"><div class="progress-fill" id="progressFill"></div></div>
+
+  <!-- Preview / Mapeamento -->
+  <div class="preview-info" id="previewInfo">
+    <h3>Mapeamento de Colunas</h3>
+    <div class="competencia-input">
+      <label>Competencia (mes/ano):</label>
+      <input type="month" id="inputCompetencia">
+    </div>
+    <div class="mapping-grid" id="mappingGrid"></div>
+    <button class="btn-primary" id="btnImportar" onclick="executarImportacao()">Importar Dados</button>
+  </div>
+
+  <div class="import-stats" id="importStats">
+    <div class="stat-card"><div class="stat-value blue" id="statTotal">0</div><div class="stat-label">Total Linhas</div></div>
+    <div class="stat-card"><div class="stat-value green" id="statOk">0</div><div class="stat-label">Importados</div></div>
+    <div class="stat-card"><div class="stat-value red" id="statErr">0</div><div class="stat-label">Erros</div></div>
+  </div>
+
+  <!-- Custos Existentes -->
+  <div class="section-title">Custos Importados</div>
+
+  <div class="filters">
+    <input type="month" id="filtroMes" title="Filtrar por competencia">
+    <input type="text" id="filtroBusca" placeholder="Buscar por nome, cargo, setor..." style="min-width:200px;">
+    <button class="btn-primary" onclick="carregarCustos()">Filtrar</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Colaborador</th>
+          <th>Cargo</th>
+          <th>Setor</th>
+          <th>Competencia</th>
+          <th>Salario Base</th>
+          <th>Beneficios</th>
+          <th>Encargos</th>
+          <th>Custo Total</th>
+        </tr>
+      </thead>
+      <tbody id="tblCustos"></tbody>
+    </table>
+  </div>
+
+  <div class="totals-bar" id="totalsBar" style="display:none;">
+    <div class="total-item">Colaboradores: <strong id="totalQtd">0</strong></div>
+    <div class="total-item">Custo Total: <strong id="totalCusto">R$ 0,00</strong></div>
+    <div class="total-item">Media por Colaborador: <strong id="totalMedia">R$ 0,00</strong></div>
+  </div>
+</main>
+
+<script src="config_rh.js"></script>
+<script src="rh_api.js"></script>
+<script src="rh_auth.js"></script>
+<script>
+// Campos mapeáveis
+const CAMPOS = [
+  { key: 'nome_colaborador', label: 'Nome', aliases: ['nome','funcionario','colaborador','empregado','nome_completo','nome_colaborador'] },
+  { key: 'cpf', label: 'CPF', aliases: ['cpf','cpf_cnpj','documento'] },
+  { key: 'matricula', label: 'Matricula', aliases: ['matricula','registro','codigo','cod','mat'] },
+  { key: 'cargo', label: 'Cargo', aliases: ['cargo','funcao','ocupacao'] },
+  { key: 'setor', label: 'Setor', aliases: ['setor','departamento','area','secao','centro_custo'] },
+  { key: 'filial', label: 'Filial', aliases: ['filial','unidade','loja','local'] },
+  { key: 'salario_base', label: 'Salario Base', aliases: ['salario','salario_base','sal_base','remuneracao','vencimento'] },
+  { key: 'horas_extras', label: 'Horas Extras', aliases: ['horas_extras','he','hora_extra','h_extra'] },
+  { key: 'adicional_noturno', label: 'Ad. Noturno', aliases: ['adicional_noturno','ad_noturno','noturno'] },
+  { key: 'adicional_insalubridade', label: 'Insalubridade', aliases: ['insalubridade','adicional_insalubridade','ad_insalubridade'] },
+  { key: 'adicional_periculosidade', label: 'Periculosidade', aliases: ['periculosidade','adicional_periculosidade','ad_periculosidade'] },
+  { key: 'vale_transporte', label: 'Vale Transporte', aliases: ['vale_transporte','vt','transporte'] },
+  { key: 'vale_alimentacao', label: 'Vale Alimentacao', aliases: ['vale_alimentacao','va','alimentacao','vr','vale_refeicao'] },
+  { key: 'plano_saude', label: 'Plano Saude', aliases: ['plano_saude','saude','convmed','convenio_medico'] },
+  { key: 'fgts', label: 'FGTS', aliases: ['fgts'] },
+  { key: 'inss_empresa', label: 'INSS Empresa', aliases: ['inss_empresa','inss_patronal','inss','contribuicao_patronal'] },
+  { key: 'outros_proventos', label: 'Outros Proventos', aliases: ['outros_proventos','outros_prov','bonificacao','bonus'] },
+  { key: 'outros_descontos', label: 'Outros Descontos', aliases: ['outros_descontos','descontos','outros_desc'] },
+  { key: 'custo_total', label: 'Custo Total', aliases: ['custo_total','total','custo','valor_total','total_geral'] },
+];
+
+let parsedRows = [];
+let headerCols = [];
+let colMapping = {};
+
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+
+uploadZone.addEventListener('click', () => fileInput.click());
+uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+uploadZone.addEventListener('drop', e => {
+  e.preventDefault();
+  uploadZone.classList.remove('drag-over');
+  processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => processFile(fileInput.files[0]));
+
+function processFile(file) {
+  if (!file) return;
+  const progressBar = document.getElementById('progressBar');
+  const progressFill = document.getElementById('progressFill');
+  progressBar.style.display = 'block';
+  progressFill.style.width = '30%';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const wb = XLSX.read(e.target.result, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      if (!data || data.length === 0) { alert('Planilha vazia'); return; }
+
+      parsedRows = data;
+      headerCols = Object.keys(data[0]);
+      progressFill.style.width = '70%';
+
+      autoMapColumns();
+      showMapping();
+
+      progressFill.style.width = '100%';
+      setTimeout(() => { progressBar.style.display = 'none'; }, 1000);
+    } catch(err) {
+      alert('Erro ao ler arquivo: ' + err.message);
+      progressBar.style.display = 'none';
+    }
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function normalize(s) {
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+}
+
+function autoMapColumns() {
+  colMapping = {};
+  const normalizedHeaders = headerCols.map(h => normalize(h));
+
+  CAMPOS.forEach(campo => {
+    let bestMatch = '';
+    for (let i = 0; i < normalizedHeaders.length; i++) {
+      for (const alias of campo.aliases) {
+        if (normalizedHeaders[i] === alias || normalizedHeaders[i].includes(alias)) {
+          bestMatch = headerCols[i];
+          break;
+        }
+      }
+      if (bestMatch) break;
+    }
+    colMapping[campo.key] = bestMatch;
+  });
+}
+
+function showMapping() {
+  const grid = document.getElementById('mappingGrid');
+  grid.innerHTML = CAMPOS.map(campo => {
+    const options = ['<option value="">-- Ignorar --</option>']
+      .concat(headerCols.map(h =>
+        `<option value="${h}" ${colMapping[campo.key] === h ? 'selected' : ''}>${h}</option>`
+      )).join('');
+    return `<div class="mapping-row">
+      <label>${campo.label}:</label>
+      <select onchange="colMapping['${campo.key}']=this.value">${options}</select>
+    </div>`;
+  }).join('');
+
+  document.getElementById('previewInfo').style.display = 'block';
+
+  // Auto-set competencia from filename or current month
+  const now = new Date();
+  document.getElementById('inputCompetencia').value =
+    now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+}
+
+async function executarImportacao() {
+  const comp = document.getElementById('inputCompetencia').value;
+  if (!comp) { alert('Informe a competencia (mes/ano)'); return; }
+
+  const competencia = comp + '-01'; // primeiro dia do mes
+  const btn = document.getElementById('btnImportar');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  document.getElementById('importStats').style.display = 'grid';
+  let total = parsedRows.length, ok = 0, err = 0;
+  document.getElementById('statTotal').textContent = total;
+
+  // Buscar funcionarios para vincular
+  let funcionarios = [];
+  try {
+    funcionarios = await RH_API.get('rh_funcionarios?select=id,nome,cpf,matricula&limit=2000') || [];
+  } catch(e) { console.warn('Nao foi possivel carregar funcionarios:', e); }
+
+  for (const row of parsedRows) {
+    try {
+      const record = { competencia };
+
+      CAMPOS.forEach(campo => {
+        const colName = colMapping[campo.key];
+        if (colName && row[colName] !== undefined && row[colName] !== '') {
+          let val = row[colName];
+          // Campos numericos
+          if (['salario_base','horas_extras','adicional_noturno','adicional_insalubridade',
+               'adicional_periculosidade','vale_transporte','vale_alimentacao','plano_saude',
+               'fgts','inss_empresa','outros_proventos','outros_descontos','custo_total'].includes(campo.key)) {
+            if (typeof val === 'string') val = parseFloat(val.replace(/[^\d,.-]/g, '').replace(',', '.')) || 0;
+          }
+          record[campo.key] = val;
+        }
+      });
+
+      // Auto-calcular custo total se nao mapeado
+      if (!record.custo_total) {
+        record.custo_total = (record.salario_base || 0) + (record.horas_extras || 0) +
+          (record.adicional_noturno || 0) + (record.adicional_insalubridade || 0) +
+          (record.adicional_periculosidade || 0) + (record.vale_transporte || 0) +
+          (record.vale_alimentacao || 0) + (record.plano_saude || 0) +
+          (record.fgts || 0) + (record.inss_empresa || 0) +
+          (record.outros_proventos || 0) - (record.outros_descontos || 0);
+      }
+
+      // Tentar vincular ao funcionario
+      if (funcionarios.length > 0 && (record.cpf || record.nome_colaborador)) {
+        const match = funcionarios.find(f => {
+          if (record.cpf && f.cpf) return f.cpf.replace(/\D/g,'') === (record.cpf+'').replace(/\D/g,'');
+          if (record.matricula && f.matricula) return f.matricula === record.matricula;
+          if (record.nome_colaborador && f.nome) return normalize(f.nome) === normalize(record.nome_colaborador);
+          return false;
+        });
+        if (match) record.funcionario_id = match.id;
+      }
+
+      record.arquivo_origem = fileInput.files[0]?.name || 'upload';
+
+      await RH_API.post('rh_custo_colaborador', record);
+      ok++;
+    } catch(e) {
+      err++;
+      console.warn('Erro importando linha:', e);
+    }
+
+    document.getElementById('statOk').textContent = ok;
+    document.getElementById('statErr').textContent = err;
+  }
+
+  btn.disabled = false;
+  btn.textContent = 'Importar Dados';
+  alert(`Importacao concluida: ${ok} importados, ${err} erros`);
+  await carregarCustos();
+}
+
+// ========== CARREGAR CUSTOS ==========
+async function carregarCustos() {
+  const mes = document.getElementById('filtroMes').value;
+  const busca = document.getElementById('filtroBusca').value.trim().toLowerCase();
+
+  let query = 'rh_custo_colaborador?select=*&order=custo_total.desc&limit=500';
+  if (mes) query += `&competencia=eq.${mes}-01`;
+
+  try {
+    let rows = await RH_API.get(query);
+    if (!rows) rows = [];
+
+    if (busca) {
+      rows = rows.filter(r =>
+        (r.nome_colaborador || '').toLowerCase().includes(busca) ||
+        (r.cargo || '').toLowerCase().includes(busca) ||
+        (r.setor || '').toLowerCase().includes(busca)
+      );
+    }
+
+    renderCustos(rows);
+  } catch(e) {
+    console.error('Erro ao carregar custos:', e);
+  }
+}
+
+function renderCustos(rows) {
+  const tbody = document.getElementById('tblCustos');
+  const totalsBar = document.getElementById('totalsBar');
+
+  if (!rows || rows.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--muted);padding:32px;">Nenhum registro encontrado</td></tr>';
+    totalsBar.style.display = 'none';
+    return;
+  }
+
+  let totalCusto = 0;
+  const fmt = v => 'R$ ' + (v || 0).toLocaleString('pt-BR', {minimumFractionDigits:2});
+
+  tbody.innerHTML = rows.map(r => {
+    totalCusto += r.custo_total || 0;
+    const beneficios = (r.vale_transporte || 0) + (r.vale_alimentacao || 0) + (r.plano_saude || 0);
+    const encargos = (r.fgts || 0) + (r.inss_empresa || 0);
+    const comp = r.competencia ? new Date(r.competencia).toLocaleDateString('pt-BR', {month:'2-digit',year:'numeric'}) : '-';
+    return `<tr>
+      <td><strong>${r.nome_colaborador || '-'}</strong></td>
+      <td>${r.cargo || '-'}</td>
+      <td>${r.setor || '-'}</td>
+      <td>${comp}</td>
+      <td class="text-right">${fmt(r.salario_base)}</td>
+      <td class="text-right">${fmt(beneficios)}</td>
+      <td class="text-right">${fmt(encargos)}</td>
+      <td class="text-right" style="font-weight:700;color:var(--accent);">${fmt(r.custo_total)}</td>
+    </tr>`;
+  }).join('');
+
+  totalsBar.style.display = 'flex';
+  document.getElementById('totalQtd').textContent = rows.length;
+  document.getElementById('totalCusto').textContent = fmt(totalCusto);
+  document.getElementById('totalMedia').textContent = fmt(totalCusto / rows.length);
+}
+
+// ========== INIT ==========
+(async () => {
+  const perfil = await RHAuth.init();
+  if (!perfil) return;
+  document.getElementById('headerUser').textContent = perfil.nome || perfil.email;
+  await carregarCustos();
+})();
+</script>
+</body>
+</html>

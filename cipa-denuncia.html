@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Canal de Denúncias CIPA - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#f0f2f5;color:#1e293b;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px}
+.card{background:#fff;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.08);max-width:600px;width:100%;padding:40px 36px}
+.logo{font-size:14px;font-weight:600;color:#64748b;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px}
+.header{text-align:center;margin-bottom:32px}
+.header h1{font-size:22px;font-weight:700;color:#0f172a;display:flex;align-items:center;justify-content:center;gap:8px}
+.shield{font-size:26px}
+.subtitle{color:#64748b;font-size:14px;margin-top:8px;line-height:1.5}
+label{display:block;font-size:13px;font-weight:600;color:#475569;margin-bottom:6px;margin-top:18px}
+select,textarea{width:100%;padding:10px 12px;border:1px solid #cbd5e1;border-radius:8px;font-family:inherit;font-size:14px;color:#1e293b;background:#fff;transition:border .2s}
+select:focus,textarea:focus{outline:none;border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+textarea{resize:vertical;min-height:120px}
+.char-count{font-size:12px;color:#94a3b8;text-align:right;margin-top:4px}
+.btn{display:block;width:100%;margin-top:24px;padding:12px;background:#16a34a;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+.btn:hover{background:#15803d}
+.btn:disabled{background:#94a3b8;cursor:not-allowed}
+.msg{margin-top:16px;padding:12px 16px;border-radius:8px;font-size:14px;display:none}
+.msg.ok{display:block;background:#dcfce7;color:#166534;border:1px solid #86efac}
+.msg.err{display:block;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5}
+.footer{text-align:center;margin-top:24px;font-size:12px;color:#94a3b8;line-height:1.7}
+@media(max-width:480px){.card{padding:28px 20px}}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">Classic RH</div>
+    <h1><span class="shield">&#128737;</span> Canal de Denúncias CIPA</h1>
+    <p class="subtitle">Sua identidade é protegida. Todas as denúncias são anônimas.</p>
+  </div>
+  <form id="formDenuncia">
+    <label for="empresa">Empresa</label>
+    <select id="empresa">
+      <option value="classic">Classic Couros</option>
+      <option value="mundial">Mundial Couros</option>
+      <option value="transanacleto">Trans Anacleto</option>
+      <option value="ja">J.A. Agroindustrial</option>
+    </select>
+
+    <label for="setor">Setor</label>
+    <select id="setor" required>
+      <option value="">Selecione o setor</option>
+      <option>Ribeira</option>
+      <option>Curtimento</option>
+      <option>Acabamento</option>
+      <option>Expedição</option>
+      <option>Manutenção</option>
+      <option>Administrativo</option>
+      <option>Outro</option>
+    </select>
+
+    <label for="descricao">Descrição da denúncia</label>
+    <textarea id="descricao" required minlength="20" placeholder="Descreva a situação de risco ou irregularidade"></textarea>
+    <div class="char-count"><span id="charN">0</span>/20 caracteres mínimos</div>
+
+    <button type="submit" class="btn" id="btnSubmit">Enviar Denúncia</button>
+  </form>
+  <div id="msg" class="msg"></div>
+  <div class="footer">
+    <p>Sua denúncia é anônima e não registra nenhum dado pessoal.</p>
+    <p>CIPA — Classic Importação e Exportação de Couros Ltda</p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const params = new URLSearchParams(location.search);
+  const emp = params.get('empresa');
+  if(emp){
+    const opt = document.querySelector('#empresa option[value="'+emp+'"]');
+    if(opt) opt.selected = true;
+  }
+
+  const desc = document.getElementById('descricao');
+  const charN = document.getElementById('charN');
+  desc.addEventListener('input', ()=>{ charN.textContent = desc.value.trim().length; });
+
+  document.getElementById('formDenuncia').addEventListener('submit', async(e)=>{
+    e.preventDefault();
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btnSubmit');
+    const texto = desc.value.trim();
+
+    if(texto.length < 20){
+      msg.className='msg err'; msg.textContent='A descrição deve ter no mínimo 20 caracteres.'; return;
+    }
+    const setor = document.getElementById('setor').value;
+    if(!setor){
+      msg.className='msg err'; msg.textContent='Selecione um setor.'; return;
+    }
+
+    btn.disabled = true; btn.textContent = 'Enviando...';
+    msg.className='msg'; msg.style.display='none';
+
+    try{
+      const res = await fetch(SB_URL+'/rest/v1/cipa_denuncias',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey': SB_KEY,
+          'Authorization':'Bearer '+SB_KEY,
+          'Prefer':'return=representation'
+        },
+        body: JSON.stringify({ setor, descricao: texto, anonima: true })
+      });
+      if(!res.ok) throw new Error('Erro '+res.status);
+      const data = await res.json();
+      const id = data[0]?.id || crypto.randomUUID().split('-')[0];
+      msg.className='msg ok';
+      msg.textContent='Denúncia registrada com sucesso. Protocolo: '+id;
+      document.getElementById('formDenuncia').querySelectorAll('select,textarea,button').forEach(el=>el.disabled=true);
+    }catch(err){
+      msg.className='msg err';
+      msg.textContent='Erro ao enviar denúncia. Tente novamente.';
+      btn.disabled=false; btn.textContent='Enviar Denúncia';
+    }
+  });
+})();
+</script>
+</body>
+</html>

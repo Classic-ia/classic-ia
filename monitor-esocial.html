@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Monitor eSocial SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.filter-bar { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:24px; }
+.filter-bar label { font-size:13px; color:var(--text-secondary); display:block; margin-bottom:4px; }
+.filter-bar input, .filter-bar select { min-width:140px; }
+.badge-type { padding:3px 8px; border-radius:4px; font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#fff; }
+.badge-type.s2210 { background:#DC2626; }
+.badge-type.s2220 { background:#2563EB; }
+.badge-type.s2240 { background:#D97706; }
+.prazo-vencido { color:#DC2626; font-weight:600; }
+.prazo-hoje { color:#D97706; font-weight:600; }
+.prazo-ok { color:#64748B; }
+.row-atrasado { background:rgba(220,38,38,.06); }
+.row-urgente { background:rgba(217,119,6,.06); }
+.row-clickable { cursor:pointer; }
+.row-clickable:hover { background:rgba(37,99,235,.04); }
+.detail-panel { background:var(--bg-page); border-top:1px solid var(--border); padding:16px 20px; }
+.detail-panel p { font-size:13px; line-height:1.6; margin-bottom:6px; }
+.detail-panel strong { color:var(--text-primary); }
+.badge-cancelado { text-decoration:line-through; }
+.modal-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:500; align-items:center; justify-content:center; }
+.modal-overlay.active { display:flex; }
+.modal-box { background:var(--bg-card); border:1px solid var(--border); border-radius:12px; padding:24px; width:100%; max-width:440px; box-shadow:0 8px 32px rgba(0,0,0,.18); }
+.modal-box h3 { font-size:16px; font-weight:600; margin-bottom:16px; }
+.modal-box .form-group { margin-bottom:14px; }
+.modal-box .form-group label { display:block; font-size:13px; margin-bottom:4px; color:var(--text-secondary); }
+.modal-box .form-group input,
+.modal-box .form-group textarea { width:100%; padding:8px 12px; border:1px solid var(--border); border-radius:8px; font-size:14px; font-family:inherit; }
+.modal-box textarea { min-height:80px; resize:vertical; }
+.modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:16px; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- KPIs -->
+  <div class="kpi-row mb-6">
+    <div class="kpi-card"><div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div><div class="kpi-value" id="kpiTotal"><span class="spinner"></span></div><div class="kpi-label">Eventos Pendentes</div></div>
+    <div class="kpi-card"><div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="kpi-value" id="kpiAtrasados"><span class="spinner"></span></div><div class="kpi-label">Atrasados</div></div>
+    <div class="kpi-card"><div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></div><div class="kpi-value" id="kpiUrgentes"><span class="spinner"></span></div><div class="kpi-label">Urgentes</div></div>
+    <div class="kpi-card"><div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg></div><div class="kpi-value" id="kpiAtencao"><span class="spinner"></span></div><div class="kpi-label">Em Atencao</div></div>
+    <div class="kpi-card"><div class="kpi-icon green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></div><div class="kpi-value" id="kpiEnviados"><span class="spinner"></span></div><div class="kpi-label">Enviados no Mes</div></div>
+  </div>
+
+  <!-- Filters -->
+  <div class="card mb-4">
+    <div class="card-body">
+      <div class="filter-bar" style="margin-bottom:0">
+        <div><label>Tipo</label><select id="fTipo"><option value="">Todos</option><option value="S-2210">S-2210</option><option value="S-2220">S-2220</option><option value="S-2240">S-2240</option></select></div>
+        <div><label>Status</label><select id="fStatus"><option value="">Todos</option><option value="atrasado">Atrasado</option><option value="urgente">Urgente</option><option value="atencao">Atencao</option><option value="pendente">Pendente</option><option value="enviado">Enviado</option></select></div>
+        <div><label>Data Fato De</label><input type="date" id="fDe"></div>
+        <div><label>Data Fato Ate</label><input type="date" id="fAte"></div>
+        <div><label>Busca</label><input type="text" id="fBusca" placeholder="Descricao ou funcionario"></div>
+        <div style="display:flex;gap:8px;padding-top:18px">
+          <button class="btn btn-primary btn-sm" onclick="load()">Filtrar</button>
+          <button class="btn btn-ghost btn-sm" onclick="clearFilters()">Limpar</button>
+          <button class="btn btn-primary btn-sm" onclick="startAutoGen()" title="Gerar eventos a partir de ASOs e CATs">Gerar Automaticos</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="card mb-6">
+    <div class="card-header"><span class="font-medium">Eventos eSocial SST</span></div>
+    <div class="card-body">
+      <div class="data-table-wrapper">
+        <table class="data-table" id="tblEventos">
+          <thead><tr>
+            <th>Tipo</th><th>Funcionario</th><th>Data Fato</th><th>Prazo Envio</th><th>Subtipo</th><th>Status</th><th>Acoes</th>
+          </tr></thead>
+          <tbody id="tbBody"><tr><td colspan="7" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Marcar Enviado -->
+<div class="modal-overlay" id="modalEnviado">
+  <div class="modal-box">
+    <h3>Marcar como Enviado</h3>
+    <div class="form-group"><label>Protocolo eSocial</label><input type="text" id="inpProtocolo" placeholder="Ex: 1.2.2024.0001234"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modalEnviado')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btnConfirmEnvio">Confirmar Envio</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Observacoes -->
+<div class="modal-overlay" id="modalObs">
+  <div class="modal-box">
+    <h3>Editar Observacoes</h3>
+    <div class="form-group"><label>Observacoes</label><textarea id="inpObs"></textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modalObs')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btnSaveObs">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: Confirmar Geracao -->
+<div class="modal-overlay" id="modalGerar">
+  <div class="modal-box">
+    <h3>Gerar Eventos Automaticos</h3>
+    <p id="gerarMsg" class="text-sm" style="margin-bottom:12px">Analisando dados...</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost btn-sm" onclick="closeModal('modalGerar')">Cancelar</button>
+      <button class="btn btn-primary btn-sm" id="btnConfirmGerar" disabled>Confirmar Geracao</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ── state ── */
+let allEvents = [], funcMap = {}, setorMap = {}, expandedId = null, selectedId = null, pendingGen = [];
+
+/* ── init ── */
+(async function(){
+  const user = await Shell.init({ page: 'monitor_esocial', title: 'Monitor eSocial SST' });
+  if (!user) return;
+  await loadMaps();
+  await load();
+})();
+
+async function loadMaps(){
+  const [f, s] = await Promise.all([
+    API.get('rh_funcionarios', 'id,nome_completo,cpf,setor_id,data_admissao'),
+    API.get('rh_setores', 'id,nome')
+  ]);
+  if (f.ok) f.data.forEach(r => funcMap[r.id] = r);
+  if (s.ok) s.data.forEach(r => setorMap[r.id] = r.nome);
+}
+
+/* ── load events ── */
+async function load(){
+  const tipo = document.getElementById('fTipo').value;
+  const status = document.getElementById('fStatus').value;
+  const de = document.getElementById('fDe').value;
+  const ate = document.getElementById('fAte').value;
+  const busca = document.getElementById('fBusca').value.trim().toLowerCase();
+
+  let params = 'order=prazo_envio.asc';
+  if (tipo) params += `&tipo=eq.${tipo}`;
+  if (status) params += `&status=eq.${status}`;
+  if (de) params += `&data_fato=gte.${de}`;
+  if (ate) params += `&data_fato=lte.${ate}`;
+
+  const res = await API.get('esocial_eventos', '*', params);
+  if (!res.ok){ document.getElementById('tbBody').innerHTML = `<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">${API.esc(res.error)}</td></tr>`; return; }
+
+  allEvents = res.data;
+  if (busca){
+    allEvents = allEvents.filter(e => {
+      const fn = funcMap[e.funcionario_id];
+      const nome = fn ? fn.nome_completo.toLowerCase() : '';
+      return (e.descricao||'').toLowerCase().includes(busca) || nome.includes(busca);
+    });
+  }
+  renderKPIs(res.data);
+  renderTable();
+}
+
+function clearFilters(){
+  ['fTipo','fStatus','fDe','fAte','fBusca'].forEach(id => document.getElementById(id).value = '');
+  load();
+}
+
+/* ── KPIs ── */
+function renderKPIs(data){
+  const pending = data.filter(e => !['enviado','cancelado'].includes(e.status));
+  const atrasados = data.filter(e => e.status === 'atrasado');
+  const urgentes = data.filter(e => e.status === 'urgente');
+  const atencao = data.filter(e => e.status === 'atencao');
+  const now = new Date(), y = now.getFullYear(), m = now.getMonth();
+  const enviadosMes = data.filter(e => {
+    if (e.status !== 'enviado' || !e.enviado_em) return false;
+    const d = new Date(e.enviado_em);
+    return d.getFullYear() === y && d.getMonth() === m;
+  });
+  document.getElementById('kpiTotal').textContent = API.fmtNum(pending.length);
+  document.getElementById('kpiAtrasados').textContent = API.fmtNum(atrasados.length);
+  document.getElementById('kpiUrgentes').textContent = API.fmtNum(urgentes.length);
+  document.getElementById('kpiAtencao').textContent = API.fmtNum(atencao.length);
+  document.getElementById('kpiEnviados').textContent = API.fmtNum(enviadosMes.length);
+}
+
+/* ── Table ── */
+function renderTable(){
+  const tb = document.getElementById('tbBody');
+  if (!allEvents.length){ tb.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Nenhum evento encontrado</td></tr>'; return; }
+  const today = new Date().toISOString().slice(0,10);
+  let html = '';
+  allEvents.forEach(e => {
+    const fn = funcMap[e.funcionario_id];
+    const nome = fn ? API.esc(fn.nome_completo) : '-';
+    const rowCls = e.status === 'atrasado' ? 'row-atrasado' : e.status === 'urgente' ? 'row-urgente' : '';
+    const tipoCls = e.tipo === 'S-2210' ? 's2210' : e.tipo === 'S-2220' ? 's2220' : 's2240';
+    const prazoCls = e.prazo_envio < today ? 'prazo-vencido' : e.prazo_envio === today ? 'prazo-hoje' : 'prazo-ok';
+    const statusBadge = badgeForStatus(e.status);
+
+    html += `<tr class="row-clickable ${rowCls}" onclick="toggleDetail('${e.id}')">
+      <td><span class="badge-type ${tipoCls}">${API.esc(e.tipo)}</span></td>
+      <td>${nome}</td>
+      <td>${API.fmtData(e.data_fato)}</td>
+      <td class="${prazoCls}">${API.fmtData(e.prazo_envio)}</td>
+      <td class="text-sm">${API.esc(e.subtipo||'-')}</td>
+      <td>${statusBadge}</td>
+      <td onclick="event.stopPropagation()">
+        ${e.status !== 'enviado' && e.status !== 'cancelado' ? `<button class="btn btn-primary btn-sm" onclick="openEnviado('${e.id}')">Enviar</button> ` : ''}
+        <button class="btn btn-ghost btn-sm" onclick="openObs('${e.id}')">Obs</button>
+      </td>
+    </tr>`;
+
+    if (expandedId === e.id){
+      const setor = fn && setorMap[fn.setor_id] ? API.esc(setorMap[fn.setor_id]) : '-';
+      const cpf = fn ? API.esc(fn.cpf||'') : '-';
+      html += `<tr><td colspan="7" class="detail-panel">
+        <p><strong>Descricao:</strong> ${API.esc(e.descricao||'-')}</p>
+        <p><strong>Funcionario:</strong> ${nome} &mdash; CPF: ${cpf} &mdash; Setor: ${setor}</p>
+        <p><strong>Protocolo:</strong> ${API.esc(e.protocolo||'Nao enviado')}</p>
+        <p><strong>Observacoes:</strong> ${API.esc(e.observacoes||'Nenhuma')}</p>
+        ${e.enviado_em ? `<p><strong>Enviado em:</strong> ${API.fmtData(e.enviado_em)} por ${API.esc(e.enviado_por||'-')}</p>` : ''}
+        <p><strong>Criado em:</strong> ${API.fmtData(e.created_at)}</p>
+      </td></tr>`;
+    }
+  });
+  tb.innerHTML = html;
+}
+
+function badgeForStatus(s){
+  const map = { atrasado:'badge-danger', urgente:'badge-warning', atencao:'badge-info', pendente:'badge-gray', enviado:'badge-success', cancelado:'badge-gray badge-cancelado' };
+  const labels = { atrasado:'Atrasado', urgente:'Urgente', atencao:'Atencao', pendente:'Pendente', enviado:'Enviado', cancelado:'Cancelado' };
+  return `<span class="badge ${map[s]||'badge-gray'}">${labels[s]||s}</span>`;
+}
+
+function toggleDetail(id){ expandedId = expandedId === id ? null : id; renderTable(); }
+
+/* ── Modal helpers ── */
+function openModal(id){ document.getElementById(id).classList.add('active'); }
+function closeModal(id){ document.getElementById(id).classList.remove('active'); }
+
+/* ── Marcar Enviado ── */
+function openEnviado(id){
+  selectedId = id;
+  document.getElementById('inpProtocolo').value = '';
+  openModal('modalEnviado');
+}
+document.getElementById('btnConfirmEnvio').addEventListener('click', async function(){
+  const proto = document.getElementById('inpProtocolo').value.trim();
+  if (!proto){ alert('Informe o protocolo.'); return; }
+  this.disabled = true; this.textContent = 'Salvando...';
+  const res = await API.patch('esocial_eventos', selectedId, {
+    status: 'enviado', protocolo: proto, enviado_em: new Date().toISOString(), enviado_por: 'usuario'
+  });
+  this.disabled = false; this.textContent = 'Confirmar Envio';
+  if (!res.ok){ alert('Erro: ' + res.error); return; }
+  closeModal('modalEnviado');
+  await load();
+});
+
+/* ── Observacoes ── */
+function openObs(id){
+  selectedId = id;
+  const ev = allEvents.find(e => e.id === id);
+  document.getElementById('inpObs').value = ev ? ev.observacoes || '' : '';
+  openModal('modalObs');
+}
+document.getElementById('btnSaveObs').addEventListener('click', async function(){
+  const obs = document.getElementById('inpObs').value.trim();
+  this.disabled = true; this.textContent = 'Salvando...';
+  const res = await API.patch('esocial_eventos', selectedId, { observacoes: obs });
+  this.disabled = false; this.textContent = 'Salvar';
+  if (!res.ok){ alert('Erro: ' + res.error); return; }
+  closeModal('modalObs');
+  await load();
+});
+
+/* ── Auto-generate events ── */
+async function startAutoGen(){
+  pendingGen = [];
+  document.getElementById('gerarMsg').textContent = 'Analisando dados...';
+  document.getElementById('btnConfirmGerar').disabled = true;
+  openModal('modalGerar');
+
+  const [acidentes, asos, existentes] = await Promise.all([
+    API.get('sst_acidente', 'id,funcionario_id,data_ocorrencia,tipo_acidente,cat_emitida'),
+    API.get('sst_aso', 'id,funcionario_id,tipo_exame,data_exame,data_validade'),
+    API.get('esocial_eventos', 'id,tipo,funcionario_id,data_fato')
+  ]);
+
+  if (!acidentes.ok || !asos.ok || !existentes.ok){
+    document.getElementById('gerarMsg').textContent = 'Erro ao carregar dados: ' + (acidentes.error||asos.error||existentes.error);
+    return;
+  }
+
+  const existSet = new Set(existentes.data.map(e => `${e.tipo}|${e.funcionario_id}|${e.data_fato}`));
+
+  /* S-2210: acidentes com CAT */
+  acidentes.data.filter(a => a.cat_emitida === true).forEach(a => {
+    const key = `S-2210|${a.funcionario_id}|${a.data_ocorrencia}`;
+    if (existSet.has(key)) return;
+    const prazo = addDays(a.data_ocorrencia, 1);
+    pendingGen.push({
+      tipo: 'S-2210', funcionario_id: a.funcionario_id, data_fato: a.data_ocorrencia,
+      prazo_envio: prazo, subtipo: a.tipo_acidente || 'Acidente',
+      descricao: 'CAT - Acidente de trabalho', status: prazoStatus(prazo)
+    });
+  });
+
+  /* S-2220: ASOs */
+  const validTypes = ['admissional','periodico','retorno','demissional'];
+  asos.data.filter(a => validTypes.includes(a.tipo_exame)).forEach(a => {
+    const key = `S-2220|${a.funcionario_id}|${a.data_exame}`;
+    if (existSet.has(key)) return;
+    const prazo = calcPrazoASO(a);
+    pendingGen.push({
+      tipo: 'S-2220', funcionario_id: a.funcionario_id, data_fato: a.data_exame,
+      prazo_envio: prazo, subtipo: a.tipo_exame,
+      descricao: 'ASO - ' + a.tipo_exame, status: prazoStatus(prazo)
+    });
+  });
+
+  if (pendingGen.length === 0){
+    document.getElementById('gerarMsg').textContent = 'Nenhum evento novo a ser gerado. Todos os dados ja possuem evento correspondente.';
+  } else {
+    document.getElementById('gerarMsg').textContent = `Serao gerados ${pendingGen.length} evento(s): ${pendingGen.filter(e=>e.tipo==='S-2210').length} S-2210, ${pendingGen.filter(e=>e.tipo==='S-2220').length} S-2220.`;
+    document.getElementById('btnConfirmGerar').disabled = false;
+  }
+}
+
+document.getElementById('btnConfirmGerar').addEventListener('click', async function(){
+  this.disabled = true; this.textContent = 'Gerando...';
+  let ok = 0, fail = 0;
+  for (const ev of pendingGen){
+    const res = await API.post('esocial_eventos', ev);
+    if (res.ok) ok++; else fail++;
+  }
+  this.textContent = 'Confirmar Geracao'; this.disabled = false;
+  closeModal('modalGerar');
+  alert(`Gerados: ${ok} eventos. ${fail ? 'Falhas: ' + fail : ''}`);
+  await load();
+});
+
+/* ── date helpers ── */
+function addDays(dateStr, days){
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0,10);
+}
+
+function calcPrazoASO(aso){
+  const fn = funcMap[aso.funcionario_id];
+  switch(aso.tipo_exame){
+    case 'admissional':
+      if (fn && fn.data_admissao) return addDays(fn.data_admissao, 15);
+      return addDays(aso.data_exame, 15);
+    case 'periodico': {
+      const d = new Date(aso.data_exame + 'T00:00:00');
+      const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 15);
+      return nextMonth.toISOString().slice(0,10);
+    }
+    case 'retorno':
+      return aso.data_exame;
+    case 'demissional':
+      return addDays(aso.data_exame, 15);
+    default:
+      return addDays(aso.data_exame, 15);
+  }
+}
+
+function prazoStatus(prazo){
+  const today = new Date().toISOString().slice(0,10);
+  if (prazo < today) return 'atrasado';
+  if (prazo === today) return 'urgente';
+  const diff = (new Date(prazo) - new Date(today)) / 86400000;
+  return diff <= 3 ? 'atencao' : 'pendente';
+}
+
+/* ── close modals on overlay click ── */
+document.querySelectorAll('.modal-overlay').forEach(el => {
+  el.addEventListener('click', function(e){ if (e.target === this) closeModal(this.id); });
+});
+</script>
+</body>
+</html>

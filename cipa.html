@@ -181,29 +181,29 @@ document.getElementById('tabBar').addEventListener('click',e=>{
 
 /* DATA LOADERS */
 async function loadMandato(){
-  const r=await API.get('cipa_mandato','*','status=eq.ativo&limit=1');
+  const r=await API.get('cipa_mandato?select=*&status=eq.ativo&limit=1');
   if(r.ok&&r.data.length)mandato=r.data[0];
 }
 async function loadMembros(){
   if(!mandato)return;
-  const r=await API.get('cipa_membros','*','mandato_id=eq.'+mandato.id+'&order=nome');
+  const r=await API.get('cipa_membros?select=*&mandato_id=eq.'+mandato.id+'&order=nome');
   if(r.ok)membros=r.data;
 }
 async function loadReunioes(){
   if(!mandato)return;
-  const r=await API.get('cipa_reunioes','*','mandato_id=eq.'+mandato.id+'&order=data.desc');
+  const r=await API.get('cipa_reunioes?select=*&mandato_id=eq.'+mandato.id+'&order=data.desc');
   if(r.ok)reunioes=r.data;
 }
 async function loadInspecoes(){
-  const r=await API.get('cipa_inspecoes','*','order=data.desc');
+  const r=await API.get('cipa_inspecoes?select=*&order=data.desc');
   if(r.ok)inspecoes=r.data;
 }
 async function loadDenuncias(){
-  const r=await API.get('cipa_denuncias','*','order=created_at.desc');
+  const r=await API.get('cipa_denuncias?select=*&order=created_at.desc');
   if(r.ok)denuncias=r.data;
 }
 async function loadChecklist(){
-  const r=await API.get('cipa_checklist_padrao','*','ativo=eq.true&order=ordem');
+  const r=await API.get('cipa_checklist_padrao?select=*&ativo=eq.true&order=ordem');
   if(r.ok)checklist=r.data;
 }
 
@@ -270,7 +270,7 @@ async function saveMembro(){
 }
 
 async function marcarTreinado(id){
-  const r=await API.patch('cipa_membros',id,{treinado:true,data_treinamento:today});
+  const r=await API.patch('cipa_membros?id=eq.'+id,{treinado:true,data_treinamento:today});
   if(r.ok){await loadMembros();renderMembros();}
 }
 
@@ -304,8 +304,8 @@ async function toggleReuniao(id){
   const presEl=document.getElementById('pres-'+id);
   presEl.innerHTML='<span class="text-muted">Carregando...</span>';
   const [pRes,aRes]=await Promise.all([
-    API.get('cipa_presencas','*','reuniao_id=eq.'+id),
-    API.get('cipa_assinaturas','*','reuniao_id=eq.'+id)
+    API.get('cipa_presencas?select=*&reuniao_id=eq.'+id),
+    API.get('cipa_assinaturas?select=*&reuniao_id=eq.'+id)
   ]);
   const presencas=pRes.ok?pRes.data:[];
   const assinaturas=aRes.ok?aRes.data:[];
@@ -455,7 +455,7 @@ function toggleDenuncia(row){
 
 async function responderDenuncia(id,status){
   const resp=document.getElementById('denResp-'+id).value;
-  const r=await API.patch('cipa_denuncias',id,{resposta:resp,status});
+  const r=await API.patch('cipa_denuncias?id=eq.'+id,{resposta:resp,status});
   if(r.ok){await loadDenuncias();renderDenuncias();renderPainel();}
 }
 

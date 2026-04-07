@@ -133,14 +133,15 @@ let allEvents = [], funcMap = {}, setorMap = {}, expandedId = null, selectedId =
 (async function(){
   const user = await Shell.init({ page: 'monitor_esocial', title: 'Monitor eSocial SST' });
   if (!user) return;
+  API.setPerfil(user.perfil);
   await loadMaps();
   await load();
 })();
 
 async function loadMaps(){
   const [f, s] = await Promise.all([
-    API.get('rh_funcionarios', 'id,nome_completo,cpf,setor_id,data_admissao'),
-    API.get('rh_setores', 'id,nome')
+    API.get('rh_funcionarios?select=id,nome_completo,cpf,setor_id,data_admissao&limit=2000'),
+    API.get('rh_setores?select=id,nome')
   ]);
   if (f.ok) f.data.forEach(r => funcMap[r.id] = r);
   if (s.ok) s.data.forEach(r => setorMap[r.id] = r.nome);
@@ -160,7 +161,7 @@ async function load(){
   if (de) params += `&data_fato=gte.${de}`;
   if (ate) params += `&data_fato=lte.${ate}`;
 
-  const res = await API.get('esocial_eventos', '*', params);
+  const res = await API.get('esocial_eventos?select=*&' + params);
   if (!res.ok){ document.getElementById('tbBody').innerHTML = `<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">${API.esc(res.error)}</td></tr>`; return; }
 
   allEvents = res.data;
@@ -264,8 +265,8 @@ document.getElementById('btnConfirmEnvio').addEventListener('click', async funct
   const proto = document.getElementById('inpProtocolo').value.trim();
   if (!proto){ alert('Informe o protocolo.'); return; }
   this.disabled = true; this.textContent = 'Salvando...';
-  const res = await API.patch('esocial_eventos', selectedId, {
-    status: 'enviado', protocolo: proto, enviado_em: new Date().toISOString(), enviado_por: 'usuario'
+  const res = await API.patch('esocial_eventos?id=eq.' + selectedId, {
+    status: 'enviado', protocolo: proto, enviado_em: new Date().toISOString()
   });
   this.disabled = false; this.textContent = 'Confirmar Envio';
   if (!res.ok){ alert('Erro: ' + res.error); return; }
@@ -283,7 +284,7 @@ function openObs(id){
 document.getElementById('btnSaveObs').addEventListener('click', async function(){
   const obs = document.getElementById('inpObs').value.trim();
   this.disabled = true; this.textContent = 'Salvando...';
-  const res = await API.patch('esocial_eventos', selectedId, { observacoes: obs });
+  const res = await API.patch('esocial_eventos?id=eq.' + selectedId, { observacoes: obs });
   this.disabled = false; this.textContent = 'Salvar';
   if (!res.ok){ alert('Erro: ' + res.error); return; }
   closeModal('modalObs');
@@ -298,9 +299,9 @@ async function startAutoGen(){
   openModal('modalGerar');
 
   const [acidentes, asos, existentes] = await Promise.all([
-    API.get('sst_acidente', 'id,funcionario_id,data_ocorrencia,tipo_acidente,cat_emitida'),
-    API.get('sst_aso', 'id,funcionario_id,tipo_exame,data_exame,data_validade'),
-    API.get('esocial_eventos', 'id,tipo,funcionario_id,data_fato')
+    API.get('sst_acidente?select=id,funcionario_id,data_ocorrencia,tipo_acidente,cat_emitida'),
+    API.get('sst_aso?select=id,funcionario_id,tipo_exame,data_exame,data_validade'),
+    API.get('esocial_eventos?select=id,tipo,funcionario_id,data_fato')
   ]);
 
   if (!acidentes.ok || !asos.ok || !existentes.ok){

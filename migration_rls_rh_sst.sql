@@ -1,109 +1,112 @@
 -- ============================================================================
 -- migration_rls_rh_sst.sql
--- Correções de RLS para o banco RH/SST — baseado em auditoria funcional real
+-- Correções cirúrgicas de RLS — aplicadas e validadas no banco real
+-- Projeto: muiqmtnfvyffborgiwdw (RH Classic)
+-- Data: 2026-04-08
 --
 -- CONTEXTO:
 --   O banco JÁ possui RLS implementado com funções helper:
---     - rh_perfil_atual()        → retorna perfil do usuario logado
---     - rh_perfil_sensivel()     → true se admin/rh
---     - rh_funcionario_atual_id()→ id do funcionario vinculado ao usuario
---     - rh_setor_do_gestor()     → setor_id do gestor (QUEBRADA — ver fix abaixo)
---     - rh_meu_perfil()          → RPC para frontend
+--     rh_perfil_atual()         → perfil do usuario logado (SECURITY DEFINER)
+--     rh_perfil_sensivel()      → true se admin/rh
+--     rh_funcionario_atual_id() → func.id via match email
+--     rh_setor_do_gestor()      → setor_id via match email (CORRIGIDO AQUI)
+--     rh_meu_perfil()           → RPC para frontend
 --
---   Tabela rh_usuarios usa coluna auth_uid (não auth_id).
---   Tabelas SST são prefixadas sst_ (não rh_).
---   Perfis válidos: administrador, rh, gestor, gestor_confianca,
---                   visualizador, qualidade, financeiro, diretoria
+--   Tabela rh_usuarios: coluna auth_uid (não auth_id)
+--   Tabelas SST: prefixo sst_ (não rh_)
+--   Perfis: administrador, rh, gestor, gestor_confianca, visualizador,
+--           qualidade, financeiro, diretoria
 --
--- BUGS ENCONTRADOS NA AUDITORIA:
---   1. CRÍTICO: rh_setor_do_gestor() referencia rh_usuarios.funcionario_id
---      que NÃO EXISTE → crash para perfis gestor/gestor_confianca
---   2. ALTO: gestor_confianca (Paulo) não tem match em rh_funcionarios
---      via email → rh_funcionario_atual_id() retorna NULL
---   3. MÉDIO: 35 tabelas usam auth.role()='authenticated' para SELECT
---      sem checar perfil — qualquer autenticado (incluindo qualidade) lê tudo
---   4. BAIXO: sst_treinamento e sst_epi_entrega não têm policy DELETE
---
--- ESTE ARQUIVO CORRIGE APENAS OS BUGS. NÃO REESCREVE POLICIES EXISTENTES.
+-- STATUS: APLICADO E VALIDADO — este arquivo documenta o que foi feito
 -- ============================================================================
 
-BEGIN;
 
 -- ============================================================================
--- FIX 1 (CRÍTICO): Adicionar coluna funcionario_id em rh_usuarios
--- e corrigir rh_setor_do_gestor()
+-- FIX 1 (CRÍTICO): rh_setor_do_gestor() — remover referência a coluna inexistente
+--
+-- ANTES: JOIN rh_funcionarios f ON f.id = u.funcionario_id  ← CRASH (coluna não existe)
+-- DEPOIS: JOIN via email (mesmo padrão de rh_funcionario_atual_id())
 -- ============================================================================
 
--- 1a. Adicionar coluna que a função espera
-ALTER TABLE rh_usuarios
-  ADD COLUMN IF NOT EXISTS funcionario_id UUID REFERENCES rh_funcionarios(id);
-
--- 1b. Popular automaticamente a partir do match por email
-UPDATE rh_usuarios u
-SET funcionario_id = f.id
-FROM rh_funcionarios f
-WHERE lower(f.email_pessoal) = lower(u.email)
-  AND f.status != 'desligado'
-  AND u.funcionario_id IS NULL;
-
--- 1c. Recriar a função com tratamento de NULL
 CREATE OR REPLACE FUNCTION public.rh_setor_do_gestor()
 RETURNS UUID
 LANGUAGE plpgsql STABLE SECURITY DEFINER
-SET search_path = public
+SET search_path = 'public'
 AS $$
 DECLARE v_setor UUID;
 BEGIN
   SELECT f.setor_id INTO v_setor
   FROM rh_usuarios u
-  JOIN rh_funcionarios f ON f.id = u.funcionario_id
+  JOIN rh_funcionarios f ON lower(f.email_pessoal) = lower(u.email)
   WHERE u.auth_uid = auth.uid()
     AND u.ativo = TRUE
-    AND f.status != 'desligado';
-  RETURN v_setor;  -- retorna NULL se não encontrar (gestor vê 0 rows — seguro)
+    AND f.status != 'desligado'
+  LIMIT 1;
+  RETURN v_setor;  -- NULL se não encontrar = gestor vê 0 rows (fail closed)
 END;
 $$;
 
-COMMENT ON FUNCTION public.rh_setor_do_gestor() IS
-  'Retorna setor_id do funcionario vinculado ao usuario logado. NULL se não vinculado.';
-
 
 -- ============================================================================
--- FIX 2 (ALTO): Vincular gestor_confianca ao funcionario correto
--- Paulo não tem match por email — precisa vincular manualmente
--- ============================================================================
-
--- Verificar se Paulo tem funcionario_id preenchido após o UPDATE acima
--- Se não, o admin precisa preencher manualmente via:
---   UPDATE rh_usuarios SET funcionario_id = '<uuid-do-funcionario>'
---   WHERE email = 'pauloalberton.classiccouros@hotmail.com';
+-- FIX 2 (CRÍTICO): rh_perfil_atual() — fail closed
 --
--- Não fazemos match forçado aqui porque não sabemos qual é o registro correto.
+-- ANTES: COALESCE(v_perfil, 'visualizador') — desconhecido vira visualizador
+-- DEPOIS: retorna '_sem_acesso' — nenhuma policy aceita esse valor
+-- ============================================================================
+
+CREATE OR REPLACE FUNCTION public.rh_perfil_atual()
+RETURNS TEXT
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = 'public'
+AS $$
+DECLARE v_perfil TEXT;
+BEGIN
+  SELECT perfil INTO v_perfil
+  FROM rh_usuarios
+  WHERE auth_uid = auth.uid()
+    AND ativo = TRUE
+  LIMIT 1;
+  RETURN COALESCE(v_perfil, '_sem_acesso');
+END;
+$$;
 
 
 -- ============================================================================
--- FIX 3 (MÉDIO): Endurecer policies de tabelas com dados sensíveis
--- que usam apenas auth.role()='authenticated' para SELECT
+-- FIX 3 (ALTO): Vincular gestor_confianca (Paulo) ao funcionário
+--
+-- Paulo existia em rh_funcionarios mas email_pessoal era NULL.
+-- Preenchido para que rh_funcionario_atual_id() e rh_setor_do_gestor() funcionem.
+-- Resultado: Paulo → setor "Produção"
 -- ============================================================================
 
--- 3a. sst_treinamento — restringir SELECT a perfis RH/SST/gestor
+UPDATE rh_funcionarios
+SET email_pessoal = 'pauloalberton.classiccouros@hotmail.com'
+WHERE id = 'd8875fcb-3be9-4964-a499-545c1f1be218'
+  AND (email_pessoal IS NULL OR email_pessoal = '');
+
+
+-- ============================================================================
+-- FIX 4 (MÉDIO): Endurecer SELECT aberto em tabelas com dados operacionais
+--
+-- De: auth.role() = 'authenticated' (qualquer autenticado, incluindo qualidade)
+-- Para: rh_perfil_atual() IN (...) com perfis explícitos
+--
+-- NÃO tocamos em catálogos/referência (cargos, setores, empresas, filiais,
+-- catálogo EPI, tipos de treinamento, etc.) — esses continuam abertos.
+-- ============================================================================
+
+-- 4a. SST operacional
 DROP POLICY IF EXISTS trein_select ON sst_treinamento;
 CREATE POLICY trein_select ON sst_treinamento
   FOR SELECT TO authenticated
-  USING (
-    rh_perfil_atual() IN ('administrador','rh','gestor','gestor_confianca','visualizador','diretoria')
-  );
+  USING (rh_perfil_atual() IN ('administrador','rh','gestor','gestor_confianca','visualizador','diretoria'));
 
--- 3b. sst_epi_entrega — restringir SELECT
 DROP POLICY IF EXISTS epi_ent_select ON sst_epi_entrega;
 CREATE POLICY epi_ent_select ON sst_epi_entrega
   FOR SELECT TO authenticated
-  USING (
-    rh_perfil_atual() IN ('administrador','rh','gestor','gestor_confianca','visualizador','diretoria')
-  );
+  USING (rh_perfil_atual() IN ('administrador','rh','gestor','gestor_confianca','visualizador','diretoria'));
 
--- 3c. rh_cte + componentes + log — dados financeiros de transporte
--- Restringir de "qualquer autenticado" para admin/rh/financeiro/diretoria
+-- 4b. Financeiro / CT-e
 DROP POLICY IF EXISTS rh_cte_all ON rh_cte;
 CREATE POLICY rh_cte_select ON rh_cte
   FOR SELECT TO authenticated
@@ -140,7 +143,39 @@ CREATE POLICY rh_custo_write ON rh_custo_colaborador
   USING (rh_perfil_atual() IN ('administrador','rh'))
   WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
--- 3d. Audit log SELECT — incluir 'rh' (atualmente apenas admin)
+-- 4c. Custos transporte
+DROP POLICY IF EXISTS custos_transporte_select ON rh_custos_transporte;
+CREATE POLICY custos_transporte_select ON rh_custos_transporte
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+DROP POLICY IF EXISTS transporte_func_select ON rh_custos_transporte_funcionarios;
+CREATE POLICY transporte_func_select ON rh_custos_transporte_funcionarios
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+DROP POLICY IF EXISTS custos_transporte_rateio_select ON rh_custos_transporte_rateio;
+CREATE POLICY custos_transporte_rateio_select ON rh_custos_transporte_rateio
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+-- 4d. Faturas SST
+DROP POLICY IF EXISTS sst_faturas_select ON sst_faturas_servicos;
+CREATE POLICY sst_faturas_select ON sst_faturas_servicos
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+DROP POLICY IF EXISTS sst_resumo_select ON sst_fatura_resumo_procedimentos;
+CREATE POLICY sst_resumo_select ON sst_fatura_resumo_procedimentos
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+DROP POLICY IF EXISTS sst_historico_select ON sst_fatura_historico_colaborador;
+CREATE POLICY sst_historico_select ON sst_fatura_historico_colaborador
+  FOR SELECT TO authenticated
+  USING (rh_perfil_atual() IN ('administrador','rh','financeiro','diretoria'));
+
+-- 4e. Audit log — expandir leitura para rh e diretoria
 DROP POLICY IF EXISTS audit_select ON rh_audit_log;
 CREATE POLICY audit_select ON rh_audit_log
   FOR SELECT TO authenticated
@@ -148,18 +183,28 @@ CREATE POLICY audit_select ON rh_audit_log
 
 
 -- ============================================================================
--- FIX 4 (BAIXO): Adicionar DELETE policies ausentes em tabelas SST
+-- TABELAS QUE MANTÊM SELECT ABERTO (DECISÃO DOCUMENTADA)
+--
+-- Todas são dados de referência/catálogo sem dados pessoais:
+--   rh_cargos (39 rows)          — dropdown de cargos
+--   rh_setores (8 rows)          — dropdown de setores
+--   rh_empresas (1 row)          — empresa única
+--   rh_filiais (1 row)           — filial única
+--   rh_centros_custo (0 rows)    — referência contábil
+--   rh_niveis_hierarquicos (10)  — organograma
+--   rh_tipo_documento (0 rows)   — catálogo de docs
+--   sst_tipo_treinamento (7)     — NRs
+--   sst_catalogo_epi (552)       — catálogo de EPIs com CA
+--   sst_cargo_epi (0 rows)       — matriz cargo×EPI
+--   sst_cargo_treinamento (0)    — matriz cargo×treinamento
+--   fp_rubrica (26 rows)         — rubricas da folha
+--   rh_hist_cargo (627)          — histórico movimentação
+--   rh_hist_setor (633)          — histórico setores
+--   rh_hist_gestor (0 rows)      — histórico gestores
+--   rh_proc_* (0 rows cada)     — processos workflow (não populado)
+--
+-- Nenhuma contém: CPF, salário, dados bancários, saúde, CID,
+-- atestados, ou qualquer dado sensível/pessoal.
+--
+-- WRITE nestas tabelas JÁ está restrito a admin/rh via policies existentes.
 -- ============================================================================
-
--- sst_treinamento (não tinha DELETE policy)
-CREATE POLICY trein_delete ON sst_treinamento
-  FOR DELETE TO authenticated
-  USING (rh_perfil_atual() = 'administrador');
-
--- sst_epi_entrega (não tinha DELETE policy)
-CREATE POLICY epi_ent_delete ON sst_epi_entrega
-  FOR DELETE TO authenticated
-  USING (rh_perfil_atual() = 'administrador');
-
-
-COMMIT;

@@ -57,6 +57,15 @@
   .welcome-title { font-family:'Syne',sans-serif; font-size:26px; font-weight:800; line-height:1.15; }
   .welcome-title span { color:var(--accent); }
   .welcome-sub { font-size:13px; color:var(--muted); margin-top:6px; }
+  .welcome-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .btn-refresh {
+    background:transparent; border:1px solid var(--border); border-radius:8px;
+    color:var(--muted); font-size:11px; padding:6px 14px; cursor:pointer;
+    letter-spacing:0.06em; transition:all 0.2s; font-family:'DM Sans',sans-serif;
+    flex-shrink:0;
+  }
+  .btn-refresh:hover { border-color:var(--blue); color:var(--text); }
+  .btn-refresh.loading { opacity:.5; pointer-events:none; }
 
   .section-block { margin-bottom:36px; }
   .section-title {
@@ -228,7 +237,7 @@
   </div>
   <div class="header-right">
     <span id="headerUser"></span>
-    <a href="app.html" class="btn-cq">CQ</a>
+    <a href="index_2.html" class="btn-cq">CQ</a>
     <button class="btn-sair" onclick="RHAuth.logout()">Sair</button>
   </div>
 </header>
@@ -261,7 +270,10 @@
 <main>
   <div class="welcome">
     <div class="welcome-tag">Classic Importacao e Exportacao de Couros</div>
-    <div class="welcome-title">RH & <span>Seguranca do Trabalho</span></div>
+    <div class="welcome-row">
+      <div class="welcome-title">RH & <span>Seguranca do Trabalho</span></div>
+      <button class="btn-refresh" id="btnRefresh" onclick="refreshDados()" title="Atualizar dados">Atualizar</button>
+    </div>
     <div class="welcome-sub" id="welcomeSub">Carregando...</div>
   </div>
 
@@ -296,7 +308,7 @@ const SECTIONS = [
         perfis:['administrador','rh','diretoria','sst'],
         indicadores: [
           { id:'ind_ativos', label:'Ativos', query:'rh_funcionarios?status=eq.ativo&select=id', tipo:'count' },
-          { id:'ind_bloqueados', label:'Bloqueados', query:'rh_funcionarios?status=eq.bloqueado&select=id', tipo:'count', criticidade:'err' }
+          { id:'ind_afastados', label:'Afastados', query:'rh_funcionarios?status=eq.afastado&select=id', tipo:'count', criticidade:'warn' }
         ]
       },
       {
@@ -308,7 +320,7 @@ const SECTIONS = [
         perfis:['administrador','rh','diretoria','sst'],
         indicadores: [
           { id:'ind_aso_vencer', label:'ASOs 30d', query:'_kpi_aso_vencer', tipo:'kpi', criticidade:'warn' },
-          { id:'ind_trein_vencer', label:'Trein. venc.', query:'rh_treinamentos?validade=lte.{hoje}&select=id', tipo:'count', criticidade:'err' }
+          { id:'ind_trein_vencer', label:'Trein. venc.', query:'rh_treinamentos?data_validade=lte.{hoje}&select=id', tipo:'count', criticidade:'err' }
         ]
       },
       {
@@ -319,7 +331,7 @@ const SECTIONS = [
         badge:'NR-1',
         perfis:['administrador','rh','diretoria','sst'],
         indicadores: [
-          { id:'ind_risco_alto', label:'Risco alto', query:'rh_saude_mental?classificacao=eq.alto&select=id', tipo:'count', criticidade:'err' }
+          { id:'ind_risco_alto', label:'Risco alto', query:'rh_saude_mental?classificacao_risco=eq.alto&select=id', tipo:'count', criticidade:'err' }
         ]
       },
       {
@@ -379,7 +391,7 @@ const ALERTAS_CONFIG = [
   { id:'aso_vencer', label:'ASOs a vencer', href:'gestao_rh_sst.html?tab=aso&filtro=vencer30d',
     query:'_kpi_aso_vencer', tipo:'kpi', nivel:'crit', minimo:1 },
   { id:'trein_vencido', label:'Treinamentos vencidos', href:'gestao_rh_sst.html?tab=treinamentos&filtro=vencido',
-    query:'rh_treinamentos?validade=lte.{hoje}&select=id', tipo:'count', nivel:'crit', minimo:1 },
+    query:'rh_treinamentos?data_validade=lte.{hoje}&select=id', tipo:'count', nivel:'crit', minimo:1 },
   { id:'contrato_exp', label:'Contratos expirando', href:'gestao_rh_sst.html?tab=funcionarios&filtro=experiencia',
     query:'rh_funcionarios?tipo_contrato=eq.experiencia&data_fim_contrato=lte.{d30}&data_fim_contrato=gte.{hoje}&select=id',
     tipo:'count', nivel:'warn', minimo:1 },
@@ -451,6 +463,26 @@ async function _resolveQuery(query) {
     _execCache[query] = v;
     return v;
   } catch(e) { _execCache[query] = 0; return 0; }
+}
+
+/* Refresh manual — limpa cache e recarrega tudo */
+async function refreshDados() {
+  const btn = document.getElementById('btnRefresh');
+  if (btn) btn.classList.add('loading');
+  // Limpar cache
+  Object.keys(_execCache).forEach(k => delete _execCache[k]);
+  // Limpar alertas (re-render)
+  const strip = document.getElementById('alertasStrip');
+  strip.style.display = '';
+  strip.querySelectorAll('.alerta-chip').forEach(el => el.remove());
+  try {
+    await Promise.all([
+      dashboard_executivo_corporativo(),
+      renderAlertas(),
+      carregarIndicadoresCards()
+    ]);
+  } catch(e) { console.warn('Refresh:', e); }
+  if (btn) btn.classList.remove('loading');
 }
 
 async function dashboard_executivo_corporativo() {
@@ -607,6 +639,12 @@ function traduzPerfil(p) {
 (async () => {
   const perfil = await RHAuth.init();
   if (!perfil) return;
+
+  // Perfil "qualidade" nao tem modulos RH — redirecionar para CQ
+  if (perfil.perfil === 'qualidade') {
+    window.location.href = 'index_2.html';
+    return;
+  }
 
   document.getElementById('headerUser').textContent =
     (perfil.nome || perfil.email) + ' \u00b7 ' + traduzPerfil(perfil.perfil);

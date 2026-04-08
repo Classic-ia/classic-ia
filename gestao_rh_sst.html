@@ -1916,12 +1916,49 @@ async function recarregar() {
   await popularEmpresasFiliais();
   await recarregar();
 
-  // Suporte a ?tab= na URL (ex: ?tab=aso)
+  // Suporte a ?tab= e ?filtro= na URL (ex: ?tab=aso&filtro=vencer30d)
   const params = new URLSearchParams(window.location.search);
   const tab = params.get('tab');
   if (tab) {
     const tabEl = document.querySelector(`.tab[data-tab="${tab}"]`);
     if (tabEl) tabEl.click();
+  }
+
+  // Aplicar filtro automático vindo de alertas do hub
+  const filtro = params.get('filtro');
+  if (filtro) {
+    const FILTRO_MAP = {
+      // ASO
+      'vencer30d':    { select: 'filterAsoStatus', value: 'vencer', fn: 'filtrarAso' },
+      'vencido_aso':  { select: 'filterAsoStatus', value: 'vencido', fn: 'filtrarAso' },
+      // Treinamentos
+      'vencido':      { select: null, value: null, fn: 'filtrarTreinamentosVencidos' },
+      // Funcionarios
+      'experiencia':  { select: 'filterStatus', value: null, fn: 'filtrarContratosExperiencia' },
+      'afastados':    { select: 'filterStatus', value: 'afastado', fn: 'filtrarFuncionarios' },
+    };
+    const cfg = FILTRO_MAP[filtro];
+    if (cfg) {
+      setTimeout(() => {
+        if (cfg.select && cfg.value) {
+          const sel = document.getElementById(cfg.select);
+          if (sel) { sel.value = cfg.value; sel.dispatchEvent(new Event('change')); }
+        } else if (cfg.fn === 'filtrarTreinamentosVencidos') {
+          // Filtrar treinamentos vencidos programaticamente
+          const hoje = new Date().toISOString().slice(0, 10);
+          const lista = (typeof TREINAMENTOS !== 'undefined' ? TREINAMENTOS : [])
+            .filter(t => t.data_validade && t.data_validade < hoje);
+          if (typeof renderTreinamentos === 'function') renderTreinamentos(lista);
+        } else if (cfg.fn === 'filtrarContratosExperiencia') {
+          // Filtrar contratos experiência
+          const d30 = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+          const hoje = new Date().toISOString().slice(0, 10);
+          const lista = (typeof FUNCIONARIOS !== 'undefined' ? FUNCIONARIOS : [])
+            .filter(f => f.tipo_contrato === 'experiencia' && f.data_fim_contrato && f.data_fim_contrato >= hoje && f.data_fim_contrato <= d30);
+          if (typeof renderFuncionarios === 'function') renderFuncionarios(lista);
+        }
+      }, 300);
+    }
   }
 })();
 </script>

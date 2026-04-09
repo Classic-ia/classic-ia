@@ -36,12 +36,18 @@ LANGUAGE plpgsql SECURITY DEFINER SET search_path = 'public'
 AS $fn$
 DECLARE
   v_perfil TEXT;
+  v_uid UUID;
   v_processo_id UUID;
   v_desl_id UUID;
   v_func RECORD;
   v_tem_entrevista BOOLEAN;
 BEGIN
-  v_perfil := rh_perfil_atual();
+  -- Capture caller uid from GUC (auth.uid() retorna NULL dentro de SECURITY DEFINER)
+  v_uid := NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid;
+
+  -- Get perfil via query direta (não rh_perfil_atual que também depende de auth.uid)
+  SELECT perfil INTO v_perfil FROM rh_usuarios WHERE auth_uid = v_uid AND ativo = true LIMIT 1;
+  v_perfil := COALESCE(v_perfil, '_sem_acesso');
   IF v_perfil NOT IN ('administrador','rh') THEN
     RETURN jsonb_build_object('ok', false, 'processo_id', null,
       'error', 'Apenas perfis administrador ou rh podem abrir desligamento. Perfil atual: ' || v_perfil);
@@ -75,7 +81,7 @@ BEGIN
   END IF;
 
   INSERT INTO rh_processo (funcionario_id, tipo, status, data_solicitacao, solicitado_por, created_by)
-  VALUES (p_funcionario_id, 'desligamento', 'rascunho', CURRENT_DATE, auth.uid(), auth.uid())
+  VALUES (p_funcionario_id, 'desligamento', 'rascunho', CURRENT_DATE, v_uid, v_uid)
   RETURNING id INTO v_processo_id;
 
   v_tem_entrevista := (p_entrevista_p1 IS NOT NULL OR p_entrevista_p2 IS NOT NULL

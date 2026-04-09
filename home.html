@@ -89,6 +89,14 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
 /* Loading */
 .loading{text-align:center;padding:60px;color:var(--muted);font-size:13px;}
 
+/* Filial selector */
+.filial-bar{background:var(--surface);border-bottom:1px solid var(--border);padding:8px 24px;
+  display:flex;align-items:center;gap:12px;position:relative;z-index:1;}
+.filial-label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;}
+.filial-select{background:var(--surface2);border:1px solid var(--border);border-radius:8px;
+  color:var(--text);font-size:13px;padding:6px 12px;font-family:inherit;cursor:pointer;}
+.filial-select:focus{border-color:var(--blue);outline:none;}
+
 /* Responsive */
 @media(max-width:768px){
   .mod-grid{grid-template-columns:1fr;}
@@ -96,6 +104,7 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
   .header{padding:12px 16px;}
   .main{padding:20px 16px 40px;}
   .hdr-user{display:none;}
+  .filial-bar{padding:8px 16px;}
 }
 </style>
 </head>
@@ -111,6 +120,11 @@ body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
     <div class="hdr-user" id="hdrUser">Carregando...</div>
     <button class="btn-out" onclick="RHAuth.logout()">Sair</button>
   </div>
+</div>
+
+<div class="filial-bar" id="filialBar" style="display:none">
+  <span class="filial-label">Unidade</span>
+  <select class="filial-select" id="filialSelect" onchange="trocarFilial()"></select>
 </div>
 
 <div class="main">
@@ -279,6 +293,49 @@ function renderSysAlerts(data) {
 }
 
 /* ═══════════════════════════════════════
+   FILIAL CONTEXT
+   ═══════════════════════════════════════ */
+async function carregarFiliais(user) {
+  try {
+    const filiais = user.filiais_acesso || [];
+    if (filiais.length <= 1) {
+      // Single filial — no selector needed, store the one
+      if (filiais.length === 1) localStorage.setItem('filial_ativa', filiais[0]);
+      return;
+    }
+
+    // Multiple filiais — show selector
+    const res = await RH_API.fetch('rpc/rh_listar_filiais', { method: 'POST', body: {} });
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data) || data.length <= 1) return;
+
+    const sel = document.getElementById('filialSelect');
+    const salva = localStorage.getItem('filial_ativa');
+
+    sel.innerHTML = '<option value="">Todas as unidades</option>' +
+      data.map(f => `<option value="${f.id}" ${f.id === salva ? 'selected' : ''}>${f.nome_fantasia}${f.cidade ? ' — ' + f.cidade : ''}</option>`).join('');
+
+    document.getElementById('filialBar').style.display = 'flex';
+  } catch(e) { console.warn('Filiais:', e); }
+}
+
+function trocarFilial() {
+  const val = document.getElementById('filialSelect').value;
+  if (val) {
+    localStorage.setItem('filial_ativa', val);
+  } else {
+    localStorage.removeItem('filial_ativa');
+  }
+  // Reload to apply context
+  window.location.reload();
+}
+
+// Utility: get active filial ID (used by other pages)
+function getFilialAtiva() {
+  return localStorage.getItem('filial_ativa') || null;
+}
+
+/* ═══════════════════════════════════════
    INIT
    ═══════════════════════════════════════ */
 (async () => {
@@ -288,6 +345,9 @@ function renderSysAlerts(data) {
   // Header
   document.getElementById('hdrUser').innerHTML =
     `<strong>${user.nome || user.email}</strong><span class="hdr-badge">${user.perfil}</span>`;
+
+  // Load filiais
+  await carregarFiliais(user);
 
   // Modules
   renderModules(user.perfil);

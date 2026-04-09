@@ -1,6 +1,6 @@
 -- ============================================================================
 -- migration_filial_triunfo.sql
--- Inclusão da filial Triunfo + infraestrutura multi-filial
+-- Inclusão das filiais Triunfo e Álvares Machado + infraestrutura multi-filial
 -- STATUS: APLICADO no banco em 2026-04-09
 -- ============================================================================
 
@@ -15,9 +15,24 @@ VALUES (
   true
 );
 
--- 2. SETORES PARA TRIUNFO (cópia dos setores da Matriz)
+-- 1b. FILIAL ÁLVARES MACHADO
+INSERT INTO rh_filiais (razao_social, cnpj, nome_fantasia, empresa_id, endereco, ativo)
+VALUES (
+  'CLASSIC IMPORTACAO E EXPORTACAO DE COUROS LTDA',
+  '08849964000382',
+  'Classic Couros - Álvares Machado',
+  (SELECT id FROM rh_empresas LIMIT 1),
+  '{"logradouro":"Rua 09 de Julho","numero":"2","bairro":"Irene Bressan de Oliveira","cidade":"Álvares Machado","uf":"SP","cep":"19160-000","inscricao_estadual":"162.042.231.117"}'::jsonb,
+  true
+);
+
+-- 2. SETORES PARA TRIUNFO E ÁLVARES MACHADO (cópia dos setores da Matriz)
 INSERT INTO rh_setores (nome, filial_id, ativo)
 SELECT nome, (SELECT id FROM rh_filiais WHERE cnpj = '08849964000200'), true
+FROM rh_setores WHERE filial_id = (SELECT id FROM rh_filiais WHERE cnpj = '08849964000110');
+
+INSERT INTO rh_setores (nome, filial_id, ativo)
+SELECT nome, (SELECT id FROM rh_filiais WHERE cnpj = '08849964000382'), true
 FROM rh_setores WHERE filial_id = (SELECT id FROM rh_filiais WHERE cnpj = '08849964000110');
 
 -- 3. ATUALIZAR filiais_acesso DOS USUARIOS

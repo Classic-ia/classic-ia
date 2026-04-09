@@ -54,6 +54,13 @@ $$;
 -- DEPOIS: retorna '_sem_acesso' — nenhuma policy aceita esse valor
 -- ============================================================================
 
+-- NOTA IMPORTANTE (2026-04-09):
+-- Todas as funções SECURITY DEFINER devem usar:
+--   COALESCE(auth.uid(), NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
+-- em vez de apenas auth.uid() ou apenas GUC.
+-- Motivo: auth.uid() funciona via PostgREST (frontend real), GUC funciona via service role (testes).
+-- COALESCE garante que ambos os contextos funcionam.
+
 CREATE OR REPLACE FUNCTION public.rh_perfil_atual()
 RETURNS TEXT
 LANGUAGE plpgsql STABLE SECURITY DEFINER

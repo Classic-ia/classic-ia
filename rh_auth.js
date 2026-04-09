@@ -260,7 +260,7 @@ const RHAuth = (function () {
     }
 
     if (opts.perfisPermitidos && !opts.perfisPermitidos.includes(_user.perfil)) {
-      window.location.href = 'home.html'; return null;
+      window.location.href = 'app_rh.html'; return null;
     }
 
     _resetTimers();

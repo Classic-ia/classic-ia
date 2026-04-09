@@ -8,6 +8,7 @@
 <script src="config_rh.js"></script>
 <script src="rh_api.js"></script>
 <script src="rh_auth.js"></script>
+<script src="filial_context.js"></script>
 <style>
 :root {
   --bg:#07111c; --bg2:#0d1b2a; --bg3:#162535; --border:#1e3a52;
@@ -1006,7 +1007,11 @@ function renderMotorBanner() {
 // ── API HELPERS ──────────────────────────────────────────
 async function carregarDados(tabela) {
   try {
-    return await RH_API.get(tabela + '?order=created_at.desc&limit=1000') || [];
+    // Apply filial filter to tables that have filial_id
+    let filtro = '';
+    if (tabela === TABELAS.func) filtro = FilialContext.filtroQuery('filial_id');
+    else if (tabela === 'rh_setores') filtro = FilialContext.filtroQuery('filial_id');
+    return await RH_API.get(tabela + '?order=created_at.desc&limit=1000' + filtro) || [];
   } catch (e) {
     console.warn('Erro ao carregar ' + tabela, e);
     return [];
@@ -2028,6 +2033,17 @@ async function recarregar() {
   CARGOS = await _cargos;
   TIPOS_TREINAMENTO = await _tiposTrein;
   CATALOGO_EPI = await _catEpi;
+
+  // Multi-filial: filter SST data by loaded funcionarios (already filial-filtered)
+  if (FilialContext.getFilialAtiva()) {
+    const funcIds = new Set(FUNCIONARIOS.map(f => f.id));
+    ASOS = ASOS.filter(a => funcIds.has(a.funcionario_id));
+    TREINAMENTOS = TREINAMENTOS.filter(t => funcIds.has(t.funcionario_id));
+    EPIS = EPIS.filter(e => funcIds.has(e.funcionario_id));
+    ACIDENTES = ACIDENTES.filter(a => funcIds.has(a.funcionario_id));
+    AUSENCIAS = AUSENCIAS.filter(a => funcIds.has(a.colaborador_id || a.funcionario_id));
+    RESTRICOES = RESTRICOES.filter(r => funcIds.has(r.funcionario_id));
+  }
 
   popularSelectsFuncionarios();
   await popularSetores();

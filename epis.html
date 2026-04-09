@@ -10,6 +10,7 @@
 <script src="config.js"></script>
 <script src="rh_auth.js"></script>
 <script src="api.js"></script>
+<script src="filial_context.js"></script>
 <script src="shell.js"></script>
 <script src="ui_components.js"></script>
 <script src="page_bootstrap.js"></script>
@@ -185,15 +186,19 @@ function switchToTab(t) {
 /* ===== Load ===== */
 (async function init() {
   try {
-    /* All aggregations via server RPCs — no 1000-row limit issue */
+    /* All aggregations via server RPCs with filial filter */
+    const _fc = typeof FilialContext !== 'undefined' ? FilialContext : { filtroQuery: ()=>'', filtroRPC: ()=>({}) };
+    const fq = _fc.filtroQuery('filial_id');  // for rh_funcionarios
+    const fr = _fc.filtroRPC();               // for RPCs {p_filial_id: uuid}
+
     const [rCat, rEnt, rFunc, rSet, rKpis, rFuncAgg, rSetorAgg, rPend, rOS] = await Promise.all([
       API.get('sst_catalogo_epi?select=id,descricao,ca_numero,ca_validade,categoria,fabricante,ativo&order=descricao'),
       API.get('sst_epi_entrega?select=id,funcionario_id,catalogo_epi_id,data_entrega,quantidade,motivo_entrega&order=data_entrega.desc&limit=200'),
-      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,ferias)&limit=2000'),
-      API.get('rh_setores?select=id,nome'),
-      API.rpc('epi_kpis'),
-      API.get('rpc/epi_entregas_por_funcionario'),
-      API.get('rpc/epi_entregas_por_setor'),
+      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,ferias)&limit=2000' + fq),
+      API.get('rh_setores?select=id,nome' + fq),
+      API.rpc('epi_kpis', fr),
+      API.get('rpc/epi_entregas_por_funcionario' + (fr.p_filial_id ? '?p_filial_id=' + fr.p_filial_id : '')),
+      API.get('rpc/epi_entregas_por_setor' + (fr.p_filial_id ? '?p_filial_id=' + fr.p_filial_id : '')),
       API.get('rpc/epi_pendentes_assinatura'),
       API.get('rpc/epi_ordens_servico')
     ]);

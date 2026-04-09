@@ -1,0 +1,40 @@
+-- ============================================================================
+-- migration_recrutamento_selecao.sql
+-- Módulo de Recrutamento & Seleção — tabelas reais + distribuição de vagas
+-- STATUS: APLICADO no banco em 2026-04-09
+-- ============================================================================
+--
+-- CONTEXTO:
+--   As tabelas rs_vagas, rs_candidatos, rs_pipeline, rs_entrevistas eram
+--   views dummy (SELECT ... WHERE false). Foram substituídas por tabelas reais.
+--
+-- TABELAS CRIADAS:
+--   rs_vagas               — vagas de emprego (titulo, setor, cargo, quantidade, status...)
+--   rs_vagas_distribuicao  — distribuição de vagas por setor (FK → rs_vagas)
+--   rs_candidatos          — candidatos (nome, cpf, telefone, email, status...)
+--   rs_pipeline            — pipeline kanban (vaga_id, candidato_id, etapa, notas...)
+--   rs_entrevistas         — agenda de entrevistas
+--   rs_banco_talentos      — banco de talentos (candidato_id, area, tags...)
+--   rs_avaliacoes          — avaliações de candidatos
+--
+-- DADOS INICIAIS:
+--   Vaga: "Auxiliar de Produção" — 30 posições, prioridade alta
+--   Distribuição por setor:
+--     Carga e Descarga  7  M  1turno
+--     Miúdos            6  F  1turno
+--     Descongelar       2  F  1turno
+--     Sebo              7  M  1turno
+--     Classificação     4  F  1turno
+--     Couro             4  M  1turno
+--
+-- RLS:
+--   SELECT: everyone authenticated
+--   INSERT/UPDATE/DELETE: admin, rh, gestor
+--
+-- FRONTEND:
+--   recrutamento_selecao.html:
+--     - carregarVagas() agora carrega rs_vagas_distribuicao junto
+--     - renderVagas() mostra sub-linhas expansíveis por distribuição
+--     - Pipeline tab: painel "Vagas Abertas por Setor" com criticidade por cor
+--     - Badge no header Triagem com total de vagas abertas
+-- ============================================================================

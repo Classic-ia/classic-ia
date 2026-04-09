@@ -62,7 +62,12 @@
   <div class="kpi-card">
     <div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
     <div class="kpi-value" id="kFuncEpi"><span class="spinner"></span></div>
-    <div class="kpi-label">Funcionarios com EPI</div>
+    <div class="kpi-label">Func. Ativos c/ EPI</div>
+  </div>
+  <div class="kpi-card" style="cursor:pointer" onclick="switchToTab('pendentes')">
+    <div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg></div>
+    <div class="kpi-value" id="kPendentes"><span class="spinner"></span></div>
+    <div class="kpi-label">Pend. Assinatura</div>
   </div>
 </div>
 
@@ -72,6 +77,8 @@
   <button data-t="entregas">Entregas Recentes</button>
   <button data-t="funcionario">Por Funcionario</button>
   <button data-t="setor">Por Setor</button>
+  <button data-t="pendentes">Pend. Assinatura</button>
+  <button data-t="os">Ordens de Servico</button>
 </div>
 
 <!-- TAB CATALOGO -->
@@ -109,6 +116,7 @@
   <div class="filter-row">
     <div><label>Buscar</label><input type="text" id="fFuncBusca" placeholder="Nome do funcionario..." oninput="renderFuncionarios()"></div>
     <div><label>Setor</label><select id="fFuncSetor" onchange="renderFuncionarios()"><option value="">Todos</option></select></div>
+    <div><label>Status</label><select id="fFuncStatus" onchange="renderFuncionarios()"><option value="ativos">Apenas Ativos</option><option value="todos">Todos</option></select></div>
   </div>
   <div class="card">
     <div class="data-table-wrapper"><table class="data-table"><thead><tr>
@@ -121,6 +129,22 @@
 <!-- TAB POR SETOR -->
 <div class="tp" id="tp-setor">
   <div id="setorGrid" class="setor-grid"></div>
+</div>
+
+<!-- TAB PENDENTES ASSINATURA -->
+<div class="tp" id="tp-pendentes">
+  <div class="card">
+    <div class="data-table-wrapper"><table class="data-table"><thead><tr>
+      <th>Funcionario</th><th>Setor</th><th>EPI</th><th>CA</th><th>Data Entrega</th><th>Acao</th>
+    </tr></thead><tbody id="tbPendentes"></tbody></table></div>
+    <div class="tbl-footer" id="ftPendentes"></div>
+  </div>
+</div>
+
+<!-- TAB ORDENS DE SERVICO -->
+<div class="tp" id="tp-os">
+  <div id="osGrid"></div>
+  <div class="tbl-footer" id="ftOS"></div>
 </div>
 
 </div>
@@ -136,6 +160,8 @@ let catalogo = [], entregas = [], funcionarios = [], setores = [];
 let catMap = {}, funcMap = {}, setorMap = {};
 let funcAgg = [];      // from RPC epi_entregas_por_funcionario()
 let setorAgg = [];     // from RPC epi_entregas_por_setor()
+let pendentes = [];    // from RPC epi_pendentes_assinatura()
+let ordensServico = []; // from RPC epi_ordens_servico()
 let kpisServer = {};   // from RPC epi_kpis()
 let expandedFuncId = null;
 
@@ -160,15 +186,16 @@ function switchToTab(t) {
 (async function init() {
   try {
     /* All aggregations via server RPCs — no 1000-row limit issue */
-    const [rCat, rEnt, rFunc, rSet, rKpis, rFuncAgg, rSetorAgg] = await Promise.all([
+    const [rCat, rEnt, rFunc, rSet, rKpis, rFuncAgg, rSetorAgg, rPend, rOS] = await Promise.all([
       API.get('sst_catalogo_epi?select=id,descricao,ca_numero,ca_validade,categoria,fabricante,ativo&order=descricao'),
       API.get('sst_epi_entrega?select=id,funcionario_id,catalogo_epi_id,data_entrega,quantidade,motivo_entrega&order=data_entrega.desc&limit=200'),
-      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,experiencia,ferias)&limit=2000'),
+      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,ferias)&limit=2000'),
       API.get('rh_setores?select=id,nome'),
       API.rpc('epi_kpis'),
-      /* Set-returning RPCs: call via GET to preserve full array (API.rpc takes only [0]) */
       API.get('rpc/epi_entregas_por_funcionario'),
-      API.get('rpc/epi_entregas_por_setor')
+      API.get('rpc/epi_entregas_por_setor'),
+      API.get('rpc/epi_pendentes_assinatura'),
+      API.get('rpc/epi_ordens_servico')
     ]);
 
     catalogo = rCat.ok ? rCat.data : [];
@@ -176,8 +203,9 @@ function switchToTab(t) {
     funcionarios = rFunc.ok ? rFunc.data : [];
     setores = rSet.ok ? rSet.data : [];
     kpisServer = (rKpis.ok && rKpis.data) ? rKpis.data : {};
+    pendentes = rPend.ok ? (rPend.data || []) : [];
+    ordensServico = rOS.ok ? (rOS.data || []) : [];
 
-    /* Aggregations from RPCs — full arrays */
     const funcAggRaw = rFuncAgg.ok ? (rFuncAgg.data || []) : [];
     funcAgg = funcAggRaw.map(r => ({ id: r.funcionario_id, total: Number(r.total), ultima: r.ultima_entrega }));
     setorAgg = rSetorAgg.ok ? (rSetorAgg.data || []) : [];
@@ -193,6 +221,8 @@ function switchToTab(t) {
     renderEntregas();
     renderFuncionarios();
     renderSetores();
+    renderPendentes();
+    renderOS();
   } catch (err) {
     console.error('Erro ao carregar dados de EPIs:', err);
   }
@@ -222,6 +252,7 @@ function renderKPIs() {
   document.getElementById('kEntregas').textContent = API.fmtNum(kpisServer.total_entregas || 0);
   document.getElementById('kEntregas12').textContent = API.fmtNum(kpisServer.entregas_12m || 0);
   document.getElementById('kFuncEpi').textContent = API.fmtNum(kpisServer.func_com_epi || funcAgg.length);
+  document.getElementById('kPendentes').textContent = API.fmtNum(kpisServer.pendentes_assinatura || pendentes.length);
 }
 
 /* ===== Tab 1: Catalogo ===== */
@@ -316,11 +347,13 @@ function renderEntregas() {
 function renderFuncionarios() {
   const busca = (document.getElementById('fFuncBusca').value || '').toLowerCase();
   const setorId = document.getElementById('fFuncSetor').value;
+  const apenasAtivos = (document.getElementById('fFuncStatus').value || 'ativos') === 'ativos';
   expandedFuncId = null;
 
   const filtered = funcAgg.filter(a => {
     const func = funcMap[a.id];
-    if (!func) return false;
+    if (!func) return !apenasAtivos; // desligados without funcMap entry: hide if filtering ativos
+    if (apenasAtivos && !['ativo','afastado','ferias'].includes(func.status)) return false;
     if (busca && !(func.nome_completo || '').toLowerCase().includes(busca)) return false;
     if (setorId && func.setor_id !== setorId) return false;
     return true;
@@ -430,6 +463,59 @@ function drillSetor(setorId) {
   document.getElementById('fFuncSetor').value = setorId;
   switchToTab('funcionario');
   renderFuncionarios();
+}
+
+/* ===== Tab 5: Pendentes Assinatura ===== */
+function renderPendentes() {
+  const tbody = document.getElementById('tbPendentes');
+  if (!pendentes.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Nenhuma entrega pendente de assinatura</td></tr>';
+    document.getElementById('ftPendentes').textContent = '0 pendentes';
+    return;
+  }
+  tbody.innerHTML = pendentes.map(p =>
+    '<tr>'
+    + '<td><strong>' + esc(p.funcionario_nome || '--') + '</strong></td>'
+    + '<td>' + esc(p.setor_nome || '--') + '</td>'
+    + '<td>' + esc(p.epi_descricao || '--') + '</td>'
+    + '<td>' + esc(p.ca || '--') + '</td>'
+    + '<td>' + esc(fmtD(p.data_entrega)) + '</td>'
+    + '<td>' + (p.url_termo ? '<a href="' + esc(p.url_termo) + '" target="_blank" style="color:var(--primary);font-weight:500">Assinar</a>' : '--') + '</td>'
+    + '</tr>'
+  ).join('');
+  document.getElementById('ftPendentes').textContent = pendentes.length + ' entregas pendentes';
+}
+
+/* ===== Tab 6: Ordens de Servico ===== */
+function renderOS() {
+  const container = document.getElementById('osGrid');
+  if (!ordensServico.length) {
+    container.innerHTML = '<div class="card" style="padding:40px;text-align:center">'
+      + '<p class="text-muted" style="margin-bottom:12px">Nenhuma Ordem de Servico cadastrada.</p>'
+      + '<p style="font-size:12px;color:var(--text-secondary)">Ordens de Servico (OS) definem EPIs obrigatorios, riscos e treinamentos por setor/cargo.<br>Cadastre via <strong>SST > Ordem de Servico</strong>.</p>'
+      + '</div>';
+    document.getElementById('ftOS').textContent = '';
+    return;
+  }
+  container.innerHTML = '<div class="data-table-wrapper"><table class="data-table"><thead><tr>'
+    + '<th>Codigo</th><th>Titulo</th><th>Setor</th><th>Cargo</th><th>Status</th><th>Emissao</th><th>Ciencias</th>'
+    + '</tr></thead><tbody>'
+    + ordensServico.map(os => {
+      const stBadge = os.status === 'vigente'
+        ? '<span class="badge badge-success">Vigente</span>'
+        : '<span class="badge badge-gray">' + esc(os.status || '--') + '</span>';
+      return '<tr>'
+        + '<td><strong>' + esc(os.codigo || '--') + '</strong></td>'
+        + '<td>' + esc(os.titulo || '--') + '</td>'
+        + '<td>' + esc(os.setor_nome || '--') + '</td>'
+        + '<td>' + esc(os.cargo_nome || '--') + '</td>'
+        + '<td>' + stBadge + '</td>'
+        + '<td>' + esc(fmtD(os.data_emissao)) + '</td>'
+        + '<td style="text-align:center">' + (os.total_ciencias || 0) + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody></table></div>';
+  document.getElementById('ftOS').textContent = ordensServico.length + ' ordens de servico';
 }
 </script>
 </body>

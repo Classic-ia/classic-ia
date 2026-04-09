@@ -55,11 +55,14 @@ $$;
 -- ============================================================================
 
 -- NOTA IMPORTANTE (2026-04-09):
--- Todas as funções SECURITY DEFINER devem usar:
---   COALESCE(auth.uid(), NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid)
--- em vez de apenas auth.uid() ou apenas GUC.
--- Motivo: auth.uid() funciona via PostgREST (frontend real), GUC funciona via service role (testes).
--- COALESCE garante que ambos os contextos funcionam.
+-- Todas as funções SECURITY DEFINER devem usar o padrão de 3 métodos:
+--   COALESCE(
+--     auth.uid(),                                                          -- Method 1: INVOKER context
+--     (current_setting('request.jwt.claims', true)::json->>'sub')::uuid,   -- Method 2: full JWT JSON (mais confiável)
+--     NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid     -- Method 3: GUC direto (fallback)
+--   )
+-- Motivo: auth.uid() pode retornar NULL em SECURITY DEFINER no PostgREST.
+-- Method 2 é o mais confiável porque Supabase SEMPRE seta request.jwt.claims.
 
 CREATE OR REPLACE FUNCTION public.rh_perfil_atual()
 RETURNS TEXT

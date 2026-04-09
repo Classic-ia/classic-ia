@@ -577,16 +577,7 @@ tbody td{padding:10px;vertical-align:middle;}
       <div class="field"><label>Treinamento / NR *</label>
         <select id="treinTipo" required>
           <option value="">Selecione</option>
-          <option value="NR-06">NR-06 – EPI</option>
-          <option value="NR-10">NR-10 – Segurança em Eletricidade</option>
-          <option value="NR-12">NR-12 – Máquinas e Equipamentos</option>
-          <option value="NR-35">NR-35 – Trabalho em Altura</option>
-          <option value="NR-36">NR-36 – Abate e Processamento</option>
-          <option value="CIPA">CIPA</option>
-          <option value="Integração">Integração</option>
-          <option value="Brigada">Brigada de Incêndio</option>
-          <option value="Primeiro Socorros">Primeiros Socorros</option>
-          <option value="Outro">Outro</option>
+          <!-- Populado dinamicamente via TIPOS_TREINAMENTO -->
         </select>
       </div>
       <div class="field"><label>Carga Horária (h)</label><input type="number" id="treinCarga"></div>
@@ -617,14 +608,21 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="field"><label>Funcionário *</label>
       <select id="epiFunc" required><option value="">Selecione</option></select>
     </div>
-    <div class="field-row">
-      <div class="field"><label>EPI *</label><input id="epiNome" required placeholder="Ex: Luva Nitrílica"></div>
-      <div class="field"><label>CA (Certificado)</label><input id="epiCa"></div>
+    <div class="field"><label>EPI do Catálogo *</label>
+      <select id="epiCatalogo" required><option value="">Selecione o EPI</option></select>
     </div>
     <div class="field-row-3">
       <div class="field"><label>Data Entrega *</label><input type="date" id="epiDataEntrega" required></div>
-      <div class="field"><label>Validade</label><input type="date" id="epiValidade"></div>
       <div class="field"><label>Quantidade</label><input type="number" id="epiQtd" value="1" min="1"></div>
+      <div class="field"><label>Motivo</label>
+        <select id="epiMotivo">
+          <option value="primeira_entrega">Primeira Entrega</option>
+          <option value="substituicao">Substituição</option>
+          <option value="desgaste">Desgaste</option>
+          <option value="perda">Perda</option>
+          <option value="mudanca_funcao">Mudança de Função</option>
+        </select>
+      </div>
     </div>
     <div class="field"><label>Observações</label><textarea id="epiObs" rows="2"></textarea></div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
@@ -858,6 +856,7 @@ let SETORES = [];
 let EMPRESAS = [];
 let CARGOS = [];
 let TIPOS_TREINAMENTO = [];
+let CATALOGO_EPI = [];
 
 const TABELAS = {
   func: 'rh_funcionarios',
@@ -1101,6 +1100,32 @@ function nomeSetor(id) {
   return s ? s.nome : id;
 }
 
+function popularCatalogoEpi() {
+  const sel = document.getElementById('epiCatalogo');
+  sel.innerHTML = '<option value="">Selecione o EPI</option>';
+  CATALOGO_EPI.forEach(c => {
+    const label = c.descricao + (c.ca_numero ? ' (CA ' + c.ca_numero + ')' : '');
+    sel.innerHTML += `<option value="${c.id}">${label}</option>`;
+  });
+}
+
+function nomeEpi(catalogoId) {
+  if (!catalogoId) return '—';
+  const c = CATALOGO_EPI.find(x => x.id === catalogoId);
+  return c ? c.descricao : catalogoId;
+}
+
+function popularTiposTreinamento() {
+  const selModal = document.getElementById('treinTipo');
+  const selFiltro = document.getElementById('filterNR');
+  selModal.innerHTML = '<option value="">Selecione</option>';
+  selFiltro.innerHTML = '<option value="">Todas NRs</option>';
+  TIPOS_TREINAMENTO.forEach(t => {
+    selModal.innerHTML += `<option value="${t.id}">${t.nome}</option>`;
+    selFiltro.innerHTML += `<option value="${t.id}">${t.nome}</option>`;
+  });
+}
+
 async function popularEmpresasFiliais() {
   try {
     EMPRESAS = await RH_API.get('rh_empresas?status=eq.ativa&order=razao_social') || [];
@@ -1245,7 +1270,7 @@ function filtrarTreinamentos() {
   const nr = document.getElementById('filterNR').value;
   let lista = TREINAMENTOS;
   if (busca) lista = lista.filter(t => nomeFunc(t.funcionario_id).toLowerCase().includes(busca));
-  if (nr) lista = lista.filter(t => t.tipo_treinamento === nr);
+  if (nr) lista = lista.filter(t => t.tipo_treinamento_id === nr || t.tipo_treinamento === nr);
   renderTreinamentos(lista);
 }
 
@@ -1263,13 +1288,14 @@ function renderEpis(lista) {
     else if (dias <= 30) statusHtml = `<span class="badge badge-yellow">Vence em ${dias}d</span>`;
     else statusHtml = '<span class="badge badge-green">Ativo</span>';
 
+    const cat = CATALOGO_EPI.find(c => c.id === e.catalogo_epi_id) || {};
     return `<tr>
       <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
-      <td>${e.epi_nome || '—'}</td>
-      <td style="font-family:monospace;font-size:11px">${e.ca_numero || '—'}</td>
+      <td>${cat.descricao || e.epi_nome || '—'}</td>
+      <td style="font-family:monospace;font-size:11px">${cat.ca_numero || e.ca_numero || '—'}</td>
       <td>${fmtData(e.data_entrega)}</td>
-      <td>${fmtData(e.data_validade)}</td>
-      <td>${e.data_devolucao ? fmtData(e.data_devolucao) : '—'}</td>
+      <td>${fmtData(e.data_devolucao) || '—'}</td>
+      <td>${(e.motivo_entrega || '').replace(/_/g, ' ') || '—'}</td>
       <td>${statusHtml}</td>
       <td><button class="btn-icon" onclick="editarEpi('${e.id}')" title="Editar">✏️</button></td>
     </tr>`;
@@ -1321,23 +1347,26 @@ function renderAbsenteismo(lista) {
     atestado: 'badge-blue', afastamento_inss: 'badge-red'
   };
 
-  tb.innerHTML = lista.map(a => `<tr>
-    <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+  tb.innerHTML = lista.map(a => {
+    const funcId = a.colaborador_id || a.funcionario_id;
+    const tipo = a.tipo || a.tipo_ausencia || '';
+    return `<tr>
+    <td><strong>${nomeFunc(funcId)}</strong></td>
     <td>${fmtData(a.data_inicio)}</td>
-    <td><span class="badge ${tipoBadge[a.tipo_ausencia] || 'badge-muted'}">${(a.tipo_ausencia || '').replace(/_/g, ' ')}</span></td>
+    <td><span class="badge ${tipoBadge[tipo] || 'badge-muted'}">${tipo.replace(/_/g, ' ')}</span></td>
     <td>${a.dias || 1}</td>
-    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.motivo || ''}">${a.motivo || '—'}</td>
-    <td style="font-family:monospace;font-size:11px">${a.cid || '—'}</td>
+    <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${a.observacoes || a.motivo || ''}">${a.observacoes || a.motivo || '—'}</td>
+    <td>${a.gravidade || '—'}</td>
     <td><button class="btn-icon" onclick="editarAbsent('${a.id}')" title="Editar">✏️</button></td>
-  </tr>`).join('');
+  </tr>`;}).join('');
 }
 
 function filtrarAbsenteismo() {
   const busca = document.getElementById('searchAbsent').value.toLowerCase();
   const tipo = document.getElementById('filterAbsentTipo').value;
   let lista = AUSENCIAS;
-  if (busca) lista = lista.filter(a => nomeFunc(a.funcionario_id).toLowerCase().includes(busca));
-  if (tipo) lista = lista.filter(a => a.tipo_ausencia === tipo);
+  if (busca) lista = lista.filter(a => nomeFunc(a.colaborador_id || a.funcionario_id).toLowerCase().includes(busca));
+  if (tipo) lista = lista.filter(a => (a.tipo || a.tipo_ausencia) === tipo);
   renderAbsenteismo(lista);
 }
 
@@ -1688,7 +1717,7 @@ function editarTrein(id) {
   if (!t) return;
   document.getElementById('treinId').value = t.id;
   document.getElementById('treinFunc').value = t.funcionario_id;
-  document.getElementById('treinTipo').value = t.tipo_treinamento || '';
+  document.getElementById('treinTipo').value = t.tipo_treinamento_id || '';
   document.getElementById('treinCarga').value = t.carga_horaria || '';
   document.getElementById('treinData').value = t.data_realizacao || '';
   document.getElementById('treinValidade').value = t.data_validade || '';
@@ -1702,10 +1731,10 @@ async function salvarTreinamento(e) {
   const id = document.getElementById('treinId').value;
   const dados = {
     funcionario_id: document.getElementById('treinFunc').value,
-    tipo_treinamento: document.getElementById('treinTipo').value,
+    tipo_treinamento_id: document.getElementById('treinTipo').value || null,
     carga_horaria: parseInt(document.getElementById('treinCarga').value) || null,
     data_realizacao: document.getElementById('treinData').value,
-    data_validade: document.getElementById('treinValidade').value,
+    data_validade: document.getElementById('treinValidade').value || null,
     instrutor: document.getElementById('treinInstrutor').value.trim() || null,
     observacoes: document.getElementById('treinObs').value.trim() || null,
   };
@@ -1730,11 +1759,10 @@ function editarEpi(id) {
   if (!e) return;
   document.getElementById('epiId').value = e.id;
   document.getElementById('epiFunc').value = e.funcionario_id;
-  document.getElementById('epiNome').value = e.epi_nome || '';
-  document.getElementById('epiCa').value = e.ca_numero || '';
+  document.getElementById('epiCatalogo').value = e.catalogo_epi_id || '';
   document.getElementById('epiDataEntrega').value = e.data_entrega || '';
-  document.getElementById('epiValidade').value = e.data_validade || '';
   document.getElementById('epiQtd').value = e.quantidade || 1;
+  document.getElementById('epiMotivo').value = e.motivo_entrega || 'primeira_entrega';
   document.getElementById('epiObs').value = e.observacoes || '';
   abrirModal('modalEpi');
 }
@@ -1744,11 +1772,10 @@ async function salvarEpi(e) {
   const id = document.getElementById('epiId').value;
   const dados = {
     funcionario_id: document.getElementById('epiFunc').value,
-    epi_nome: document.getElementById('epiNome').value.trim(),
-    ca_numero: document.getElementById('epiCa').value.trim() || null,
+    catalogo_epi_id: document.getElementById('epiCatalogo').value,
     data_entrega: document.getElementById('epiDataEntrega').value,
-    data_validade: document.getElementById('epiValidade').value || null,
     quantidade: parseInt(document.getElementById('epiQtd').value) || 1,
+    motivo_entrega: document.getElementById('epiMotivo').value || 'primeira_entrega',
     observacoes: document.getElementById('epiObs').value.trim() || null,
   };
   const ok = await salvarRegistro(TABELAS.epi, dados, id);
@@ -1822,13 +1849,13 @@ function editarAbsent(id) {
   const a = AUSENCIAS.find(x => x.id === id);
   if (!a) return;
   document.getElementById('absentId').value = a.id;
-  document.getElementById('absentFunc').value = a.funcionario_id;
+  document.getElementById('absentFunc').value = a.colaborador_id || a.funcionario_id;
   document.getElementById('absentInicio').value = a.data_inicio || '';
   document.getElementById('absentFim').value = a.data_fim || '';
-  document.getElementById('absentTipo').value = a.tipo_ausencia || '';
-  document.getElementById('absentCid').value = a.cid || '';
+  document.getElementById('absentTipo').value = a.tipo || a.tipo_ausencia || '';
+  document.getElementById('absentCid').value = '';
   document.getElementById('absentDias').value = a.dias || 1;
-  document.getElementById('absentObs').value = a.motivo || '';
+  document.getElementById('absentObs').value = a.observacoes || a.motivo || '';
   abrirModal('modalAbsent');
 }
 
@@ -1836,13 +1863,12 @@ async function salvarAusencia(e) {
   e.preventDefault();
   const id = document.getElementById('absentId').value;
   const dados = {
-    funcionario_id: document.getElementById('absentFunc').value,
+    colaborador_id: document.getElementById('absentFunc').value,
     data_inicio: document.getElementById('absentInicio').value,
     data_fim: document.getElementById('absentFim').value || null,
-    tipo_ausencia: document.getElementById('absentTipo').value,
-    cid: document.getElementById('absentCid').value.trim() || null,
+    tipo: document.getElementById('absentTipo').value,
     dias: parseInt(document.getElementById('absentDias').value) || 1,
-    motivo: document.getElementById('absentObs').value.trim() || null,
+    observacoes: document.getElementById('absentObs').value.trim() || null,
   };
   const ok = await salvarRegistro(TABELAS.absent, dados, id);
   if (ok) {
@@ -1956,6 +1982,7 @@ async function salvarDesligamento(e) {
 async function recarregar() {
   const _cargos = carregarDados('rh_cargos');
   const _tiposTrein = carregarDados('sst_tipo_treinamento');
+  const _catEpi = carregarDados('sst_catalogo_epi?ativo=eq.true&order=descricao');
   [FUNCIONARIOS, ASOS, TREINAMENTOS, EPIS, ACIDENTES, AUSENCIAS, RESTRICOES, DESLIGAMENTOS] = await Promise.all([
     carregarDados(TABELAS.func),
     carregarDados(TABELAS.aso),
@@ -1968,9 +1995,12 @@ async function recarregar() {
   ]);
   CARGOS = await _cargos;
   TIPOS_TREINAMENTO = await _tiposTrein;
+  CATALOGO_EPI = await _catEpi;
 
   popularSelectsFuncionarios();
   await popularSetores();
+  popularTiposTreinamento();
+  popularCatalogoEpi();
   renderFuncionarios();
   renderAso();
   renderTreinamentos();

@@ -786,19 +786,27 @@ tbody td{padding:10px;vertical-align:middle;}
         <select id="desligTipoDeslig" required>
           <option value="">Selecione</option>
           <option value="pedido_demissao">Pedido de Demissão</option>
-          <option value="demissao_empresa">Demissão pela Empresa</option>
+          <option value="demissao_sem_justa_causa">Demissão sem Justa Causa</option>
+          <option value="demissao_justa_causa">Demissão por Justa Causa</option>
           <option value="termino_contrato">Término de Contrato</option>
-          <option value="justa_causa">Justa Causa</option>
           <option value="acordo_mutuo">Acordo Mútuo</option>
+          <option value="falecimento">Falecimento</option>
+          <option value="aposentadoria">Aposentadoria</option>
         </select>
       </div>
       <div class="field"><label>Categoria da Causa *</label>
         <select id="desligCategoria" required>
           <option value="">Selecione</option>
-          <option value="admissao">Admissão (não adaptou, expectativa errada)</option>
-          <option value="operacional">Operacional (liderança, ambiente, carga)</option>
-          <option value="financeiro">Financeiro (salário, benefícios)</option>
-          <option value="pessoal">Pessoal (família, mudança, saúde)</option>
+          <option value="remuneracao">Remuneração</option>
+          <option value="lideranca">Liderança</option>
+          <option value="ambiente">Ambiente de Trabalho</option>
+          <option value="crescimento">Crescimento Profissional</option>
+          <option value="pessoal">Pessoal</option>
+          <option value="desempenho">Desempenho</option>
+          <option value="conduta">Conduta</option>
+          <option value="reestruturacao">Reestruturação</option>
+          <option value="termino_contrato">Término de Contrato</option>
+          <option value="outro">Outro</option>
         </select>
       </div>
     </div>
@@ -1922,7 +1930,21 @@ async function salvarRestricao(e) {
   } else toast('Erro ao salvar restrição', true);
 }
 
-// ── DESLIGAMENTO ─────────────────────────────────────────
+async function carregarDesligamentos() {
+  // Join processo pai + detalhe filho para obter funcionario_id + dados do desligamento
+  try {
+    const procs = await RH_API.get('rh_processo?tipo=eq.desligamento&order=created_at.desc&limit=200') || [];
+    if (!procs.length) return [];
+    const detalhes = await RH_API.get('rh_proc_desligamento?order=created_at.desc&limit=200') || [];
+    // Merge: add funcionario_id from processo pai to each detalhe
+    return detalhes.map(d => {
+      const proc = procs.find(p => p.id === d.processo_id);
+      return { ...d, funcionario_id: proc ? proc.funcionario_id : null, processo_status: proc ? proc.status : null };
+    });
+  } catch(e) { console.warn('Erro carregarDesligamentos:', e); return []; }
+}
+
+// ── DESLIGAMENTO (via workflow rh_processo) ──────────────
 function abrirModalDeslig() {
   document.getElementById('formDeslig').reset();
   document.getElementById('desligId').value = '';
@@ -1930,14 +1952,15 @@ function abrirModalDeslig() {
 }
 
 function editarDeslig(id) {
+  // Desligamentos existentes são processos — abrir em modo visualização
   const d = DESLIGAMENTOS.find(x => x.id === id);
   if (!d) return;
-  document.getElementById('desligId').value = d.id;
-  document.getElementById('desligFunc').value = d.funcionario_id;
+  document.getElementById('desligId').value = d.processo_id || d.id;
+  document.getElementById('desligFunc').value = d.funcionario_id || '';
   document.getElementById('desligData').value = d.data_desligamento || '';
   document.getElementById('desligTipoDeslig').value = d.tipo_desligamento || '';
   document.getElementById('desligCategoria').value = d.categoria_causa || '';
-  document.getElementById('desligDescricao').value = d.descricao || '';
+  document.getElementById('desligDescricao').value = d.motivo_detalhado || d.descricao || '';
   document.getElementById('entrevP1').value = d.entrevista_p1 || '';
   document.getElementById('entrevP2').value = d.entrevista_p2 || '';
   document.getElementById('entrevP3').value = d.entrevista_p3 || '';
@@ -1948,32 +1971,41 @@ function editarDeslig(id) {
 
 async function salvarDesligamento(e) {
   e.preventDefault();
-  const id = document.getElementById('desligId').value;
+  const processoId = document.getElementById('desligId').value;
   const funcId = document.getElementById('desligFunc').value;
-  const dados = {
-    funcionario_id: funcId,
-    data_desligamento: document.getElementById('desligData').value,
-    tipo_desligamento: document.getElementById('desligTipoDeslig').value,
-    categoria_causa: document.getElementById('desligCategoria').value,
-    descricao: document.getElementById('desligDescricao').value.trim(),
-    entrevista_p1: document.getElementById('entrevP1').value || null,
-    entrevista_p2: document.getElementById('entrevP2').value.trim() || null,
-    entrevista_p3: document.getElementById('entrevP3').value || null,
-    entrevista_p4: document.getElementById('entrevP4').value || null,
-    entrevista_p5: document.getElementById('entrevP5').value.trim() || null,
+
+  if (!funcId) { toast('Selecione o funcionário', true); return; }
+
+  const params = {
+    p_funcionario_id: funcId,
+    p_tipo_desligamento: document.getElementById('desligTipoDeslig').value,
+    p_data_desligamento: document.getElementById('desligData').value,
+    p_categoria_causa: document.getElementById('desligCategoria').value,
+    p_motivo_detalhado: document.getElementById('desligDescricao').value.trim(),
+    p_entrevista_p1: document.getElementById('entrevP1').value || null,
+    p_entrevista_p2: document.getElementById('entrevP2').value.trim() || null,
+    p_entrevista_p3: document.getElementById('entrevP3').value || null,
+    p_entrevista_p4: document.getElementById('entrevP4').value || null,
+    p_entrevista_p5: document.getElementById('entrevP5').value.trim() || null,
   };
 
-  const ok = await salvarRegistro(TABELAS.deslig, dados, id);
-  if (ok) {
-    // Inativar funcionário
-    if (!id) {
-      await salvarRegistro(TABELAS.func, { status: 'inativo', data_desligamento: dados.data_desligamento }, funcId);
+  try {
+    // Abrir processo de desligamento via RPC (cria processo pai + detalhe filho)
+    const res = await RH_API.fetch('rpc/rh_abrir_desligamento', { method: 'POST', body: params });
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.ok) {
+      await logAudit('abrir_desligamento', 'rh_processo', data.processo_id, null, params);
+      toast('Processo de desligamento aberto. Preencha o checklist rescisório para efetivar.');
+      fecharModal('modalDeslig');
+      await recarregar();
+    } else {
+      const errMsg = (data && data.error) || 'Erro ao abrir processo';
+      toast(errMsg, true);
     }
-    await logAudit(id ? 'editar_desligamento' : 'criar_desligamento', TABELAS.deslig, id, null, dados);
-    toast(id ? 'Desligamento atualizado' : 'Desligamento registrado');
-    fecharModal('modalDeslig');
-    await recarregar();
-  } else toast('Erro ao salvar desligamento', true);
+  } catch (err) {
+    toast('Erro de conexão: ' + err.message, true);
+  }
 }
 
 // ══════════════════════════════════════════════════════════
@@ -1991,7 +2023,7 @@ async function recarregar() {
     carregarDados(TABELAS.acid),
     carregarDados(TABELAS.absent),
     carregarDados(TABELAS.rest),
-    carregarDados(TABELAS.deslig),
+    carregarDesligamentos(),
   ]);
   CARGOS = await _cargos;
   TIPOS_TREINAMENTO = await _tiposTrein;

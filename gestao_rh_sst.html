@@ -138,6 +138,13 @@ tbody td{padding:10px;vertical-align:middle;}
   .field-row,.field-row-3{grid-template-columns:1fr;}
   .toolbar{flex-direction:column;}
   .kpi-row{grid-template-columns:1fr 1fr;}
+  /* Modal mobile optimization */
+  .modal-overlay{padding:0;align-items:flex-end;}
+  .modal-box{max-height:92vh;border-radius:14px 14px 0 0;padding:20px 16px;}
+  .modal-title{font-size:16px;position:sticky;top:0;background:var(--bg2);padding-bottom:12px;z-index:1;}
+  .field label{font-size:10px;}
+  .field input,.field select,.field textarea{font-size:16px;padding:10px;} /* prevent iOS zoom */
+  .btn{padding:12px 18px;font-size:14px;width:100%;}
 }
 </style>
 </head>
@@ -465,7 +472,15 @@ tbody td{padding:10px;vertical-align:middle;}
       </div>
       <div class="field"><label>Salário Base</label><input type="number" step="0.01" id="funcSalario"></div>
     </div>
-    <div class="field-row">
+    <div class="field-row-3">
+      <div class="field"><label>Status</label>
+        <select id="funcStatus">
+          <option value="ativo">Ativo</option>
+          <option value="inativo">Inativo</option>
+          <option value="afastado">Afastado</option>
+          <option value="ferias">Férias</option>
+        </select>
+      </div>
       <div class="field"><label>Empresa</label>
         <select id="funcEmpresa"><option value="">Selecione</option></select>
       </div>
@@ -477,9 +492,19 @@ tbody td{padding:10px;vertical-align:middle;}
       <div class="field"><label>Matrícula</label><input id="funcMatricula"></div>
       <div class="field"><label>PIS/PASEP</label><input id="funcPis"></div>
     </div>
-    <div class="field">
-      <label>Observações</label>
-      <textarea id="funcObs" rows="2"></textarea>
+    <div class="field-row">
+      <div class="field"><label>GHE</label><input id="funcGhe" placeholder="Grupo Homogêneo de Exposição"></div>
+      <div class="field"><label>Observações</label><input id="funcObs"></div>
+    </div>
+    <div style="display:flex;gap:20px;margin-top:8px;">
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="funcCargoConfianca" style="width:16px;height:16px;accent-color:var(--blue);">
+        Cargo de Confiança (CLT Art. 62, II)
+      </label>
+      <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);cursor:pointer;">
+        <input type="checkbox" id="funcJovemAprendiz" style="width:16px;height:16px;accent-color:var(--blue);">
+        Jovem Aprendiz (Lei 10.097/2000)
+      </label>
     </div>
     <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:20px;">
       <button type="button" class="btn btn-outline" onclick="fecharModal('modalFunc')">Cancelar</button>
@@ -831,6 +856,7 @@ let RESTRICOES = [];
 let DESLIGAMENTOS = [];
 let SETORES = [];
 let EMPRESAS = [];
+let CARGOS = [];
 
 const TABELAS = {
   func: 'rh_funcionarios',
@@ -1035,23 +1061,37 @@ function popularSelectsFuncionarios() {
   });
 }
 
-function popularSetores() {
+async function popularSetores() {
   const sel = document.getElementById('filterSetor');
   const selFunc = document.getElementById('funcSetor');
-  const setores = [...new Set(FUNCIONARIOS.map(f => f.setor).filter(Boolean))].sort();
+
+  // Carregar setores reais do banco (UUID + nome)
+  let setoresDB = [];
+  try { setoresDB = await RH_API.get('rh_setores?ativo=eq.true&order=nome') || []; } catch(e) {}
 
   sel.innerHTML = '<option value="">Todos os setores</option>';
   selFunc.innerHTML = '<option value="">Selecione</option>';
-  setores.forEach(s => {
-    sel.innerHTML += `<option value="${s}">${s}</option>`;
-    selFunc.innerHTML += `<option value="${s}">${s}</option>`;
-  });
-  // Adicionar setores padrão se vazio
-  if (setores.length === 0) {
-    ['Produção', 'Desossa', 'Miúdos', 'Expedição', 'Qualidade', 'Manutenção', 'Administrativo', 'RH', 'Logística'].forEach(s => {
-      selFunc.innerHTML += `<option value="${s}">${s}</option>`;
+
+  if (setoresDB.length > 0) {
+    SETORES = setoresDB;
+    setoresDB.forEach(s => {
+      sel.innerHTML += `<option value="${s.id}">${s.nome}</option>`;
+      selFunc.innerHTML += `<option value="${s.id}">${s.nome}</option>`;
+    });
+  } else {
+    // Fallback: extrair nomes únicos dos funcionários
+    const nomes = [...new Set(FUNCIONARIOS.map(f => f.setor_id).filter(Boolean))];
+    nomes.forEach(id => {
+      selFunc.innerHTML += `<option value="${id}">${id}</option>`;
     });
   }
+}
+
+// Helper: nome do setor por ID
+function nomeSetor(id) {
+  if (!id) return '—';
+  const s = SETORES.find(x => x.id === id);
+  return s ? s.nome : id;
 }
 
 async function popularEmpresasFiliais() {
@@ -1094,11 +1134,14 @@ function renderFuncionarios(lista) {
       ? '<span class="badge badge-green">APTO</span>'
       : `<span class="badge badge-red" title="${motor.problemas.join(', ')}">BLOQUEADO</span>`;
 
+    const cargoNome = f.cargo_id ? ((CARGOS.find(c => c.id === f.cargo_id) || {}).nome || f.cargo || '—') : (f.cargo || '—');
+    const setorNome = f.setor_id ? nomeSetor(f.setor_id) : (f.setor || '—');
+
     return `<tr>
       <td><strong>${f.nome_completo || '—'}</strong></td>
       <td style="font-size:11px;font-family:monospace">${fmtCPF(f.cpf)}</td>
-      <td>${f.cargo || '—'}</td>
-      <td>${f.setor || '—'}</td>
+      <td>${cargoNome}</td>
+      <td>${setorNome}</td>
       <td>${fmtData(f.data_admissao)}</td>
       <td>${statusBadge(f.status)}</td>
       <td>${motorHtml}</td>
@@ -1117,7 +1160,7 @@ function filtrarFuncionarios() {
   const status = document.getElementById('filterStatus').value;
   let lista = FUNCIONARIOS;
   if (busca) lista = lista.filter(f => (f.nome_completo || '').toLowerCase().includes(busca) || (f.cpf || '').includes(busca));
-  if (setor) lista = lista.filter(f => f.setor === setor);
+  if (setor) lista = lista.filter(f => f.setor_id === setor || f.setor === setor);
   if (status) lista = lista.filter(f => f.status === status);
   renderFuncionarios(lista);
 }
@@ -1496,6 +1539,9 @@ function calcularKPIs() {
 function abrirModalFunc() {
   document.getElementById('formFunc').reset();
   document.getElementById('funcId').value = '';
+  document.getElementById('funcStatus').value = 'ativo';
+  document.getElementById('funcCargoConfianca').checked = false;
+  document.getElementById('funcJovemAprendiz').checked = false;
   document.getElementById('modalFuncTitle').textContent = 'Novo Funcionário';
   abrirModal('modalFunc');
 }
@@ -1503,6 +1549,9 @@ function abrirModalFunc() {
 function editarFunc(id) {
   const f = FUNCIONARIOS.find(x => x.id === id);
   if (!f) return;
+  // Resolver nome do cargo pelo cargo_id
+  const cargoNome = f.cargo_id ? (CARGOS.find(c => c.id === f.cargo_id) || {}).nome || '' : '';
+
   document.getElementById('funcId').value = f.id;
   document.getElementById('funcNome').value = f.nome_completo || '';
   document.getElementById('funcCpf').value = f.cpf || '';
@@ -1510,56 +1559,69 @@ function editarFunc(id) {
   document.getElementById('funcSexo').value = f.sexo || '';
   document.getElementById('funcEstadoCivil').value = f.estado_civil || '';
   document.getElementById('funcTel').value = f.telefone || '';
-  document.getElementById('funcEmail').value = f.email || '';
-  document.getElementById('funcCargo').value = f.cargo || '';
-  document.getElementById('funcSetor').value = f.setor || '';
-  document.getElementById('funcCCusto').value = f.centro_custo || '';
+  document.getElementById('funcEmail').value = f.email_pessoal || '';
+  document.getElementById('funcCargo').value = cargoNome;
+  document.getElementById('funcSetor').value = f.setor_id || '';
+  document.getElementById('funcCCusto').value = f.centro_custo_id || '';
   document.getElementById('funcAdmissao').value = f.data_admissao || '';
-  document.getElementById('funcContrato').value = f.tipo_contrato || 'CLT';
+  document.getElementById('funcContrato').value = f.tipo_vinculo || 'CLT';
   document.getElementById('funcSalario').value = f.salario_base || '';
+  document.getElementById('funcStatus').value = f.status || 'ativo';
   document.getElementById('funcMatricula').value = f.matricula || '';
   document.getElementById('funcPis').value = f.pis_pasep || '';
   document.getElementById('funcEmpresa').value = f.empresa_id || '';
   document.getElementById('funcFilial').value = f.filial_id || '';
+  document.getElementById('funcGhe').value = f.ghe || '';
   document.getElementById('funcObs').value = f.observacoes || '';
+  document.getElementById('funcCargoConfianca').checked = !!f.cargo_confianca;
+  document.getElementById('funcJovemAprendiz').checked = !!f.jovem_aprendiz;
   document.getElementById('modalFuncTitle').textContent = 'Editar Funcionário';
   abrirModal('modalFunc');
 }
 
 async function salvarFuncionario(e) {
   e.preventDefault();
-  const id = document.getElementById('funcId').value;
-  const dados = {
-    nome_completo: document.getElementById('funcNome').value.trim(),
-    cpf: document.getElementById('funcCpf').value.replace(/\D/g, ''),
-    data_nascimento: document.getElementById('funcNasc').value || null,
-    sexo: document.getElementById('funcSexo').value || null,
-    estado_civil: document.getElementById('funcEstadoCivil').value || null,
-    telefone: document.getElementById('funcTel').value.trim() || null,
-    email: document.getElementById('funcEmail').value.trim() || null,
-    cargo: document.getElementById('funcCargo').value.trim(),
-    setor: document.getElementById('funcSetor').value,
-    centro_custo: document.getElementById('funcCCusto').value.trim() || null,
-    data_admissao: document.getElementById('funcAdmissao').value,
-    tipo_contrato: document.getElementById('funcContrato').value,
-    salario_base: parseFloat(document.getElementById('funcSalario').value) || null,
-    matricula: document.getElementById('funcMatricula').value.trim() || null,
-    pis_pasep: document.getElementById('funcPis').value.trim() || null,
-    empresa_id: document.getElementById('funcEmpresa').value || null,
-    filial_id: document.getElementById('funcFilial').value || null,
-    observacoes: document.getElementById('funcObs').value.trim() || null,
-    status: 'ativo',
+  const id = document.getElementById('funcId').value || null;
+  const nome = document.getElementById('funcNome').value.trim();
+  const cpf = document.getElementById('funcCpf').value.replace(/\D/g, '');
+  const dataAdm = document.getElementById('funcAdmissao').value;
+
+  if (!nome) { toast('Preencha o nome', true); return; }
+  if (!cpf || cpf.length !== 11) { toast('CPF inválido (11 dígitos)', true); return; }
+  if (!dataAdm) { toast('Preencha a data de admissão', true); return; }
+
+  const params = {
+    p_id: id || null,
+    p_nome_completo: nome,
+    p_cpf: cpf,
+    p_matricula: document.getElementById('funcMatricula').value.trim() || null,
+    p_cargo: document.getElementById('funcCargo').value.trim() || null,
+    p_setor_id: document.getElementById('funcSetor').value || null,
+    p_ghe: document.getElementById('funcGhe').value.trim() || null,
+    p_salario_base: parseFloat(document.getElementById('funcSalario').value) || null,
+    p_data_admissao: dataAdm,
+    p_turno: document.getElementById('funcContrato').value || 'comercial',
+    p_status: document.getElementById('funcStatus').value || 'ativo',
+    p_cargo_confianca: document.getElementById('funcCargoConfianca').checked,
+    p_jovem_aprendiz: document.getElementById('funcJovemAprendiz').checked,
   };
 
-  const antes = id ? FUNCIONARIOS.find(x => x.id === id) : null;
-  const ok = await salvarRegistro(TABELAS.func, dados, id);
-  if (ok) {
-    await logAudit(id ? 'editar_funcionario' : 'criar_funcionario', TABELAS.func, id, antes, dados);
-    toast(id ? 'Funcionário atualizado' : 'Funcionário cadastrado');
-    fecharModal('modalFunc');
-    await recarregar();
-  } else {
-    toast('Erro ao salvar funcionário', true);
+  try {
+    const antes = id ? FUNCIONARIOS.find(x => x.id === id) : null;
+    const res = await RH_API.fetch('rpc/salvar_colaborador', { method: 'POST', body: params });
+    const data = await res.json().catch(() => null);
+
+    if (res.ok && data && data.ok) {
+      await logAudit(id ? 'editar_funcionario' : 'criar_funcionario', TABELAS.func, data.id || id, antes, params);
+      toast(id ? 'Funcionário atualizado' : 'Funcionário cadastrado');
+      fecharModal('modalFunc');
+      await recarregar();
+    } else {
+      const errMsg = (data && data.error) || 'Erro ao salvar';
+      toast(errMsg, true);
+    }
+  } catch (e) {
+    toast('Erro de conexão: ' + e.message, true);
   }
 }
 
@@ -1885,6 +1947,7 @@ async function salvarDesligamento(e) {
 // INIT
 // ══════════════════════════════════════════════════════════
 async function recarregar() {
+  const _cargos = carregarDados('rh_cargos');
   [FUNCIONARIOS, ASOS, TREINAMENTOS, EPIS, ACIDENTES, AUSENCIAS, RESTRICOES, DESLIGAMENTOS] = await Promise.all([
     carregarDados(TABELAS.func),
     carregarDados(TABELAS.aso),
@@ -1895,9 +1958,10 @@ async function recarregar() {
     carregarDados(TABELAS.rest),
     carregarDados(TABELAS.deslig),
   ]);
+  CARGOS = await _cargos;
 
   popularSelectsFuncionarios();
-  popularSetores();
+  await popularSetores();
   renderFuncionarios();
   renderAso();
   renderTreinamentos();

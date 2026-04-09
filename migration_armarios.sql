@@ -1,0 +1,47 @@
+-- ============================================================================
+-- migration_armarios.sql + organograma produção
+-- Módulo de armários com blocos, turnos, tipo e integração organograma
+-- STATUS: APLICADO no banco em 2026-04-09
+-- ============================================================================
+--
+-- TABELAS CRIADAS:
+--   arm_blocos          — vestiários/containers (tipo: masculino/feminino/misto)
+--   arm_armarios        — armários físicos (bloco, setor, turno, tipo_uso)
+--   arm_ocupacoes       — quem usa qual armário (1:1 ativo)
+--   arm_historico       — log imutável de ações
+--   arm_bloqueios       — motivo + período de bloqueio
+--
+-- CONSTRAINTS:
+--   idx_arm_ocup_armario_unico — 1 ocupação ativa por armário
+--   idx_arm_ocup_func_unico   — 1 armário ativo por funcionário
+--
+-- TRIGGERS:
+--   trg_arm_atribuir     — INSERT ocupação → status=ocupado + histórico
+--   trg_arm_liberar      — UPDATE data_devolução → status=disponivel + histórico
+--   trg_arm_bloqueio     — INSERT/UPDATE bloqueio → status=bloqueado/disponivel
+--   trg_arm_desligamento — UPDATE rh_funcionarios.status=desligado → libera armário
+--
+-- VIEWS:
+--   vw_arm_disponiveis     — armários livres com bloco/setor/turno
+--   vw_arm_ocupados        — ocupados com dados completos do funcionário
+--   vw_arm_ocupacao_setor  — resumo por setor com taxa ocupação
+--   vw_arm_ocupacao_bloco  — resumo por bloco
+--   vw_arm_irregulares     — desligados, sem chave, > 2 anos
+--   vw_arm_por_turno       — resumo por turno
+--
+-- RPC:
+--   arm_sugerir(funcionario_id) — sugere armário por sexo + setor + filial
+--
+-- RLS:
+--   RH/SST: CRUD total
+--   Demais: leitura
+--   Histórico: append-only, leitura admin/rh/sst
+--   Anon: bloqueado
+--
+-- ORGANOGRAMA:
+--   rh_setores.setor_pai_id — hierarquia de setores
+--   rh_setores.tipo — operacional/producao/apoio
+--   rh_funcionarios.turno_trabalho — comercial/1turno/2turno/3turno/noturno
+--   14 sub-setores de produção criados
+--   Views: vw_headcount_setor, vw_headcount_turno, vw_organograma
+-- ============================================================================

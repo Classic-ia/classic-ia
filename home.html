@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic — Hub Operacional</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="rh_api.js"></script>
+<script src="filial_context.js"></script>
+<style>
+/* Hub-specific styles on top of ds.css */
+.hub-header{background:#fff;border-bottom:1px solid #e5e7eb;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;}
+.hub-logo{display:flex;align-items:center;gap:12px;}
+.hub-logo img{height:36px;width:auto;border-radius:8px;object-fit:contain;}
+.hub-logo-text{font-size:18px;font-weight:700;color:#1e293b;letter-spacing:-.02em;}
+.hub-logo-text span{color:#2563eb;}
+.hub-right{display:flex;align-items:center;gap:14px;}
+.hub-user{font-size:12px;color:#64748b;text-align:right;line-height:1.3;}
+.hub-user strong{color:#1e293b;display:block;font-weight:600;}
+.hub-badge{font-size:9px;color:#2563eb;text-transform:uppercase;letter-spacing:.08em;font-weight:600;}
+.hub-dot{width:8px;height:8px;border-radius:50%;background:#22c55e;flex-shrink:0;}
+.btn-logout{background:#fff;border:1px solid #e5e7eb;border-radius:8px;color:#64748b;font-size:11px;padding:6px 14px;cursor:pointer;font-weight:500;transition:all .2s;font-family:inherit;}
+.btn-logout:hover{border-color:#ef4444;color:#ef4444;}
+
+/* Filial bar */
+.filial-bar{background:#f8fafc;border-bottom:1px solid #e5e7eb;padding:8px 24px;display:flex;align-items:center;gap:12px;}
+.filial-label{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.1em;font-weight:600;}
+.filial-select{background:#fff;border:1px solid #e5e7eb;border-radius:8px;color:#1e293b;font-size:13px;padding:6px 12px;font-family:inherit;cursor:pointer;}
+.filial-select:focus{border-color:#2563eb;outline:none;box-shadow:0 0 0 3px rgba(37,99,235,.1);}
+
+/* Main */
+.hub-main{max-width:1200px;margin:0 auto;padding:28px 24px 60px;}
+
+/* Alert strip */
+.alert-strip{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:28px;}
+.alert-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;cursor:pointer;transition:all .2s;text-decoration:none;color:#1e293b;}
+.alert-card:hover{border-color:#2563eb;box-shadow:0 4px 12px rgba(0,0,0,.06);transform:translateY(-1px);}
+.alert-val{font-size:26px;font-weight:700;line-height:1;}
+.alert-val.ok{color:#22c55e;}
+.alert-val.warn{color:#f59e0b;}
+.alert-val.crit{color:#ef4444;}
+.alert-val.neutral{color:#2563eb;}
+.alert-lbl{font-size:10px;color:#94a3b8;text-transform:uppercase;letter-spacing:.08em;margin-top:4px;font-weight:500;}
+
+/* Section */
+.hub-section{margin-bottom:32px;}
+.hub-section-title{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#94a3b8;margin-bottom:14px;display:flex;align-items:center;gap:8px;}
+.hub-section-title::before{content:'';width:3px;height:12px;background:#2563eb;border-radius:2px;display:inline-block;}
+
+/* Module grid */
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;}
+.mod-card{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:22px 20px;cursor:pointer;text-decoration:none;color:#1e293b;display:block;transition:all .2s;position:relative;}
+.mod-card:hover{border-color:#2563eb;box-shadow:0 4px 16px rgba(37,99,235,.08);transform:translateY(-1px);}
+.mod-icon{font-size:28px;margin-bottom:10px;}
+.mod-name{font-size:15px;font-weight:600;margin-bottom:4px;color:#1e293b;}
+.mod-desc{font-size:12px;color:#64748b;line-height:1.5;}
+.mod-badge{display:inline-block;margin-top:10px;font-size:9px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:#2563eb;border:1px solid rgba(37,99,235,.2);border-radius:6px;padding:2px 8px;background:rgba(37,99,235,.04);}
+
+/* Recent */
+.recent-strip{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:24px;}
+.recent-chip{background:#fff;border:1px solid #e5e7eb;border-radius:8px;padding:8px 16px;font-size:12px;color:#1e293b;cursor:pointer;text-decoration:none;transition:all .2s;font-weight:500;}
+.recent-chip:hover{border-color:#2563eb;background:rgba(37,99,235,.04);}
+
+/* System alerts */
+.sys-alerts{background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:16px 20px;}
+.sys-alert-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px;color:#475569;}
+.sys-alert-item:last-child{border-bottom:none;}
+.sys-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0;}
+.sys-dot.red{background:#ef4444;}
+.sys-dot.yellow{background:#f59e0b;}
+.sys-dot.green{background:#22c55e;}
+
+.loading{text-align:center;padding:60px;color:#94a3b8;font-size:13px;}
+
+@media(max-width:768px){
+  .mod-grid{grid-template-columns:1fr;}
+  .alert-strip{grid-template-columns:1fr 1fr;}
+  .hub-header{padding:12px 16px;}
+  .hub-main{padding:20px 16px 40px;}
+  .hub-user{display:none;}
+  .filial-bar{padding:8px 16px;}
+}
+</style>
+</head>
+<body style="background:#f5f7fa;">
+
+<div class="hub-header">
+  <div class="hub-logo">
+    <img src="logo-classic-icon.jpg" alt="" onerror="this.style.display='none'">
+    <div class="hub-logo-text">CLASSIC <span>ERP</span></div>
+  </div>
+  <div class="hub-right">
+    <div class="hub-dot" title="Sessão ativa"></div>
+    <div class="hub-user" id="hdrUser">Carregando...</div>
+    <button class="btn-logout" onclick="RHAuth.logout()">Sair</button>
+  </div>
+</div>
+
+<div class="filial-bar" id="filialBar" style="display:none">
+  <span class="filial-label">Unidade</span>
+  <select class="filial-select" id="filialSelect" onchange="trocarFilial()"></select>
+</div>
+
+<div class="hub-main">
+  <div id="alertStrip" class="alert-strip"></div>
+  <div id="recentStrip"></div>
+  <div id="modulesContainer"><div class="loading">Carregando módulos...</div></div>
+  <div id="sysAlerts"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════
+   CONFIGURAÇÃO DE MÓDULOS
+   ═══════════════════════════════════════ */
+const MODULOS = [
+  { grupo:'Operação', id:'gestao_rh_sst', nome:'Gestão RH & SST', icon:'👥', href:'gestao_rh_sst.html', desc:'Funcionários, ASO, treinamentos, EPIs, acidentes e desligamentos.', badge:'RH & SST', perfis:['administrador','rh','diretoria','sst','gestor','gestor_confianca'] },
+  { grupo:'Operação', id:'cq', nome:'Controle de Qualidade', icon:'🔬', href:'index_2.html', desc:'Inspeções, recebimentos, classificação ABC, ranking de fornecedores.', badge:'CQ', perfis:['administrador','rh','qualidade','diretoria'] },
+  { grupo:'Operação', id:'epis', nome:'Gestão de EPIs', icon:'🦺', href:'epis.html', desc:'Catálogo, entregas, pendências de assinatura, ordens de serviço.', badge:'SST', perfis:['administrador','rh','sst','gestor','gestor_confianca','diretoria'] },
+  { grupo:'Operação', id:'recrutamento', nome:'Recrutamento & Seleção', icon:'🎯', href:'recrutamento_selecao.html', desc:'Vagas, candidatos, pipeline kanban e banco de talentos.', badge:'R&S', perfis:['administrador','rh','diretoria'] },
+  { grupo:'Operação', id:'pagamentos', nome:'Gestão de Pagamentos', icon:'💰', href:'exportar_pagamentos.html', desc:'Dados bancários, lotes de pagamento, exportação financeiro.', badge:'Financeiro', perfis:['administrador','rh','diretoria','financeiro'] },
+  { grupo:'Operação', id:'saude', nome:'Saúde e Equilíbrio', icon:'💬', href:'saude_mental.html', desc:'Saúde mental, risco psicossocial, gatilhos e NR-1.', badge:'NR-1', perfis:['administrador','rh','diretoria','sst'] },
+  { grupo:'Operação', id:'lideranca', nome:'Gestão & Liderança', icon:'🏆', href:'lideranca.html', desc:'Avaliações, metas, engajamento, rankings e organograma.', badge:'Liderança', perfis:['administrador','rh','diretoria','gestor','gestor_confianca'] },
+  { grupo:'Operação', id:'cipa', nome:'CIPA', icon:'🛡️', href:'cipa.html', desc:'Mandatos, membros, reuniões, inspeções e canal de denúncias.', badge:'SST', perfis:['administrador','rh','sst','diretoria'] },
+  { grupo:'Operação', id:'estoque', nome:'Estoque', icon:'📦', href:'estoque.html', desc:'Controle de estoque, movimentações, categorias e filiais.', badge:'Estoque', perfis:['administrador','estoque','diretoria'] },
+
+  { grupo:'Dashboards', id:'dash_sst', nome:'Dashboard SST', icon:'📊', href:'dashboard_sst.html', desc:'KPIs de conformidade, turnover, risco por setor.', badge:'BI', perfis:['administrador','rh','diretoria','sst'] },
+  { grupo:'Dashboards', id:'dash_custos', nome:'Dashboard Custos', icon:'💸', href:'dashboard_custos.html', desc:'CT-e, gastos por colaborador, análise por rota e setor.', badge:'BI', perfis:['administrador','rh','diretoria','financeiro'] },
+  { grupo:'Dashboards', id:'esocial', nome:'Monitor eSocial', icon:'📋', href:'monitor-esocial.html', desc:'Eventos SST pendentes para envio ao eSocial.', badge:'Fiscal', perfis:['administrador','rh','sst'] },
+  { grupo:'Dashboards', id:'ficha360', nome:'Ficha 360°', icon:'📄', href:'ficha_360.html', desc:'Visão completa do colaborador com todos os indicadores.', badge:'BI', perfis:['administrador','rh','diretoria','gestor_confianca'] },
+
+  { grupo:'Integrações', id:'convenia', nome:'Integração Convenia', icon:'🔗', href:'convenia_integracao.html', desc:'Sincronizar funcionários e dados com a plataforma Convenia.', badge:'Integração', perfis:['administrador','rh'] },
+  { grupo:'Integrações', id:'agente_ia', nome:'Agentes de IA', icon:'🤖', href:'agente-ia.html', desc:'Agentes automatizados para análise trabalhista e SST.', badge:'IA', perfis:['administrador','rh'] },
+
+  { grupo:'Administração', id:'gestao_filiais', nome:'Empresas & Filiais', icon:'🏢', href:'gestao_filiais.html', desc:'Cadastro de empresas, filiais e configurações.', badge:'Admin', perfis:['administrador'] },
+];
+
+const ALERT_CARDS = [
+  { id:'func_ativos', label:'Colaboradores', href:'gestao_rh_sst.html', classe:'neutral' },
+  { id:'alertas_abertos', label:'Alertas Abertos', href:'gestao_rh_sst.html', classe:'warn', minimo:1 },
+  { id:'asos_vencer', label:'ASOs Vencendo', href:'gestao_rh_sst.html?tab=aso&filtro=vencer30d', classe:'crit', minimo:1 },
+  { id:'treinamentos_vencidos', label:'Trein. Vencidos', href:'gestao_rh_sst.html?tab=treinamentos&filtro=vencido', classe:'crit', minimo:1 },
+  { id:'processos_abertos', label:'Processos RH', href:'gestao_rh_sst.html?tab=desligamentos', classe:'warn', minimo:1 },
+  { id:'pendencias_agente', label:'Pendências IA', href:'agente-ia.html', classe:'warn', minimo:1 },
+];
+
+/* ═══════════════════════════════════════
+   RENDER
+   ═══════════════════════════════════════ */
+function renderAlerts(data) {
+  document.getElementById('alertStrip').innerHTML = ALERT_CARDS
+    .filter(a => !a.minimo || (data[a.id] || 0) >= a.minimo)
+    .map(a => {
+      const val = data[a.id] || 0;
+      return `<a class="alert-card" href="${a.href}">
+        <div class="alert-val ${val === 0 ? 'ok' : a.classe}">${val.toLocaleString('pt-BR')}</div>
+        <div class="alert-lbl">${a.label}</div>
+      </a>`;
+    }).join('');
+}
+
+function renderModules(perfil) {
+  const container = document.getElementById('modulesContainer');
+  const visiveis = MODULOS.filter(m => m.perfis.includes(perfil));
+  const grupos = [...new Set(visiveis.map(m => m.grupo))];
+  container.innerHTML = grupos.map(g => {
+    const mods = visiveis.filter(m => m.grupo === g);
+    return `<div class="hub-section">
+      <div class="hub-section-title">${g}</div>
+      <div class="mod-grid">${mods.map(m => `
+        <a class="mod-card" href="${m.href}" data-id="${m.id}">
+          <div class="mod-icon">${m.icon}</div>
+          <div class="mod-name">${m.nome}</div>
+          <div class="mod-desc">${m.desc}</div>
+          <div class="mod-badge">${m.badge}</div>
+        </a>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.mod-card').forEach(c => c.addEventListener('click', () => {
+    let r = JSON.parse(localStorage.getItem('hub_recents') || '[]');
+    r = [c.dataset.id, ...r.filter(x => x !== c.dataset.id)].slice(0, 5);
+    localStorage.setItem('hub_recents', JSON.stringify(r));
+  }));
+}
+
+function renderRecents(perfil) {
+  const strip = document.getElementById('recentStrip');
+  const r = JSON.parse(localStorage.getItem('hub_recents') || '[]')
+    .map(id => MODULOS.find(m => m.id === id)).filter(m => m && m.perfis.includes(perfil));
+  if (!r.length) { strip.innerHTML = ''; return; }
+  strip.innerHTML = `<div class="hub-section" style="margin-bottom:20px">
+    <div class="hub-section-title">Recentes</div>
+    <div class="recent-strip">${r.map(m => `<a class="recent-chip" href="${m.href}">${m.icon} ${m.nome}</a>`).join('')}</div>
+  </div>`;
+}
+
+function renderSysAlerts(data) {
+  const c = document.getElementById('sysAlerts');
+  const a = [];
+  if (data.alertas_abertos > 10) a.push({ n:'yellow', m:`${data.alertas_abertos} alertas de orquestração abertos` });
+  if (data.pendencias_agente > 100) a.push({ n:'yellow', m:`${data.pendencias_agente} pendências de agentes IA` });
+  if (data.treinamentos_vencidos > 0) a.push({ n:'red', m:`${data.treinamentos_vencidos} treinamentos vencidos` });
+  if (data.asos_vencer > 0) a.push({ n:'red', m:`${data.asos_vencer} ASOs vencendo em 30 dias` });
+  if (!a.length) { c.innerHTML = ''; return; }
+  c.innerHTML = `<div class="hub-section" style="margin-top:12px">
+    <div class="hub-section-title">Alertas do Sistema</div>
+    <div class="sys-alerts">${a.map(x => `<div class="sys-alert-item"><span class="sys-dot ${x.n}"></span>${x.m}</div>`).join('')}</div>
+  </div>`;
+}
+
+/* ═══════════════════════════════════════
+   FILIAL CONTEXT
+   ═══════════════════════════════════════ */
+async function carregarFiliais(user) {
+  try {
+    const filiais = user.filiais_acesso || [];
+    if (filiais.length <= 1) { if (filiais.length === 1) localStorage.setItem('filial_ativa', filiais[0]); return; }
+    const res = await RH_API.fetch('rpc/rh_listar_filiais', { method: 'POST', body: {} });
+    const data = await res.json();
+    if (!res.ok || !Array.isArray(data) || data.length <= 1) return;
+    const sel = document.getElementById('filialSelect');
+    const salva = localStorage.getItem('filial_ativa');
+    sel.innerHTML = '<option value="">Todas as unidades</option>' +
+      data.map(f => `<option value="${f.id}" ${f.id === salva ? 'selected' : ''}>${f.nome_fantasia}${f.cidade ? ' — ' + f.cidade : ''}</option>`).join('');
+    document.getElementById('filialBar').style.display = 'flex';
+  } catch(e) { console.warn('Filiais:', e); }
+}
+
+function trocarFilial() {
+  const v = document.getElementById('filialSelect').value;
+  if (v) localStorage.setItem('filial_ativa', v); else localStorage.removeItem('filial_ativa');
+  window.location.reload();
+}
+
+function getFilialAtiva() { return localStorage.getItem('filial_ativa') || null; }
+
+/* ═══════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════ */
+(async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  if (user.perfil === 'qualidade') { window.location.href = 'index_2.html'; return; }
+
+  document.getElementById('hdrUser').innerHTML =
+    `<strong>${user.nome || user.email}</strong><span class="hub-badge">${user.perfil}</span>`;
+
+  await carregarFiliais(user);
+  renderModules(user.perfil);
+  renderRecents(user.perfil);
+
+  try {
+    const filialAtiva = getFilialAtiva();
+    const res = await RH_API.fetch('rpc/hub_resumo', { method: 'POST', body: filialAtiva ? { p_filial_id: filialAtiva } : {} });
+    const data = await res.json();
+    if (res.ok && data) { renderAlerts(data); renderSysAlerts(data); }
+  } catch(e) { console.warn('Hub resumo:', e); }
+})();
+</script>
+</body>
+</html>

@@ -596,6 +596,28 @@ function gerarLoteAutomatico() {
   abrirModal('modalLote');
 }
 
+function exportarLote(id) {
+  const lote = LOTES.find(l => l.id === id);
+  if (!lote) { toast('Lote não encontrado', true); return; }
+  // Gerar arquivo CSV do lote
+  const funcs = DADOS_BANC.filter(d => {
+    const f = FUNC.find(x => x.id === d.funcionario_id);
+    return f && f.status === 'ativo';
+  });
+  if (!funcs.length) { toast('Nenhum funcionário no lote', true); return; }
+  const header = 'Nome,CPF,Banco,Agencia,Conta,Tipo,Valor\n';
+  const rows = funcs.map(d => {
+    const f = FUNC.find(x => x.id === d.funcionario_id);
+    return [f?.nome_completo || '', f?.cpf || '', d.banco || '', d.agencia || '', d.conta || '', d.forma_pagamento || '', ''].join(',');
+  }).join('\n');
+  const blob = new Blob([header + rows], { type: 'text/csv' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'lote_' + (lote.nome || lote.id).replace(/\s/g, '_') + '.csv';
+  a.click();
+  toast('Lote exportado');
+}
+
 // ── EXPORTAR ─────────────────────────────────────────────
 function exportarLista(tipo, formato) {
   const ativos = FUNC.filter(f => f.status === 'ativo');

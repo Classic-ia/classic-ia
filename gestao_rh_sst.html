@@ -857,16 +857,17 @@ let DESLIGAMENTOS = [];
 let SETORES = [];
 let EMPRESAS = [];
 let CARGOS = [];
+let TIPOS_TREINAMENTO = [];
 
 const TABELAS = {
   func: 'rh_funcionarios',
-  aso: 'rh_aso',
-  trein: 'rh_treinamentos',
-  epi: 'rh_epi_entregas',
-  acid: 'rh_acidentes',
-  absent: 'rh_ausencias',
-  rest: 'rh_restricoes',
-  deslig: 'rh_desligamentos',
+  aso: 'sst_aso',
+  trein: 'sst_treinamento',
+  epi: 'sst_epi_entrega',
+  acid: 'sst_acidente',
+  absent: 'rh_ocorrencias',
+  rest: 'sst_restricao',
+  deslig: 'rh_proc_desligamento',
   setores: 'rh_setores',
   empresas: 'rh_empresas',
 };
@@ -925,6 +926,12 @@ function diasEntre(d1, d2) {
 function nomeFunc(id) {
   const f = FUNCIONARIOS.find(x => x.id === id);
   return f ? f.nome_completo : '—';
+}
+
+function nomeTipoTrein(id) {
+  if (!id) return '—';
+  const t = TIPOS_TREINAMENTO.find(x => x.id === id);
+  return t ? t.nome : id;
 }
 
 // ── MOTOR LÓGICO: "Pode trabalhar hoje?" ─────────────────
@@ -1223,7 +1230,7 @@ function renderTreinamentos(lista) {
 
     return `<tr>
       <td><strong>${nomeFunc(t.funcionario_id)}</strong></td>
-      <td>${t.tipo_treinamento || '—'}</td>
+      <td>${nomeTipoTrein(t.tipo_treinamento_id) || t.tipo_treinamento || '—'}</td>
       <td>${fmtData(t.data_realizacao)}</td>
       <td>${fmtData(t.data_validade)}</td>
       <td>${t.carga_horaria ? t.carga_horaria + 'h' : '—'}</td>
@@ -1793,7 +1800,7 @@ async function salvarAcidente(e) {
     cat_emitida: document.getElementById('acidCat').value === 'sim',
     dias_afastamento: parseInt(document.getElementById('acidAfastamento').value) || 0,
     acao_corretiva: document.getElementById('acidAcao').value.trim() || null,
-    setor: func ? func.setor : null,
+    setor_id: func ? func.setor_id : null,
   };
   const ok = await salvarRegistro(TABELAS.acid, dados, id);
   if (ok) {
@@ -1948,6 +1955,7 @@ async function salvarDesligamento(e) {
 // ══════════════════════════════════════════════════════════
 async function recarregar() {
   const _cargos = carregarDados('rh_cargos');
+  const _tiposTrein = carregarDados('sst_tipo_treinamento');
   [FUNCIONARIOS, ASOS, TREINAMENTOS, EPIS, ACIDENTES, AUSENCIAS, RESTRICOES, DESLIGAMENTOS] = await Promise.all([
     carregarDados(TABELAS.func),
     carregarDados(TABELAS.aso),
@@ -1959,6 +1967,7 @@ async function recarregar() {
     carregarDados(TABELAS.deslig),
   ]);
   CARGOS = await _cargos;
+  TIPOS_TREINAMENTO = await _tiposTrein;
 
   popularSelectsFuncionarios();
   await popularSetores();

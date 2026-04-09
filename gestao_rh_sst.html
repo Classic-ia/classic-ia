@@ -1419,12 +1419,7 @@ function renderDesligamentos(lista) {
   const tb = document.getElementById('tbDesligamentos');
   if (!lista) lista = DESLIGAMENTOS;
 
-  const tipoLabel = { pedido_demissao: 'Pedido Demissão', demissao_empresa: 'Demissão', termino_contrato: 'Término Contrato', justa_causa: 'Justa Causa', acordo_mutuo: 'Acordo' };
-  const catLabel = { admissao: 'Admissão', operacional: 'Operacional', financeiro: 'Financeiro', pessoal: 'Pessoal' };
-  const catBadge = { admissao: 'badge-blue', operacional: 'badge-red', financeiro: 'badge-yellow', pessoal: 'badge-muted' };
-
   tb.innerHTML = lista.map(d => {
-    // Calcular tempo de casa
     const func = FUNCIONARIOS.find(f => f.id === d.funcionario_id);
     let tempoCasa = '—';
     if (func && func.data_admissao && d.data_desligamento) {
@@ -1432,15 +1427,34 @@ function renderDesligamentos(lista) {
       tempoCasa = dias < 30 ? dias + 'd' : dias < 365 ? Math.floor(dias / 30) + 'm' : Math.floor(dias / 365) + 'a ' + Math.floor((dias % 365) / 30) + 'm';
     }
 
-    const temEntrevista = d.entrevista_p1 || d.entrevista_p2;
+    const st = d.processo_status || 'concluido';
+    const stBadge = st === 'concluido' ? 'badge-green' : st === 'em_execucao' ? 'badge-yellow' : 'badge-muted';
+
+    // Checklist for em_execucao processes
+    let checklistHtml = '';
+    if (st === 'em_execucao') {
+      const checks = [
+        { k:'exame_demissional_ok', l:'Exame demissional' },
+        { k:'devolucao_epis_ok', l:'Devolução EPIs' },
+        { k:'devolucao_patrimonio_ok', l:'Patrimônio' },
+        { k:'bloqueio_acessos_ok', l:'Bloqueio acessos' },
+      ];
+      const allOk = checks.every(c => d[c.k]);
+      checklistHtml = `<div style="margin-top:8px;padding:10px;background:var(--bg3);border-radius:8px;font-size:11px;">
+        ${checks.map(c => `<label style="display:flex;align-items:center;gap:6px;margin-bottom:4px;cursor:pointer;">
+          <input type="checkbox" ${d[c.k] ? 'checked' : ''} onchange="toggleChecklist('${d.processo_id || d.id}','${c.k}',this.checked)" style="accent-color:var(--green);">
+          ${c.l}
+        </label>`).join('')}
+        ${allOk ? `<button class="btn btn-primary btn-sm" style="margin-top:8px;width:100%" onclick="efetivarDesligamento('${d.processo_id || d.id}')">Efetivar Desligamento</button>` : '<div style="color:var(--muted);margin-top:6px">Complete o checklist para efetivar</div>'}
+      </div>`;
+    }
 
     return `<tr>
-      <td><strong>${nomeFunc(d.funcionario_id)}</strong></td>
+      <td><strong>${nomeFunc(d.funcionario_id)}</strong>${checklistHtml}</td>
       <td>${fmtData(d.data_desligamento)}</td>
-      <td>${tipoLabel[d.tipo_desligamento] || '—'}</td>
-      <td><span class="badge ${catBadge[d.categoria_causa] || 'badge-muted'}">${catLabel[d.categoria_causa] || '—'}</span></td>
+      <td>${d.tipo_desligamento || '—'}</td>
+      <td><span class="badge ${stBadge}">${st.replace(/_/g, ' ')}</span></td>
       <td>${tempoCasa}</td>
-      <td>${temEntrevista ? '<span class="badge badge-green">Sim</span>' : '<span class="badge badge-muted">Não</span>'}</td>
       <td><button class="btn-icon" onclick="editarDeslig('${d.id}')" title="Ver">👁️</button></td>
     </tr>`;
   }).join('');
@@ -1453,6 +1467,31 @@ function filtrarDesligamentos() {
   if (busca) lista = lista.filter(d => nomeFunc(d.funcionario_id).toLowerCase().includes(busca));
   if (tipo) lista = lista.filter(d => d.tipo_desligamento === tipo);
   renderDesligamentos(lista);
+}
+
+async function toggleChecklist(processoId, campo, valor) {
+  try {
+    const res = await RH_API.fetch('rh_proc_desligamento?processo_id=eq.' + processoId, {
+      method: 'PATCH', headers: { 'Prefer': 'return=minimal' },
+      body: { [campo]: valor }
+    });
+    if (res.ok) await recarregar();
+    else toast('Erro ao atualizar checklist', true);
+  } catch(e) { toast('Erro: ' + e.message, true); }
+}
+
+async function efetivarDesligamento(processoId) {
+  if (!confirm('Efetivar o desligamento? O funcionário será marcado como DESLIGADO. Esta ação não pode ser desfeita.')) return;
+  try {
+    const res = await RH_API.fetch('rpc/rh_executar_desligamento', { method: 'POST', body: { p_processo_id: processoId } });
+    if (res.ok) {
+      toast('Desligamento efetivado com sucesso');
+      await recarregar();
+    } else {
+      const err = await res.text().catch(() => 'Erro desconhecido');
+      toast('Erro: ' + err, true);
+    }
+  } catch(e) { toast('Erro: ' + e.message, true); }
 }
 
 // ══════════════════════════════════════════════════════════

@@ -1,0 +1,16 @@
+-- ============================================================================
+-- migration_transporte.sql
+-- Módulo de Controle de Transporte de Colaboradores
+-- STATUS: APLICADO no banco em 2026-04-09
+-- ============================================================================
+--
+-- TABELAS: log_municipios, log_rotas, log_veiculos, log_transporte_colaborador, log_transporte_historico
+-- TRIGGERS: vincular (verifica capacidade), desvincular, desligamento automático
+-- VIEWS: por município, ocupação rota, por setor, irregulares
+-- RPC: log_sugerir_rota(municipio)
+-- RLS: RH=CRUD, demais=leitura, histórico=append-only
+--
+-- MUNICÍPIOS: Jardim Alegre, São João do Ivaí, São Pedro do Ivaí, Ivaiporã, Godoy Moreira, Lunardelli, Lidianópolis
+-- ROTAS: R-SJI-01 (40), R-SPI-01 (30), R-IVA-01 (30), R-GOD-01 (25), R-LUN-01 (20), R-LID-01 (15)
+-- COLABORADORES VINCULADOS: 34 (SJI:10, GOD:11, IVA:9, SPI:4)
+-- ============================================================================

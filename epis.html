@@ -139,6 +139,7 @@ let expandedFuncId = null;
 let totalEntregasServer = 0;
 let totalFuncComEpiServer = 0;
 let entregas12mServer = 0;
+let catalogoAtivoServer = 0;
 
 /* ===== Tabs ===== */
 document.getElementById('tabBar').addEventListener('click', e => {
@@ -170,23 +171,19 @@ function switchToTab(t) {
     cutoff12m.setFullYear(cutoff12m.getFullYear() - 1);
     const cutoffStr = cutoff12m.toISOString().slice(0, 10);
 
-    const [rCat, rEnt, rEntAll, rFunc, rSet, rCntTotal, rCnt12m, rCntFunc] = await Promise.all([
+    const [rCat, rEnt, rEntAll, rFunc, rSet, rKpis] = await Promise.all([
       /* Catalogo - small table, load all */
       API.get('sst_catalogo_epi?select=id,descricao,ca_numero,ca_validade,categoria,fabricante,ativo&order=descricao'),
       /* Entregas recentes for display (last 200) */
       API.get('sst_epi_entrega?select=id,funcionario_id,catalogo_epi_id,data_entrega,quantidade,motivo_entrega&order=data_entrega.desc&limit=200'),
-      /* All entregas for aggregation - large limit to capture all */
+      /* All entregas for aggregation — use server-side count for KPIs */
       API.get('sst_epi_entrega?select=funcionario_id,data_entrega,quantidade&order=data_entrega.desc&limit=30000'),
       /* Funcionarios ativos */
       API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,experiencia,ferias)&limit=2000'),
       /* Setores */
       API.get('rh_setores?select=id,nome'),
-      /* Server-side count: Total entregas (select minimal, use header count) */
-      API.get('sst_epi_entrega?select=id&limit=1', { head: true }),
-      /* Server-side count: Entregas last 12 months */
-      API.get('sst_epi_entrega?select=id&data_entrega=gte.' + cutoffStr + '&limit=1', { head: true }),
-      /* Server-side count: Distinct funcionarios with EPI */
-      API.get('sst_epi_entrega?select=funcionario_id&limit=1', { head: true })
+      /* KPIs via RPC — accurate server-side counts */
+      API.rpc('epi_kpis')
     ]);
 
     catalogo = rCat.ok ? rCat.data : [];
@@ -195,10 +192,12 @@ function switchToTab(t) {
     funcionarios = rFunc.ok ? rFunc.data : [];
     setores = rSet.ok ? rSet.data : [];
 
-    /* Extract server counts from headers when available */
-    totalEntregasServer = (rCntTotal.ok && rCntTotal.count != null) ? rCntTotal.count : 0;
-    entregas12mServer = (rCnt12m.ok && rCnt12m.count != null) ? rCnt12m.count : 0;
-    totalFuncComEpiServer = (rCntFunc.ok && rCntFunc.count != null) ? rCntFunc.count : 0;
+    /* KPIs from RPC — always accurate */
+    const kpis = (rKpis.ok && rKpis.data) ? rKpis.data : {};
+    totalEntregasServer = kpis.total_entregas || 0;
+    entregas12mServer = kpis.entregas_12m || 0;
+    totalFuncComEpiServer = kpis.func_com_epi || 0;
+    catalogoAtivoServer = kpis.catalogo_ativo || 0;
 
     /* Build lookup maps */
     catalogo.forEach(c => { catMap[c.id] = c; });
@@ -252,8 +251,8 @@ function populateFilters() {
 
 /* ===== KPIs ===== */
 function renderKPIs() {
-  /* BUG FIX #1: Use server-side counts when available, client data as fallback */
-  const ativos = catalogo.filter(c => c.ativo === true || c.ativo === 'true').length;
+  /* KPIs: prefer server RPC counts, fallback to client data */
+  const ativos = catalogoAtivoServer || catalogo.filter(c => c.ativo === true || c.ativo === 'true').length;
   document.getElementById('kCatalogo').textContent = API.fmtNum(ativos);
 
   /* Total Entregas - prefer server count, fallback to loaded data length */

@@ -44,13 +44,31 @@ const API = (() => {
   }
 
   // ============================================================
-  // GET
+  // GET — supports { head: true } for server-side count via Prefer: count=exact
   // ============================================================
-  async function get(endpoint) {
+  async function get(endpoint, opts = {}) {
     try {
       const url = endpoint.startsWith('http') ? endpoint : `${SB_URL}/rest/v1/${endpoint}`;
       const ctrl = new AbortController();
       const tid = setTimeout(() => ctrl.abort(), 15000);
+
+      if (opts.head) {
+        // HEAD request with count=exact — returns count from content-range header
+        const res = await fetch(url, {
+          method: 'HEAD',
+          headers: hdrs({ 'Prefer': 'count=exact' }),
+          signal: ctrl.signal
+        });
+        clearTimeout(tid);
+        if (!res.ok) return { ok: false, data: null, count: null, error: `Erro ${res.status}`, status: res.status };
+        // Parse content-range: "0-0/25288" → 25288
+        const range = res.headers.get('content-range') || '';
+        const match = range.match(/\/(\d+)/);
+        const count = match ? parseInt(match[1], 10) : null;
+        return { ok: true, data: null, count, error: null, status: res.status };
+      }
+
+      // Normal GET
       const res = await fetch(url, { headers: hdrs(), signal: ctrl.signal });
       clearTimeout(tid);
       if (!res.ok) return handleResponse(res, null);

@@ -278,9 +278,13 @@ async function sendMessage(tab) {
 
   try {
     const systemPrompt = SYSTEM_PROMPTS[tab] + '\nContexto da empresa: ' + companyContext;
-    const res = await fetch('/api/ai', {
+    const res = await fetch(SB_URL + '/functions/v1/ai-agent', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      headers:{
+        'Content-Type':'application/json',
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY
+      },
       body: JSON.stringify({
         messages: histories[tab],
         system: systemPrompt,
@@ -288,16 +292,13 @@ async function sendMessage(tab) {
       })
     });
 
-    if (res.status === 404) {
-      throw new Error('Endpoint /api/ai nao configurado. Configure a API key no backend.');
-    }
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new Error(errBody || `Erro ${res.status} ao chamar a API de IA.`);
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `Erro ${res.status} ao chamar a API de IA.`);
     }
 
     const data = await res.json();
-    const reply = data.content || 'Sem resposta.';
+    const reply = data.reply || data.content || 'Sem resposta.';
     histories[tab].push({ role:'assistant', content:reply });
     saveHistory(tab);
     removeTyping(typingEl);

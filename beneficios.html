@@ -30,6 +30,11 @@
 .pedido-header .ped-total{font-weight:800;font-size:15px;color:var(--primary);}
 .pedido-detail{display:none;margin-bottom:16px;}
 .pedido-detail.open{display:block;}
+.sortable{cursor:pointer;user-select:none;position:relative;padding-right:16px!important;}
+.sortable:hover{color:var(--primary);}
+.sortable::after{content:'⇅';position:absolute;right:2px;opacity:.3;font-size:9px;}
+.sortable.asc::after{content:'▲';opacity:.8;}
+.sortable.desc::after{content:'▼';opacity:.8;}
 </style>
 </head>
 <body class="page-bg">
@@ -63,13 +68,13 @@
     </div>
   </div>
 
-  <div class="card mt-4">
+  <div class="card mt-4" id="tbBenef-wrap">
     <div class="card-header"><h3>Todos os Benefícios</h3></div>
     <div class="card-body">
       <div class="data-table-wrapper">
         <table class="data-table">
           <thead><tr>
-            <th>Funcionário</th><th>Tipo</th><th>Data</th><th style="text-align:right">Valor</th><th>Pedido</th><th>Status</th>
+            <th class="sortable" onclick="sortBenef('func')">Funcionário</th><th class="sortable" onclick="sortBenef('tipo')">Tipo</th><th class="sortable" onclick="sortBenef('data')">Data</th><th class="sortable" style="text-align:right" onclick="sortBenef('valor')">Valor</th><th class="sortable" onclick="sortBenef('pedido')">Pedido</th><th class="sortable" onclick="sortBenef('status')">Status</th>
           </tr></thead>
           <tbody id="tbBenef"></tbody>
         </table>
@@ -113,6 +118,30 @@ function renderKPIs() {
     <div class="summary-card"><div class="val">${pedidos}</div><div class="lbl">Pedidos</div></div>
     ${Object.entries(tipos).map(([t,v]) => `<div class="summary-card"><div class="val">${fmtBRL(v)}</div><div class="lbl">${TIPO_LABELS[t]||t}</div></div>`).join('')}
   `;
+}
+
+let _bSortCol = 'func', _bSortDir = 'asc';
+function sortBenef(col) {
+  if (_bSortCol === col) { _bSortDir = _bSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _bSortCol = col; _bSortDir = 'asc'; }
+  document.querySelectorAll('#tbBenef-wrap .sortable').forEach(th => th.classList.remove('asc','desc'));
+  event.target.closest('th').classList.add(_bSortDir);
+  renderBeneficios();
+}
+
+function sortedList(lista) {
+  const dir = _bSortDir === 'asc' ? 1 : -1;
+  return [...lista].sort((a, b) => {
+    let va, vb;
+    if (_bSortCol === 'func') { va = nomeFunc(a.funcionario_id); vb = nomeFunc(b.funcionario_id); }
+    else if (_bSortCol === 'tipo') { va = a.tipo||''; vb = b.tipo||''; }
+    else if (_bSortCol === 'data') { va = a.data_inicio||''; vb = b.data_inicio||''; }
+    else if (_bSortCol === 'valor') { return (Number(a.valor||0) - Number(b.valor||0)) * dir; }
+    else if (_bSortCol === 'pedido') { va = a.documento_ref||''; vb = b.documento_ref||''; }
+    else if (_bSortCol === 'status') { va = a.status||''; vb = b.status||''; }
+    else { va = ''; vb = ''; }
+    return String(va).localeCompare(String(vb)) * dir;
+  });
 }
 
 function renderBeneficios() {
@@ -161,9 +190,9 @@ function renderBeneficios() {
 
   document.getElementById('countBenef').textContent = `${lista.length} registros em ${pedList.length} pedidos`;
 
-  // Table view
-  const sorted = [...lista].sort((a,b) => (b.data_inicio||'').localeCompare(a.data_inicio||''));
-  document.getElementById('tbBenef').innerHTML = sorted.slice(0, 200).map(b => `<tr>
+  // Table view (sorted by selected column, default A-Z by name)
+  const sorted = sortedList(lista);
+  document.getElementById('tbBenef').innerHTML = sorted.slice(0, 500).map(b => `<tr>
     <td><a href="ficha_360.html?id=${b.funcionario_id}" style="color:var(--text-primary);text-decoration:none;font-weight:600;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-primary)'">${nomeFunc(b.funcionario_id)}</a></td>
     <td><span class="badge-tipo ${TIPO_BADGE[b.tipo]||'badge-other'}">${TIPO_LABELS[b.tipo]||b.tipo}</span></td>
     <td>${fmtData(b.data_inicio)}</td>

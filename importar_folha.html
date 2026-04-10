@@ -445,10 +445,12 @@
         continue;
       }
 
+      var cpfClean = e.cpf ? e.cpf.replace(/[.\-\/]/g, '') : '';
+
       var payload = {
         competencia: competencia,
         nome_colaborador: e.nome,
-        cpf: e.cpf || null,
+        cpf: cpfClean || null,
         matricula: e.codigo || null,
         cargo: e.cargo || null,
         setor: null,
@@ -473,8 +475,7 @@
 
       // Try to link to funcionario
       try {
-        if (e.cpf) {
-          var cpfClean = e.cpf.replace(/[.\-]/g, '');
+        if (cpfClean) {
           var funcRes = await API.get('rh_funcionarios?cpf=eq.' + cpfClean + '&select=id&limit=1');
           if (funcRes.ok && funcRes.data && funcRes.data.length) {
             payload.funcionario_id = funcRes.data[0].id;
@@ -485,8 +486,8 @@
       // Upsert: check existing
       try {
         var checkUrl = 'rh_custo_colaborador?competencia=eq.' + competencia;
-        if (e.cpf) {
-          checkUrl += '&cpf=eq.' + encodeURIComponent(e.cpf);
+        if (cpfClean) {
+          checkUrl += '&cpf=eq.' + encodeURIComponent(cpfClean);
         } else {
           checkUrl += '&nome_colaborador=eq.' + encodeURIComponent(e.nome);
         }

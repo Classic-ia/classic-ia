@@ -195,6 +195,22 @@
     </div>
   </div>
 
+  <!-- Evolução Mensal por Rota -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Evolução Mensal por Rota</h3></div>
+    <div class="card-body">
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead id="evolMesHead"></thead>
+          <tbody id="evolMesBody">
+            <tr><td colspan="4" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="chart-container-lg" style="margin-top:20px"><canvas id="chartEvolTransp"></canvas></div>
+    </div>
+  </div>
+
   <div class="section-label">Custos de Pessoal</div>
 
   <!-- Top 20 Employee Costs -->
@@ -663,6 +679,110 @@
           options: { responsive: true, plugins: { title: { display: true, text: 'Custo por Município' } } }
         });
       }
+
+      // ── Monthly breakdown table + chart ──
+      var porMes = d.por_mes || [];
+      var passageirosPorMun = {};
+      for (var i = 0; i < porMun.length; i++) {
+        passageirosPorMun[porMun[i].municipio] = porMun[i].passageiros || 0;
+      }
+
+      if (porMes.length) {
+        // Get unique months and municipalities
+        var meses = []; var munsMap = {};
+        for (var i = 0; i < porMes.length; i++) {
+          if (meses.indexOf(porMes[i].mes) === -1) meses.push(porMes[i].mes);
+          munsMap[porMes[i].municipio] = true;
+        }
+        meses.sort();
+        var muns = Object.keys(munsMap).sort();
+
+        // Build lookup: custoGrid[mun][mes] = valor
+        var custoGrid = {};
+        for (var i = 0; i < porMes.length; i++) {
+          var r = porMes[i];
+          if (!custoGrid[r.municipio]) custoGrid[r.municipio] = {};
+          custoGrid[r.municipio][r.mes] = Number(r.custo) || 0;
+        }
+
+        // Render table header
+        var thead = '<tr><th>Município</th><th style="text-align:center">Passag.</th>';
+        for (var i = 0; i < meses.length; i++) {
+          thead += '<th style="text-align:right">' + meses[i] + '</th>';
+        }
+        thead += '<th style="text-align:right">Total</th><th style="text-align:right">Média/Mês</th></tr>';
+        document.getElementById('evolMesHead').innerHTML = thead;
+
+        // Render table body
+        var tbody = '';
+        for (var m = 0; m < muns.length; m++) {
+          var mun = muns[m];
+          var pass = passageirosPorMun[mun] || 0;
+          var total = 0;
+          tbody += '<tr><td><strong>' + mun + '</strong></td>';
+          tbody += '<td style="text-align:center">' + pass + '</td>';
+          for (var i = 0; i < meses.length; i++) {
+            var val = (custoGrid[mun] && custoGrid[mun][meses[i]]) || 0;
+            total += val;
+            tbody += '<td style="text-align:right">' + (val > 0 ? 'R$ ' + API.fmtNum(val, 0) : '—') + '</td>';
+          }
+          var media = meses.length > 0 ? total / meses.length : 0;
+          tbody += '<td style="text-align:right;font-weight:700">R$ ' + API.fmtNum(total, 0) + '</td>';
+          tbody += '<td style="text-align:right;color:var(--primary);font-weight:600">R$ ' + API.fmtNum(media, 0) + '</td>';
+          tbody += '</tr>';
+        }
+        // Total row
+        tbody += '<tr style="background:var(--bg-page);font-weight:700"><td>Total Geral</td><td></td>';
+        var grandTotal = 0;
+        for (var i = 0; i < meses.length; i++) {
+          var mesTotal = 0;
+          for (var m = 0; m < muns.length; m++) {
+            mesTotal += (custoGrid[muns[m]] && custoGrid[muns[m]][meses[i]]) || 0;
+          }
+          grandTotal += mesTotal;
+          tbody += '<td style="text-align:right">R$ ' + API.fmtNum(mesTotal, 0) + '</td>';
+        }
+        var grandMedia = meses.length > 0 ? grandTotal / meses.length : 0;
+        tbody += '<td style="text-align:right">R$ ' + API.fmtNum(grandTotal, 0) + '</td>';
+        tbody += '<td style="text-align:right;color:var(--primary)">R$ ' + API.fmtNum(grandMedia, 0) + '</td></tr>';
+        document.getElementById('evolMesBody').innerHTML = tbody;
+
+        // Line chart: evolution per municipality
+        destroyChart('chartEvolTransp');
+        var datasets = [];
+        for (var m = 0; m < muns.length; m++) {
+          datasets.push({
+            label: muns[m],
+            data: meses.map(function(mes) { return (custoGrid[muns[m]] && custoGrid[muns[m]][mes]) || 0; }),
+            borderColor: COLORS[m % COLORS.length],
+            backgroundColor: COLORS[m % COLORS.length] + '18',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 4
+          });
+        }
+        charts['chartEvolTransp'] = new Chart(document.getElementById('chartEvolTransp'), {
+          type: 'line',
+          data: { labels: meses, datasets: datasets },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+              tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': R$ ' + API.fmtNum(ctx.raw, 0); } } },
+              legend: { labels: { boxWidth: 12 } }
+            },
+            scales: {
+              y: { beginAtZero: true, ticks: { callback: function(v) { return 'R$ ' + API.fmtNum(v, 0); } }, grid: { color: '#E2E8F0' } },
+              x: { grid: { display: false } }
+            }
+          }
+        });
+      } else {
+        document.getElementById('evolMesHead').innerHTML = '';
+        document.getElementById('evolMesBody').innerHTML = '<tr><td colspan="4" style="text-align:center;padding:20px;color:#888">Sem dados mensais no período</td></tr>';
+        destroyChart('chartEvolTransp');
+      }
+
     } catch(e) { console.warn('Transporte custos:', e); }
   }
 

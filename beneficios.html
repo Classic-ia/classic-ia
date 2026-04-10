@@ -206,14 +206,25 @@ function renderBeneficios() {
   const user = await Shell.init({ page: 'beneficios', title: 'Benefícios' });
   if (!user) return;
 
-  // Load data
-  const [rBenef, rFunc] = await Promise.all([
-    API.get('rh_beneficio?select=id,funcionario_id,tipo,status,data_inicio,valor,documento_ref&order=data_inicio.desc&limit=5000'),
-    API.get('rh_funcionarios?select=id,nome_completo&limit=2000')
+  // Load data — paginated to bypass PostgREST max-rows limit
+  async function fetchAll(endpoint) {
+    let all = [], offset = 0, pageSize = 1000;
+    while (true) {
+      const res = await API.get(endpoint + (endpoint.includes('?') ? '&' : '?') + 'limit=' + pageSize + '&offset=' + offset);
+      const data = (res.ok && res.data) ? res.data : [];
+      all = all.concat(data);
+      if (data.length < pageSize) break;
+      offset += pageSize;
+    }
+    return all;
+  }
+
+  const [benefData, funcList] = await Promise.all([
+    fetchAll('rh_beneficio?select=id,funcionario_id,tipo,status,data_inicio,valor,documento_ref&order=data_inicio.desc'),
+    fetchAll('rh_funcionarios?select=id,nome_completo')
   ]);
 
-  beneficios = (rBenef.ok && rBenef.data) ? rBenef.data : [];
-  const funcList = (rFunc.ok && rFunc.data) ? rFunc.data : [];
+  beneficios = benefData;
   funcList.forEach(f => { funcionarios[f.id] = f.nome_completo; });
 
   // Populate month filter

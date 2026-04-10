@@ -142,10 +142,8 @@
     var lines = text.split('\n');
     var employees = {};
     var comp = '';
-    var blocks = [];
-    var currentBlock = [];
-    var inSummary = false;
     var afastados = [];
+    var debugInfo = [];
 
     // 1. Extract competencia
     for (var i = 0; i < lines.length; i++) {
@@ -157,122 +155,142 @@
       }
     }
 
-    // 2. Split into blocks by separator lines
+    // 2. Find employee headers and build blocks
+    //    Employee header patterns: "0478-ADAO..." or "0478 - ADAO..." or "0478-ADAO"
+    var headerRegex = /^(\d{4})\s*[-–—]\s*([A-ZÀ-Ú][A-ZÀ-Ú\s.]+)/;
+    var blocks = [];
+    var currentBlock = null;
+    var inSummary = false;
+
     for (var i = 0; i < lines.length; i++) {
       var line = lines[i];
+      var trimmed = line.trim();
 
-      // Stop at summary section
-      if (line.indexOf('RESUMO DOS EVENTOS') !== -1) { inSummary = true; }
+      // Stop at summary/resume section
+      if (trimmed.indexOf('RESUMO DOS EVENTOS') !== -1 || trimmed.indexOf('EVENTOS DA FOLHA DOS') !== -1) {
+        if (currentBlock) { blocks.push(currentBlock); currentBlock = null; }
+        inSummary = true;
+      }
+
       if (inSummary) {
         // Parse afastados
-        if (line.indexOf('Trabalhadores Afastados') !== -1) {
-          for (var j = i + 2; j < lines.length; j++) {
-            var am = lines[j].match(/^(\d{6})\s+(.+?)\s{2,}(\d{2})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/);
-            if (am) afastados.push({ matricula: am[1], nome: am[2].trim(), codigo: am[3], inicio: am[4], retorno: am[5] });
-          }
-        }
+        var am = trimmed.match(/^(\d{6})\s+(.+?)\s+(\d{2})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/);
+        if (am) afastados.push({ matricula: am[1], nome: am[2].trim(), codigo: am[3], inicio: am[4], retorno: am[5] });
         continue;
       }
 
-      // Skip page headers
-      if (/^={10,}/.test(line)) continue;
-      if (line.indexOf('PROVENTOS/Descri') !== -1) continue;
-      if (line.indexOf('CLASSIC IMP E EXP') !== -1 || line.indexOf('RODOVIA PRT') !== -1) continue;
-      if (line.indexOf('Listagem da Folha') !== -1) continue;
+      // Skip page headers, separators
+      if (/^[=]{5,}/.test(trimmed)) continue;
+      if (/^[-–—]{5,}/.test(trimmed)) continue;
+      if (trimmed.indexOf('PROVENTOS/Descri') !== -1) continue;
+      if (trimmed.indexOf('CLASSIC IMP E EXP') !== -1) continue;
+      if (trimmed.indexOf('RODOVIA PRT') !== -1) continue;
+      if (trimmed.indexOf('Listagem da Folha') !== -1) continue;
+      if (trimmed.indexOf('C.N.P.J') !== -1 && trimmed.indexOf('Folha.:') !== -1) continue;
+      if (!trimmed) continue;
 
-      // Separator = end of block
-      if (/^-{10,}/.test(line)) {
-        if (currentBlock.length > 0) {
-          blocks.push(currentBlock);
-          currentBlock = [];
+      // Check if this is an employee header
+      var hm = trimmed.match(headerRegex);
+      if (hm) {
+        var isContinuation = trimmed.indexOf('Continua') !== -1;
+
+        if (isContinuation) {
+          // Continuation of previous employee — keep current block
+          if (currentBlock) currentBlock.lines.push(trimmed);
+          continue;
         }
+
+        // New employee block
+        if (currentBlock) blocks.push(currentBlock);
+        currentBlock = { header: trimmed, codigo: hm[1], nome: hm[2].trim(), lines: [trimmed] };
         continue;
       }
 
-      if (line.trim()) currentBlock.push(line);
+      // Add line to current block
+      if (currentBlock) currentBlock.lines.push(trimmed);
     }
-    if (currentBlock.length > 0) blocks.push(currentBlock);
+    if (currentBlock) blocks.push(currentBlock);
+
+    debugInfo.push('Blocos encontrados: ' + blocks.length);
+    debugInfo.push('Competência: ' + comp);
 
     // 3. Parse each block
     for (var b = 0; b < blocks.length; b++) {
       var block = blocks[b];
-      var blockText = block.join('\n');
+      var blockText = block.lines.join('\n');
 
-      // Skip sócios and autônomos
-      if (blockText.indexOf('PRO- LABORE') !== -1 || blockText.indexOf('AUTÔNOMO') !== -1 ||
-          blockText.indexOf('SERVIÇOS DE MEDICINA') !== -1) continue;
+      // Skip sócios, autônomos, and summary entries
+      if (blockText.indexOf('PRO- LABORE') !== -1 || blockText.indexOf('PRO-LABORE') !== -1) continue;
+      if (blockText.indexOf('AUTÔNOMO') !== -1 || blockText.indexOf('AUTONOMO') !== -1) continue;
+      if (blockText.indexOf('SERVIÇOS DE MEDICINA') !== -1 || blockText.indexOf('SERVICOS DE MEDICINA') !== -1) continue;
 
-      // Employee header: 4-digit code + name
-      var headerMatch = block[0].match(/^(\d{4})-(.+?)(?:\s{2,})/);
-      if (!headerMatch) {
-        // Check for continuation
-        if (block[0].indexOf('Continua') !== -1) continue;
-        continue;
-      }
+      var codigo = block.codigo;
+      var fullName = block.nome;
 
-      var codigo = headerMatch[1];
-      var isContinuation = block[0].indexOf('Continuação') !== -1 || block[0].indexOf('Continuacao') !== -1;
+      // Clean name: remove cargo that might be appended
+      var nameEnd = fullName.search(/\s{2,}[A-Z]/);
+      if (nameEnd > 5) fullName = fullName.substring(0, nameEnd).trim();
 
-      // If this is a new employee occurrence (not continuation), or first time
-      if (!isContinuation) {
-        var fullName = headerMatch[2].trim();
-        // Extract cargo from after the name
-        var cargoMatch = block[0].match(/^(\d{4})-(.+?)\s{2,}(.+?)(?:\s+\d{2}\/\d{2}|\s+Data de|\s+Hrs\/Sem)/);
-        var cargo = cargoMatch ? cargoMatch[3].trim() : '';
-        // Clean cargo
-        cargo = cargo.replace(/\s+\d{2}\/\d{2}$/, '').trim();
-      }
+      // Extract cargo from header
+      var cargoMatch = block.header.match(/^\d{4}\s*[-–—]\s*[A-ZÀ-Ú][A-ZÀ-Ú\s.]+?\s{2,}(.+?)(?:\s+\d{2}\/\d{2}|\s+Data de|\s+Hrs\/Sem)/);
+      var cargo = cargoMatch ? cargoMatch[1].trim() : '';
 
-      // Extract CPF and municipio
+      // Extract CPF and municipio from all lines
       var cpf = '';
       var municipio = '';
-      for (var i = 0; i < block.length; i++) {
-        var cpfM = block[i].match(/C\.P\.F\.+?:(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+      for (var i = 0; i < block.lines.length; i++) {
+        var ln = block.lines[i];
+        var cpfM = ln.match(/C\.?P\.?F\.?[.:]+\s*([\d]{3}\.[\d]{3}\.[\d]{3}-[\d]{2})/);
         if (cpfM) cpf = cpfM[1];
-        var munM = block[i].match(/MUNICÍPIO\.+?:(.+?)(?:\s*$)/);
+        var munM = ln.match(/MUNIC[IÍ]PIO\.?[.:]+\s*(.+?)(?:\s*$)/);
         if (munM) municipio = munM[1].trim();
       }
 
-      // Extract verbas by pattern
+      // Extract verbas by searching for patterns in all block lines
       var verbas = {
         salario_base: 0, horas_extras: 0, adicional_noturno: 0,
-        adicional_insalubridade: 0, adicional_periculosidade: 0,
-        vale_transporte: 0, vale_alimentacao: 0, plano_saude: 0,
         auxilio_deslocamento: 0, adicional_assiduidade: 0,
-        fgts: 0, inss_empresa: 0, outros_proventos: 0, outros_descontos: 0,
+        vale_alimentacao: 0, fgts: 0,
         total_proventos: 0, total_descontos: 0
       };
 
-      for (var i = 0; i < block.length; i++) {
-        var ln = block[i];
+      for (var i = 0; i < block.lines.length; i++) {
+        var ln = block.lines[i];
 
-        // ── Proventos (left side) ──
-        var salM = ln.match(/^SALARIO BASE\s+[\d.,]+[dh]?\s+([\d.]+,\d{2})/);
+        // ── Salário Base ──
+        var salM = ln.match(/SALARIO BASE\s+[\d.,]+[dh]?\s+([\d.]+,\d{2})/);
         if (salM) verbas.salario_base += parseNum(salM[1]);
 
-        var saldoM = ln.match(/^SALDO DE SAL[AÁ]RIO RESCIS/);
-        if (saldoM) { var v = ln.match(/([\d.]+,\d{2})/g); if (v) verbas.salario_base += parseNum(v[v.length > 1 ? 1 : 0]); }
+        var saldoM = ln.match(/SALDO DE SAL[AÁ]RIO RESCIS[AÃ]O\s+[\d.,]+[dh]?\s+([\d.]+,\d{2})/);
+        if (saldoM) verbas.salario_base += parseNum(saldoM[1]);
 
-        var heM = ln.match(/^HORAS EXTRAS \d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
+        var salMatM = ln.match(/SALARIO MATERNIDADE\s+[\d.,]+[dh]?\s+([\d.]+,\d{2})/);
+        if (salMatM) verbas.salario_base += parseNum(salMatM[1]);
+
+        // ── Horas Extras ──
+        var heM = ln.match(/HORAS EXTRAS \d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
         if (heM) verbas.horas_extras += parseNum(heM[1]);
 
-        var refHeM = ln.match(/^REFLEXO H\.E\.\s+\d+%.*?[\d.,]+h\s+([\d.]+,\d{2})/);
+        var refHeM = ln.match(/REFLEXO H\.?E\.?\s+\d+%.*?[\d.,]+h\s+([\d.]+,\d{2})/);
         if (refHeM) verbas.horas_extras += parseNum(refHeM[1]);
 
-        var adNotM = ln.match(/^ADICIONAL NOTURNO\s+\d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
+        // ── Adicional Noturno ──
+        var adNotM = ln.match(/ADICIONAL NOTURNO\s+\d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
         if (adNotM) verbas.adicional_noturno += parseNum(adNotM[1]);
 
-        var refNotM = ln.match(/^REFLEXO ADIC\.NOTURNO.*?[\d.,]+h\s+([\d.]+,\d{2})/);
+        var refNotM = ln.match(/REFLEXO ADIC\.?NOTURNO.*?[\d.,]+h\s+([\d.]+,\d{2})/);
         if (refNotM) verbas.adicional_noturno += parseNum(refNotM[1]);
 
-        var deslocM = ln.match(/^AJUDA DE CUSTO DESLOC.*?([\d.]+,\d{2})/);
+        // ── Deslocamento ──
+        var deslocM = ln.match(/AJUDA DE CUSTO DESLOC.*?([\d.]+,\d{2})/);
         if (deslocM) verbas.auxilio_deslocamento += parseNum(deslocM[1]);
 
-        var assidM = ln.match(/^PREMIACAO ASSIDUIDADE.*?([\d.]+,\d{2})/);
+        // ── Assiduidade ──
+        var assidM = ln.match(/PREMIACAO ASSIDUIDADE.*?([\d.]+,\d{2})/);
         if (assidM) verbas.adicional_assiduidade += parseNum(assidM[1]);
 
-        // ── Descontos (right side or standalone) ──
-        var vaM = ln.match(/VALE ALIMENTACAO\s+([\d.]+,\d{2})/);
+        // ── Vale Alimentação (DESCONTO) ──
+        var vaM = ln.match(/VALE ALIMENTA[CÇ][AÃ]O\s+([\d.]+,\d{2})/);
         if (vaM) verbas.vale_alimentacao += parseNum(vaM[1]);
 
         // ── Totais ──
@@ -282,34 +300,29 @@
         var totDescM = ln.match(/Total dos Descontos\.+:\s+([\d.]+,\d{2})/);
         if (totDescM) verbas.total_descontos += parseNum(totDescM[1]);
 
-        var fgtsM = ln.match(/F\.G\.T\.S\.+:\s+([\d.]+,\d{2})/);
-        if (fgtsM) verbas.fgts += parseNum(fgtsM[1]);
+        // ── FGTS ──
+        var fgtsM = ln.match(/F\.?G\.?T\.?S\.+:\s+([\d.]+,\d{2})/);
+        if (fgtsM && ln.indexOf('Base') === -1) verbas.fgts += parseNum(fgtsM[1]);
       }
 
-      // Build employee key
-      var key = cpf || (codigo + '-' + (fullName || ''));
+      // Build employee key (use CPF if available, else code+name)
+      var key = cpf || (codigo + '-' + fullName);
 
       if (!employees[key]) {
         employees[key] = {
-          codigo: codigo,
-          nome: fullName || '',
-          cargo: cargo || '',
-          cpf: cpf,
-          municipio: municipio,
+          codigo: codigo, nome: fullName, cargo: cargo,
+          cpf: cpf, municipio: municipio,
           salario_base: 0, horas_extras: 0, adicional_noturno: 0,
-          adicional_insalubridade: 0, adicional_periculosidade: 0,
-          vale_transporte: 0, vale_alimentacao: 0, plano_saude: 0,
           auxilio_deslocamento: 0, adicional_assiduidade: 0,
-          fgts: 0, inss_empresa: 0, outros_proventos: 0, outros_descontos: 0,
+          vale_alimentacao: 0, fgts: 0,
+          outros_proventos: 0, outros_descontos: 0,
           total_proventos: 0, total_descontos: 0
         };
       }
 
       var emp = employees[key];
-      // Update name/cargo/municipio if not set
-      if (!emp.nome && fullName) emp.nome = fullName;
-      if (!emp.cargo && cargo) emp.cargo = cargo;
       if (!emp.cpf && cpf) emp.cpf = cpf;
+      if (!emp.cargo && cargo) emp.cargo = cargo;
       if (!emp.municipio && municipio) emp.municipio = municipio;
 
       // Sum verbas (handles multiple blocks per employee)
@@ -324,7 +337,7 @@
       emp.total_descontos += verbas.total_descontos;
     }
 
-    // 4. Calculate outros_proventos as residual
+    // 4. Calculate residuals
     var result = Object.values(employees);
     for (var i = 0; i < result.length; i++) {
       var e = result[i];
@@ -335,7 +348,7 @@
       e.custo_total = e.total_proventos + e.fgts;
     }
 
-    return { competencia: comp, employees: result, afastados: afastados };
+    return { competencia: comp, employees: result, afastados: afastados, debug: debugInfo };
   }
 
   /* ── STEP 1: Process ── */
@@ -347,7 +360,12 @@
     competencia = result.competencia;
     parsedData = result.employees;
 
-    if (!parsedData.length) { alert('Nenhum funcionário encontrado no texto. Verifique o formato.'); return; }
+    if (!parsedData.length) {
+      var lines = text.split('\n');
+      var sample = lines.slice(0, 30).map(function(l, i) { return (i+1) + ': ' + l.substring(0, 100); }).join('\n');
+      alert('Nenhum funcionário encontrado.\n\nDebug: ' + (result.debug || []).join(', ') + '\nTotal linhas: ' + lines.length + '\n\nPrimeiras 30 linhas:\n' + sample);
+      return;
+    }
 
     // Show competencia
     document.getElementById('competenciaInfo').innerHTML =

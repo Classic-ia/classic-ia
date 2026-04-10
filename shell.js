@@ -24,7 +24,7 @@ const Shell = (() => {
     { group: 'Pessoas', id: 'desligamentos', label: 'Desligamentos', href: 'desligamentos_turnover.html', icon: 'user-minus', perfis: ['administrador','rh'] },
     { group: 'Processos', id: 'ocorrencias', label: 'Ocorrencias', href: 'ocorrencias.html', icon: 'file-text', perfis: ['administrador','rh'] },
     { group: 'Processos', id: 'experiencia', label: 'Contratos Exp.', href: 'apuracao.html', icon: 'calendar', perfis: ['administrador','rh'] },
-    { group: 'SST', id: 'sst_dashboard', label: 'Painel SST', href: 'sst_dashboard.html', icon: 'shield', perfis: ['all'] },
+    { group: 'SST', id: 'sst_dashboard', label: 'Painel SST', href: 'dashboard_sst.html', icon: 'shield', perfis: ['all'] },
     { group: 'SST', id: 'asos', label: 'ASOs', href: 'asos.html', icon: 'activity', perfis: ['administrador','rh'] },
     { group: 'SST', id: 'treinamentos', label: 'Treinamentos', href: 'treinamentos.html', icon: 'book', perfis: ['all'] },
     { group: 'SST', id: 'epis', label: 'EPIs', href: 'epis.html', icon: 'shield', perfis: ['all'] },

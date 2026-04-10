@@ -134,7 +134,7 @@
 
 </div>
 <script>
-let beneficios = [], funcionarios = {}, funcSetores = {};
+let beneficios = [], funcionarios = {}, funcSetores = {}, totalFuncAtivos = 0;
 
 const TIPO_LABELS = {
   vale_alimentacao: 'Vale Alimentação',
@@ -183,7 +183,7 @@ function renderInsights(lista) {
   const custoMedio = funcsUnicos > 0 ? total / funcsUnicos : 0;
 
   // Cobertura: beneficiários únicos no período / total funcionários ativos
-  const totalAtivos = Object.keys(funcionarios).length;
+  const totalAtivos = totalFuncAtivos;
   const cobertura = totalAtivos > 0 ? Math.round(funcsUnicos / totalAtivos * 100) : 0;
 
   // Comparativo com mês anterior
@@ -430,16 +430,18 @@ function renderBeneficios() {
 
   const [benefData, funcList, setoresList] = await Promise.all([
     fetchAll('rh_beneficio?select=id,funcionario_id,tipo,status,data_inicio,valor,documento_ref&order=data_inicio.desc'),
-    fetchAll('rh_funcionarios?select=id,nome_completo,setor_id'),
+    fetchAll('rh_funcionarios?select=id,nome_completo,setor_id,status'),
     fetchAll('rh_setores?select=id,nome')
   ]);
 
   beneficios = benefData;
   const setoresMap = {};
   setoresList.forEach(s => { setoresMap[s.id] = s.nome; });
+  totalFuncAtivos = 0;
   funcList.forEach(f => {
     funcionarios[f.id] = f.nome_completo;
     funcSetores[f.id] = setoresMap[f.setor_id] || 'Sem setor';
+    if (f.status === 'ativo' || f.status === 'afastado' || f.status === 'ferias') totalFuncAtivos++;
   });
 
   // Remove old month filter if exists (replaced by period selector)

@@ -359,9 +359,9 @@
     plano_saude:              ['planosaude', 'saude', 'planodesaude', 'assistmedica', 'assistenciamedica'],
     fgts:                     ['fgts', 'fundegarantia'],
     inss_empresa:             ['inssempresa', 'insspatronal', 'inss', 'contribuicaopatronal'],
-    outros_proventos:         ['outrosproventos', 'proventos', 'outrasverbas'],
-    outros_descontos:         ['outrosdescontos', 'descontos'],
-    custo_total:              ['custototal', 'total', 'custoempregado', 'totalgeral', 'totalcusto']
+    outros_proventos:         ['outrosproventos', 'outrasverbas', 'demaisproventos'],
+    outros_descontos:         ['outrosdescontos', 'descontos', 'demaisdescontos'],
+    custo_total:              ['custototal', 'total', 'custoempregado', 'totalgeral', 'totalcusto', 'proventos', 'totalproventos']
   };
 
   function normalize(s) {
@@ -635,12 +635,8 @@
           payload.funcionario_id = func.id;
         }
 
-        // Auto-calculate custo_total if not mapped or zero
-        var custoTotalMapped = toNum(getVal(row, 'custo_total'));
-        if (custoTotalMapped > 0) {
-          payload.custo_total = custoTotalMapped;
-        } else {
-          payload.custo_total =
+        // Sum of individually mapped cost fields
+        var somaConhecidos =
             payload.salario_base +
             payload.horas_extras +
             payload.adicional_noturno +
@@ -650,9 +646,20 @@
             payload.vale_alimentacao +
             payload.plano_saude +
             payload.fgts +
-            payload.inss_empresa +
-            payload.outros_proventos -
-            payload.outros_descontos;
+            payload.inss_empresa;
+
+        // Auto-calculate custo_total if not mapped or zero
+        var custoTotalMapped = toNum(getVal(row, 'custo_total'));
+        if (custoTotalMapped > 0) {
+          payload.custo_total = custoTotalMapped;
+          // If outros_proventos was mapped to the same total column (common Excel issue),
+          // recalculate it as the residual: what is NOT accounted for by known fields
+          if (payload.outros_proventos >= custoTotalMapped * 0.9 && somaConhecidos > 0) {
+            payload.outros_proventos = Math.max(0,
+              custoTotalMapped + payload.outros_descontos - somaConhecidos);
+          }
+        } else {
+          payload.custo_total = somaConhecidos + payload.outros_proventos - payload.outros_descontos;
         }
 
         // Upsert: check if record already exists for CPF + competencia

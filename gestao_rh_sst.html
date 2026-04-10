@@ -147,6 +147,11 @@ tbody td{padding:10px;vertical-align:middle;}
   .field input,.field select,.field textarea{font-size:16px;padding:10px;} /* prevent iOS zoom */
   .btn{padding:12px 18px;font-size:14px;width:100%;}
 }
+.sortable{cursor:pointer;user-select:none;position:relative;padding-right:16px!important;}
+.sortable:hover{color:var(--blue);}
+.sortable::after{content:'⇅';position:absolute;right:2px;opacity:.3;font-size:9px;}
+.sortable.asc::after{content:'▲';opacity:.8;}
+.sortable.desc::after{content:'▼';opacity:.8;}
 </style>
 </head>
 <body>
@@ -276,7 +281,7 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Funcionário</th><th>Treinamento</th><th>Realizado</th><th>Validade</th><th>Carga Horária</th><th>Status</th><th>Ações</th>
+          <th class="sortable" onclick="sortTrein('func')">Funcionário</th><th class="sortable" onclick="sortTrein('trein')">Treinamento</th><th class="sortable" onclick="sortTrein('realizado')">Realizado</th><th class="sortable" onclick="sortTrein('validade')">Validade</th><th class="sortable" onclick="sortTrein('carga')">Carga Horária</th><th>Status</th><th>Ações</th>
         </tr></thead>
         <tbody id="tbTreinamentos"></tbody>
       </table>
@@ -1184,7 +1189,7 @@ function renderFuncionarios(lista) {
     const setorNome = f.setor_id ? nomeSetor(f.setor_id) : (f.setor || '—');
 
     return `<tr>
-      <td><strong>${f.nome_completo || '—'}</strong></td>
+      <td><a href="ficha_360.html?id=${f.id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${f.nome_completo || '—'}</a></td>
       <td style="font-size:11px;font-family:monospace">${fmtCPF(f.cpf)}</td>
       <td>${cargoNome}</td>
       <td>${setorNome}</td>
@@ -1243,7 +1248,7 @@ function renderAso(lista) {
     };
 
     return `<tr>
-      <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+      <td><a href="ficha_360.html?id=${a.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(a.funcionario_id)}</a></td>
       <td>${(a.tipo_exame || '').replace(/_/g, ' ')}</td>
       <td>${fmtData(a.data_exame)}</td>
       <td>${fmtData(a.data_validade)}</td>
@@ -1280,7 +1285,7 @@ function renderTreinamentos(lista) {
     else statusHtml = '<span class="badge badge-green">Em dia</span>';
 
     return `<tr>
-      <td><strong>${nomeFunc(t.funcionario_id)}</strong></td>
+      <td><a href="ficha_360.html?id=${t.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(t.funcionario_id)}</a></td>
       <td>${nomeTipoTrein(t.tipo_treinamento_id) || t.tipo_treinamento || '—'}</td>
       <td>${fmtData(t.data_realizacao)}</td>
       <td>${fmtData(t.data_validade)}</td>
@@ -1291,12 +1296,35 @@ function renderTreinamentos(lista) {
   }).join('');
 }
 
+let _treinSortCol = '', _treinSortDir = 'asc';
+function sortTrein(col) {
+  if (_treinSortCol === col) { _treinSortDir = _treinSortDir === 'asc' ? 'desc' : 'asc'; }
+  else { _treinSortCol = col; _treinSortDir = 'asc'; }
+  // Update header visual
+  document.querySelectorAll('#tab-treinamentos .sortable').forEach(th => th.classList.remove('asc','desc'));
+  event.target.closest('th').classList.add(_treinSortDir);
+  filtrarTreinamentos();
+}
+
 function filtrarTreinamentos() {
   const busca = document.getElementById('searchTrein').value.toLowerCase();
   const nr = document.getElementById('filterNR').value;
   let lista = TREINAMENTOS;
   if (busca) lista = lista.filter(t => nomeFunc(t.funcionario_id).toLowerCase().includes(busca));
   if (nr) lista = lista.filter(t => t.tipo_treinamento_id === nr || t.tipo_treinamento === nr);
+  if (_treinSortCol) {
+    const dir = _treinSortDir === 'asc' ? 1 : -1;
+    lista = [...lista].sort((a, b) => {
+      let va, vb;
+      if (_treinSortCol === 'func') { va = nomeFunc(a.funcionario_id); vb = nomeFunc(b.funcionario_id); }
+      else if (_treinSortCol === 'trein') { va = nomeTipoTrein(a.tipo_treinamento_id) || a.tipo_treinamento || ''; vb = nomeTipoTrein(b.tipo_treinamento_id) || b.tipo_treinamento || ''; }
+      else if (_treinSortCol === 'realizado') { va = a.data_realizacao || ''; vb = b.data_realizacao || ''; }
+      else if (_treinSortCol === 'validade') { va = a.data_validade || ''; vb = b.data_validade || ''; }
+      else if (_treinSortCol === 'carga') { va = Number(a.carga_horaria || 0); vb = Number(b.carga_horaria || 0); return (va - vb) * dir; }
+      else { va = ''; vb = ''; }
+      return String(va).localeCompare(String(vb)) * dir;
+    });
+  }
   renderTreinamentos(lista);
 }
 
@@ -1317,7 +1345,7 @@ function renderEpis(lista) {
 
     const cat = CATALOGO_EPI.find(c => c.id === e.catalogo_epi_id) || {};
     return `<tr>
-      <td><strong>${nomeFunc(e.funcionario_id)}</strong></td>
+      <td><a href="ficha_360.html?id=${e.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(e.funcionario_id)}</a></td>
       <td>${cat.descricao || e.epi_nome || '—'}</td>
       <td style="font-family:monospace;font-size:11px">${cat.ca_numero || e.ca_numero || '—'}</td>
       <td>${fmtData(e.data_entrega)}</td>
@@ -1346,7 +1374,7 @@ function renderAcidentes(lista) {
   const gravBadge = { leve: 'badge-green', moderado: 'badge-yellow', grave: 'badge-red', fatal: 'badge-red' };
 
   tb.innerHTML = lista.map(a => `<tr>
-    <td><strong>${nomeFunc(a.funcionario_id)}</strong></td>
+    <td><a href="ficha_360.html?id=${a.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(a.funcionario_id)}</a></td>
     <td>${fmtData(a.data_ocorrencia)}</td>
     <td>${(a.tipo_acidente || '').replace(/_/g, ' ')}</td>
     <td><span class="badge ${gravBadge[a.gravidade] || 'badge-muted'}">${a.gravidade || '—'}</span></td>
@@ -1378,7 +1406,7 @@ function renderAbsenteismo(lista) {
     const funcId = a.colaborador_id || a.funcionario_id;
     const tipo = a.tipo || a.tipo_ausencia || '';
     return `<tr>
-    <td><strong>${nomeFunc(funcId)}</strong></td>
+    <td><a href="ficha_360.html?id=${funcId}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(funcId)}</a></td>
     <td>${fmtData(a.data_inicio)}</td>
     <td><span class="badge ${tipoBadge[tipo] || 'badge-muted'}">${tipo.replace(/_/g, ' ')}</span></td>
     <td>${a.dias || 1}</td>
@@ -1410,7 +1438,7 @@ function renderRestricoes(lista) {
       : '<span class="badge badge-muted">Encerrada</span>';
 
     return `<tr>
-      <td><strong>${nomeFunc(r.funcionario_id)}</strong></td>
+      <td><a href="ficha_360.html?id=${r.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(r.funcionario_id)}</a></td>
       <td>${tipoLabel[r.tipo_restricao] || r.tipo_restricao || '—'}</td>
       <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.descricao || '—'}</td>
       <td>${fmtData(r.data_inicio)}</td>
@@ -1464,7 +1492,7 @@ function renderDesligamentos(lista) {
     }
 
     return `<tr>
-      <td><strong>${nomeFunc(d.funcionario_id)}</strong>${checklistHtml}</td>
+      <td><a href="ficha_360.html?id=${d.funcionario_id}" style="color:var(--text);text-decoration:none;font-weight:700;" onmouseover="this.style.color='var(--blue)'" onmouseout="this.style.color='var(--text)'">${nomeFunc(d.funcionario_id)}</a>${checklistHtml}</td>
       <td>${fmtData(d.data_desligamento)}</td>
       <td>${d.tipo_desligamento || '—'}</td>
       <td><span class="badge ${stBadge}">${st.replace(/_/g, ' ')}</span></td>

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Férias - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:20px;}
+.kpi-box{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center;}
+.kpi-box .val{font-size:24px;font-weight:800;line-height:1;}
+.kpi-box .val.green{color:#22c55e;} .kpi-box .val.red{color:#ef4444;} .kpi-box .val.yellow{color:#f59e0b;} .kpi-box .val.blue{color:#2563eb;}
+.kpi-box .lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-top:4px;}
+.tabs{display:flex;gap:4px;border-bottom:2px solid var(--border);margin-bottom:20px;}
+.tab{padding:10px 18px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;margin-bottom:-2px;font-family:inherit;transition:all .2s;}
+.tab:hover{color:var(--text-primary);} .tab.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600;}
+.tp{display:none;} .tp.active{display:block;}
+.toolbar{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center;}
+.toolbar input,.toolbar select{padding:8px 12px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-input);}
+.toolbar input{min-width:200px;}
+.badge{display:inline-flex;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:700;text-transform:uppercase;}
+.b-green{background:rgba(34,197,94,.1);color:#22c55e;}
+.b-yellow{background:rgba(245,158,11,.1);color:#f59e0b;}
+.b-red{background:rgba(239,68,68,.1);color:#ef4444;}
+.b-blue{background:rgba(37,99,235,.1);color:#2563eb;}
+.b-muted{background:#f1f5f9;color:var(--text-secondary);}
+.timeline-bar{display:flex;height:8px;border-radius:4px;overflow:hidden;background:var(--border);margin-top:4px;}
+.timeline-bar .seg{height:100%;}
+.sortable{cursor:pointer;user-select:none;position:relative;padding-right:16px!important;}
+.sortable:hover{color:var(--primary);}
+.sortable::after{content:'⇅';position:absolute;right:2px;opacity:.3;font-size:9px;}
+.sortable.asc::after{content:'▲';opacity:.8;} .sortable.desc::after{content:'▼';opacity:.8;}
+.alert-strip{padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;margin-bottom:16px;display:flex;align-items:center;gap:8px;}
+.alert-strip.warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:#92400e;}
+.alert-strip.danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:#991b1b;}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+<div class="kpi-strip" id="kpis"></div>
+<div id="alertas"></div>
+
+<div class="tabs" id="tabBar">
+  <button class="tab active" data-t="visao">Visão Geral</button>
+  <button class="tab" data-t="vencidas">Vencidas / Vencendo</button>
+  <button class="tab" data-t="programacao">Programação</button>
+  <button class="tab" data-t="historico">Histórico</button>
+</div>
+
+<!-- TAB VISÃO GERAL -->
+<div class="tp active" id="tp-visao">
+  <div class="toolbar">
+    <input type="text" id="fBusca" placeholder="Buscar funcionário..." oninput="renderVisao()">
+    <select id="fStatus" onchange="renderVisao()">
+      <option value="">Todos</option>
+      <option value="pendente">Pendente</option>
+      <option value="programada">Programada</option>
+      <option value="em_gozo">Em Gozo</option>
+      <option value="concluida">Concluída</option>
+      <option value="vencida">Vencida</option>
+    </select>
+    <select id="fSetor" onchange="renderVisao()"><option value="">Todos os setores</option></select>
+  </div>
+  <div class="card"><div class="data-table-wrapper">
+    <table class="data-table">
+      <thead><tr>
+        <th class="sortable" onclick="sortCol('nome')">Funcionário</th>
+        <th class="sortable" onclick="sortCol('setor')">Setor</th>
+        <th class="sortable" onclick="sortCol('admissao')">Admissão</th>
+        <th>Período Aquisitivo</th>
+        <th class="sortable" onclick="sortCol('dias')">Dias Direito</th>
+        <th>Gozados</th>
+        <th>Saldo</th>
+        <th class="sortable" onclick="sortCol('status')">Status</th>
+        <th>Ações</th>
+      </tr></thead>
+      <tbody id="tbVisao"></tbody>
+    </table>
+  </div><div id="ftVisao" style="padding:10px 12px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)"></div></div>
+</div>
+
+<!-- TAB VENCIDAS -->
+<div class="tp" id="tp-vencidas">
+  <div class="card"><div class="data-table-wrapper">
+    <table class="data-table">
+      <thead><tr>
+        <th>Funcionário</th><th>Setor</th><th>Período Aquisitivo</th><th>Vencimento</th><th>Dias Restantes</th><th>Severidade</th>
+      </tr></thead>
+      <tbody id="tbVencidas"></tbody>
+    </table>
+  </div></div>
+</div>
+
+<!-- TAB PROGRAMAÇÃO -->
+<div class="tp" id="tp-programacao">
+  <div class="toolbar">
+    <select id="fProgMes" onchange="renderProgramacao()">
+      <option value="">Todos os meses</option>
+    </select>
+  </div>
+  <div class="card"><div class="data-table-wrapper">
+    <table class="data-table">
+      <thead><tr>
+        <th>Funcionário</th><th>Setor</th><th>Início</th><th>Fim</th><th>Retorno</th><th>Dias</th><th>Abono</th><th>Status</th>
+      </tr></thead>
+      <tbody id="tbProg"></tbody>
+    </table>
+  </div></div>
+</div>
+
+<!-- TAB HISTÓRICO -->
+<div class="tp" id="tp-historico">
+  <div class="toolbar">
+    <input type="text" id="fHistBusca" placeholder="Buscar..." oninput="renderHistorico()">
+  </div>
+  <div class="card"><div class="data-table-wrapper">
+    <table class="data-table">
+      <thead><tr>
+        <th>Funcionário</th><th>Período Aquisitivo</th><th>Início Gozo</th><th>Fim</th><th>Dias Gozados</th><th>Vendidos</th><th>Abono</th><th>Status</th>
+      </tr></thead>
+      <tbody id="tbHist"></tbody>
+    </table>
+  </div></div>
+</div>
+
+</div>
+<script>
+let ferias = [], funcionarios = {}, funcData = {}, setores = {};
+let _sortCol = 'nome', _sortDir = 'asc';
+
+function fmtD(d) { if(!d) return '—'; return new Date(d+'T12:00').toLocaleDateString('pt-BR'); }
+function nomeFunc(id) { return funcionarios[id] || '—'; }
+function setorFunc(id) { return funcData[id]?.setor || '—'; }
+function admFunc(id) { return funcData[id]?.admissao || ''; }
+
+function diasEntre(d1, d2) {
+  if (!d1 || !d2) return 999;
+  return Math.ceil((new Date(d2) - new Date(d1)) / 86400000);
+}
+
+function statusBadge(s) {
+  const map = {
+    pendente: ['b-yellow','Pendente'], programada: ['b-blue','Programada'],
+    em_gozo: ['b-green','Em Gozo'], concluida: ['b-muted','Concluída'],
+    vencida: ['b-red','Vencida']
+  };
+  const [cls, lbl] = map[s] || ['b-muted', s||'—'];
+  return `<span class="badge ${cls}">${lbl}</span>`;
+}
+
+// Tabs
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('.tab'); if (!btn) return;
+  document.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tp-' + btn.dataset.t).classList.add('active');
+});
+
+function sortCol(col) {
+  if (_sortCol === col) _sortDir = _sortDir === 'asc' ? 'desc' : 'asc';
+  else { _sortCol = col; _sortDir = 'asc'; }
+  document.querySelectorAll('#tp-visao .sortable').forEach(th => th.classList.remove('asc','desc'));
+  if (event && event.target) event.target.closest('th').classList.add(_sortDir);
+  renderVisao();
+}
+
+function sortList(list) {
+  const dir = _sortDir === 'asc' ? 1 : -1;
+  return [...list].sort((a,b) => {
+    let va, vb;
+    if (_sortCol === 'nome') { va = nomeFunc(a.funcionario_id); vb = nomeFunc(b.funcionario_id); }
+    else if (_sortCol === 'setor') { va = setorFunc(a.funcionario_id); vb = setorFunc(b.funcionario_id); }
+    else if (_sortCol === 'admissao') { va = admFunc(a.funcionario_id); vb = admFunc(b.funcionario_id); }
+    else if (_sortCol === 'dias') return ((a.dias_direito||0) - (b.dias_direito||0)) * dir;
+    else if (_sortCol === 'status') { va = a.status||''; vb = b.status||''; }
+    else { va = ''; vb = ''; }
+    return String(va).localeCompare(String(vb)) * dir;
+  });
+}
+
+function renderKPIs() {
+  const hoje = new Date().toISOString().slice(0,10);
+  const total = ferias.length;
+  const emGozo = ferias.filter(f => f.status === 'em_gozo').length;
+  const pendentes = ferias.filter(f => f.status === 'pendente').length;
+  const vencidas = ferias.filter(f => {
+    if (f.status === 'concluida' || f.status === 'em_gozo') return false;
+    const limiteGozo = f.periodo_aquisitivo_fim;
+    if (!limiteGozo) return false;
+    const limite = new Date(limiteGozo);
+    limite.setFullYear(limite.getFullYear() + 1);
+    return new Date(hoje) > limite;
+  }).length;
+  const vencendo30 = ferias.filter(f => {
+    if (f.status === 'concluida' || f.status === 'em_gozo') return false;
+    const limiteGozo = f.periodo_aquisitivo_fim;
+    if (!limiteGozo) return false;
+    const limite = new Date(limiteGozo);
+    limite.setFullYear(limite.getFullYear() + 1);
+    const dias = diasEntre(hoje, limite.toISOString().slice(0,10));
+    return dias >= 0 && dias <= 30;
+  }).length;
+  const programadas = ferias.filter(f => f.status === 'programada' || (f.data_inicio && f.status === 'pendente')).length;
+
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi-box"><div class="val blue">${total}</div><div class="lbl">Total Períodos</div></div>
+    <div class="kpi-box"><div class="val green">${emGozo}</div><div class="lbl">Em Gozo</div></div>
+    <div class="kpi-box"><div class="val blue">${programadas}</div><div class="lbl">Programadas</div></div>
+    <div class="kpi-box"><div class="val">${pendentes}</div><div class="lbl">Pendentes</div></div>
+    <div class="kpi-box"><div class="val yellow">${vencendo30}</div><div class="lbl">Vencem em 30d</div></div>
+    <div class="kpi-box"><div class="val red">${vencidas}</div><div class="lbl">Vencidas</div></div>
+  `;
+
+  // Alertas
+  const alertas = [];
+  if (vencidas > 0) alertas.push({ tipo: 'danger', msg: `${vencidas} período(s) de férias vencido(s) — risco trabalhista!` });
+  if (vencendo30 > 0) alertas.push({ tipo: 'warn', msg: `${vencendo30} período(s) vencem nos próximos 30 dias` });
+  document.getElementById('alertas').innerHTML = alertas.map(a =>
+    `<div class="alert-strip ${a.tipo}">${a.msg}</div>`
+  ).join('');
+}
+
+function renderVisao() {
+  const busca = (document.getElementById('fBusca').value||'').toLowerCase();
+  const status = document.getElementById('fStatus').value;
+  const setor = document.getElementById('fSetor').value;
+
+  let lista = ferias;
+  if (busca) lista = lista.filter(f => nomeFunc(f.funcionario_id).toLowerCase().includes(busca));
+  if (status) lista = lista.filter(f => f.status === status);
+  if (setor) lista = lista.filter(f => funcData[f.funcionario_id]?.setor_id === setor);
+
+  lista = sortList(lista);
+
+  document.getElementById('tbVisao').innerHTML = lista.map(f => {
+    const saldo = (f.dias_direito||30) - (f.dias_gozados||0) - (f.dias_vendidos||0);
+    return `<tr>
+      <td><a href="ficha_360.html?id=${f.funcionario_id}" style="color:var(--text-primary);text-decoration:none;font-weight:600;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-primary)'">${nomeFunc(f.funcionario_id)}</a></td>
+      <td>${setorFunc(f.funcionario_id)}</td>
+      <td>${fmtD(admFunc(f.funcionario_id))}</td>
+      <td style="font-size:12px">${fmtD(f.periodo_aquisitivo_inicio)} a ${fmtD(f.periodo_aquisitivo_fim)}</td>
+      <td style="text-align:center">${f.dias_direito||30}</td>
+      <td style="text-align:center">${f.dias_gozados||0}</td>
+      <td style="text-align:center;font-weight:700;color:${saldo > 0 ? 'var(--primary)' : saldo === 0 ? 'var(--text-secondary)' : '#ef4444'}">${saldo}</td>
+      <td>${statusBadge(f.status)}</td>
+      <td>${f.data_inicio ? fmtD(f.data_inicio) + ' a ' + fmtD(f.data_fim) : '—'}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('ftVisao').textContent = `${lista.length} de ${ferias.length} períodos`;
+}
+
+function renderVencidas() {
+  const hoje = new Date().toISOString().slice(0,10);
+  const lista = ferias.filter(f => {
+    if (f.status === 'concluida' || f.status === 'em_gozo') return false;
+    const limiteGozo = f.periodo_aquisitivo_fim;
+    if (!limiteGozo) return false;
+    const limite = new Date(limiteGozo);
+    limite.setFullYear(limite.getFullYear() + 1);
+    return diasEntre(hoje, limite.toISOString().slice(0,10)) <= 60;
+  }).sort((a,b) => {
+    const la = new Date(a.periodo_aquisitivo_fim); la.setFullYear(la.getFullYear()+1);
+    const lb = new Date(b.periodo_aquisitivo_fim); lb.setFullYear(lb.getFullYear()+1);
+    return la - lb;
+  });
+
+  document.getElementById('tbVencidas').innerHTML = lista.map(f => {
+    const limite = new Date(f.periodo_aquisitivo_fim);
+    limite.setFullYear(limite.getFullYear() + 1);
+    const diasRest = diasEntre(hoje, limite.toISOString().slice(0,10));
+    const sev = diasRest < 0 ? 'b-red' : diasRest <= 15 ? 'b-red' : diasRest <= 30 ? 'b-yellow' : 'b-blue';
+    const sevLabel = diasRest < 0 ? 'VENCIDA' : diasRest <= 15 ? 'CRÍTICO' : diasRest <= 30 ? 'URGENTE' : 'ATENÇÃO';
+    return `<tr>
+      <td><a href="ficha_360.html?id=${f.funcionario_id}" style="color:var(--text-primary);text-decoration:none;font-weight:600;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-primary)'">${nomeFunc(f.funcionario_id)}</a></td>
+      <td>${setorFunc(f.funcionario_id)}</td>
+      <td style="font-size:12px">${fmtD(f.periodo_aquisitivo_inicio)} a ${fmtD(f.periodo_aquisitivo_fim)}</td>
+      <td>${fmtD(limite.toISOString().slice(0,10))}</td>
+      <td style="text-align:center;font-weight:700;color:${diasRest < 0 ? '#ef4444' : diasRest <= 30 ? '#f59e0b' : 'var(--text-primary)'}">${diasRest}d</td>
+      <td><span class="badge ${sev}">${sevLabel}</span></td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-secondary)">Nenhum período vencido ou vencendo</td></tr>';
+}
+
+function renderProgramacao() {
+  const mes = document.getElementById('fProgMes').value;
+  let lista = ferias.filter(f => f.data_inicio);
+  if (mes) lista = lista.filter(f => (f.data_inicio||'').startsWith(mes));
+  lista.sort((a,b) => (a.data_inicio||'').localeCompare(b.data_inicio||''));
+
+  document.getElementById('tbProg').innerHTML = lista.map(f => `<tr>
+    <td><a href="ficha_360.html?id=${f.funcionario_id}" style="color:var(--text-primary);text-decoration:none;font-weight:600;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-primary)'">${nomeFunc(f.funcionario_id)}</a></td>
+    <td>${setorFunc(f.funcionario_id)}</td>
+    <td>${fmtD(f.data_inicio)}</td>
+    <td>${fmtD(f.data_fim)}</td>
+    <td>${fmtD(f.data_retorno)}</td>
+    <td style="text-align:center;font-weight:600">${f.dias_gozados||'—'}</td>
+    <td>${f.abono_pecuniario ? '<span class="badge b-green">SIM</span>' : '—'}</td>
+    <td>${statusBadge(f.status)}</td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-secondary)">Nenhuma férias programada</td></tr>';
+}
+
+function renderHistorico() {
+  const busca = (document.getElementById('fHistBusca').value||'').toLowerCase();
+  let lista = ferias.filter(f => f.status === 'concluida' || f.status === 'em_gozo');
+  if (busca) lista = lista.filter(f => nomeFunc(f.funcionario_id).toLowerCase().includes(busca));
+  lista.sort((a,b) => (b.data_inicio||'').localeCompare(a.data_inicio||''));
+
+  document.getElementById('tbHist').innerHTML = lista.map(f => `<tr>
+    <td><a href="ficha_360.html?id=${f.funcionario_id}" style="color:var(--text-primary);text-decoration:none;font-weight:600;" onmouseover="this.style.color='var(--primary)'" onmouseout="this.style.color='var(--text-primary)'">${nomeFunc(f.funcionario_id)}</a></td>
+    <td style="font-size:12px">${fmtD(f.periodo_aquisitivo_inicio)} a ${fmtD(f.periodo_aquisitivo_fim)}</td>
+    <td>${fmtD(f.data_inicio)}</td>
+    <td>${fmtD(f.data_fim)}</td>
+    <td style="text-align:center;font-weight:600">${f.dias_gozados||'—'}</td>
+    <td style="text-align:center">${f.dias_vendidos||'—'}</td>
+    <td>${f.abono_pecuniario ? '<span class="badge b-green">SIM</span>' : '—'}</td>
+    <td>${statusBadge(f.status)}</td>
+  </tr>`).join('') || '<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text-secondary)">Nenhum histórico</td></tr>';
+}
+
+(async () => {
+  const user = await Shell.init({ page: 'ferias', title: 'Controle de Férias' });
+  if (!user) return;
+
+  // Load data with pagination
+  async function fetchAll(endpoint) {
+    let all = [], offset = 0;
+    while (true) {
+      const res = await API.get(endpoint + (endpoint.includes('?') ? '&' : '?') + 'limit=1000&offset=' + offset);
+      const data = (res.ok && res.data) ? res.data : [];
+      all = all.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    return all;
+  }
+
+  const [ferData, funcList, setList] = await Promise.all([
+    fetchAll('rh_ferias?select=*&order=periodo_aquisitivo_inicio.desc'),
+    fetchAll('rh_funcionarios?select=id,nome_completo,setor_id,data_admissao,status'),
+    fetchAll('rh_setores?select=id,nome')
+  ]);
+
+  ferias = ferData;
+  const setMap = {};
+  setList.forEach(s => { setMap[s.id] = s.nome; setores[s.id] = s.nome; });
+  funcList.forEach(f => {
+    funcionarios[f.id] = f.nome_completo;
+    funcData[f.id] = { setor: setMap[f.setor_id] || 'Sem setor', setor_id: f.setor_id, admissao: f.data_admissao, status: f.status };
+  });
+
+  // Populate setor filter
+  const setorIds = [...new Set(funcList.filter(f => f.setor_id).map(f => f.setor_id))];
+  const selSetor = document.getElementById('fSetor');
+  setorIds.forEach(id => { if (setores[id]) selSetor.add(new Option(setores[id], id)); });
+
+  // Populate month filter for programação
+  const meses = [...new Set(ferias.filter(f => f.data_inicio).map(f => (f.data_inicio||'').slice(0,7)))].sort().reverse();
+  const selMes = document.getElementById('fProgMes');
+  meses.forEach(m => {
+    const d = new Date(m + '-15');
+    selMes.add(new Option(d.toLocaleDateString('pt-BR', {month:'long', year:'numeric'}), m));
+  });
+
+  renderKPIs();
+  renderVisao();
+  renderVencidas();
+  renderProgramacao();
+  renderHistorico();
+})();
+</script>
+</body>
+</html>

@@ -28,6 +28,7 @@ const Shell = (() => {
     { group: 'SST', id: 'gestao_sst', label: 'Gestão RH & SST', href: 'gestao_rh_sst.html', icon: 'activity', perfis: ['administrador','rh'] },
     { group: 'SST', id: 'epis', label: 'EPIs', href: 'epis.html', icon: 'shield', perfis: ['all'] },
     { group: 'SST', id: 'conformidade', label: 'Conformidade', href: 'painel_conformidade.html', icon: 'check-circle', perfis: ['administrador','rh'] },
+    { group: 'Operacional', id: 'ferias', label: 'Férias', href: 'ferias.html', icon: 'sun', perfis: ['administrador','rh'] },
     { group: 'Operacional', id: 'custos', label: 'Dashboard Custos', href: 'dashboard_custos.html', icon: 'bar-chart', perfis: ['administrador','rh'] },
     { group: 'Operacional', id: 'beneficios', label: 'Beneficios', href: 'beneficios.html', icon: 'heart', perfis: ['administrador','rh'] },
     { group: 'Operacional', id: 'cipa', label: 'CIPA', href: 'cipa.html', icon: 'alert-triangle', perfis: ['administrador','rh'] },

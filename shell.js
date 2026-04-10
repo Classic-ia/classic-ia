@@ -192,7 +192,9 @@ const Shell = (() => {
       const content = document.getElementById('shell-content');
       const target = document.getElementById('page-content');
       if (content && target) {
-        target.innerHTML = content.innerHTML;
+        while (content.firstChild) {
+          target.appendChild(content.firstChild);
+        }
         content.remove();
       }
 

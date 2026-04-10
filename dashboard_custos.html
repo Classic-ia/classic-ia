@@ -241,6 +241,11 @@
   }
 
   /* ── Date filter helpers ── */
+  var now = new Date();
+  var currentMonth = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('filterFrom').value = currentMonth;
+  document.getElementById('filterTo').value = currentMonth;
+
   function getFilters() {
     return {
       from: document.getElementById('filterFrom').value,
@@ -365,10 +370,14 @@
       options: {
         indexAxis: 'y',
         responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } },
+        layout: { padding: { left: 8 } },
+        plugins: {
+          legend: { display: false },
+          tooltip: { callbacks: { title: function(items) { return routeLabels[items[0].dataIndex]; } } }
+        },
         scales: {
           x: { beginAtZero: true, grid: { color: '#E2E8F0' } },
-          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
+          y: { grid: { display: false }, ticks: { font: { size: 10 }, callback: function(v, i) { var lbl = routeLabels[i] || ''; return lbl.length > 35 ? lbl.substring(0, 33) + '...' : lbl; } } }
         }
       }
     });
@@ -566,17 +575,26 @@
   }
 
   /* ── Filter events ── */
-  document.getElementById('btnFilter').addEventListener('click', loadDashboard);
+  function reloadAll() { loadDashboard(); loadTransporteCustos(); }
+  document.getElementById('btnFilter').addEventListener('click', reloadAll);
   document.getElementById('btnClear').addEventListener('click', function() {
     document.getElementById('filterFrom').value = '';
     document.getElementById('filterTo').value = '';
-    loadDashboard();
+    reloadAll();
   });
 
   // ── Transport costs section ──
   async function loadTransporteCustos() {
     try {
-      var res = await API.rpc('custo_transporte_consolidado', {});
+      var filters = getFilters();
+      var params = {};
+      if (filters.from) params.p_from = filters.from + '-01';
+      if (filters.to) {
+        var parts = filters.to.split('-');
+        var endDate = new Date(parseInt(parts[0]), parseInt(parts[1]), 0);
+        params.p_to = parts[0] + '-' + parts[1] + '-' + String(endDate.getDate()).padStart(2, '0');
+      }
+      var res = await API.rpc('custo_transporte_consolidado', params);
       if (!res.ok || !res.data) return;
       var d = res.data;
       var totais = d.totais || {};

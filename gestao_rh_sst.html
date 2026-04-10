@@ -196,16 +196,17 @@ tbody td{padding:10px;vertical-align:middle;}
       <option value="">Todos os setores</option>
     </select>
     <select class="filter-select" id="filterStatus" onchange="filtrarFuncionarios()">
+      <option value="ativo" selected>Ativos</option>
       <option value="">Todos</option>
-      <option value="ativo">Ativos</option>
       <option value="inativo">Inativos</option>
       <option value="afastado">Afastados</option>
       <option value="ferias">Férias</option>
+      <option value="desligado">Desligados</option>
     </select>
     <button class="btn btn-primary" onclick="abrirModalFunc()">+ Novo Funcionário</button>
   </div>
   <div class="card">
-    <div class="card-title">Funcionários Cadastrados <span id="countFunc" style="font-size:11px;color:var(--muted)"></span></div>
+    <div class="card-title">Funcionários Cadastrados <span id="countFunc" style="font-size:11px;color:var(--muted)"></span> <span id="countApac" style="font-size:11px;color:var(--muted);margin-left:12px"></span></div>
     <div class="table-wrap">
       <table>
         <thead><tr>
@@ -1207,7 +1208,19 @@ function filtrarFuncionarios() {
   if (busca) lista = lista.filter(f => (f.nome_completo || '').toLowerCase().includes(busca) || (f.cpf || '').includes(busca));
   if (setor) lista = lista.filter(f => f.setor_id === setor || f.setor === setor);
   if (status) lista = lista.filter(f => f.status === status);
+  lista.sort((a, b) => (a.nome_completo || '').localeCompare(b.nome_completo || ''));
   renderFuncionarios(lista);
+  // Contadores APAC e Jovem Aprendiz
+  const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo');
+  const apac = ativos.filter(f => f.apac === true);
+  const jovem = ativos.filter(f => f.jovem_aprendiz === true);
+  const el = document.getElementById('countApac');
+  if (el) {
+    const parts = [];
+    if (apac.length) parts.push('APAC: ' + apac.length);
+    if (jovem.length) parts.push('Jovem Aprendiz: ' + jovem.length);
+    el.textContent = parts.length ? '| ' + parts.join(' | ') : '';
+  }
 }
 
 // ── ASO ──────────────────────────────────────────────────
@@ -1291,6 +1304,7 @@ function filtrarTreinamentos() {
 function renderEpis(lista) {
   const tb = document.getElementById('tbEpis');
   if (!lista) lista = EPIS;
+  lista = [...lista].sort((a, b) => (b.data_entrega || '').localeCompare(a.data_entrega || ''));
   const hoje = new Date().toISOString().slice(0, 10);
 
   tb.innerHTML = lista.map(e => {

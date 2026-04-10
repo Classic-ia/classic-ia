@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Importar Folha (PDF)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.step{display:none}.step.active{display:block}
+.step-nav{display:flex;gap:8px;margin-bottom:20px}
+.step-dot{width:32px;height:32px;border-radius:50%;background:var(--border);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.step-dot.active{background:var(--primary);color:#fff}
+.step-dot.done{background:var(--green);color:#fff}
+.paste-area{width:100%;min-height:300px;font-family:'Courier New',monospace;font-size:11px;line-height:1.4;padding:16px;border:2px dashed var(--border);border-radius:12px;background:var(--bg-input);resize:vertical}
+.paste-area:focus{border-color:var(--primary);outline:none}
+.stats-row{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+.stat-box{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;text-align:center;min-width:120px}
+.stat-box .val{font-size:22px;font-weight:800;color:var(--primary)}
+.stat-box .lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.preview-scroll{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.preview-scroll table{font-size:11px}
+.preview-scroll th{position:sticky;top:0;background:var(--bg-page);z-index:1}
+.row-warn{background:rgba(245,158,11,.06)}
+.row-ok{background:rgba(34,197,94,.04)}
+.import-log{max-height:300px;overflow:auto;background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;line-height:1.6}
+.import-log .ok{color:#22c55e}.import-log .err{color:#ef4444}.import-log .skip{color:#f59e0b}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="page-header" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+    <div>
+      <div style="font-size:18px;font-weight:700">Importar Folha de Pagamento</div>
+      <div style="font-size:12px;color:var(--text-secondary)">Cole o texto do PDF da folha (Folhamatic / similar)</div>
+    </div>
+    <div class="step-nav">
+      <div class="step-dot active" id="dot1">1</div>
+      <div class="step-dot" id="dot2">2</div>
+      <div class="step-dot" id="dot3">3</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Paste -->
+  <div class="step active" id="step1">
+    <div class="card">
+      <div class="card-header"><strong>Passo 1:</strong> Cole o texto do relatório de folha</div>
+      <div class="card-body">
+        <textarea class="paste-area" id="pasteArea" placeholder="Cole aqui o texto copiado do PDF da folha de pagamento..."></textarea>
+        <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+          <button class="btn btn-primary" id="btnProcess">Processar Folha</button>
+          <span style="font-size:12px;color:var(--text-secondary)" id="charCount">0 caracteres</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Preview -->
+  <div class="step" id="step2">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Passo 2:</strong> Conferir dados extraídos</div>
+      <div class="card-body">
+        <div id="competenciaInfo"></div>
+        <div class="stats-row" id="statsRow"></div>
+        <div class="preview-scroll" id="previewTable"></div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn btn-primary" id="btnImport">Importar para o Sistema</button>
+          <button class="btn btn-ghost" id="btnBack">Voltar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Result -->
+  <div class="step" id="step3">
+    <div class="card">
+      <div class="card-header"><strong>Passo 3:</strong> Resultado da importação</div>
+      <div class="card-body">
+        <div class="stats-row" id="resultStats"></div>
+        <div class="import-log" id="importLog"></div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="location.href='dashboard_custos.html'">Ver Dashboard</button>
+          <button class="btn btn-ghost" onclick="location.reload()">Nova Importação</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'importar_folha', title: 'Importar Folha (PDF)' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  var parsedData = [];
+  var competencia = '';
+
+  /* ── UI helpers ── */
+  function showStep(n) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step' + n).classList.add('active');
+    for (var i = 1; i <= 3; i++) {
+      var dot = document.getElementById('dot' + i);
+      dot.classList.remove('active', 'done');
+      if (i < n) dot.classList.add('done');
+      else if (i === n) dot.classList.add('active');
+    }
+  }
+
+  var ta = document.getElementById('pasteArea');
+  ta.addEventListener('input', function() {
+    document.getElementById('charCount').textContent = ta.value.length.toLocaleString('pt-BR') + ' caracteres';
+  });
+
+  /* ── MONTH MAP ── */
+  var MESES = {
+    'janeiro':'01','fevereiro':'02','marco':'03','março':'03','abril':'04',
+    'maio':'05','junho':'06','julho':'07','agosto':'08','setembro':'09',
+    'outubro':'10','novembro':'11','dezembro':'12'
+  };
+
+  /* ── Parse Brazilian number ── */
+  function parseNum(s) {
+    if (!s) return 0;
+    return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0;
+  }
+
+  function fmtNum(v) {
+    return v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  /* ── MAIN PARSER ── */
+  function parsePayroll(text) {
+    var lines = text.split('\n');
+    var employees = {};
+    var comp = '';
+    var blocks = [];
+    var currentBlock = [];
+    var inSummary = false;
+    var afastados = [];
+
+    // 1. Extract competencia
+    for (var i = 0; i < lines.length; i++) {
+      var m = lines[i].match(/referente\s+(\S+)\/(\d{4})/i);
+      if (m) {
+        var mesNome = m[1].toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        comp = m[2] + '-' + (MESES[mesNome] || '01') + '-01';
+        break;
+      }
+    }
+
+    // 2. Split into blocks by separator lines
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Stop at summary section
+      if (line.indexOf('RESUMO DOS EVENTOS') !== -1) { inSummary = true; }
+      if (inSummary) {
+        // Parse afastados
+        if (line.indexOf('Trabalhadores Afastados') !== -1) {
+          for (var j = i + 2; j < lines.length; j++) {
+            var am = lines[j].match(/^(\d{6})\s+(.+?)\s{2,}(\d{2})\s+(\d{2}\/\d{2}\/\d{4})\s+(\d{2}\/\d{2}\/\d{4})/);
+            if (am) afastados.push({ matricula: am[1], nome: am[2].trim(), codigo: am[3], inicio: am[4], retorno: am[5] });
+          }
+        }
+        continue;
+      }
+
+      // Skip page headers
+      if (/^={10,}/.test(line)) continue;
+      if (line.indexOf('PROVENTOS/Descri') !== -1) continue;
+      if (line.indexOf('CLASSIC IMP E EXP') !== -1 || line.indexOf('RODOVIA PRT') !== -1) continue;
+      if (line.indexOf('Listagem da Folha') !== -1) continue;
+
+      // Separator = end of block
+      if (/^-{10,}/.test(line)) {
+        if (currentBlock.length > 0) {
+          blocks.push(currentBlock);
+          currentBlock = [];
+        }
+        continue;
+      }
+
+      if (line.trim()) currentBlock.push(line);
+    }
+    if (currentBlock.length > 0) blocks.push(currentBlock);
+
+    // 3. Parse each block
+    for (var b = 0; b < blocks.length; b++) {
+      var block = blocks[b];
+      var blockText = block.join('\n');
+
+      // Skip sócios and autônomos
+      if (blockText.indexOf('PRO- LABORE') !== -1 || blockText.indexOf('AUTÔNOMO') !== -1 ||
+          blockText.indexOf('SERVIÇOS DE MEDICINA') !== -1) continue;
+
+      // Employee header: 4-digit code + name
+      var headerMatch = block[0].match(/^(\d{4})-(.+?)(?:\s{2,})/);
+      if (!headerMatch) {
+        // Check for continuation
+        if (block[0].indexOf('Continua') !== -1) continue;
+        continue;
+      }
+
+      var codigo = headerMatch[1];
+      var isContinuation = block[0].indexOf('Continuação') !== -1 || block[0].indexOf('Continuacao') !== -1;
+
+      // If this is a new employee occurrence (not continuation), or first time
+      if (!isContinuation) {
+        var fullName = headerMatch[2].trim();
+        // Extract cargo from after the name
+        var cargoMatch = block[0].match(/^(\d{4})-(.+?)\s{2,}(.+?)(?:\s+\d{2}\/\d{2}|\s+Data de|\s+Hrs\/Sem)/);
+        var cargo = cargoMatch ? cargoMatch[3].trim() : '';
+        // Clean cargo
+        cargo = cargo.replace(/\s+\d{2}\/\d{2}$/, '').trim();
+      }
+
+      // Extract CPF and municipio
+      var cpf = '';
+      var municipio = '';
+      for (var i = 0; i < block.length; i++) {
+        var cpfM = block[i].match(/C\.P\.F\.+?:(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+        if (cpfM) cpf = cpfM[1];
+        var munM = block[i].match(/MUNICÍPIO\.+?:(.+?)(?:\s*$)/);
+        if (munM) municipio = munM[1].trim();
+      }
+
+      // Extract verbas by pattern
+      var verbas = {
+        salario_base: 0, horas_extras: 0, adicional_noturno: 0,
+        adicional_insalubridade: 0, adicional_periculosidade: 0,
+        vale_transporte: 0, vale_alimentacao: 0, plano_saude: 0,
+        auxilio_deslocamento: 0, adicional_assiduidade: 0,
+        fgts: 0, inss_empresa: 0, outros_proventos: 0, outros_descontos: 0,
+        total_proventos: 0, total_descontos: 0
+      };
+
+      for (var i = 0; i < block.length; i++) {
+        var ln = block[i];
+
+        // ── Proventos (left side) ──
+        var salM = ln.match(/^SALARIO BASE\s+[\d.,]+[dh]?\s+([\d.]+,\d{2})/);
+        if (salM) verbas.salario_base += parseNum(salM[1]);
+
+        var saldoM = ln.match(/^SALDO DE SAL[AÁ]RIO RESCIS/);
+        if (saldoM) { var v = ln.match(/([\d.]+,\d{2})/g); if (v) verbas.salario_base += parseNum(v[v.length > 1 ? 1 : 0]); }
+
+        var heM = ln.match(/^HORAS EXTRAS \d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
+        if (heM) verbas.horas_extras += parseNum(heM[1]);
+
+        var refHeM = ln.match(/^REFLEXO H\.E\.\s+\d+%.*?[\d.,]+h\s+([\d.]+,\d{2})/);
+        if (refHeM) verbas.horas_extras += parseNum(refHeM[1]);
+
+        var adNotM = ln.match(/^ADICIONAL NOTURNO\s+\d+%\s+[\d.,]+h\s+([\d.]+,\d{2})/);
+        if (adNotM) verbas.adicional_noturno += parseNum(adNotM[1]);
+
+        var refNotM = ln.match(/^REFLEXO ADIC\.NOTURNO.*?[\d.,]+h\s+([\d.]+,\d{2})/);
+        if (refNotM) verbas.adicional_noturno += parseNum(refNotM[1]);
+
+        var deslocM = ln.match(/^AJUDA DE CUSTO DESLOC.*?([\d.]+,\d{2})/);
+        if (deslocM) verbas.auxilio_deslocamento += parseNum(deslocM[1]);
+
+        var assidM = ln.match(/^PREMIACAO ASSIDUIDADE.*?([\d.]+,\d{2})/);
+        if (assidM) verbas.adicional_assiduidade += parseNum(assidM[1]);
+
+        // ── Descontos (right side or standalone) ──
+        var vaM = ln.match(/VALE ALIMENTACAO\s+([\d.]+,\d{2})/);
+        if (vaM) verbas.vale_alimentacao += parseNum(vaM[1]);
+
+        // ── Totais ──
+        var totProvM = ln.match(/Total dos Proventos\.+:\s+([\d.]+,\d{2})/);
+        if (totProvM) verbas.total_proventos += parseNum(totProvM[1]);
+
+        var totDescM = ln.match(/Total dos Descontos\.+:\s+([\d.]+,\d{2})/);
+        if (totDescM) verbas.total_descontos += parseNum(totDescM[1]);
+
+        var fgtsM = ln.match(/F\.G\.T\.S\.+:\s+([\d.]+,\d{2})/);
+        if (fgtsM) verbas.fgts += parseNum(fgtsM[1]);
+      }
+
+      // Build employee key
+      var key = cpf || (codigo + '-' + (fullName || ''));
+
+      if (!employees[key]) {
+        employees[key] = {
+          codigo: codigo,
+          nome: fullName || '',
+          cargo: cargo || '',
+          cpf: cpf,
+          municipio: municipio,
+          salario_base: 0, horas_extras: 0, adicional_noturno: 0,
+          adicional_insalubridade: 0, adicional_periculosidade: 0,
+          vale_transporte: 0, vale_alimentacao: 0, plano_saude: 0,
+          auxilio_deslocamento: 0, adicional_assiduidade: 0,
+          fgts: 0, inss_empresa: 0, outros_proventos: 0, outros_descontos: 0,
+          total_proventos: 0, total_descontos: 0
+        };
+      }
+
+      var emp = employees[key];
+      // Update name/cargo/municipio if not set
+      if (!emp.nome && fullName) emp.nome = fullName;
+      if (!emp.cargo && cargo) emp.cargo = cargo;
+      if (!emp.cpf && cpf) emp.cpf = cpf;
+      if (!emp.municipio && municipio) emp.municipio = municipio;
+
+      // Sum verbas (handles multiple blocks per employee)
+      emp.salario_base += verbas.salario_base;
+      emp.horas_extras += verbas.horas_extras;
+      emp.adicional_noturno += verbas.adicional_noturno;
+      emp.auxilio_deslocamento += verbas.auxilio_deslocamento;
+      emp.adicional_assiduidade += verbas.adicional_assiduidade;
+      emp.vale_alimentacao += verbas.vale_alimentacao;
+      emp.fgts += verbas.fgts;
+      emp.total_proventos += verbas.total_proventos;
+      emp.total_descontos += verbas.total_descontos;
+    }
+
+    // 4. Calculate outros_proventos as residual
+    var result = Object.values(employees);
+    for (var i = 0; i < result.length; i++) {
+      var e = result[i];
+      var somaConhecidos = e.salario_base + e.horas_extras + e.adicional_noturno +
+        e.auxilio_deslocamento + e.adicional_assiduidade;
+      e.outros_proventos = Math.max(0, e.total_proventos - somaConhecidos);
+      e.outros_descontos = Math.max(0, e.total_descontos - e.vale_alimentacao);
+      e.custo_total = e.total_proventos + e.fgts;
+    }
+
+    return { competencia: comp, employees: result, afastados: afastados };
+  }
+
+  /* ── STEP 1: Process ── */
+  document.getElementById('btnProcess').addEventListener('click', function() {
+    var text = ta.value.trim();
+    if (text.length < 100) { alert('Cole o texto do relatório de folha'); return; }
+
+    var result = parsePayroll(text);
+    competencia = result.competencia;
+    parsedData = result.employees;
+
+    if (!parsedData.length) { alert('Nenhum funcionário encontrado no texto. Verifique o formato.'); return; }
+
+    // Show competencia
+    document.getElementById('competenciaInfo').innerHTML =
+      '<div style="font-size:14px;font-weight:600;margin-bottom:8px">Competência: <span style="color:var(--primary)">' + competencia + '</span></div>';
+
+    // Stats
+    var totalProv = 0, totalFGTS = 0, totalDesloc = 0, totalAssid = 0;
+    for (var i = 0; i < parsedData.length; i++) {
+      totalProv += parsedData[i].total_proventos;
+      totalFGTS += parsedData[i].fgts;
+      totalDesloc += parsedData[i].auxilio_deslocamento;
+      totalAssid += parsedData[i].adicional_assiduidade;
+    }
+    document.getElementById('statsRow').innerHTML =
+      '<div class="stat-box"><div class="val">' + parsedData.length + '</div><div class="lbl">Funcionários</div></div>' +
+      '<div class="stat-box"><div class="val">R$ ' + fmtNum(totalProv) + '</div><div class="lbl">Total Proventos</div></div>' +
+      '<div class="stat-box"><div class="val">R$ ' + fmtNum(totalFGTS) + '</div><div class="lbl">FGTS</div></div>' +
+      '<div class="stat-box"><div class="val">R$ ' + fmtNum(totalDesloc) + '</div><div class="lbl">Aux. Deslocamento</div></div>' +
+      '<div class="stat-box"><div class="val">R$ ' + fmtNum(totalAssid) + '</div><div class="lbl">Assiduidade</div></div>' +
+      (result.afastados.length ? '<div class="stat-box"><div class="val" style="color:var(--amber)">' + result.afastados.length + '</div><div class="lbl">Afastados</div></div>' : '');
+
+    // Preview table
+    var html = '<table><thead><tr>' +
+      '<th>#</th><th>Nome</th><th>CPF</th><th>Cargo</th><th>Município</th>' +
+      '<th style="text-align:right">Salário</th><th style="text-align:right">HE</th>' +
+      '<th style="text-align:right">Ad.Not.</th><th style="text-align:right">Desloc.</th>' +
+      '<th style="text-align:right">Assid.</th><th style="text-align:right">VA</th>' +
+      '<th style="text-align:right">FGTS</th><th style="text-align:right">Outros</th>' +
+      '<th style="text-align:right;font-weight:700">Total</th>' +
+      '</tr></thead><tbody>';
+
+    for (var i = 0; i < parsedData.length; i++) {
+      var e = parsedData[i];
+      var warn = !e.cpf ? ' class="row-warn"' : '';
+      html += '<tr' + warn + '>' +
+        '<td>' + (i + 1) + '</td>' +
+        '<td style="font-weight:500">' + API.esc(e.nome) + '</td>' +
+        '<td style="font-family:monospace;font-size:10px">' + (e.cpf || '<span style="color:var(--amber)">sem CPF</span>') + '</td>' +
+        '<td style="font-size:10px">' + API.esc(e.cargo) + '</td>' +
+        '<td style="font-size:10px">' + API.esc(e.municipio) + '</td>' +
+        '<td style="text-align:right">' + fmtNum(e.salario_base) + '</td>' +
+        '<td style="text-align:right">' + (e.horas_extras > 0 ? fmtNum(e.horas_extras) : '—') + '</td>' +
+        '<td style="text-align:right">' + (e.adicional_noturno > 0 ? fmtNum(e.adicional_noturno) : '—') + '</td>' +
+        '<td style="text-align:right;color:var(--blue)">' + (e.auxilio_deslocamento > 0 ? fmtNum(e.auxilio_deslocamento) : '—') + '</td>' +
+        '<td style="text-align:right;color:var(--green)">' + (e.adicional_assiduidade > 0 ? fmtNum(e.adicional_assiduidade) : '—') + '</td>' +
+        '<td style="text-align:right">' + (e.vale_alimentacao > 0 ? fmtNum(e.vale_alimentacao) : '—') + '</td>' +
+        '<td style="text-align:right">' + (e.fgts > 0 ? fmtNum(e.fgts) : '—') + '</td>' +
+        '<td style="text-align:right;color:var(--text-secondary)">' + (e.outros_proventos > 0 ? fmtNum(e.outros_proventos) : '—') + '</td>' +
+        '<td style="text-align:right;font-weight:700">' + fmtNum(e.custo_total) + '</td>' +
+        '</tr>';
+    }
+    html += '</tbody></table>';
+    document.getElementById('previewTable').innerHTML = html;
+
+    showStep(2);
+  });
+
+  /* ── STEP 2: Back ── */
+  document.getElementById('btnBack').addEventListener('click', function() { showStep(1); });
+
+  /* ── STEP 3: Import ── */
+  document.getElementById('btnImport').addEventListener('click', async function() {
+    if (!parsedData.length) return;
+
+    showStep(3);
+    var log = document.getElementById('importLog');
+    var ok = 0, err = 0, skip = 0;
+    log.innerHTML = '<div>Importando ' + parsedData.length + ' registros para competência ' + competencia + '...</div>';
+
+    for (var i = 0; i < parsedData.length; i++) {
+      var e = parsedData[i];
+
+      // Skip entries without valid data
+      if (!e.nome || e.total_proventos <= 0) {
+        log.innerHTML += '<div class="skip">[SKIP] ' + (e.nome || 'Sem nome') + ' — sem proventos</div>';
+        skip++;
+        continue;
+      }
+
+      var payload = {
+        competencia: competencia,
+        nome_colaborador: e.nome,
+        cpf: e.cpf || null,
+        matricula: e.codigo || null,
+        cargo: e.cargo || null,
+        setor: null,
+        filial: null,
+        salario_base: Math.round(e.salario_base * 100) / 100,
+        horas_extras: Math.round(e.horas_extras * 100) / 100,
+        adicional_noturno: Math.round(e.adicional_noturno * 100) / 100,
+        adicional_insalubridade: 0,
+        adicional_periculosidade: 0,
+        vale_transporte: 0,
+        vale_alimentacao: Math.round(e.vale_alimentacao * 100) / 100,
+        plano_saude: 0,
+        fgts: Math.round(e.fgts * 100) / 100,
+        inss_empresa: 0,
+        auxilio_deslocamento: Math.round(e.auxilio_deslocamento * 100) / 100,
+        adicional_assiduidade: Math.round(e.adicional_assiduidade * 100) / 100,
+        outros_proventos: Math.round(e.outros_proventos * 100) / 100,
+        outros_descontos: Math.round(e.outros_descontos * 100) / 100,
+        custo_total: Math.round(e.custo_total * 100) / 100,
+        arquivo_origem: 'folha_pdf_' + competencia
+      };
+
+      // Try to link to funcionario
+      try {
+        if (e.cpf) {
+          var cpfClean = e.cpf.replace(/[.\-]/g, '');
+          var funcRes = await API.get('rh_funcionarios?cpf=eq.' + cpfClean + '&select=id&limit=1');
+          if (funcRes.ok && funcRes.data && funcRes.data.length) {
+            payload.funcionario_id = funcRes.data[0].id;
+          }
+        }
+      } catch(ex) {}
+
+      // Upsert: check existing
+      try {
+        var checkUrl = 'rh_custo_colaborador?competencia=eq.' + competencia;
+        if (e.cpf) {
+          checkUrl += '&cpf=eq.' + encodeURIComponent(e.cpf);
+        } else {
+          checkUrl += '&nome_colaborador=eq.' + encodeURIComponent(e.nome);
+        }
+        var existing = await API.get(checkUrl + '&select=id&limit=1');
+
+        if (existing.ok && existing.data && existing.data.length) {
+          // Update
+          var upd = await API.patch('rh_custo_colaborador?id=eq.' + existing.data[0].id, payload);
+          if (upd.ok) {
+            log.innerHTML += '<div class="ok">[OK] ' + e.nome + ' — atualizado</div>';
+            ok++;
+          } else {
+            log.innerHTML += '<div class="err">[ERR] ' + e.nome + ' — ' + (upd.error || 'erro ao atualizar') + '</div>';
+            err++;
+          }
+        } else {
+          // Insert
+          var ins = await API.post('rh_custo_colaborador', payload);
+          if (ins.ok) {
+            log.innerHTML += '<div class="ok">[OK] ' + e.nome + ' — inserido</div>';
+            ok++;
+          } else {
+            log.innerHTML += '<div class="err">[ERR] ' + e.nome + ' — ' + (ins.error || 'erro ao inserir') + '</div>';
+            err++;
+          }
+        }
+      } catch (ex) {
+        log.innerHTML += '<div class="err">[ERR] ' + e.nome + ' — ' + ex.message + '</div>';
+        err++;
+      }
+    }
+
+    log.innerHTML += '<div style="margin-top:8px;border-top:1px solid #334155;padding-top:8px">Concluído: ' + ok + ' OK, ' + err + ' erros, ' + skip + ' ignorados</div>';
+
+    document.getElementById('resultStats').innerHTML =
+      '<div class="stat-box"><div class="val" style="color:var(--green)">' + ok + '</div><div class="lbl">Importados</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--red)">' + err + '</div><div class="lbl">Erros</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--amber)">' + skip + '</div><div class="lbl">Ignorados</div></div>';
+  });
+
+})();
+</script>
+</body>
+</html>

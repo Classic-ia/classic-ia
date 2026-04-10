@@ -133,6 +133,34 @@ tbody td{padding:10px;vertical-align:middle;}
 .star-filled{background:rgba(37,99,235,.15);color:var(--gold);}
 .star-empty{background:rgba(93,127,149,.1);color:var(--muted);}
 
+/* DISTRIBUTION SUB-ROWS */
+.dist-row td{background:rgba(37,99,235,.02);font-size:12px;padding:6px 10px;}
+.dist-row td:first-child{padding-left:28px;}
+.dist-toggle{cursor:pointer;user-select:none;}
+.dist-toggle .arrow{display:inline-block;transition:transform .2s;font-size:10px;margin-right:4px;}
+.dist-toggle.open .arrow{transform:rotate(90deg);}
+.sexo-tag{display:inline-flex;padding:2px 6px;border-radius:4px;font-size:9px;font-weight:700;}
+.sexo-m{background:rgba(37,99,235,.12);color:var(--blue);}
+.sexo-f{background:rgba(155,89,182,.12);color:var(--purple);}
+.progress-mini{display:inline-block;width:60px;height:6px;background:var(--border);border-radius:3px;vertical-align:middle;margin-left:6px;}
+.progress-mini-fill{height:100%;border-radius:3px;background:var(--green);}
+
+/* VAGAS ABERTAS PIPELINE INDICATOR */
+.vagas-abertas-panel{background:var(--bg2);border:1px solid var(--border);border-radius:12px;padding:16px 20px;margin-bottom:16px;}
+.vagas-abertas-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--gold);margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.vagas-abertas-grid{display:flex;gap:10px;flex-wrap:wrap;}
+.vaga-setor-chip{display:flex;align-items:center;gap:8px;padding:8px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg3);font-size:12px;}
+.vaga-setor-chip .setor-name{font-weight:600;color:var(--text);}
+.vaga-setor-chip .setor-count{font-weight:800;font-size:16px;line-height:1;}
+.vaga-setor-chip .setor-detail{font-size:10px;color:var(--muted);}
+.vaga-setor-chip.crit-red{border-color:rgba(239,68,68,.4);background:rgba(239,68,68,.05);}
+.vaga-setor-chip.crit-red .setor-count{color:var(--red);}
+.vaga-setor-chip.crit-yellow{border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.05);}
+.vaga-setor-chip.crit-yellow .setor-count{color:var(--yellow);}
+.vaga-setor-chip.crit-green{border-color:rgba(34,197,94,.4);background:rgba(34,197,94,.05);}
+.vaga-setor-chip.crit-green .setor-count{color:var(--green);}
+.pipe-vaga-badge{display:inline-flex;padding:2px 7px;border-radius:10px;font-size:9px;font-weight:700;margin-left:6px;background:rgba(239,68,68,.12);color:var(--red);}
+
 /* AGENDA */
 .agenda-day{margin-bottom:20px;}
 .agenda-day-title{font-family:'Inter',sans-serif;font-size:13px;font-weight:700;color:var(--gold);
@@ -228,7 +256,7 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Vaga</th><th>Setor</th><th>Tipo</th><th>Qtd</th><th>Prioridade</th>
+          <th>Vaga</th><th>Setor</th><th>Tipo</th><th>Qtd</th><th>Distribuição</th><th>Prioridade</th>
           <th>Status</th><th>Candidatos</th><th>Abertura</th><th>Ações</th>
         </tr></thead>
         <tbody id="tbVagas"></tbody>
@@ -289,6 +317,10 @@ tbody td{padding:10px;vertical-align:middle;}
       <option value="">Todas as vagas</option>
     </select>
     <button class="btn btn-primary" onclick="abrirModalPipeline()">+ Vincular Candidato</button>
+  </div>
+  <div class="vagas-abertas-panel" id="vagas-abertas-pipeline" style="display:none;">
+    <div class="vagas-abertas-title">Vagas Abertas por Setor</div>
+    <div class="vagas-abertas-grid" id="vagasAbertasGrid"></div>
   </div>
   <div class="kanban" id="kanbanBoard">
     <div class="kanban-col" data-etapa="triagem">
@@ -711,7 +743,7 @@ tbody td{padding:10px;vertical-align:middle;}
 // ═══════════════════════════════════════════════════════════
 // DATA CACHE
 // ═══════════════════════════════════════════════════════════
-let vagas = [], candidatos = [], pipelines = [], entrevistas = [], bancoTalentos = [];
+let vagas = [], candidatos = [], pipelines = [], entrevistas = [], bancoTalentos = [], distribuicoes = [];
 
 // ═══════════════════════════════════════════════════════════
 // INIT
@@ -770,7 +802,13 @@ function carregarKPIs() {
     return p.etapa === 'aprovado' && new Date(p.data_ultima_etapa) >= inicioMes;
   }).length;
 
-  document.getElementById('kpiVagasAbertas').textContent = vagasAbertas;
+  const distAbertas = distribuicoes.filter(d => {
+    const v = vagas.find(x => x.id === d.vaga_id);
+    return v && (v.status === 'aberta' || v.status === 'em_selecao');
+  });
+  const totalPosicoes = distAbertas.reduce((s,d) => s + (d.quantidade||0), 0);
+  const totalPreench = distAbertas.reduce((s,d) => s + (d.preenchidas||0), 0);
+  document.getElementById('kpiVagasAbertas').textContent = totalPosicoes > 0 ? `${vagasAbertas} (${totalPosicoes - totalPreench})` : vagasAbertas;
   document.getElementById('kpiCandidatos').textContent = candAtivos;
   document.getElementById('kpiEmSelecao').textContent = emSelecao;
   document.getElementById('kpiEntrevistas').textContent = entrevSemana;
@@ -783,8 +821,13 @@ function carregarKPIs() {
 // ═══════════════════════════════════════════════════════════
 async function carregarVagas() {
   try {
-    vagas = await RH_API.get('rs_vagas?order=created_at.desc') || [];
-  } catch(e) { vagas = []; }
+    [vagas, distribuicoes] = await Promise.all([
+      RH_API.get('rs_vagas?order=created_at.desc'),
+      RH_API.get('rs_vagas_distribuicao?order=setor.asc')
+    ]);
+    vagas = vagas || [];
+    distribuicoes = distribuicoes || [];
+  } catch(e) { vagas = []; distribuicoes = []; }
   renderVagas();
   preencherSelectVagas();
 }
@@ -813,11 +856,19 @@ function renderVagas() {
 
   tb.innerHTML = lista.map(v => {
     const candCount = pipelines.filter(p => p.vaga_id === v.id).length;
-    return `<tr>
-      <td><strong>${esc(v.titulo)}</strong><br><small style="color:var(--muted)">${esc(v.cargo)}</small></td>
-      <td>${esc(v.setor)}</td>
-      <td><span class="badge badge-muted">${esc(v.tipo_contrato)}</span></td>
+    const dists = distribuicoes.filter(d => d.vaga_id === v.id);
+    const hasDist = dists.length > 0;
+    const distTotal = dists.reduce((s,d) => s + (d.quantidade||0), 0);
+    const distPreench = dists.reduce((s,d) => s + (d.preenchidas||0), 0);
+    const sexoTag = s => s === 'M' ? '<span class="sexo-tag sexo-m">M</span>' : s === 'F' ? '<span class="sexo-tag sexo-f">F</span>' : '';
+    const pctFill = distTotal > 0 ? Math.round(distPreench/distTotal*100) : 0;
+
+    let rows = `<tr>
+      <td>${hasDist ? `<span class="dist-toggle" onclick="toggleDist(this,'dist-${v.id}')"><span class="arrow">&#9654;</span></span>` : ''}<strong>${esc(v.titulo)}</strong><br><small style="color:var(--muted)">${esc(v.cargo||'')}</small></td>
+      <td>${esc(v.setor||'')}</td>
+      <td><span class="badge badge-muted">${esc(v.tipo_contrato||'')}</span></td>
       <td>${v.quantidade || 1}</td>
+      <td>${hasDist ? `<strong>${distPreench}/${distTotal}</strong><div class="progress-mini"><div class="progress-mini-fill" style="width:${pctFill}%;"></div></div>` : '—'}</td>
       <td>${badgePrioridade(v.prioridade)}</td>
       <td>${badgeStatusVaga(v.status)}</td>
       <td style="text-align:center">${candCount}</td>
@@ -827,10 +878,28 @@ function renderVagas() {
         <button class="btn-icon" onclick="alterarStatusVaga('${v.id}')" title="Alterar status">🔄</button>
       </td>
     </tr>`;
+
+    if (hasDist) {
+      rows += dists.map(d => `<tr class="dist-row dist-${v.id}" style="display:none;">
+        <td>${esc(d.setor)}</td>
+        <td>${sexoTag(d.sexo_preferencial)}</td>
+        <td>${d.turno||'—'}</td>
+        <td style="text-align:center">${d.quantidade}</td>
+        <td><strong>${d.preenchidas||0}/${d.quantidade}</strong><div class="progress-mini"><div class="progress-mini-fill" style="width:${d.quantidade>0?Math.round((d.preenchidas||0)/d.quantidade*100):0}%;"></div></div></td>
+        <td colspan="5" style="color:var(--muted);font-size:11px">${esc(d.observacoes||'')}</td>
+      </tr>`).join('');
+    }
+    return rows;
   }).join('');
 }
 
 function filtrarVagas() { renderVagas(); }
+
+function toggleDist(el, cls) {
+  el.classList.toggle('open');
+  const show = el.classList.contains('open');
+  document.querySelectorAll('.' + cls).forEach(r => r.style.display = show ? '' : 'none');
+}
 
 function badgePrioridade(p) {
   const map = { urgente:'badge-red', alta:'badge-orange', normal:'badge-blue', baixa:'badge-muted' };
@@ -1090,9 +1159,71 @@ async function carregarPipeline() {
   preencherSelectPipeline();
 }
 
+function calcVagasAbertasPorSetor() {
+  const vagasAbertas = vagas.filter(v => v.status === 'aberta' || v.status === 'em_selecao');
+  const vagaIds = new Set(vagasAbertas.map(v => v.id));
+  const distAbertas = distribuicoes.filter(d => vagaIds.has(d.vaga_id));
+
+  // Count pipeline candidates per vaga (in-process = not approved/rejected/quit)
+  const emProcessoPorVaga = {};
+  pipelines.forEach(p => {
+    if (!['aprovado','reprovado','desistiu'].includes(p.etapa)) {
+      emProcessoPorVaga[p.vaga_id] = (emProcessoPorVaga[p.vaga_id]||0) + 1;
+    }
+  });
+  const contratadosPorVaga = {};
+  pipelines.forEach(p => {
+    if (p.etapa === 'aprovado') {
+      contratadosPorVaga[p.vaga_id] = (contratadosPorVaga[p.vaga_id]||0) + 1;
+    }
+  });
+
+  const result = [];
+  distAbertas.forEach(d => {
+    const emProc = emProcessoPorVaga[d.vaga_id] || 0;
+    const contrat = d.preenchidas || 0;
+    const aberta = Math.max(0, (d.quantidade||0) - contrat);
+    if (aberta > 0) {
+      result.push({ setor: d.setor, aberta, total: d.quantidade, emProcesso: emProc, preenchidas: contrat, sexo: d.sexo_preferencial });
+    }
+  });
+  return result;
+}
+
+function renderVagasAbertasPipeline() {
+  const dados = calcVagasAbertasPorSetor();
+  const panel = document.getElementById('vagas-abertas-pipeline');
+  const grid = document.getElementById('vagasAbertasGrid');
+
+  if (!dados.length) { panel.style.display = 'none'; return; }
+  panel.style.display = '';
+
+  const totalAberta = dados.reduce((s,d) => s + d.aberta, 0);
+  document.querySelector('.vagas-abertas-title').innerHTML =
+    `Vagas Abertas por Setor <span class="badge badge-red">${totalAberta} posições</span>`;
+
+  grid.innerHTML = dados.map(d => {
+    const crit = d.aberta > 5 ? 'crit-red' : d.aberta >= 2 ? 'crit-yellow' : 'crit-green';
+    return `<div class="vaga-setor-chip ${crit}">
+      <div>
+        <div class="setor-count">${d.aberta}</div>
+        <div class="setor-detail">de ${d.total}</div>
+      </div>
+      <div>
+        <div class="setor-name">${esc(d.setor)}</div>
+        <div class="setor-detail">${d.emProcesso ? d.emProcesso + ' em processo' : 'sem candidatos'}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderKanban() {
+  renderVagasAbertasPipeline();
   const vagaFiltro = document.getElementById('filterPipeVaga').value;
   const etapas = ['triagem','entrevista_rh','teste_pratico','entrevista_gestor','exame_admissional','documentacao','aprovado','reprovado'];
+
+  // Calculate total open positions for badge on kanban headers
+  const totalVagasAbertas = calcVagasAbertasPorSetor().reduce((s,d) => s + d.aberta, 0);
 
   let lista = pipelines;
   if (vagaFiltro) lista = lista.filter(p => p.vaga_id === vagaFiltro);
@@ -1102,6 +1233,16 @@ function renderKanban() {
     const cnt = document.getElementById('cnt-' + etapa);
     const cards = lista.filter(p => p.etapa === etapa);
     cnt.textContent = cards.length;
+    // Add vagas badge to triagem header
+    const header = cnt.parentElement;
+    const existingBadge = header.querySelector('.pipe-vaga-badge');
+    if (existingBadge) existingBadge.remove();
+    if (etapa === 'triagem' && totalVagasAbertas > 0) {
+      const badge = document.createElement('span');
+      badge.className = 'pipe-vaga-badge';
+      badge.textContent = totalVagasAbertas + ' vagas';
+      header.appendChild(badge);
+    }
 
     col.innerHTML = cards.map(p => {
       const cand = candidatos.find(c => c.id === p.candidato_id);

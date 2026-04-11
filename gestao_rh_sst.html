@@ -1178,6 +1178,9 @@ async function popularEmpresasFiliais() {
 // ══════════════════════════════════════════════════════════
 
 // ── FUNCIONÁRIOS ─────────────────────────────────────────
+var _funcPageSize = 50;
+var _funcShowAll = false;
+
 function renderFuncionarios(lista) {
   const tb = document.getElementById('tbFuncionarios');
   if (!lista) lista = FUNCIONARIOS;
@@ -1187,7 +1190,9 @@ function renderFuncionarios(lista) {
     return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
   };
 
-  tb.innerHTML = lista.map(f => {
+  const visivel = _funcShowAll ? lista : lista.slice(0, _funcPageSize);
+
+  tb.innerHTML = visivel.map(f => {
     const motor = avaliarMotorLogico(f);
     const motorHtml = motor.apto
       ? '<span class="badge badge-green">APTO</span>'
@@ -1209,6 +1214,16 @@ function renderFuncionarios(lista) {
       </td>
     </tr>`;
   }).join('');
+
+  // Load more button
+  if (!_funcShowAll && lista.length > _funcPageSize) {
+    tb.innerHTML += `<tr><td colspan="8" style="text-align:center;padding:12px">
+      <button onclick="_funcShowAll=true;filtrarFuncionarios()" style="padding:8px 20px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">
+        Mostrar todos (${lista.length})
+      </button>
+      <span style="font-size:11px;color:#64748b;margin-left:8px">Exibindo ${visivel.length} de ${lista.length}</span>
+    </td></tr>`;
+  }
 
   document.getElementById('countFunc').textContent = `(${lista.length})`;
 }

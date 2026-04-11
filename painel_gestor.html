@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Painel do Gestor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.pg-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+.pg-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px}
+@media(max-width:900px){.pg-grid,.pg-grid-3{grid-template-columns:1fr}}
+.pg-section{font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary);margin:28px 0 12px;display:flex;align-items:center;gap:8px}
+.pg-section::after{content:'';flex:1;height:1px;background:var(--border)}
+/* KPIs */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.kpi{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:16px 20px}
+.kpi .v{font-size:28px;font-weight:800;line-height:1}.kpi .l{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+.kpi .trend{font-size:11px;font-weight:600;margin-top:4px}
+.kpi .trend.up{color:var(--red)}.kpi .trend.down{color:var(--green)}.kpi .trend.flat{color:var(--text-secondary)}
+/* Urgency blocks */
+.urg-block{border-radius:12px;padding:16px 20px;margin-bottom:12px}
+.urg-block.critico{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.2)}
+.urg-block.alerta{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2)}
+.urg-block.atencao{background:rgba(37,99,235,.04);border:1px solid rgba(37,99,235,.15)}
+.urg-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.urg-title .dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.urg-block.critico .urg-title{color:#dc2626}.urg-block.critico .dot{background:#dc2626}
+.urg-block.alerta .urg-title{color:#d97706}.urg-block.alerta .dot{background:#d97706}
+.urg-block.atencao .urg-title{color:#2563eb}.urg-block.atencao .dot{background:#2563eb}
+.urg-item{display:flex;align-items:center;gap:12px;padding:8px 0;border-bottom:1px solid rgba(0,0,0,.04);font-size:13px}
+.urg-item:last-child{border-bottom:none}
+.urg-item .name{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.urg-item .meta{font-size:11px;color:var(--text-secondary);white-space:nowrap}
+.urg-item .days{font-weight:700;font-size:12px;white-space:nowrap;min-width:50px;text-align:right}
+.days.neg{color:#dc2626}.days.soon{color:#d97706}.days.ok{color:#2563eb}
+.urg-actions{display:flex;gap:6px;margin-left:8px}
+.urg-actions button{padding:4px 10px;font-size:10px;font-weight:600;border-radius:6px;cursor:pointer;border:1px solid var(--border);background:var(--bg-card);color:var(--text-secondary);font-family:inherit;transition:all .15s}
+.urg-actions button:hover{border-color:var(--primary);color:var(--primary)}
+.urg-actions button.act-resolve{border-color:rgba(34,197,94,.4);color:var(--green)}
+.urg-actions button.act-resolve:hover{background:rgba(34,197,94,.08)}
+/* Risk bar */
+.risk-bar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--border);margin-top:4px}
+.risk-bar .seg{height:100%}
+/* Score badge */
+.score-badge{display:inline-flex;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+.score-badge.high{background:rgba(239,68,68,.1);color:#dc2626}
+.score-badge.med{background:rgba(245,158,11,.1);color:#d97706}
+.score-badge.low{background:rgba(34,197,94,.1);color:#22c55e}
+.score-badge.exp{background:rgba(37,99,235,.1);color:#2563eb}
+/* Setor card */
+.setor-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:16px}
+.setor-card .setor-name{font-size:14px;font-weight:700;margin-bottom:8px}
+.setor-card .setor-stat{display:flex;justify-content:space-between;font-size:12px;padding:3px 0;color:var(--text-secondary)}
+.setor-card .setor-stat .sv{font-weight:600;color:var(--text-primary)}
+/* Afastados */
+.af-card{display:flex;align-items:center;gap:12px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
+.af-card .af-info{flex:1;min-width:0}
+.af-card .af-name{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.af-card .af-meta{font-size:11px;color:var(--text-secondary)}
+.af-card .af-days{text-align:right;font-size:20px;font-weight:800}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--bg-card);border-radius:12px;padding:24px;width:90%;max-width:480px;max-height:90vh;overflow-y:auto}
+.modal-box h3{font-size:16px;font-weight:700;margin-bottom:16px}
+.form-group{margin-bottom:12px}
+.form-group label{display:block;font-size:12px;font-weight:600;color:var(--text-secondary);margin-bottom:4px}
+.form-group select,.form-group input,.form-group textarea{width:100%}
+.loading-center{text-align:center;padding:60px;color:var(--text-secondary);font-size:13px}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="mainContent"><div class="loading-center"><span class="spinner"></span> Carregando painel...</div></div>
+
+  <!-- Modal: Resolver/Justificar/Delegar -->
+  <div class="modal-overlay" id="modalAcao">
+    <div class="modal-box">
+      <h3 id="modalTitle">Registrar Acao</h3>
+      <input type="hidden" id="acaoFuncId">
+      <input type="hidden" id="acaoFuncNome">
+      <input type="hidden" id="acaoSetor">
+      <input type="hidden" id="acaoTipo">
+      <input type="hidden" id="acaoOrigem">
+      <div class="form-group">
+        <label>Tipo de Acao</label>
+        <select id="acaoAcaoTipo">
+          <option value="resolver">Resolver</option>
+          <option value="justificar">Justificar</option>
+          <option value="delegar">Delegar</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Urgencia</label>
+        <select id="acaoUrgencia">
+          <option value="critica">Critica</option>
+          <option value="alta">Alta</option>
+          <option value="media">Media</option>
+          <option value="baixa">Baixa</option>
+        </select>
+      </div>
+      <div class="form-group" id="grpDelegado" style="display:none">
+        <label>Delegar para</label>
+        <input type="text" id="acaoDelegado" placeholder="Nome do responsavel">
+      </div>
+      <div class="form-group">
+        <label>Descricao / Justificativa</label>
+        <textarea id="acaoDesc" rows="3" placeholder="Descreva a acao tomada..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>Data Limite</label>
+        <input type="date" id="acaoDataLimite">
+      </div>
+      <div style="display:flex;gap:10px;margin-top:16px">
+        <button class="btn btn-primary" id="btnSalvarAcao">Salvar</button>
+        <button class="btn btn-ghost" onclick="document.getElementById('modalAcao').classList.remove('open')">Cancelar</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'painel_gestor', title: 'Painel do Gestor', perfisPermitidos: ['administrador','rh','diretoria','gestor','gestor_confianca'] });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  /* ── Load data ── */
+  var res = await API.rpc('painel_gestor_dados', {});
+  if (!res.ok || !res.data) { document.getElementById('mainContent').innerHTML = '<div class="loading-center">Erro ao carregar dados.</div>'; return; }
+  var D = res.data;
+  var kpis = D.kpis || {};
+  var risco = D.risco || [];
+  var riscoSetor = D.risco_setor || [];
+  var vencimentos = D.vencimentos || [];
+  var experiencia = D.experiencia || [];
+  var afastados = D.afastados || [];
+  var acoes = D.acoes || [];
+
+  function fmtDate(d) { if (!d) return '—'; return new Date(d+'T12:00:00').toLocaleDateString('pt-BR'); }
+  function daysClass(d) { return d < 0 ? 'neg' : d <= 7 ? 'soon' : 'ok'; }
+  function daysLabel(d) { if (d === null) return 'S/prev.'; return d < 0 ? Math.abs(d) + 'd atrasado' : d === 0 ? 'HOJE' : d + 'd'; }
+  function scoreBadge(s) { return s >= 30 ? '<span class="score-badge high">' + s + '</span>' : s >= 15 ? '<span class="score-badge med">' + s + '</span>' : s > 0 ? '<span class="score-badge low">' + s + '</span>' : '<span class="score-badge exp">' + s + '</span>'; }
+  function tipoIcon(t) { return t === 'aso' ? 'ASO' : t === 'treinamento' ? 'TREIN' : t.toUpperCase(); }
+  function afastIcon(t) { var m = { 'inss_doenca': 'INSS', 'acidente_trabalho': 'ACID', 'licenca_maternidade': 'MAT', 'licenca_paternidade': 'PAT' }; return m[t] || (t || '').toUpperCase(); }
+
+  /* ── Render ── */
+  var html = '';
+
+  // KPIs
+  html += '<div class="kpi-grid">';
+  html += '<div class="kpi"><div class="v">' + kpis.ativos + '</div><div class="l">Ativos</div></div>';
+  html += '<div class="kpi"><div class="v" style="color:var(--amber)">' + kpis.afastados + '</div><div class="l">Afastados</div></div>';
+  html += '<div class="kpi"><div class="v" style="color:var(--blue)">' + kpis.experiencia + '</div><div class="l">Em Experiencia</div></div>';
+  html += '<div class="kpi"><div class="v" style="color:' + (acoes.length > 0 ? 'var(--red)' : 'var(--green)') + '">' + kpis.acoes_abertas + '</div><div class="l">Acoes Pendentes</div></div>';
+  html += '<div class="kpi"><div class="v" style="color:var(--amber)">' + vencimentos.length + '</div><div class="l">Vencimentos 30d</div></div>';
+  html += '<div class="kpi"><div class="v" style="color:var(--red)">' + risco.filter(function(r) { return r.score >= 30; }).length + '</div><div class="l">Risco Alto</div></div>';
+  html += '</div>';
+
+  // ── URGENCY BLOCKS ──
+  html += '<div class="pg-section">Acao Imediata</div>';
+
+  // CRITICAL: vencimentos already expired or today
+  var criticos = vencimentos.filter(function(v) { return v.dias_restantes <= 0; });
+  var expCriticos = experiencia.filter(function(e) { return e.dias_restantes <= 7; });
+  var afastRetorno = afastados.filter(function(a) { return a.dias_retorno !== null && a.dias_retorno <= 10; });
+
+  if (criticos.length || expCriticos.length || afastRetorno.length) {
+    html += '<div class="urg-block critico"><div class="urg-title"><span class="dot"></span>CRITICO — Acao Hoje</div>';
+    criticos.forEach(function(v) {
+      html += '<div class="urg-item"><span class="name">' + API.esc(v.nome) + '</span><span class="meta">' + tipoIcon(v.tipo) + ': ' + API.esc(v.detalhe || '') + '</span><span class="days neg">' + daysLabel(v.dias_restantes) + '</span>';
+      html += '<div class="urg-actions"><button class="act-resolve" onclick="openAcao(\'' + v.funcionario_id + '\',\'' + API.esc(v.nome) + '\',\'' + API.esc(v.setor) + '\',\'' + v.tipo + ' vencido\')">Resolver</button></div></div>';
+    });
+    expCriticos.forEach(function(e) {
+      html += '<div class="urg-item"><span class="name">' + API.esc(e.nome) + '</span><span class="meta">Contrato ' + e.periodo + '</span><span class="days soon">' + daysLabel(e.dias_restantes) + '</span>';
+      html += '<div class="urg-actions"><button onclick="openAcao(\'' + e.id + '\',\'' + API.esc(e.nome) + '\',\'' + API.esc(e.setor) + '\',\'experiencia\')">Decidir</button></div></div>';
+    });
+    afastRetorno.forEach(function(a) {
+      html += '<div class="urg-item"><span class="name">' + API.esc(a.nome) + '</span><span class="meta">Retorno ' + afastIcon(a.tipo_afastamento) + '</span><span class="days soon">' + daysLabel(a.dias_retorno) + '</span>';
+      html += '<div class="urg-actions"><button onclick="openAcao(\'' + a.id + '\',\'' + API.esc(a.nome) + '\',\'' + API.esc(a.setor) + '\',\'retorno_afastado\')">Preparar</button></div></div>';
+    });
+    html += '</div>';
+  }
+
+  // ALERT: vencimentos 1-7 days
+  var alertas = vencimentos.filter(function(v) { return v.dias_restantes > 0 && v.dias_restantes <= 7; });
+  if (alertas.length) {
+    html += '<div class="urg-block alerta"><div class="urg-title"><span class="dot"></span>ALERTA — Esta Semana</div>';
+    alertas.forEach(function(v) {
+      html += '<div class="urg-item"><span class="name">' + API.esc(v.nome) + '</span><span class="meta">' + tipoIcon(v.tipo) + ': ' + API.esc(v.detalhe || '') + '</span><span class="days soon">' + daysLabel(v.dias_restantes) + '</span>';
+      html += '<div class="urg-actions"><button onclick="openAcao(\'' + v.funcionario_id + '\',\'' + API.esc(v.nome) + '\',\'' + API.esc(v.setor) + '\',\'' + v.tipo + ' vencendo\')">Agendar</button></div></div>';
+    });
+    html += '</div>';
+  }
+
+  // ATTENTION: vencimentos 8-30 days
+  var atencao = vencimentos.filter(function(v) { return v.dias_restantes > 7; });
+  if (atencao.length) {
+    html += '<div class="urg-block atencao"><div class="urg-title"><span class="dot"></span>ATENCAO — Proximo Mes</div>';
+    atencao.slice(0, 10).forEach(function(v) {
+      html += '<div class="urg-item"><span class="name">' + API.esc(v.nome) + '</span><span class="meta">' + tipoIcon(v.tipo) + ': ' + API.esc(v.detalhe || '') + '</span><span class="days ok">' + daysLabel(v.dias_restantes) + '</span></div>';
+    });
+    if (atencao.length > 10) html += '<div style="font-size:11px;color:var(--text-secondary);padding:4px 0">+ ' + (atencao.length - 10) + ' itens</div>';
+    html += '</div>';
+  }
+
+  if (!criticos.length && !alertas.length && !atencao.length && !expCriticos.length) {
+    html += '<div class="urg-block atencao"><div class="urg-title"><span class="dot"></span>Tudo em dia</div><div style="font-size:13px;color:var(--text-secondary)">Nenhum vencimento nos proximos 30 dias.</div></div>';
+  }
+
+  // ── CONTRACTS + RISK SIDE BY SIDE ──
+  html += '<div class="pg-grid">';
+
+  // Left: Contratos experiencia
+  html += '<div><div class="pg-section">Contratos de Experiencia</div>';
+  if (experiencia.length) {
+    html += '<div class="card"><div class="card-body"><table style="font-size:12px;width:100%"><thead><tr><th>Nome</th><th>Cargo</th><th>Periodo</th><th style="text-align:right">Dias</th></tr></thead><tbody>';
+    experiencia.forEach(function(e) {
+      var cls = e.dias_restantes <= 7 ? 'style="background:rgba(239,68,68,.04)"' : '';
+      html += '<tr ' + cls + '><td style="font-weight:600">' + API.esc(e.nome) + '</td><td style="font-size:11px;color:var(--text-secondary)">' + API.esc(e.cargo) + '</td><td>' + (e.periodo === '1o_periodo' ? '1o (45d)' : '2o (90d)') + '</td><td style="text-align:right"><span class="days ' + daysClass(e.dias_restantes) + '">' + e.dias_restantes + 'd</span></td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  } else {
+    html += '<div class="card"><div class="card-body" style="text-align:center;color:var(--text-secondary);padding:32px">Nenhum contrato de experiencia ativo</div></div>';
+  }
+  html += '</div>';
+
+  // Right: Top Risco
+  html += '<div><div class="pg-section">Ranking de Risco (90 dias)</div>';
+  html += '<div class="card"><div class="card-body"><table style="font-size:12px;width:100%"><thead><tr><th>Nome</th><th>Setor</th><th style="text-align:center">F</th><th style="text-align:center">A</th><th style="text-align:center">At</th><th style="text-align:right">Score</th></tr></thead><tbody>';
+  risco.filter(function(r) { return r.score > 0; }).slice(0, 15).forEach(function(r) {
+    html += '<tr><td style="font-weight:600">' + API.esc(r.nome) + '</td><td style="font-size:11px;color:var(--text-secondary)">' + API.esc(r.setor) + '</td>';
+    html += '<td style="text-align:center">' + (r.faltas_90d || '') + '</td><td style="text-align:center">' + (r.advertencias_90d || '') + '</td><td style="text-align:center">' + (r.atestados_90d || '') + '</td>';
+    html += '<td style="text-align:right">' + scoreBadge(r.score) + '</td></tr>';
+  });
+  if (!risco.filter(function(r) { return r.score > 0; }).length) html += '<tr><td colspan="6" style="text-align:center;color:var(--text-secondary);padding:20px">Nenhuma ocorrencia nos ultimos 90 dias</td></tr>';
+  html += '</tbody></table></div></div></div>';
+  html += '</div>';
+
+  // ── SECTOR RISK RANKING ──
+  html += '<div class="pg-section">Risco por Setor</div>';
+  html += '<div class="pg-grid-3">';
+  riscoSetor.forEach(function(s) {
+    var total = (s.faltas || 0) + (s.advertencias || 0) + (s.atestados || 0);
+    var maxBar = Math.max(total, 1);
+    html += '<div class="setor-card">';
+    html += '<div class="setor-name">' + API.esc(s.setor) + '</div>';
+    html += '<div class="setor-stat"><span>Funcionarios</span><span class="sv">' + s.funcionarios + '</span></div>';
+    html += '<div class="setor-stat"><span>Faltas</span><span class="sv" style="color:var(--amber)">' + (s.faltas || 0) + '</span></div>';
+    html += '<div class="setor-stat"><span>Advertencias</span><span class="sv" style="color:var(--red)">' + (s.advertencias || 0) + '</span></div>';
+    html += '<div class="setor-stat"><span>Atestados</span><span class="sv" style="color:var(--blue)">' + (s.atestados || 0) + '</span></div>';
+    var pF = Math.round(((s.faltas||0)/maxBar)*100), pA = Math.round(((s.advertencias||0)/maxBar)*100), pAt = Math.round(((s.atestados||0)/maxBar)*100);
+    html += '<div class="risk-bar"><div class="seg" style="width:' + pF + '%;background:var(--amber)"></div><div class="seg" style="width:' + pA + '%;background:var(--red)"></div><div class="seg" style="width:' + pAt + '%;background:var(--blue)"></div></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  // ── AFASTADOS ──
+  if (afastados.length) {
+    html += '<div class="pg-section">Afastados (' + afastados.length + ')</div>';
+    html += '<div class="pg-grid">';
+    afastados.forEach(function(a) {
+      var dColor = a.dias_retorno === null ? 'var(--text-secondary)' : a.dias_retorno <= 10 ? 'var(--red)' : a.dias_retorno <= 30 ? 'var(--amber)' : 'var(--blue)';
+      html += '<div class="af-card"><div class="af-info"><div class="af-name">' + API.esc(a.nome) + '</div>';
+      html += '<div class="af-meta">' + afastIcon(a.tipo_afastamento) + ' | ' + API.esc(a.setor) + ' | Desde ' + fmtDate(a.afastamento_inicio) + '</div></div>';
+      html += '<div class="af-days" style="color:' + dColor + '">' + (a.dias_retorno !== null ? a.dias_retorno + '<div style="font-size:10px;font-weight:400;color:var(--text-secondary)">dias</div>' : 'S/prev.') + '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  // ── ACTIONS LOG ──
+  if (acoes.length) {
+    html += '<div class="pg-section">Acoes em Andamento (' + acoes.length + ')</div>';
+    html += '<div class="card"><div class="card-body"><table style="font-size:12px;width:100%"><thead><tr><th>Funcionario</th><th>Tipo</th><th>Status</th><th>Urgencia</th><th>Descricao</th><th>Data Limite</th></tr></thead><tbody>';
+    acoes.forEach(function(a) {
+      html += '<tr><td style="font-weight:600">' + API.esc(a.funcionario_nome || '') + '</td><td>' + API.esc(a.tipo || '') + '</td><td><span class="badge badge-' + (a.status === 'pendente' ? 'amber' : 'blue') + '">' + a.status + '</span></td>';
+      html += '<td><span class="badge badge-' + (a.urgencia === 'critica' ? 'red' : a.urgencia === 'alta' ? 'amber' : 'blue') + '">' + a.urgencia + '</span></td>';
+      html += '<td style="font-size:11px">' + API.esc(a.descricao || '') + '</td><td>' + fmtDate(a.data_limite) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+
+  document.getElementById('mainContent').innerHTML = html;
+
+  /* ── Modal logic ── */
+  window.openAcao = function(funcId, nome, setor, tipo) {
+    document.getElementById('acaoFuncId').value = funcId;
+    document.getElementById('acaoFuncNome').value = nome;
+    document.getElementById('acaoSetor').value = setor;
+    document.getElementById('acaoTipo').value = tipo;
+    document.getElementById('modalTitle').textContent = 'Acao: ' + nome;
+    document.getElementById('acaoDesc').value = '';
+    document.getElementById('acaoDelegado').value = '';
+    document.getElementById('acaoDataLimite').value = '';
+    document.getElementById('modalAcao').classList.add('open');
+  };
+
+  document.getElementById('acaoAcaoTipo').addEventListener('change', function() {
+    document.getElementById('grpDelegado').style.display = this.value === 'delegar' ? '' : 'none';
+  });
+
+  document.getElementById('btnSalvarAcao').addEventListener('click', async function() {
+    var tipoAcao = document.getElementById('acaoAcaoTipo').value;
+    var statusMap = { 'resolver': 'em_andamento', 'justificar': 'justificado', 'delegar': 'delegado' };
+
+    var payload = {
+      tipo: document.getElementById('acaoTipo').value,
+      descricao: document.getElementById('acaoDesc').value || document.getElementById('acaoTipo').value,
+      funcionario_id: document.getElementById('acaoFuncId').value || null,
+      funcionario_nome: document.getElementById('acaoFuncNome').value,
+      setor: document.getElementById('acaoSetor').value,
+      urgencia: document.getElementById('acaoUrgencia').value,
+      status: statusMap[tipoAcao] || 'pendente',
+      acao_tomada: tipoAcao,
+      delegado_para: tipoAcao === 'delegar' ? document.getElementById('acaoDelegado').value : null,
+      justificativa: tipoAcao === 'justificar' ? document.getElementById('acaoDesc').value : null,
+      data_limite: document.getElementById('acaoDataLimite').value || null,
+      origem: 'painel_gestor',
+      created_by: user.id
+    };
+
+    var r = await API.post('rh_acoes', payload);
+    if (r.ok) {
+      document.getElementById('modalAcao').classList.remove('open');
+      location.reload();
+    } else {
+      alert('Erro ao salvar: ' + (r.error || 'Tente novamente'));
+    }
+  });
+})();
+</script>
+</body>
+</html>

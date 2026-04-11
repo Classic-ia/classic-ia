@@ -167,12 +167,15 @@
         if (pm) { periodo = pm[1] + ' - ' + pm[2]; periodoInicio = pm[1]; periodoFim = pm[2]; }
       }
 
-      // Detect NOME: label followed by name
-      if (cell0 === 'NOME:' || cell0.indexOf('NOME:') !== -1) {
-        // Next non-empty row should have the name
-        for (var n = r + 1; n < Math.min(r + 3, rows.length); n++) {
+      // Detect NOME: label — check all cells in row
+      var foundNome = false;
+      for (var c = 0; c < Math.min(row.length, 5); c++) {
+        if (String(row[c] || '').trim() === 'NOME:') { foundNome = true; break; }
+      }
+      if (foundNome) {
+        for (var n = r + 1; n < Math.min(r + 4, rows.length); n++) {
           var nameVal = String(rows[n][0] || '').trim();
-          if (nameVal && nameVal !== 'ADMISSÃO:' && nameVal.length > 2) {
+          if (nameVal && nameVal.length > 2 && nameVal !== 'ADMISSÃO:' && !nameVal.match(/^(SEG|TER|QUA|QUI|SEX|SAB|DOM)$/) && nameVal.indexOf('HORÁRIO') === -1) {
             currentEmp = { nome: nameVal, cpf: '', departamento: '', funcao: '', records: [] };
             employees.push(currentEmp);
             break;
@@ -182,9 +185,8 @@
         continue;
       }
 
-      // Detect CPF
-      if (currentEmp && (cell0 === 'CPF:' || rowText.indexOf('CPF:') !== -1)) {
-        // Find CPF in the row
+      // Detect CPF — scan entire row
+      if (currentEmp && !currentEmp.cpf) {
         for (var c = 0; c < row.length; c++) {
           var cv = String(row[c] || '').trim();
           var cpfM = cv.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
@@ -192,37 +194,21 @@
         }
       }
 
-      // Detect ADMISSÃO row — might contain CPF too
-      if (currentEmp && cell0.indexOf('/') !== -1 && cell0.match(/^\d{2}\/\d{2}\/\d{4}$/) && !inData) {
-        // This might be admission date row — check for CPF in nearby cells
-        for (var c = 1; c < row.length; c++) {
-          var cv = String(row[c] || '').trim();
-          var cpfM = cv.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
-          if (cpfM) { currentEmp.cpf = cpfM[1]; break; }
-        }
-      }
-
-      // Detect DEPARTAMENTO and FUNÇÃO
-      if (currentEmp && rowText.indexOf('DEPARTAMENTO:') !== -1) {
+      // Detect DEPARTAMENTO and FUNÇÃO — scan entire row
+      if (currentEmp) {
         for (var c = 0; c < row.length; c++) {
           var cv = String(row[c] || '').trim();
-          if (cv === 'DEPARTAMENTO:' && c + 1 < row.length) {
-            var dept = String(row[c + 1] || '').trim();
-            if (dept) currentEmp.departamento = dept;
+          if (cv === 'DEPARTAMENTO:' || cv === 'Departamento:') {
+            for (var nc = c + 1; nc < Math.min(c + 3, row.length); nc++) {
+              var dv = String(row[nc] || '').trim();
+              if (dv && dv.length > 1 && dv !== 'FUNÇÃO:' && dv !== 'FUNCAO:') { currentEmp.departamento = dv; break; }
+            }
           }
-          if ((cv === 'FUNÇÃO:' || cv === 'FUNCAO:') && c + 1 < row.length) {
-            var func = String(row[c + 1] || '').trim();
-            if (func) currentEmp.funcao = func;
-          }
-        }
-      }
-
-      // Detect function row (row after DEPARTAMENTO row)
-      if (currentEmp && !currentEmp.funcao && rowText.indexOf('08.849.964') !== -1) {
-        for (var c = 0; c < row.length; c++) {
-          var cv = String(row[c] || '').trim();
-          if (cv && cv.length > 3 && !cv.match(/^\d/) && cv !== 'Produção' && cv.indexOf('08.849') === -1 && cv.indexOf('9040') === -1) {
-            // Could be function
+          if (cv === 'FUNÇÃO:' || cv === 'FUNCAO:') {
+            for (var nc = c + 1; nc < Math.min(c + 3, row.length); nc++) {
+              var fv = String(row[nc] || '').trim();
+              if (fv && fv.length > 1) { currentEmp.funcao = fv; break; }
+            }
           }
         }
       }
@@ -242,81 +228,72 @@
 
       // Parse date rows
       if (inData && currentEmp && cell0) {
-        var dateMatch = cell0.match(/^(\d{2}\/\d{2}\/\d{4})\s*-\s*(\w{3})/);
+        var dateMatch = cell0.match(/^(\d{2}\/\d{2}\/\d{4})\s*-\s*(\S{3})/);
         if (dateMatch) {
           var dateStr = dateMatch[1];
           var diaSem = dateMatch[2];
           var parts = dateStr.split('/');
           var isoDate = parts[2] + '-' + parts[1] + '-' + parts[0];
 
-          // Read cells: B=ent1, C/D=sai1, E/F=ent2, G=sai2, H=ent3, I=sai3
-          // Then: normais, faltas, ex50, ex100, dsr_deb, not, exnot, ajuste, carga
-          var vals = [];
-          for (var c = 1; c < Math.min(row.length, 30); c++) {
-            vals.push(String(row[c] || '').trim());
-          }
-
-          var ent1 = vals[0] || '';
-          var sai1 = vals[1] || vals[2] || '';
-          var ent2 = vals[2] || vals[3] || '';
-          var sai2 = vals[3] || vals[4] || '';
-
-          // Smarter extraction: find time-like values
-          var times = [];
-          for (var c = 1; c < Math.min(row.length, 10); c++) {
-            var v = String(row[c] || '').trim();
-            if (v.match(/^\d{2}:\d{2}\*?$/) || v === 'FALTA' || v === 'Folga') {
-              times.push(v.replace('*', ''));
-            }
-          }
-
-          ent1 = times[0] || '';
-          sai1 = times[1] || '';
-          ent2 = times[2] || '';
-          sai2 = times[3] || '';
-          var ent3 = times[4] || '';
-          var sai3 = times[5] || '';
-
-          // Find numeric columns after times: normais, faltas, ex50, ex100, dsr, not, exnot, ajuste, carga
-          var numCols = [];
-          var foundNums = false;
+          // Collect ALL non-empty values from the row (skip cell 0 = date)
+          var allVals = [];
           for (var c = 1; c < row.length; c++) {
             var v = String(row[c] || '').trim();
-            if (foundNums || v.match(/^\d{2,3}:\d{2}$/) && c > 6) {
-              foundNums = true;
-              numCols.push(v);
-            }
+            if (v) allVals.push({ col: c, val: v });
           }
-          // If not found by position, try to find after the last time entry
-          if (!numCols.length) {
-            var afterTimes = false;
-            var timeCount = 0;
-            for (var c = 1; c < row.length; c++) {
-              var v = String(row[c] || '').trim();
-              if (v.match(/^\d{2}:\d{2}\*?$/) || v === 'FALTA' || v === 'Folga') timeCount++;
-              if (timeCount >= times.length && timeCount > 0 && !v.match(/^\d{2}:\d{2}\*?$/) && v !== 'FALTA' && v !== 'Folga') {
-                afterTimes = true;
-              }
-              if (afterTimes && v) numCols.push(v);
+
+          // Separate into time entries (HH:MM or FALTA/Folga/Ferias) and numeric summaries
+          var timeEntries = [];
+          var numEntries = [];
+          var isSpecialDay = false;
+
+          for (var k = 0; k < allVals.length; k++) {
+            var v = allVals[k].val;
+            if (v === 'FALTA' || v === 'Folga' || v === 'Ferias' || v.match(/^Feria/i)) {
+              isSpecialDay = v;
+            } else if (v.match(/^\d{2}:\d{2}\*?$/)) {
+              timeEntries.push(v.replace('*', ''));
+            } else if (v.match(/^\d{1,3}:\d{2}$/) || v.match(/^\d+[.,]\d{2}$/) || v === '0,00') {
+              numEntries.push(v);
             }
           }
 
-          var normais = numCols[0] || '00:00';
-          var faltas = numCols[1] || '00:00';
-          var ex50 = numCols[2] || '00:00';
-          var ex100 = numCols[3] || '00:00';
-          var dsrDeb = numCols[4] || '0';
-          var noturnas = numCols[5] || '00:00';
-          var exNot = numCols[6] || '00:00';
-          var ajuste = numCols[7] || '00:00';
-          var carga = numCols[8] || numCols[numCols.length - 1] || '00:00';
+          // First 6 time entries = ent1, sai1, ent2, sai2, ent3, sai3
+          var ent1 = timeEntries[0] || '';
+          var sai1 = timeEntries[1] || '';
+          var ent2 = timeEntries[2] || '';
+          var sai2 = timeEntries[3] || '';
+          var ent3 = timeEntries[4] || '';
+          var sai3 = timeEntries[5] || '';
+
+          // Remaining time entries after the first 6 = normais, faltas, ex50, ex100, etc.
+          var normais = timeEntries[6] || numEntries[0] || '00:00';
+          var faltas = numEntries[1] || timeEntries[7] || '00:00';
+          var ex50 = numEntries[2] || '00:00';
+          var ex100 = numEntries[3] || '00:00';
+          var dsrDeb = '0';
+          var noturnas = '00:00';
+          var exNot = '00:00';
+          var ajuste = '00:00';
+          var carga = numEntries[numEntries.length - 1] || normais;
+
+          // Try to find specific summary values from numEntries
+          if (numEntries.length >= 5) {
+            normais = numEntries[0] || '00:00';
+            faltas = numEntries[1] || '00:00';
+            ex50 = numEntries[2] || '00:00';
+            ex100 = numEntries[3] || '00:00';
+            noturnas = numEntries.length >= 6 ? numEntries[5] : '00:00';
+            carga = numEntries[numEntries.length - 1] || '00:00';
+          }
 
           // Determine type
           var tipo = 'normal';
-          if (ent1 === 'FALTA') tipo = 'falta';
-          else if (ent1 === 'Folga') tipo = 'folga';
+          if (isSpecialDay === 'FALTA') tipo = 'falta';
+          else if (isSpecialDay === 'Folga') tipo = 'folga';
+          else if (isSpecialDay && isSpecialDay.match(/^Feria/i)) tipo = 'ferias';
           else if (diaSem === 'Dom' && !ent1) tipo = 'dsr';
-          else if (!ent1 && !sai1) tipo = 'sem_registro';
+          else if (!ent1 && !sai1 && !isSpecialDay) tipo = 'sem_registro';
 
           currentEmp.records.push({
             data: isoDate,

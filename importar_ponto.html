@@ -55,13 +55,29 @@
   <!-- Step 1: Upload -->
   <div class="step active" id="step1">
     <div class="card">
-      <div class="card-header"><strong>Passo 1:</strong> Envie a planilha do Secullum</div>
+      <div class="card-header">
+        <strong>Passo 1:</strong> Escolha o formato
+        <div style="display:flex;gap:6px;margin-top:8px">
+          <button class="btn btn-primary btn-sm" id="tabAFD" onclick="showImportTab('afd')">AFD (Recomendado)</button>
+          <button class="btn btn-ghost btn-sm" id="tabXLSX" onclick="showImportTab('xlsx')">Planilha (.xlsx)</button>
+        </div>
+      </div>
       <div class="card-body">
-        <div class="upload-zone" id="dropZone">
-          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-top:12px">Arraste a planilha aqui</div>
-          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">ou clique para selecionar (.xlsx, .xls, .csv)</div>
-          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        <div id="importAFD">
+          <div style="font-size:13px;color:var(--text-secondary);margin-bottom:12px">Cole o texto do arquivo AFD exportado do Secullum Ponto Web</div>
+          <textarea id="afdArea" style="width:100%;min-height:250px;font-family:'Courier New',monospace;font-size:11px;padding:12px;border:2px dashed var(--border);border-radius:12px;background:var(--bg-input);resize:vertical" placeholder="Cole o AFD aqui..."></textarea>
+          <div style="margin-top:12px;display:flex;gap:10px;align-items:center">
+            <button class="btn btn-primary" id="btnProcessAFD">Processar AFD</button>
+            <span style="font-size:12px;color:var(--text-secondary)" id="afdCount">0 linhas</span>
+          </div>
+        </div>
+        <div id="importXLSX" style="display:none">
+          <div class="upload-zone" id="dropZone">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-top:12px">Arraste a planilha aqui</div>
+            <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">ou clique para selecionar (.xlsx, .xls, .csv)</div>
+            <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+          </div>
         </div>
         <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)" id="fileInfo"></div>
       </div>
@@ -107,6 +123,190 @@
   const user = await Shell.init({ page: 'importar_ponto', title: 'Importar Ponto' });
   if (!user) return;
   API.setPerfil(user.perfil);
+
+  /* ── Tab switch ── */
+  window.showImportTab = function(tab) {
+    document.getElementById('importAFD').style.display = tab === 'afd' ? '' : 'none';
+    document.getElementById('importXLSX').style.display = tab === 'xlsx' ? '' : 'none';
+    document.getElementById('tabAFD').className = tab === 'afd' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+    document.getElementById('tabXLSX').className = tab === 'xlsx' ? 'btn btn-primary btn-sm' : 'btn btn-ghost btn-sm';
+  };
+
+  document.getElementById('afdArea').addEventListener('input', function() {
+    document.getElementById('afdCount').textContent = this.value.split('\n').filter(function(l) { return l.trim(); }).length + ' linhas';
+  });
+
+  /* ── AFD Parser ── */
+  function parseAFD(text) {
+    var lines = text.split('\n');
+    var punches = {}; // key: PIS+date → array of times
+    var empresa = '';
+    var minDate = '9999-99-99', maxDate = '0000-00-00';
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i].trim();
+      if (line.length < 34) continue;
+
+      var tipo = line.charAt(9);
+
+      // Type 1: header
+      if (tipo === '1' && line.length > 50) {
+        empresa = line.substring(37, 187).trim();
+        continue;
+      }
+
+      // Type 3: punch (marcação)
+      if (tipo === '3') {
+        var dateStr = line.substring(10, 18); // ddmmaaaa
+        var timeStr = line.substring(18, 22); // hhmm
+        var pis = line.substring(22, 34).trim();
+
+        if (!dateStr.match(/^\d{8}$/) || !timeStr.match(/^\d{4}$/)) continue;
+
+        var day = dateStr.substring(0, 2);
+        var month = dateStr.substring(2, 4);
+        var year = dateStr.substring(4, 8);
+        var isoDate = year + '-' + month + '-' + day;
+        var timeFmt = timeStr.substring(0, 2) + ':' + timeStr.substring(2, 4);
+
+        if (isoDate < minDate) minDate = isoDate;
+        if (isoDate > maxDate) maxDate = isoDate;
+
+        var key = pis + '|' + isoDate;
+        if (!punches[key]) punches[key] = { pis: pis, data: isoDate, times: [] };
+        punches[key].times.push(timeFmt);
+      }
+    }
+
+    // Sort times and build records
+    var records = [];
+    var pisSet = {};
+    Object.values(punches).forEach(function(p) {
+      p.times.sort();
+      pisSet[p.pis] = true;
+      records.push({
+        pis: p.pis,
+        data: p.data,
+        dia_semana: getDiaSemana(p.data),
+        entrada_1: p.times[0] || null,
+        saida_1: p.times[1] || null,
+        entrada_2: p.times[2] || null,
+        saida_2: p.times[3] || null,
+        entrada_3: p.times[4] || null,
+        saida_3: p.times[5] || null,
+        horas_normais: calcHoras(p.times),
+        horas_falta: '00:00',
+        horas_extra_50: '00:00',
+        horas_extra_100: '00:00',
+        dsr_debito: 0,
+        horas_noturnas: '00:00',
+        horas_extra_noturna: '00:00',
+        ajuste: '00:00',
+        carga: '00:00',
+        tipo: 'normal',
+        batidas: p.times.length
+      });
+    });
+
+    records.sort(function(a, b) { return a.pis.localeCompare(b.pis) || a.data.localeCompare(b.data); });
+
+    return {
+      empresa: empresa,
+      periodoInicio: minDate,
+      periodoFim: maxDate,
+      totalPIS: Object.keys(pisSet).length,
+      records: records
+    };
+  }
+
+  function getDiaSemana(iso) {
+    var d = new Date(iso + 'T12:00:00');
+    return ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'][d.getDay()];
+  }
+
+  function calcHoras(times) {
+    if (times.length < 2) return '00:00';
+    var total = 0;
+    for (var i = 0; i < times.length - 1; i += 2) {
+      var ini = parseInt(times[i].split(':')[0]) * 60 + parseInt(times[i].split(':')[1]);
+      var fim = parseInt(times[i+1].split(':')[0]) * 60 + parseInt(times[i+1].split(':')[1]);
+      if (fim < ini) fim += 24 * 60; // turno noturno
+      total += fim - ini;
+    }
+    var h = Math.floor(total / 60);
+    var m = total % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+
+  /* ── AFD Process button ── */
+  document.getElementById('btnProcessAFD').addEventListener('click', async function() {
+    var text = document.getElementById('afdArea').value.trim();
+    if (text.length < 30) { alert('Cole o texto AFD'); return; }
+
+    var afd = parseAFD(text);
+    if (!afd.records.length) { alert('Nenhuma marcação encontrada no AFD.'); return; }
+
+    periodoInicio = afd.periodoInicio.split('-').reverse().join('/');
+    periodoFim = afd.periodoFim.split('-').reverse().join('/');
+
+    // Resolve PIS → employee name
+    var pisMap = {};
+    try {
+      var funcs = await API.get('rh_funcionarios?select=id,nome_completo,pis_pasep,cpf&limit=2000');
+      if (funcs && funcs.length) {
+        funcs.forEach(function(f) {
+          if (f.pis_pasep) pisMap[f.pis_pasep.replace(/[.\-\/]/g, '')] = f;
+        });
+      }
+    } catch(e) {}
+
+    // Enrich records with names
+    parsedRecords = [];
+    var unmatchedPIS = {};
+    for (var i = 0; i < afd.records.length; i++) {
+      var r = afd.records[i];
+      var func = pisMap[r.pis];
+      r.nome_colaborador = func ? func.nome_completo : 'PIS ' + r.pis;
+      r.cpf = func ? (func.cpf || '').replace(/[.\-]/g, '') : '';
+      r.funcionario_id = func ? func.id : null;
+      r.departamento = null;
+      r.funcao = null;
+      if (!func) unmatchedPIS[r.pis] = true;
+      parsedRecords.push(r);
+    }
+
+    // Show stats
+    var totalBatidas = afd.records.reduce(function(s, r) { return s + r.batidas; }, 0);
+    document.getElementById('periodoInfo').innerHTML =
+      '<div style="font-size:14px;font-weight:600;margin-bottom:4px">Período: <span style="color:var(--primary)">' + periodoInicio + ' a ' + periodoFim + '</span></div>' +
+      (afd.empresa ? '<div style="font-size:12px;color:var(--text-secondary)">' + API.esc(afd.empresa) + '</div>' : '');
+
+    document.getElementById('statsRow').innerHTML =
+      '<div class="stat-box"><div class="val">' + afd.totalPIS + '</div><div class="lbl">Funcionários</div></div>' +
+      '<div class="stat-box"><div class="val">' + totalBatidas + '</div><div class="lbl">Batidas</div></div>' +
+      '<div class="stat-box"><div class="val">' + parsedRecords.length + '</div><div class="lbl">Dias c/ Registro</div></div>' +
+      (Object.keys(unmatchedPIS).length ? '<div class="stat-box"><div class="val" style="color:var(--amber)">' + Object.keys(unmatchedPIS).length + '</div><div class="lbl">PIS Sem Vínculo</div></div>' : '');
+
+    // Rankings not applicable for AFD (no HE/falta data) — skip
+    document.getElementById('rankings').innerHTML = '';
+
+    // Preview
+    var preview = parsedRecords.slice(0, 100);
+    var tbl = '<table><thead><tr><th>Nome</th><th>Data</th><th>Dia</th><th>Ent.1</th><th>Saí.1</th><th>Ent.2</th><th>Saí.2</th><th>Ent.3</th><th>Saí.3</th><th style="text-align:right">Horas</th></tr></thead><tbody>';
+    for (var i = 0; i < preview.length; i++) {
+      var r = preview[i];
+      tbl += '<tr><td style="font-size:10px">' + API.esc(r.nome_colaborador) + '</td><td>' + r.data + '</td><td>' + r.dia_semana + '</td>';
+      tbl += '<td>' + (r.entrada_1 || '—') + '</td><td>' + (r.saida_1 || '—') + '</td>';
+      tbl += '<td>' + (r.entrada_2 || '—') + '</td><td>' + (r.saida_2 || '—') + '</td>';
+      tbl += '<td>' + (r.entrada_3 || '—') + '</td><td>' + (r.saida_3 || '—') + '</td>';
+      tbl += '<td style="text-align:right">' + r.horas_normais + '</td></tr>';
+    }
+    tbl += '</tbody></table>';
+    if (parsedRecords.length > 100) tbl += '<div style="padding:8px;text-align:center;font-size:11px;color:var(--text-secondary)">Mostrando 100 de ' + parsedRecords.length + ' registros</div>';
+    document.getElementById('previewTable').innerHTML = tbl;
+
+    showStep(2);
+  });
 
   var parsedRecords = [];
   var periodoInicio = '', periodoFim = '';

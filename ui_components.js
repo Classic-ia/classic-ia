@@ -82,8 +82,11 @@ const UI = (() => {
   function toast(msg, tipo = 'ok') {
     const colors = {
       ok: ['#DCFCE7','#166534','#86EFAC'],
+      success: ['#DCFCE7','#166534','#86EFAC'],
       warn: ['#FEF3C7','#92400E','#FCD34D'],
+      warning: ['#FEF3C7','#92400E','#FCD34D'],
       err: ['#FEE2E2','#991B1B','#FECACA'],
+      error: ['#FEE2E2','#991B1B','#FECACA'],
       info: ['#EFF6FF','#1E40AF','#BFDBFE']
     };
     const [bg, color, border] = colors[tipo] || colors.ok;

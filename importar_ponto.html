@@ -213,22 +213,34 @@
         }
       }
 
-      // Detect DATA header row
-      if (cell0 === 'DATA') {
+      // Detect DATA header row — search all cells
+      var foundData = false;
+      for (var c = 0; c < Math.min(row.length, 5); c++) {
+        if (String(row[c] || '').trim() === 'DATA') { foundData = true; break; }
+      }
+      if (foundData) {
         inData = true;
         continue;
       }
 
-      // Detect TOTAIS row — end of employee data
-      if (cell0 === 'TOTAIS') {
+      // Detect TOTAIS row — search first cells
+      var foundTotais = false;
+      for (var c = 0; c < Math.min(row.length, 3); c++) {
+        if (String(row[c] || '').trim() === 'TOTAIS') { foundTotais = true; break; }
+      }
+      if (foundTotais) {
         inData = false;
         // Extract totals if needed
         continue;
       }
 
-      // Parse date rows
-      if (inData && currentEmp && cell0) {
-        var dateMatch = cell0.match(/^(\d{2}\/\d{2}\/\d{4})\s*-\s*(\S{3})/);
+      // Parse date rows — search first few cells for date pattern
+      if (inData && currentEmp) {
+        var dateMatch = null;
+        for (var c = 0; c < Math.min(row.length, 3); c++) {
+          var cv = String(row[c] || '').trim();
+          if (cv) { dateMatch = cv.match(/^(\d{2}\/\d{2}\/\d{4})\s*-\s*(\S{3})/); if (dateMatch) break; }
+        }
         if (dateMatch) {
           var dateStr = dateMatch[1];
           var diaSem = dateMatch[2];

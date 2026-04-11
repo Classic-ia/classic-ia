@@ -215,7 +215,7 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Nome</th><th>CPF</th><th>Cargo</th><th>Setor</th><th>Admissão</th><th>Status</th><th>Motor</th><th>Ações</th>
+          <th class="sortable" onclick="sortFunc('nome_completo')">Nome <span id="sortIcon_nome_completo"></span></th><th class="sortable" onclick="sortFunc('cpf')">CPF</th><th class="sortable" onclick="sortFunc('cargo')">Cargo</th><th class="sortable" onclick="sortFunc('setor')">Setor</th><th class="sortable" onclick="sortFunc('data_admissao')">Admissão</th><th class="sortable" onclick="sortFunc('status')">Status</th><th>Motor</th><th>Ações</th>
         </tr></thead>
         <tbody id="tbFuncionarios"></tbody>
       </table>
@@ -1228,6 +1228,15 @@ function renderFuncionarios(lista) {
   document.getElementById('countFunc').textContent = `(${lista.length})`;
 }
 
+var _funcSortCol = 'nome_completo';
+var _funcSortAsc = true;
+
+function sortFunc(col) {
+  if (_funcSortCol === col) { _funcSortAsc = !_funcSortAsc; }
+  else { _funcSortCol = col; _funcSortAsc = true; }
+  filtrarFuncionarios();
+}
+
 function filtrarFuncionarios() {
   const busca = document.getElementById('searchFunc').value.toLowerCase();
   const setor = document.getElementById('filterSetor').value;
@@ -1236,7 +1245,35 @@ function filtrarFuncionarios() {
   if (busca) lista = lista.filter(f => (f.nome_completo || '').toLowerCase().includes(busca) || (f.cpf || '').includes(busca));
   if (setor) lista = lista.filter(f => f.setor_id === setor || f.setor === setor);
   if (status) lista = lista.filter(f => f.status === status);
-  lista.sort((a, b) => (a.nome_completo || '').localeCompare(b.nome_completo || ''));
+
+  // Sort by selected column
+  lista.sort((a, b) => {
+    var va, vb;
+    if (_funcSortCol === 'cargo') {
+      va = a.cargo_id ? ((CARGOS.find(c => c.id === a.cargo_id) || {}).nome || '') : '';
+      vb = b.cargo_id ? ((CARGOS.find(c => c.id === b.cargo_id) || {}).nome || '') : '';
+    } else if (_funcSortCol === 'setor') {
+      va = a.setor_id ? nomeSetor(a.setor_id) : '';
+      vb = b.setor_id ? nomeSetor(b.setor_id) : '';
+    } else {
+      va = a[_funcSortCol] || '';
+      vb = b[_funcSortCol] || '';
+    }
+    var cmp = String(va).localeCompare(String(vb), 'pt-BR');
+    return _funcSortAsc ? cmp : -cmp;
+  });
+
+  // Update sort icons
+  try {
+    var tbl = document.getElementById('tbFuncionarios');
+    if (tbl) tbl.closest('table').querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('asc', 'desc');
+      if (th.getAttribute('onclick') && th.getAttribute('onclick').indexOf("'" + _funcSortCol + "'") !== -1) {
+        th.classList.add(_funcSortAsc ? 'asc' : 'desc');
+      }
+    });
+  } catch(e) {}
+
   renderFuncionarios(lista);
   // Contadores APAC e Jovem Aprendiz
   const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo');
@@ -2159,7 +2196,7 @@ async function recarregar() {
   await popularSetores();
   popularTiposTreinamento();
   popularCatalogoEpi();
-  renderFuncionarios();
+  filtrarFuncionarios();
   renderAso();
   renderTreinamentos();
   renderEpis();

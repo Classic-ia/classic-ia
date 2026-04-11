@@ -1,0 +1,543 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Importar Ponto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.step{display:none}.step.active{display:block}
+.step-nav{display:flex;gap:8px;margin-bottom:20px}
+.step-dot{width:32px;height:32px;border-radius:50%;background:var(--border);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+.step-dot.active{background:var(--primary);color:#fff}
+.step-dot.done{background:var(--green);color:#fff}
+.upload-zone{border:2px dashed var(--border);border-radius:12px;padding:48px 24px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;background:var(--bg-card)}
+.upload-zone:hover,.upload-zone.drag-over{border-color:var(--primary);background:#EFF6FF}
+.upload-zone input[type="file"]{display:none}
+.stats-row{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}
+.stat-box{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;text-align:center;min-width:120px}
+.stat-box .val{font-size:22px;font-weight:800;color:var(--primary)}
+.stat-box .lbl{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.preview-scroll{max-height:500px;overflow:auto;border:1px solid var(--border);border-radius:8px}
+.preview-scroll table{font-size:11px}
+.preview-scroll th{position:sticky;top:0;background:var(--bg-page);z-index:1}
+.he-row{background:rgba(245,158,11,.06)}
+.falta-row{background:rgba(239,68,68,.06)}
+.import-log{max-height:300px;overflow:auto;background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;font-family:'Courier New',monospace;font-size:12px;line-height:1.6}
+.import-log .ok{color:#22c55e}.import-log .err{color:#ef4444}.import-log .skip{color:#f59e0b}
+.ranking-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px}
+@media(max-width:768px){.ranking-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+    <div>
+      <div style="font-size:18px;font-weight:700">Importar Cartão Ponto</div>
+      <div style="font-size:12px;color:var(--text-secondary)">Secullum Ponto Web — planilha exportada</div>
+    </div>
+    <div class="step-nav">
+      <div class="step-dot active" id="dot1">1</div>
+      <div class="step-dot" id="dot2">2</div>
+      <div class="step-dot" id="dot3">3</div>
+    </div>
+  </div>
+
+  <!-- Step 1: Upload -->
+  <div class="step active" id="step1">
+    <div class="card">
+      <div class="card-header"><strong>Passo 1:</strong> Envie a planilha do Secullum</div>
+      <div class="card-body">
+        <div class="upload-zone" id="dropZone">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#94a3b8" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          <div style="font-size:14px;font-weight:600;color:var(--text-primary);margin-top:12px">Arraste a planilha aqui</div>
+          <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">ou clique para selecionar (.xlsx, .xls, .csv)</div>
+          <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+        </div>
+        <div style="margin-top:12px;font-size:12px;color:var(--text-secondary)" id="fileInfo"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 2: Preview -->
+  <div class="step" id="step2">
+    <div class="card mb-4">
+      <div class="card-header"><strong>Passo 2:</strong> Conferir dados extraídos</div>
+      <div class="card-body">
+        <div id="periodoInfo"></div>
+        <div class="stats-row" id="statsRow"></div>
+        <div class="ranking-grid" id="rankings"></div>
+        <div style="margin-top:16px"><strong style="font-size:13px">Preview dos registros diários</strong></div>
+        <div class="preview-scroll" style="margin-top:8px" id="previewTable"></div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn btn-primary" id="btnImport">Importar para o Sistema</button>
+          <button class="btn btn-ghost" id="btnBack">Voltar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: Result -->
+  <div class="step" id="step3">
+    <div class="card">
+      <div class="card-header"><strong>Passo 3:</strong> Resultado</div>
+      <div class="card-body">
+        <div class="stats-row" id="resultStats"></div>
+        <div class="import-log" id="importLog"></div>
+        <div style="margin-top:12px;display:flex;gap:10px">
+          <button class="btn btn-primary" onclick="location.href='dashboard_custos.html'">Ver Dashboard</button>
+          <button class="btn btn-ghost" onclick="location.reload()">Nova Importação</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'importar_ponto', title: 'Importar Ponto' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  var parsedRecords = [];
+  var periodoInicio = '', periodoFim = '';
+
+  function showStep(n) {
+    document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+    document.getElementById('step' + n).classList.add('active');
+    for (var i = 1; i <= 3; i++) {
+      var dot = document.getElementById('dot' + i);
+      dot.classList.remove('active', 'done');
+      if (i < n) dot.classList.add('done');
+      else if (i === n) dot.classList.add('active');
+    }
+  }
+
+  /* ── File upload ── */
+  var dropZone = document.getElementById('dropZone');
+  var fileInput = document.getElementById('fileInput');
+
+  dropZone.addEventListener('click', function() { fileInput.click(); });
+  dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('drag-over'); });
+  dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('drag-over'); });
+  dropZone.addEventListener('drop', function(e) { e.preventDefault(); dropZone.classList.remove('drag-over'); if (e.dataTransfer.files.length) processFile(e.dataTransfer.files[0]); });
+  fileInput.addEventListener('change', function() { if (fileInput.files.length) processFile(fileInput.files[0]); });
+
+  function processFile(file) {
+    document.getElementById('fileInfo').textContent = 'Processando ' + file.name + '...';
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var wb = XLSX.read(e.target.result, { type: 'array', cellText: true, cellDates: false, raw: true });
+        var ws = wb.Sheets[wb.SheetNames[0]];
+        var rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '', raw: true });
+        parseSecullum(rows);
+      } catch (ex) {
+        alert('Erro ao ler planilha: ' + ex.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ── Parse Secullum format ── */
+  function parseSecullum(rows) {
+    var employees = [];
+    var currentEmp = null;
+    var inData = false;
+    var periodo = '';
+
+    for (var r = 0; r < rows.length; r++) {
+      var row = rows[r];
+      var cell0 = String(row[0] || '').trim();
+      var cell1 = String(row[1] || '').trim();
+      var rowText = row.map(function(c) { return String(c || '').trim(); }).join('\t');
+
+      // Extract period
+      if (!periodo) {
+        var pm = rowText.match(/Per[ií]odo:\s*(\d{2}\/\d{2}\/\d{4})\s*at[eé]\s*(\d{2}\/\d{2}\/\d{4})/i);
+        if (pm) { periodo = pm[1] + ' - ' + pm[2]; periodoInicio = pm[1]; periodoFim = pm[2]; }
+      }
+
+      // Detect NOME: label followed by name
+      if (cell0 === 'NOME:' || cell0.indexOf('NOME:') !== -1) {
+        // Next non-empty row should have the name
+        for (var n = r + 1; n < Math.min(r + 3, rows.length); n++) {
+          var nameVal = String(rows[n][0] || '').trim();
+          if (nameVal && nameVal !== 'ADMISSÃO:' && nameVal.length > 2) {
+            currentEmp = { nome: nameVal, cpf: '', departamento: '', funcao: '', records: [] };
+            employees.push(currentEmp);
+            break;
+          }
+        }
+        inData = false;
+        continue;
+      }
+
+      // Detect CPF
+      if (currentEmp && (cell0 === 'CPF:' || rowText.indexOf('CPF:') !== -1)) {
+        // Find CPF in the row
+        for (var c = 0; c < row.length; c++) {
+          var cv = String(row[c] || '').trim();
+          var cpfM = cv.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+          if (cpfM) { currentEmp.cpf = cpfM[1]; break; }
+        }
+      }
+
+      // Detect ADMISSÃO row — might contain CPF too
+      if (currentEmp && cell0.indexOf('/') !== -1 && cell0.match(/^\d{2}\/\d{2}\/\d{4}$/) && !inData) {
+        // This might be admission date row — check for CPF in nearby cells
+        for (var c = 1; c < row.length; c++) {
+          var cv = String(row[c] || '').trim();
+          var cpfM = cv.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+          if (cpfM) { currentEmp.cpf = cpfM[1]; break; }
+        }
+      }
+
+      // Detect DEPARTAMENTO and FUNÇÃO
+      if (currentEmp && rowText.indexOf('DEPARTAMENTO:') !== -1) {
+        for (var c = 0; c < row.length; c++) {
+          var cv = String(row[c] || '').trim();
+          if (cv === 'DEPARTAMENTO:' && c + 1 < row.length) {
+            var dept = String(row[c + 1] || '').trim();
+            if (dept) currentEmp.departamento = dept;
+          }
+          if ((cv === 'FUNÇÃO:' || cv === 'FUNCAO:') && c + 1 < row.length) {
+            var func = String(row[c + 1] || '').trim();
+            if (func) currentEmp.funcao = func;
+          }
+        }
+      }
+
+      // Detect function row (row after DEPARTAMENTO row)
+      if (currentEmp && !currentEmp.funcao && rowText.indexOf('08.849.964') !== -1) {
+        for (var c = 0; c < row.length; c++) {
+          var cv = String(row[c] || '').trim();
+          if (cv && cv.length > 3 && !cv.match(/^\d/) && cv !== 'Produção' && cv.indexOf('08.849') === -1 && cv.indexOf('9040') === -1) {
+            // Could be function
+          }
+        }
+      }
+
+      // Detect DATA header row
+      if (cell0 === 'DATA') {
+        inData = true;
+        continue;
+      }
+
+      // Detect TOTAIS row — end of employee data
+      if (cell0 === 'TOTAIS') {
+        inData = false;
+        // Extract totals if needed
+        continue;
+      }
+
+      // Parse date rows
+      if (inData && currentEmp && cell0) {
+        var dateMatch = cell0.match(/^(\d{2}\/\d{2}\/\d{4})\s*-\s*(\w{3})/);
+        if (dateMatch) {
+          var dateStr = dateMatch[1];
+          var diaSem = dateMatch[2];
+          var parts = dateStr.split('/');
+          var isoDate = parts[2] + '-' + parts[1] + '-' + parts[0];
+
+          // Read cells: B=ent1, C/D=sai1, E/F=ent2, G=sai2, H=ent3, I=sai3
+          // Then: normais, faltas, ex50, ex100, dsr_deb, not, exnot, ajuste, carga
+          var vals = [];
+          for (var c = 1; c < Math.min(row.length, 30); c++) {
+            vals.push(String(row[c] || '').trim());
+          }
+
+          var ent1 = vals[0] || '';
+          var sai1 = vals[1] || vals[2] || '';
+          var ent2 = vals[2] || vals[3] || '';
+          var sai2 = vals[3] || vals[4] || '';
+
+          // Smarter extraction: find time-like values
+          var times = [];
+          for (var c = 1; c < Math.min(row.length, 10); c++) {
+            var v = String(row[c] || '').trim();
+            if (v.match(/^\d{2}:\d{2}\*?$/) || v === 'FALTA' || v === 'Folga') {
+              times.push(v.replace('*', ''));
+            }
+          }
+
+          ent1 = times[0] || '';
+          sai1 = times[1] || '';
+          ent2 = times[2] || '';
+          sai2 = times[3] || '';
+          var ent3 = times[4] || '';
+          var sai3 = times[5] || '';
+
+          // Find numeric columns after times: normais, faltas, ex50, ex100, dsr, not, exnot, ajuste, carga
+          var numCols = [];
+          var foundNums = false;
+          for (var c = 1; c < row.length; c++) {
+            var v = String(row[c] || '').trim();
+            if (foundNums || v.match(/^\d{2,3}:\d{2}$/) && c > 6) {
+              foundNums = true;
+              numCols.push(v);
+            }
+          }
+          // If not found by position, try to find after the last time entry
+          if (!numCols.length) {
+            var afterTimes = false;
+            var timeCount = 0;
+            for (var c = 1; c < row.length; c++) {
+              var v = String(row[c] || '').trim();
+              if (v.match(/^\d{2}:\d{2}\*?$/) || v === 'FALTA' || v === 'Folga') timeCount++;
+              if (timeCount >= times.length && timeCount > 0 && !v.match(/^\d{2}:\d{2}\*?$/) && v !== 'FALTA' && v !== 'Folga') {
+                afterTimes = true;
+              }
+              if (afterTimes && v) numCols.push(v);
+            }
+          }
+
+          var normais = numCols[0] || '00:00';
+          var faltas = numCols[1] || '00:00';
+          var ex50 = numCols[2] || '00:00';
+          var ex100 = numCols[3] || '00:00';
+          var dsrDeb = numCols[4] || '0';
+          var noturnas = numCols[5] || '00:00';
+          var exNot = numCols[6] || '00:00';
+          var ajuste = numCols[7] || '00:00';
+          var carga = numCols[8] || numCols[numCols.length - 1] || '00:00';
+
+          // Determine type
+          var tipo = 'normal';
+          if (ent1 === 'FALTA') tipo = 'falta';
+          else if (ent1 === 'Folga') tipo = 'folga';
+          else if (diaSem === 'Dom' && !ent1) tipo = 'dsr';
+          else if (!ent1 && !sai1) tipo = 'sem_registro';
+
+          currentEmp.records.push({
+            data: isoDate,
+            dia_semana: diaSem,
+            entrada_1: (ent1 === 'FALTA' || ent1 === 'Folga') ? null : ent1 || null,
+            saida_1: (sai1 === 'FALTA' || sai1 === 'Folga') ? null : sai1 || null,
+            entrada_2: (ent2 === 'FALTA' || ent2 === 'Folga') ? null : ent2 || null,
+            saida_2: (sai2 === 'FALTA' || sai2 === 'Folga') ? null : sai2 || null,
+            entrada_3: (ent3 === 'FALTA' || ent3 === 'Folga') ? null : ent3 || null,
+            saida_3: (sai3 === 'FALTA' || sai3 === 'Folga') ? null : sai3 || null,
+            horas_normais: normais,
+            horas_falta: faltas,
+            horas_extra_50: ex50,
+            horas_extra_100: ex100,
+            dsr_debito: parseFloat(String(dsrDeb).replace(',', '.')) || 0,
+            horas_noturnas: noturnas,
+            horas_extra_noturna: exNot,
+            ajuste: ajuste,
+            carga: carga,
+            tipo: tipo
+          });
+        }
+      }
+    }
+
+    // Flatten to records array
+    parsedRecords = [];
+    for (var e = 0; e < employees.length; e++) {
+      var emp = employees[e];
+      for (var r = 0; r < emp.records.length; r++) {
+        var rec = emp.records[r];
+        rec.nome_colaborador = emp.nome;
+        rec.cpf = emp.cpf.replace(/[.\-]/g, '');
+        rec.departamento = emp.departamento;
+        rec.funcao = emp.funcao;
+        parsedRecords.push(rec);
+      }
+    }
+
+    if (!parsedRecords.length) {
+      alert('Nenhum registro de ponto encontrado. Verifique o formato da planilha.');
+      return;
+    }
+
+    // Stats
+    var totalHE = 0, totalFaltas = 0, totalNoturnas = 0, uniqueEmps = {};
+    for (var i = 0; i < parsedRecords.length; i++) {
+      var r = parsedRecords[i];
+      uniqueEmps[r.cpf || r.nome_colaborador] = r.nome_colaborador;
+      totalHE += parseHM(r.horas_extra_50) + parseHM(r.horas_extra_100);
+      totalFaltas += parseHM(r.horas_falta);
+      totalNoturnas += parseHM(r.horas_noturnas);
+    }
+    var empCount = Object.keys(uniqueEmps).length;
+
+    document.getElementById('periodoInfo').innerHTML =
+      '<div style="font-size:14px;font-weight:600;margin-bottom:4px">Período: <span style="color:var(--primary)">' + periodoInicio + ' a ' + periodoFim + '</span></div>';
+
+    document.getElementById('statsRow').innerHTML =
+      '<div class="stat-box"><div class="val">' + empCount + '</div><div class="lbl">Funcionários</div></div>' +
+      '<div class="stat-box"><div class="val">' + parsedRecords.length + '</div><div class="lbl">Registros Diários</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--amber)">' + fmtHM(totalHE) + '</div><div class="lbl">Total HE</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--red)">' + fmtHM(totalFaltas) + '</div><div class="lbl">Total Faltas</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--purple)">' + fmtHM(totalNoturnas) + '</div><div class="lbl">Horas Noturnas</div></div>';
+
+    // Rankings
+    var heByEmp = {}, faltasByEmp = {};
+    for (var i = 0; i < parsedRecords.length; i++) {
+      var r = parsedRecords[i];
+      var key = r.cpf || r.nome_colaborador;
+      if (!heByEmp[key]) heByEmp[key] = { nome: r.nome_colaborador, total: 0, dias: 0 };
+      if (!faltasByEmp[key]) faltasByEmp[key] = { nome: r.nome_colaborador, total: 0, dias: 0 };
+      var he = parseHM(r.horas_extra_50) + parseHM(r.horas_extra_100);
+      if (he > 0) { heByEmp[key].total += he; heByEmp[key].dias++; }
+      var flt = parseHM(r.horas_falta);
+      if (flt > 0) { faltasByEmp[key].total += flt; faltasByEmp[key].dias++; }
+    }
+
+    var heRank = Object.values(heByEmp).filter(function(x) { return x.total > 0; }).sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
+    var faltaRank = Object.values(faltasByEmp).filter(function(x) { return x.total > 0; }).sort(function(a, b) { return b.total - a.total; }).slice(0, 10);
+
+    var rankHTML = '';
+    if (heRank.length) {
+      rankHTML += '<div class="card"><div class="card-header"><strong>Top HE</strong></div><div class="card-body"><table style="font-size:11px"><thead><tr><th>#</th><th>Nome</th><th style="text-align:right">Horas</th><th style="text-align:right">Dias</th></tr></thead><tbody>';
+      for (var i = 0; i < heRank.length; i++) {
+        rankHTML += '<tr><td>' + (i + 1) + '</td><td>' + API.esc(heRank[i].nome) + '</td><td style="text-align:right;font-weight:700;color:var(--amber)">' + fmtHM(heRank[i].total) + '</td><td style="text-align:right">' + heRank[i].dias + '</td></tr>';
+      }
+      rankHTML += '</tbody></table></div></div>';
+    }
+    if (faltaRank.length) {
+      rankHTML += '<div class="card"><div class="card-header"><strong>Top Faltas</strong></div><div class="card-body"><table style="font-size:11px"><thead><tr><th>#</th><th>Nome</th><th style="text-align:right">Horas</th><th style="text-align:right">Dias</th></tr></thead><tbody>';
+      for (var i = 0; i < faltaRank.length; i++) {
+        rankHTML += '<tr><td>' + (i + 1) + '</td><td>' + API.esc(faltaRank[i].nome) + '</td><td style="text-align:right;font-weight:700;color:var(--red)">' + fmtHM(faltaRank[i].total) + '</td><td style="text-align:right">' + faltaRank[i].dias + '</td></tr>';
+      }
+      rankHTML += '</tbody></table></div></div>';
+    }
+    document.getElementById('rankings').innerHTML = rankHTML;
+
+    // Preview table (first 100 records)
+    var preview = parsedRecords.slice(0, 100);
+    var tbl = '<table><thead><tr><th>Nome</th><th>Data</th><th>Dia</th><th>Ent.1</th><th>Saí.1</th><th>Ent.2</th><th>Saí.2</th><th style="text-align:right">Normais</th><th style="text-align:right">Faltas</th><th style="text-align:right">HE 50%</th><th style="text-align:right">Not.</th></tr></thead><tbody>';
+    for (var i = 0; i < preview.length; i++) {
+      var r = preview[i];
+      var cls = r.tipo === 'falta' ? ' class="falta-row"' : (parseHM(r.horas_extra_50) > 0 ? ' class="he-row"' : '');
+      tbl += '<tr' + cls + '><td style="font-size:10px">' + API.esc(r.nome_colaborador) + '</td><td>' + r.data + '</td><td>' + r.dia_semana + '</td>';
+      tbl += '<td>' + (r.entrada_1 || '—') + '</td><td>' + (r.saida_1 || '—') + '</td>';
+      tbl += '<td>' + (r.entrada_2 || '—') + '</td><td>' + (r.saida_2 || '—') + '</td>';
+      tbl += '<td style="text-align:right">' + r.horas_normais + '</td>';
+      tbl += '<td style="text-align:right;color:var(--red)">' + (r.horas_falta !== '00:00' ? r.horas_falta : '') + '</td>';
+      tbl += '<td style="text-align:right;color:var(--amber)">' + (r.horas_extra_50 !== '00:00' ? r.horas_extra_50 : '') + '</td>';
+      tbl += '<td style="text-align:right;color:var(--purple)">' + (r.horas_noturnas !== '00:00' ? r.horas_noturnas : '') + '</td>';
+      tbl += '</tr>';
+    }
+    tbl += '</tbody></table>';
+    if (parsedRecords.length > 100) tbl += '<div style="padding:8px;text-align:center;font-size:11px;color:var(--text-secondary)">Mostrando 100 de ' + parsedRecords.length + ' registros</div>';
+    document.getElementById('previewTable').innerHTML = tbl;
+
+    document.getElementById('fileInfo').textContent = employees.length + ' funcionários, ' + parsedRecords.length + ' registros diários extraídos.';
+    showStep(2);
+  }
+
+  function parseHM(s) {
+    if (!s || s === '00:00' || s === '0') return 0;
+    var m = String(s).match(/(\d+):(\d+)/);
+    if (!m) return parseFloat(String(s).replace(',', '.')) || 0;
+    return parseInt(m[1]) * 60 + parseInt(m[2]);
+  }
+
+  function fmtHM(mins) {
+    var h = Math.floor(mins / 60);
+    var m = mins % 60;
+    return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+  }
+
+  /* ── Back ── */
+  document.getElementById('btnBack').addEventListener('click', function() { showStep(1); });
+
+  /* ── Import ── */
+  document.getElementById('btnImport').addEventListener('click', async function() {
+    if (!parsedRecords.length) return;
+    showStep(3);
+    var log = document.getElementById('importLog');
+    var ok = 0, err = 0, skip = 0;
+    var pIni = periodoInicio ? periodoInicio.split('/').reverse().join('-') : null;
+    var pFim = periodoFim ? periodoFim.split('/').reverse().join('-') : null;
+
+    log.innerHTML = '<div>Importando ' + parsedRecords.length + ' registros...</div>';
+
+    // Batch by 50
+    var batch = [];
+    for (var i = 0; i < parsedRecords.length; i++) {
+      var r = parsedRecords[i];
+      if (!r.data || r.tipo === 'dsr' || r.tipo === 'sem_registro') { skip++; continue; }
+
+      batch.push({
+        nome_colaborador: r.nome_colaborador,
+        cpf: r.cpf || null,
+        departamento: r.departamento || null,
+        funcao: r.funcao || null,
+        data: r.data,
+        dia_semana: r.dia_semana,
+        entrada_1: r.entrada_1,
+        saida_1: r.saida_1,
+        entrada_2: r.entrada_2,
+        saida_2: r.saida_2,
+        entrada_3: r.entrada_3,
+        saida_3: r.saida_3,
+        horas_normais: r.horas_normais,
+        horas_falta: r.horas_falta,
+        horas_extra_50: r.horas_extra_50,
+        horas_extra_100: r.horas_extra_100,
+        dsr_debito: r.dsr_debito,
+        horas_noturnas: r.horas_noturnas,
+        horas_extra_noturna: r.horas_extra_noturna,
+        ajuste: r.ajuste,
+        carga: r.carga,
+        tipo: r.tipo,
+        periodo_inicio: pIni,
+        periodo_fim: pFim,
+        arquivo_origem: 'secullum_' + (pIni || 'ponto')
+      });
+
+      if (batch.length >= 50 || i === parsedRecords.length - 1) {
+        try {
+          var res = await API.post('rh_ponto', batch, 'return=minimal,resolution=merge-duplicates');
+          if (res.ok) {
+            ok += batch.length;
+            log.innerHTML += '<div class="ok">[OK] ' + batch.length + ' registros importados</div>';
+          } else {
+            // Try one by one
+            for (var b = 0; b < batch.length; b++) {
+              try {
+                var r2 = await API.post('rh_ponto', batch[b]);
+                if (r2.ok) { ok++; }
+                else {
+                  // Try update
+                  var check = await API.get('rh_ponto?cpf=eq.' + batch[b].cpf + '&data=eq.' + batch[b].data + '&select=id&limit=1');
+                  if (check.ok && check.data && check.data.length) {
+                    var upd = await API.patch('rh_ponto?id=eq.' + check.data[0].id, batch[b]);
+                    if (upd.ok) { ok++; } else { err++; log.innerHTML += '<div class="err">[ERR] ' + batch[b].nome_colaborador + ' ' + batch[b].data + '</div>'; }
+                  } else { err++; }
+                }
+              } catch(ex) { err++; }
+            }
+          }
+        } catch(ex) {
+          err += batch.length;
+          log.innerHTML += '<div class="err">[ERR] Batch: ' + ex.message + '</div>';
+        }
+        batch = [];
+      }
+    }
+
+    log.innerHTML += '<div style="margin-top:8px;border-top:1px solid #334155;padding-top:8px">Concluído: ' + ok + ' OK, ' + err + ' erros, ' + skip + ' ignorados</div>';
+    document.getElementById('resultStats').innerHTML =
+      '<div class="stat-box"><div class="val" style="color:var(--green)">' + ok + '</div><div class="lbl">Importados</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--red)">' + err + '</div><div class="lbl">Erros</div></div>' +
+      '<div class="stat-box"><div class="val" style="color:var(--amber)">' + skip + '</div><div class="lbl">Ignorados</div></div>';
+  });
+
+})();
+</script>
+</body>
+</html>

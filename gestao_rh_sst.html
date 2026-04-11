@@ -1021,11 +1021,12 @@ function renderMotorBanner() {
 // ── API HELPERS ──────────────────────────────────────────
 async function carregarDados(tabela) {
   try {
-    // Apply filial filter to tables that have filial_id
     let filtro = '';
     if (tabela === TABELAS.func) filtro = FilialContext.filtroQuery('filial_id');
     else if (tabela === 'rh_setores') filtro = FilialContext.filtroQuery('filial_id');
-    return await RH_API.get(tabela + '?order=created_at.desc&limit=500' + filtro) || [];
+    // Funcionários: carregar todos (necessário para resolver nomes em outras abas)
+    var lim = (tabela === TABELAS.func) ? '&limit=2000' : '&limit=500';
+    return await RH_API.get(tabela + '?order=created_at.desc' + lim + filtro) || [];
   } catch (e) {
     console.warn('Erro ao carregar ' + tabela, e);
     return [];

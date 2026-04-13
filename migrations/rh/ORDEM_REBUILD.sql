@@ -1,0 +1,92 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- ORDEM OFICIAL DE REBUILD — Banco RH/SST (Classic Couros)
+-- Última homologação: 2026-04-13 (0 erros, PostgreSQL 16)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- EXECUÇÃO:
+--   psql -d <banco> -f 00_PREAMBULO.sql
+--   psql -d <banco> -f FUNDACAO_BANCO_v2.sql
+--   ... (na ordem abaixo)
+--
+-- PRÉ-REQUISITOS:
+--   - PostgreSQL 16+
+--   - Em ambiente Supabase: nenhum pré-requisito adicional
+--   - Em ambiente local: 00_PREAMBULO.sql cria stubs necessários
+--
+-- ════════════════════════════════════════════════════════════════════════════
+--
+--  #  ARQUIVO                              OBJETOS        DOMÍNIO
+-- ──  ─────────────────────────────────────  ─────────────  ────────────────
+--  1  00_PREAMBULO.sql                      extensions,    Ambiente
+--                                           stubs auth,
+--                                           roles
+--
+--  2  FUNDACAO_BANCO_v2.sql                 13 tabelas,    RH Core
+--                                           triggers,      (estrutura
+--                                           functions      organizacional)
+--
+--  3  00_schema_supabase.sql                10 tabelas,    RH Core
+--                                           views,         (colaboradores,
+--                                           RPC            ponto, custos)
+--
+--  4  schema_rh_sst_completo.sql            16 tabelas,    RH + SST
+--                                           indexes,       (funcionarios,
+--                                           RLS            ASO, EPIs)
+--
+--  5  MODULO_SST_v2.sql                     10 tabelas,    SST
+--                                           trigger        (acidentes, OS,
+--                                                          treinamentos)
+--
+--  6  schema_recrutamento_selecao.sql       6 tabelas      Recrutamento
+--
+--  7  schema_lideranca.sql                  4 tabelas,     Liderança
+--                                           function
+--
+--  8  SEGURANCA_SUPABASE.sql                7 tabelas,     Segurança
+--                                           12 functions,  (RLS, RBAC,
+--                                           RLS+policies   perfis)
+--     ↑ ANTES de DESLIGAMENTOS e SAUDE_MENTAL (dependência: has_perfil)
+--
+--  9  MODULO_DESLIGAMENTOS_TURNOVER.sql     4 tabelas,     Desligamentos
+--                                           3 RPCs,        Turnover
+--                                           5 views
+--
+-- 10  MODULO_SAUDE_MENTAL.sql               4 tabelas,     Saúde Mental
+--                                           6 RPCs,
+--                                           3 views
+--
+-- 11  TABELAS_RH_CORE.sql                   17 tabelas     Processos,
+--                                                          Ponto, Férias,
+--                                                          Documentos
+--
+-- 12  TABELAS_SST.sql                       18 tabelas     Estoque EPI,
+--                                                          Faturas, CIPA,
+--                                                          eSocial
+--
+-- 13  TABELAS_GESTOR.sql                    24 tabelas     Motor Score,
+--                                                          Agentes IA,
+--                                                          Orquestração
+--
+-- 14  TABELAS_FINANCEIRO.sql                16 tabelas     Custos, CTE,
+--                                                          Folha Pgto
+--
+-- 15  TABELAS_ETL.sql                       39 tabelas     Staging,
+--                                                          Integração,
+--                                                          Produção
+--
+-- 16  RLS_TABELAS_NOVAS.sql                 11 tabelas     Segurança
+--                                           22 policies    (patch RLS)
+--
+-- 17  VIEWS_APLICACAO.sql                   16 views       Dashboard RPCs
+--                                                          (motor, absenteísmo)
+--
+-- 18  FUNCOES_APLICACAO.sql                 18 RPCs        Frontend
+--                                                          (dashboards,
+--                                                          CRUD, ETL)
+--
+-- ════════════════════════════════════════════════════════════════════════════
+-- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
+--   177 tabelas | 30 views | 67 functions | 60 triggers
+--   64 tabelas com RLS | 219 policies
+--   0 erros | 0 tabelas sensíveis expostas
+-- ════════════════════════════════════════════════════════════════════════════

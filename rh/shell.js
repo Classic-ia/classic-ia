@@ -33,6 +33,9 @@ const Shell = (() => {
     { group: 'Processos', id: 'ocorrencias', label: 'Ocorrencias', href: 'ocorrencias.html', icon: 'file-text', perfis: ['administrador','rh'] },
     { group: 'Processos', id: 'experiencia', label: 'Contratos Exp.', href: 'apuracao.html', icon: 'calendar', perfis: ['administrador','rh'] },
 
+    // PROCESSOS
+    { group: 'Processos', id: 'absenteismo', label: 'Absenteismo', href: 'absenteismo.html', icon: 'calendar', perfis: ['administrador','rh'] },
+
     // SST
     { group: 'SST', id: 'sst_dashboard', label: 'Painel SST', href: 'sst_dashboard.html', icon: 'shield', perfis: ['all'] },
     { group: 'SST', id: 'asos', label: 'ASOs', href: 'asos.html', icon: 'activity', perfis: ['administrador','rh'] },
@@ -42,6 +45,7 @@ const Shell = (() => {
     { group: 'SST', id: 'entrega_epi', label: 'Entrega EPI', href: 'entrega_epi.html', icon: 'package', perfis: ['administrador','rh'] },
     { group: 'SST', id: 'estoque_epi', label: 'Estoque EPI', href: 'estoque_epi.html', icon: 'box', perfis: ['administrador','rh'] },
     { group: 'SST', id: 'ordem_servico', label: 'Ordem Servico', href: 'ordem_servico.html', icon: 'clipboard', perfis: ['all'] },
+    { group: 'SST', id: 'restricoes', label: 'Restricoes Medicas', href: 'restricoes_medicas.html', icon: 'alert-triangle', perfis: ['administrador','rh','sst'] },
 
     // OPERACIONAL
     { group: 'Operacional', id: 'ponto', label: 'Ponto', href: 'importar_secullum.html', icon: 'clock', perfis: ['administrador','rh'] },

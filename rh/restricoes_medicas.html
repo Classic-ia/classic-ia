@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Restricoes Medicas - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.filter-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+.filter-row label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px}
+.filter-row input,.filter-row select{min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-page);color:var(--text-primary)}
+.filter-row input[type="text"]{min-width:200px}
+.tbl-footer{padding:10px 16px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)}
+.row-encerrada{opacity:.55}
+.badge-orange{background:#fff7ed;color:#c2410c;border:1px solid #fed7aa}
+.badge-blue{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe}
+.badge-purple{background:#faf5ff;color:#7c3aed;border:1px solid #ddd6fe}
+.badge-red{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.badge-yellow{background:#fefce8;color:#a16207;border:1px solid #fef08a}
+.badge-teal{background:#f0fdfa;color:#0f766e;border:1px solid #99f6e4}
+.badge-gray{background:var(--bg-page);color:var(--text-secondary);border:1px solid var(--border)}
+.badge-danger{background:#fef2f2;color:#dc2626;border:1px solid #fecaca}
+.badge-muted{background:var(--bg-page);color:var(--text-secondary);border:1px solid var(--border)}
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal-box{background:var(--bg-card);border-radius:12px;padding:28px;width:95%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal-box h3{font-size:16px;font-weight:700;margin:0 0 20px}
+.form-group{margin-bottom:16px}
+.form-group label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-page);color:var(--text-primary);box-sizing:border-box}
+.form-group textarea{resize:vertical;min-height:70px}
+.form-group input:disabled,.form-group select:disabled{opacity:.5;cursor:not-allowed}
+.form-check{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+.form-check input[type="checkbox"]{width:16px;height:16px;accent-color:var(--primary)}
+.form-check label{font-size:13px;color:var(--text-primary);margin:0}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal-actions button{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;border:1px solid var(--border);font-family:inherit;transition:background .15s}
+.btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.btn-primary:hover{opacity:.9}
+.btn-secondary{background:var(--bg-page);color:var(--text-primary)}
+.btn-secondary:hover{background:var(--border)}
+.btn-add{background:var(--primary);color:#fff;border:none;padding:8px 18px;border-radius:8px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:opacity .15s}
+.btn-add:hover{opacity:.9}
+.btn-edit,.btn-del{background:none;border:none;cursor:pointer;padding:4px 8px;font-size:12px;font-family:inherit;border-radius:6px;transition:background .15s}
+.btn-edit{color:var(--primary)}.btn-edit:hover{background:rgba(37,99,235,.08)}
+.btn-del{color:#dc2626}.btn-del:hover{background:rgba(220,38,38,.08)}
+@media(max-width:640px){.filter-row{flex-direction:column}.filter-row input,.filter-row select{min-width:100%}.modal-box{padding:20px}}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+<!-- KPIs -->
+<div class="kpi-row mb-6">
+  <div class="kpi-card">
+    <div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg></div>
+    <div class="kpi-value" id="kAtivas"><span class="spinner"></span></div>
+    <div class="kpi-label">Restricoes Ativas</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon orange"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg></div>
+    <div class="kpi-value" id="kPeso"><span class="spinner"></span></div>
+    <div class="kpi-label">Restricoes de Peso</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="2" x2="12" y2="22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></div>
+    <div class="kpi-value" id="kAltura"><span class="spinner"></span></div>
+    <div class="kpi-label">Restricoes de Altura</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+    <div class="kpi-value" id="kTemp"><span class="spinner"></span></div>
+    <div class="kpi-label">Temporarias</div>
+  </div>
+</div>
+
+<!-- Filters + Add button -->
+<div class="filter-row">
+  <div><label>Buscar funcionario</label><input type="text" id="fBusca" placeholder="Nome do funcionario..." oninput="renderTable()"></div>
+  <div><label>Tipo</label>
+    <select id="fTipo" onchange="renderTable()">
+      <option value="">Todos</option>
+      <option value="peso">Restricao de Peso</option>
+      <option value="altura">Restricao de Altura</option>
+      <option value="repetitivo">Mov. Repetitivo</option>
+      <option value="temperatura">Temperatura</option>
+      <option value="quimica">Agentes Quimicos</option>
+      <option value="funcional">Funcional</option>
+      <option value="outra">Outra</option>
+    </select>
+  </div>
+  <div><label>Status</label>
+    <select id="fStatus" onchange="renderTable()">
+      <option value="">Todas</option>
+      <option value="ativa" selected>Ativas</option>
+      <option value="encerrada">Encerradas</option>
+    </select>
+  </div>
+  <div style="margin-left:auto;align-self:flex-end">
+    <button class="btn-add" onclick="openModal()">+ Nova Restricao</button>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="data-table-wrapper">
+    <table class="data-table">
+      <thead><tr>
+        <th>Funcionario</th>
+        <th>Tipo</th>
+        <th>Permanente?</th>
+        <th>Inicio</th>
+        <th>Previsao Fim</th>
+        <th>Descricao</th>
+        <th>Laudo</th>
+        <th>Status</th>
+        <th>Acoes</th>
+      </tr></thead>
+      <tbody id="tbBody"></tbody>
+    </table>
+  </div>
+  <div class="tbl-footer" id="tblFooter"></div>
+</div>
+
+</div>
+
+<!-- CRUD Modal -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <h3 id="modalTitle">Nova Restricao Medica</h3>
+    <input type="hidden" id="mId">
+    <div class="form-group">
+      <label>Funcionario *</label>
+      <select id="mFuncionario"><option value="">Selecione...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Tipo de Restricao *</label>
+      <select id="mTipo">
+        <option value="">Selecione...</option>
+        <option value="peso">Restricao de Peso</option>
+        <option value="altura">Restricao de Altura</option>
+        <option value="repetitivo">Mov. Repetitivo</option>
+        <option value="temperatura">Temperatura</option>
+        <option value="quimica">Agentes Quimicos</option>
+        <option value="funcional">Funcional</option>
+        <option value="outra">Outra</option>
+      </select>
+    </div>
+    <div class="form-check">
+      <input type="checkbox" id="mPermanente" onchange="togglePermanente()">
+      <label for="mPermanente">Permanente</label>
+    </div>
+    <div class="form-group">
+      <label>Data Inicio *</label>
+      <input type="date" id="mInicio">
+    </div>
+    <div class="form-group">
+      <label>Previsao Fim</label>
+      <input type="date" id="mFim">
+    </div>
+    <div class="form-group">
+      <label>Descricao</label>
+      <textarea id="mDescricao" placeholder="Descreva a restricao..."></textarea>
+    </div>
+    <div class="form-group">
+      <label>Laudo Referencia</label>
+      <input type="text" id="mLaudo" placeholder="Numero ou referencia do laudo">
+    </div>
+    <div class="form-group">
+      <label>Status</label>
+      <select id="mStatus">
+        <option value="ativa">Ativa</option>
+        <option value="encerrada">Encerrada</option>
+      </select>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" id="btnSave" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+Shell.init({ page: 'restricoes', title: 'Restricoes Medicas' });
+
+const esc = s => API.esc(s);
+const fmtD = d => d ? API.fmtData(d) : '--';
+
+/* ===== Types map ===== */
+const TIPOS = {
+  peso:        { label: 'Restricao de Peso', badge: 'badge-orange' },
+  altura:      { label: 'Restricao de Altura', badge: 'badge-blue' },
+  repetitivo:  { label: 'Mov. Repetitivo', badge: 'badge-purple' },
+  temperatura: { label: 'Temperatura', badge: 'badge-red' },
+  quimica:     { label: 'Agentes Quimicos', badge: 'badge-yellow' },
+  funcional:   { label: 'Funcional', badge: 'badge-teal' },
+  outra:       { label: 'Outra', badge: 'badge-gray' }
+};
+
+/* ===== State ===== */
+let restricoes = [];
+let funcMap = {};
+let funcList = [];
+
+/* ===== Load ===== */
+(async function init() {
+  try {
+    const [rRestr, rFunc] = await Promise.all([
+      API.get('sst_restricao?order=created_at.desc&limit=500'),
+      API.get('rh_funcionarios?select=id,nome_completo,status&status=in.(ativo,afastado,ferias)&order=nome_completo')
+    ]);
+
+    restricoes = rRestr.ok ? rRestr.data : [];
+    funcList = rFunc.ok ? rFunc.data : [];
+    funcList.forEach(f => { funcMap[f.id] = f; });
+
+    populateFuncSelect();
+    renderKPIs();
+    renderTable();
+  } catch (err) {
+    console.error('Erro ao carregar restricoes medicas:', err);
+  }
+})();
+
+/* ===== Populate funcionario select ===== */
+function populateFuncSelect() {
+  const sel = document.getElementById('mFuncionario');
+  funcList.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.id;
+    o.textContent = f.nome_completo;
+    sel.appendChild(o);
+  });
+}
+
+/* ===== KPIs ===== */
+function renderKPIs() {
+  const ativas = restricoes.filter(r => r.status === 'ativa');
+  document.getElementById('kAtivas').textContent = ativas.length;
+  document.getElementById('kPeso').textContent = ativas.filter(r => r.tipo_restricao === 'peso').length;
+  document.getElementById('kAltura').textContent = ativas.filter(r => r.tipo_restricao === 'altura').length;
+  document.getElementById('kTemp').textContent = ativas.filter(r => r.permanente === false || r.permanente === 'false').length;
+}
+
+/* ===== Render table ===== */
+function renderTable() {
+  const busca = (document.getElementById('fBusca').value || '').toLowerCase();
+  const tipo = document.getElementById('fTipo').value;
+  const status = document.getElementById('fStatus').value;
+
+  const filtered = restricoes.filter(r => {
+    if (tipo && r.tipo_restricao !== tipo) return false;
+    if (status && r.status !== status) return false;
+    if (busca) {
+      const func = funcMap[r.funcionario_id];
+      const nome = (func ? func.nome_completo : '').toLowerCase();
+      if (!nome.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('tbBody');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="9" class="text-muted" style="text-align:center;padding:24px">Nenhuma restricao encontrada</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(r => {
+      const func = funcMap[r.funcionario_id] || {};
+      const t = TIPOS[r.tipo_restricao] || TIPOS.outra;
+      const isPerm = r.permanente === true || r.permanente === 'true';
+      const isEnc = r.status === 'encerrada';
+      const rowClass = isEnc ? ' class="row-encerrada"' : '';
+      const statusBadge = isEnc
+        ? '<span class="badge badge-muted">Encerrada</span>'
+        : '<span class="badge badge-danger">Ativa</span>';
+      const permLabel = isPerm ? 'Sim' : 'Nao';
+
+      return '<tr' + rowClass + '>'
+        + '<td>' + esc(func.nome_completo || '--') + '</td>'
+        + '<td><span class="badge ' + t.badge + '">' + esc(t.label) + '</span></td>'
+        + '<td>' + esc(permLabel) + '</td>'
+        + '<td>' + esc(fmtD(r.data_inicio)) + '</td>'
+        + '<td>' + (isPerm ? '--' : esc(fmtD(r.data_previsao_fim))) + '</td>'
+        + '<td>' + esc(r.descricao || '--') + '</td>'
+        + '<td>' + esc(r.laudo_referencia || '--') + '</td>'
+        + '<td>' + statusBadge + '</td>'
+        + '<td style="white-space:nowrap">'
+          + '<button class="btn-edit" onclick="editar(\'' + r.id + '\')">Editar</button>'
+        + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+  document.getElementById('tblFooter').textContent = filtered.length + ' de ' + restricoes.length + ' restricoes';
+}
+
+/* ===== Modal ===== */
+function openModal(item) {
+  document.getElementById('mId').value = item ? item.id : '';
+  document.getElementById('modalTitle').textContent = item ? 'Editar Restricao Medica' : 'Nova Restricao Medica';
+  document.getElementById('mFuncionario').value = item ? item.funcionario_id : '';
+  document.getElementById('mTipo').value = item ? item.tipo_restricao : '';
+  document.getElementById('mPermanente').checked = item ? (item.permanente === true || item.permanente === 'true') : false;
+  document.getElementById('mInicio').value = item ? (item.data_inicio || '') : '';
+  document.getElementById('mFim').value = item ? (item.data_previsao_fim || '') : '';
+  document.getElementById('mDescricao').value = item ? (item.descricao || '') : '';
+  document.getElementById('mLaudo').value = item ? (item.laudo_referencia || '') : '';
+  document.getElementById('mStatus').value = item ? item.status : 'ativa';
+  togglePermanente();
+  document.getElementById('modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function togglePermanente() {
+  const checked = document.getElementById('mPermanente').checked;
+  const fimInput = document.getElementById('mFim');
+  fimInput.disabled = checked;
+  if (checked) fimInput.value = '';
+}
+
+function editar(id) {
+  const item = restricoes.find(r => r.id === id);
+  if (item) openModal(item);
+}
+
+/* ===== Save ===== */
+async function salvar() {
+  const id = document.getElementById('mId').value;
+  const funcionario_id = document.getElementById('mFuncionario').value;
+  const tipo_restricao = document.getElementById('mTipo').value;
+  const permanente = document.getElementById('mPermanente').checked;
+  const data_inicio = document.getElementById('mInicio').value;
+  const data_previsao_fim = permanente ? null : (document.getElementById('mFim').value || null);
+  const descricao = document.getElementById('mDescricao').value.trim();
+  const laudo_referencia = document.getElementById('mLaudo').value.trim();
+  const status = document.getElementById('mStatus').value;
+
+  if (!funcionario_id || !tipo_restricao || !data_inicio) {
+    if (typeof UI !== 'undefined' && UI.toast) {
+      UI.toast('Preencha os campos obrigatorios (funcionario, tipo, data inicio).', 'error');
+    } else {
+      alert('Preencha os campos obrigatorios (funcionario, tipo, data inicio).');
+    }
+    return;
+  }
+
+  const payload = { funcionario_id, tipo_restricao, permanente, data_inicio, data_previsao_fim, descricao, laudo_referencia, status };
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  try {
+    let res;
+    if (id) {
+      res = await API.patch('sst_restricao?id=eq.' + id, payload);
+    } else {
+      res = await API.post('sst_restricao', payload);
+    }
+
+    if (res.ok) {
+      if (typeof UI !== 'undefined' && UI.toast) {
+        UI.toast(id ? 'Restricao atualizada.' : 'Restricao criada.', 'success');
+      }
+      closeModal();
+      await reloadData();
+    } else {
+      const msg = (res.error && res.error.message) || 'Erro ao salvar restricao.';
+      if (typeof UI !== 'undefined' && UI.toast) {
+        UI.toast(msg, 'error');
+      } else {
+        alert(msg);
+      }
+    }
+  } catch (err) {
+    console.error('Erro ao salvar restricao:', err);
+    if (typeof UI !== 'undefined' && UI.toast) {
+      UI.toast('Erro inesperado ao salvar.', 'error');
+    } else {
+      alert('Erro inesperado ao salvar.');
+    }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
+}
+
+/* ===== Reload data ===== */
+async function reloadData() {
+  try {
+    const res = await API.get('sst_restricao?order=created_at.desc&limit=500');
+    restricoes = res.ok ? res.data : [];
+    renderKPIs();
+    renderTable();
+  } catch (err) {
+    console.error('Erro ao recarregar dados:', err);
+  }
+}
+
+/* Close modal on overlay click */
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+/* Close modal on Escape */
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+</script>
+</body>
+</html>

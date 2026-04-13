@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - Painel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- Welcome -->
+  <div class="welcome-section">
+    <div class="welcome-greeting" id="welcomeMsg">Bom dia</div>
+    <div class="welcome-date" id="welcomeDate"></div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-row mb-6" id="kpiRow">
+    <a class="kpi-card" href="colaboradores.html">
+      <div class="kpi-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-ativos"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">Colaboradores Ativos</div>
+    </a>
+    <a class="kpi-card" href="alertas_rh.html">
+      <div class="kpi-icon amber">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-pendencias"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">Pendencias Abertas</div>
+    </a>
+    <a class="kpi-card" href="alertas_rh.html">
+      <div class="kpi-icon green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-acoes"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">Planos de Acao</div>
+    </a>
+    <a class="kpi-card" href="motor_v2.html">
+      <div class="kpi-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-score"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+      <div class="kpi-label">Score Operacional</div>
+    </a>
+  </div>
+
+  <!-- Two columns: Priorities + Alerts -->
+  <div class="dash-columns mb-6">
+    <!-- Left: Priorities -->
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>Prioridades do Dia</h3>
+          <p class="text-sm text-muted">Itens que precisam de atencao imediata</p>
+        </div>
+        <a href="alertas_rh.html" class="btn btn-ghost btn-sm">Ver todos</a>
+      </div>
+      <div class="card-body" style="padding:0;" id="prioridadesBody">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+
+    <!-- Right: Critical Alerts -->
+    <div class="card">
+      <div class="card-header">
+        <h3>Alertas Criticos</h3>
+        <a href="alertas_rh.html" class="btn btn-ghost btn-sm">Ver todos</a>
+      </div>
+      <div class="card-body" style="padding:0;" id="alertasBody">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Contracts expiring -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <div>
+        <h3>Contratos de Experiencia</h3>
+        <p class="text-sm text-muted">Colaboradores nos primeiros 90 dias</p>
+      </div>
+    </div>
+    <div class="data-table-wrapper" style="border:none;border-radius:0;">
+      <table class="data-table" id="tblExperiencia">
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Admissao</th>
+            <th>Dias</th>
+            <th>Vencimento 45d</th>
+            <th>Vencimento 90d</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyExperiencia">
+          <tr><td colspan="6" class="table-empty"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Integrations status -->
+  <div class="card mb-6">
+    <div class="card-header">
+      <h3>Integracoes</h3>
+      <a href="integracoes.html" class="btn btn-ghost btn-sm">Gerenciar</a>
+    </div>
+    <div class="card-body" id="integBody">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="text-align:center;padding:var(--space-6) 0;font-size:var(--text-xs);color:var(--text-muted);">
+    Classic RH &amp; SST v2026.03 &mdash; Classic Importacao e Exportacao de Couros Ltda
+  </div>
+
+</div>
+
+<script>
+(async () => {
+  // =========================================================
+  // 1. SHELL + AUTH
+  // =========================================================
+  const user = await Shell.init({ page: 'app', title: 'Dashboard' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  // =========================================================
+  // 2. WELCOME
+  // =========================================================
+  const nome = (user.nome || user.email || '').split(' ')[0];
+  const hour = new Date().getHours();
+  let greeting = 'Bom dia';
+  if (hour >= 12 && hour < 18) greeting = 'Boa tarde';
+  else if (hour >= 18) greeting = 'Boa noite';
+
+  document.getElementById('welcomeMsg').textContent = `${greeting}, ${nome}`;
+  document.getElementById('welcomeDate').textContent = new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  // =========================================================
+  // 3. LOAD ALL DATA
+  // =========================================================
+  loadKPIs();
+  loadPrioridades();
+  loadAlertas();
+  loadExperiencia();
+  loadIntegracoes();
+
+  // =========================================================
+  // 4. KPIs
+  // =========================================================
+  async function loadKPIs() {
+    try {
+      const [funcs, alertas, acoes, tarefas] = await Promise.all([
+        API.get('rh_funcionarios?status=in.(ativo,ferias,experiencia)&select=id'),
+        API.get('orch_alerta?status=eq.aberto&select=id'),
+        API.get('acao_plano?status=not.in.(concluida,cancelada,descartada)&select=id'),
+        API.get('orch_tarefa?status=eq.pendente&select=id'),
+      ]);
+
+      setKPI('kpi-ativos', funcs.ok ? funcs.data.length : '--');
+      setKPI('kpi-pendencias', alertas.ok ? alertas.data.length : '--');
+      setKPI('kpi-acoes', acoes.ok ? acoes.data.length : '--');
+      setKPI('kpi-score', tarefas.ok ? tarefas.data.length : '--');
+    } catch (e) {
+      console.warn('KPIs error:', e.message);
+      ['kpi-ativos','kpi-pendencias','kpi-acoes','kpi-score'].forEach(id => setKPI(id, '--'));
+    }
+  }
+
+  // =========================================================
+  // 5. PRIORITIES
+  // =========================================================
+  async function loadPrioridades() {
+    const el = document.getElementById('prioridadesBody');
+    try {
+      const res = await API.get('orch_alerta?status=eq.aberto&order=prioridade.desc,criado_em.desc&limit=8&select=id,tipo,titulo,prioridade,criado_em');
+      const data = res.ok ? res.data : [];
+      if (!data.length) {
+        el.innerHTML = emptyState('Nenhuma prioridade pendente');
+        return;
+      }
+      let html = '<ul class="priority-list">';
+      data.forEach(item => {
+        const prio = (item.prioridade || 'media').toLowerCase();
+        const cls = prio === 'alta' || prio === 'critica' ? 'high' : prio === 'media' ? 'medium' : 'low';
+        const icon = cls === 'high' ? '!' : cls === 'medium' ? '-' : 'i';
+        html += `
+          <li class="priority-item">
+            <div class="priority-icon ${cls}">${icon}</div>
+            <div class="priority-content">
+              <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Sem titulo')}</div>
+              <div class="priority-meta">${API.esc(item.tipo || '')} &middot; ${API.fmtData(item.criado_em)}</div>
+            </div>
+            <span class="badge badge-${cls === 'high' ? 'danger' : cls === 'medium' ? 'warning' : 'info'}">${API.esc(capitalize(prio))}</span>
+          </li>`;
+      });
+      html += '</ul>';
+      el.innerHTML = html;
+    } catch (e) {
+      el.innerHTML = emptyState('Erro ao carregar prioridades');
+    }
+  }
+
+  // =========================================================
+  // 6. CRITICAL ALERTS
+  // =========================================================
+  async function loadAlertas() {
+    const el = document.getElementById('alertasBody');
+    try {
+      const res = await API.get('orch_alerta?status=eq.aberto&prioridade=in.(alta,critica)&order=criado_em.desc&limit=6&select=id,tipo,titulo,prioridade,criado_em');
+      const data = res.ok ? res.data : [];
+      if (!data.length) {
+        el.innerHTML = emptyState('Nenhum alerta critico');
+        return;
+      }
+      let html = '<ul class="priority-list">';
+      data.forEach(item => {
+        html += `
+          <li class="priority-item">
+            <div class="priority-icon high">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="priority-content">
+              <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Alerta')}</div>
+              <div class="priority-meta">${API.fmtData(item.criado_em)}</div>
+            </div>
+          </li>`;
+      });
+      html += '</ul>';
+      el.innerHTML = html;
+    } catch (e) {
+      el.innerHTML = emptyState('Erro ao carregar alertas');
+    }
+  }
+
+  // =========================================================
+  // 7. EXPERIENCE CONTRACTS
+  // =========================================================
+  async function loadExperiencia() {
+    const tbody = document.getElementById('tbodyExperiencia');
+    try {
+      const ninetyDaysAgo = new Date();
+      ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+      const isoDate = ninetyDaysAgo.toISOString().slice(0, 10);
+
+      const res = await API.get(
+        `vw_funcionario_base?status=eq.ativo&data_admissao=gte.${isoDate}&select=id,nome,data_admissao&order=data_admissao.asc`
+      );
+      const data = res.ok ? res.data : [];
+
+      if (!data.length) {
+        tbody.innerHTML = '<tr><td colspan="6" class="table-empty">Nenhum contrato de experiencia ativo</td></tr>';
+        return;
+      }
+
+      const today = new Date();
+      tbody.innerHTML = data.map(f => {
+        const admDate = new Date(f.data_admissao);
+        const dias = Math.floor((today - admDate) / 86400000);
+        const v45 = new Date(admDate); v45.setDate(v45.getDate() + 45);
+        const v90 = new Date(admDate); v90.setDate(v90.getDate() + 90);
+
+        let statusBadge = '<span class="badge badge-success">OK</span>';
+        if (dias >= 80) statusBadge = '<span class="badge badge-danger">Vence em breve</span>';
+        else if (dias >= 40 && dias <= 50) statusBadge = '<span class="badge badge-warning">45 dias</span>';
+
+        return `<tr>
+          <td class="font-medium">${API.esc(f.nome)}</td>
+          <td>${API.fmtData(f.data_admissao)}</td>
+          <td class="cell-center">${dias}</td>
+          <td>${API.fmtData(v45.toISOString())}</td>
+          <td>${API.fmtData(v90.toISOString())}</td>
+          <td>${statusBadge}</td>
+        </tr>`;
+      }).join('');
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="table-empty text-muted">Erro ao carregar contratos</td></tr>';
+    }
+  }
+
+  // =========================================================
+  // 8. INTEGRATIONS STATUS
+  // =========================================================
+  async function loadIntegracoes() {
+    const el = document.getElementById('integBody');
+    try {
+      const res = await API.get('integ_conector?select=id,nome,tipo,ativo,ultimo_sync,status_sync&order=nome.asc');
+      const data = res.ok ? res.data : [];
+
+      if (!data.length) {
+        el.innerHTML = `
+          <div class="grid-auto gap-3">
+            ${integCard('Convenia', 'RH', true)}
+            ${integCard('BuscaEPI', 'SST', true)}
+            ${integCard('Secullum', 'Ponto', false)}
+            ${integCard('Atak', 'Producao', false)}
+          </div>`;
+        return;
+      }
+
+      let html = '<div class="grid-auto gap-3">';
+      data.forEach(c => {
+        const online = c.ativo && c.status_sync !== 'erro';
+        const lastSync = c.ultimo_sync ? API.fmtData(c.ultimo_sync) : 'Nunca';
+        html += `
+          <div class="integ-card">
+            <div class="integ-icon"><span class="status-dot ${online ? 'online' : 'offline'}"></span></div>
+            <div class="integ-info">
+              <div class="integ-name">${API.esc(c.nome)}</div>
+              <div class="integ-detail">${API.esc(c.tipo || '')} &middot; Sync: ${lastSync}</div>
+            </div>
+            <span class="badge ${online ? 'badge-success' : 'badge-gray'}">${online ? 'Online' : 'Offline'}</span>
+          </div>`;
+      });
+      html += '</div>';
+      el.innerHTML = html;
+    } catch (e) {
+      el.innerHTML = `
+        <div class="grid-auto gap-3">
+          ${integCard('Convenia', 'RH', true)}
+          ${integCard('BuscaEPI', 'SST', true)}
+          ${integCard('Secullum', 'Ponto', false)}
+          ${integCard('Atak', 'Producao', false)}
+        </div>`;
+    }
+  }
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+  function setKPI(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = typeof value === 'number' ? API.fmtNum(value) : value;
+  }
+
+  function capitalize(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1) : '';
+  }
+
+  function emptyState(msg) {
+    return `<div style="padding:var(--space-8) var(--space-6);text-align:center;">
+      <div style="color:var(--text-muted);font-size:var(--text-sm);">${msg}</div>
+    </div>`;
+  }
+
+  function integCard(name, type, online) {
+    return `
+      <div class="integ-card">
+        <div class="integ-icon"><span class="status-dot ${online ? 'online' : 'offline'}"></span></div>
+        <div class="integ-info">
+          <div class="integ-name">${name}</div>
+          <div class="integ-detail">${type}</div>
+        </div>
+        <span class="badge ${online ? 'badge-success' : 'badge-gray'}">${online ? 'Online' : 'Offline'}</span>
+      </div>`;
+  }
+
+})();
+</script>
+</body>
+</html>

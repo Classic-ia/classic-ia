@@ -1,0 +1,1020 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motor de Decisao v2 — Classic RH & SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<style>
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  text-decoration: none; font-family: 'DM Sans';
+}
+.back-btn:hover { color: var(--text); border-color: var(--accent); }
+.page-title { font-family: 'Syne'; font-weight: 800; font-size: 18px; color: var(--accent); }
+.page-sub { font-size: 11px; color: var(--muted); }
+.breadcrumb { font-size: 11px; color: var(--muted); margin-bottom: 2px; }
+.breadcrumb a { color: var(--muted); text-decoration: none; }
+.breadcrumb a:hover { color: var(--accent); }
+
+/* Main */
+.main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+/* Period selector */
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.toolbar-left { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.toolbar-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.period-select {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 7px 12px; border-radius: 8px; font-family: 'DM Sans'; font-size: 13px;
+  cursor: pointer; outline: none;
+}
+.period-select:focus { border-color: var(--accent); }
+.btn-execute {
+  background: var(--primary-light); color: #fff; border: none;
+  padding: 8px 18px; border-radius: 8px; font-family: 'DM Sans'; font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: .2s;
+}
+.btn-execute:hover { background: var(--primary); }
+.btn-execute:disabled { opacity: .5; cursor: not-allowed; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; }
+.badge-alertas {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(220,53,69,.12); border: 1px solid rgba(220,53,69,.3);
+  border-radius: 8px; padding: 6px 12px; font-size: 12px; font-weight: 600;
+}
+.badge-alertas .count { color: var(--err); font-family: 'Syne'; font-weight: 800; font-size: 16px; }
+
+/* KPIs */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 16px; text-align: center;
+  transition: .25s;
+}
+.kpi:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.kpi-val {
+  font-family: 'Syne'; font-weight: 800; font-size: 26px; color: var(--accent);
+}
+.kpi-lbl {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+.kpi-ref { font-size: 10px; color: var(--muted); margin-top: 2px; font-style: italic; }
+
+/* Sections */
+.section { margin-bottom: 28px; }
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .icon { font-size: 16px; }
+
+/* Data Quality Block */
+.quality-block {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; margin-bottom: 24px;
+}
+.quality-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; flex-wrap: wrap; gap: 12px;
+}
+.quality-title {
+  font-family: 'Syne'; font-weight: 800; font-size: 16px;
+}
+.quality-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 16px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.quality-badge .dot {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+}
+.quality-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px; margin-bottom: 16px;
+}
+.quality-card {
+  background: var(--surface2); border-radius: 10px; padding: 14px 16px;
+}
+.quality-card-title {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 8px;
+}
+.bar-track {
+  height: 8px; background: var(--surface3); border-radius: 4px;
+  overflow: hidden; margin-bottom: 4px;
+}
+.bar-fill { height: 100%; border-radius: 4px; transition: width .5s ease; }
+.bar-label { display: flex; justify-content: space-between; font-size: 11px; }
+.bar-label .pct { font-family: 'DM Mono'; font-weight: 500; }
+.quality-warning {
+  background: rgba(255,193,7,.08); border: 1px solid rgba(255,193,7,.25);
+  border-radius: 10px; padding: 12px 16px; font-size: 12px; color: var(--warn);
+  display: flex; align-items: flex-start; gap: 10px; line-height: 1.5;
+}
+.quality-warning .warn-icon { font-size: 18px; flex-shrink: 0; margin-top: 1px; }
+
+/* Confidence per sector */
+.conf-table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden; margin-bottom: 24px;
+}
+
+/* Score distribution */
+.dist-block {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 24px; margin-bottom: 24px;
+}
+.stacked-bar-container { margin-bottom: 14px; }
+.stacked-bar {
+  display: flex; height: 32px; border-radius: 8px; overflow: hidden;
+  background: var(--surface3);
+}
+.stacked-segment {
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; color: #fff;
+  transition: width .5s ease; min-width: 0; overflow: hidden;
+  white-space: nowrap;
+}
+.dist-legend {
+  display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px;
+}
+.legend-item {
+  display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted);
+}
+.legend-dot { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
+
+/* Tables */
+.data-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.data-table th {
+  text-align: left; padding: 10px 14px;
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .06em; border-bottom: 1px solid var(--border);
+  background: var(--surface2); position: sticky; top: 0;
+}
+.data-table td {
+  padding: 10px 14px; border-bottom: 1px solid rgba(30,58,82,.4);
+}
+.data-table tr:hover td { background: rgba(46,107,138,.06); }
+.data-table .num {
+  font-family: 'DM Mono'; font-weight: 500; text-align: right;
+}
+
+/* Tags / badges */
+.tag {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .03em;
+}
+.tag-consistente { background: rgba(40,167,69,.15); color: var(--cls-consistente); }
+.tag-regular { background: rgba(23,162,184,.15); color: var(--cls-regular); }
+.tag-monitorar { background: rgba(255,193,7,.15); color: var(--cls-monitorar); }
+.tag-atencao_operacional { background: rgba(220,53,69,.15); color: var(--cls-atencao); }
+.tag-dado_insuficiente { background: rgba(108,117,125,.15); color: var(--cls-insuf); }
+
+.tag-critica { background: rgba(220,53,69,.15); color: var(--cls-atencao); }
+.tag-alta { background: rgba(255,152,0,.15); color: #ff9800; }
+.tag-media { background: rgba(255,193,7,.15); color: var(--cls-monitorar); }
+.tag-baixa { background: rgba(23,162,184,.15); color: var(--cls-regular); }
+.tag-informativa { background: rgba(108,117,125,.15); color: var(--cls-insuf); }
+
+.tag-aberto { background: rgba(220,53,69,.15); color: var(--cls-atencao); }
+.tag-em_analise { background: rgba(255,193,7,.15); color: var(--cls-monitorar); }
+.tag-resolvido { background: rgba(40,167,69,.15); color: var(--cls-consistente); }
+
+/* Score bar inline */
+.score-bar-inline {
+  display: flex; align-items: center; gap: 8px;
+}
+.score-bar-track {
+  flex: 1; height: 6px; background: var(--surface3); border-radius: 3px; overflow: hidden;
+}
+.score-bar-fill { height: 100%; border-radius: 3px; }
+.score-val {
+  font-family: 'DM Mono'; font-weight: 500; font-size: 12px; min-width: 36px; text-align: right;
+}
+
+/* Evolution mini-chart */
+.evo-chart {
+  display: flex; align-items: flex-end; gap: 3px; height: 60px;
+  padding: 4px 0;
+}
+.evo-bar {
+  flex: 1; min-width: 12px; border-radius: 3px 3px 0 0;
+  background: var(--primary-light); transition: height .4s ease;
+  position: relative;
+}
+.evo-bar:hover { background: var(--accent); }
+.evo-labels {
+  display: flex; gap: 3px; margin-top: 4px;
+}
+.evo-labels span {
+  flex: 1; min-width: 12px; text-align: center;
+  font-size: 8px; color: var(--muted); font-family: 'DM Mono';
+}
+
+/* LGPD Footer */
+.lgpd-footer {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 20px 24px; margin-top: 32px;
+  margin-bottom: 20px;
+}
+.lgpd-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 12px;
+  color: var(--warn); text-transform: uppercase; letter-spacing: .08em;
+  margin-bottom: 8px; display: flex; align-items: center; gap: 8px;
+}
+.lgpd-text {
+  font-size: 12px; color: var(--muted); line-height: 1.7;
+}
+
+/* Spinner */
+.spinner {
+  width: 20px; height: 20px; border: 2px solid var(--surface3);
+  border-top-color: var(--accent); border-radius: 50%;
+  animation: spin .7s linear infinite; display: inline-block;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-center {
+  text-align: center; padding: 60px 20px; color: var(--muted); font-size: 14px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kpi-row { grid-template-columns: 1fr 1fr; }
+  .quality-grid { grid-template-columns: 1fr; }
+  .toolbar { flex-direction: column; align-items: flex-start; }
+  .data-table { font-size: 11px; }
+  .data-table th, .data-table td { padding: 8px 10px; }
+}
+@media (max-width: 480px) {
+  .kpi-row { grid-template-columns: 1fr; }
+}
+
+/* Scrollable table wrapper */
+.table-scroll { overflow-x: auto; }
+
+/* Hidden section */
+.hidden { display: none !important; }
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<!-- Main content -->
+<div class="main">
+
+  <!-- Toolbar: period selector + alerts badge -->
+  <div class="toolbar">
+    <div class="toolbar-left">
+      <span class="toolbar-label">Periodo:</span>
+      <select id="sel-month" class="period-select"></select>
+      <select id="sel-year" class="period-select"></select>
+      <button id="btn-exec" class="btn-execute" title="Recalcular scores para o periodo selecionado">Recalcular</button>
+    </div>
+    <div class="toolbar-right">
+      <div class="badge-alertas" id="badge-alertas" style="display:none">
+        <span style="font-size:16px">&#9888;</span>
+        <span>Alertas: <span class="count" id="alertas-count">0</span></span>
+        <span style="color:var(--err);font-size:11px" id="alertas-criticos"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- KPI Row -->
+  <div class="kpi-row" id="kpi-row">
+    <!-- Filled dynamically -->
+  </div>
+
+  <!-- Data Quality Block -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128202;</span> Qualidade dos Dados</div>
+    <div class="quality-block" id="quality-block">
+      <div class="loading-center"><div class="spinner"></div> Carregando...</div>
+    </div>
+  </div>
+
+  <!-- Score Distribution -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128200;</span> Distribuicao de Classificacoes</div>
+    <div class="dist-block" id="dist-block">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Evolution mini chart -->
+  <div class="section" id="evo-section">
+    <div class="section-title"><span class="icon">&#128208;</span> Evolucao Mensal</div>
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px 24px;" id="evo-block">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Sector Ranking -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#127981;</span> Ranking por Setor</div>
+    <div class="conf-table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-setores">
+          <thead><tr>
+            <th>Setor</th><th class="num">Func.</th><th class="num">Score Medio</th>
+            <th>Distribuicao</th><th class="num">Fontes</th><th class="num">Qualidade</th>
+          </tr></thead>
+          <tbody id="tbody-setores">
+            <tr><td colspan="6" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Confiabilidade por Setor -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128269;</span> Confiabilidade por Setor</div>
+    <div class="conf-table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-conf">
+          <thead><tr>
+            <th>Setor</th><th class="num">Total</th>
+            <th class="num">Alta</th><th class="num">Media</th><th class="num">Baixa</th>
+            <th class="num">Presenca</th><th class="num">Producao</th>
+            <th class="num">Treinamento</th><th class="num">EPI</th>
+          </tr></thead>
+          <tbody id="tbody-conf">
+            <tr><td colspan="9" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alerts Table -->
+  <div class="section" id="section-alertas">
+    <div class="section-title"><span class="icon">&#128680;</span> Alertas</div>
+    <div class="conf-table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-alertas">
+          <thead><tr>
+            <th>Tipo</th><th>Prioridade</th><th>Titulo</th><th>Setor</th><th>Status</th>
+          </tr></thead>
+          <tbody id="tbody-alertas">
+            <tr><td colspan="5" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Patterns -->
+  <div class="section" id="section-padroes">
+    <div class="section-title"><span class="icon">&#128161;</span> Padroes Detectados</div>
+    <div class="conf-table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-padroes">
+          <thead><tr>
+            <th>Tipo</th><th>Descricao</th><th>Setor</th><th>Severidade</th>
+          </tr></thead>
+          <tbody id="tbody-padroes">
+            <tr><td colspan="4" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Detailed Scores (admin/rh only) -->
+  <div class="section hidden" id="section-detalhado">
+    <div class="section-title"><span class="icon">&#128100;</span> Scores Individuais Detalhados</div>
+    <div class="conf-table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-detalhado">
+          <thead><tr>
+            <th>Funcionario</th><th>Setor</th><th class="num">Score</th>
+            <th>Classificacao</th><th>Confiabilidade</th>
+            <th class="num">Fontes</th><th class="num">Qualidade</th>
+          </tr></thead>
+          <tbody id="tbody-detalhado">
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- LGPD Notice -->
+  <div class="lgpd-footer">
+    <div class="lgpd-title">&#128274; Aviso LGPD</div>
+    <div class="lgpd-text">
+      Este motor utiliza exclusivamente dados operacionais (presenca via registro de producao, producao em KG,
+      treinamentos registrados, tempo de empresa e entregas de EPI). NAO sao utilizados dados de saude
+      (CID, ASO, restricoes medicas, diagnosticos). O score NAO e um julgamento de valor sobre o funcionario.
+      Classificacoes como "dado_insuficiente" indicam FALTA DE REGISTRO, nao baixa performance.
+      Nenhuma decisao de gestao deve ser tomada exclusivamente com base neste score sem validacao humana.
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+</div><!-- /shell-content -->
+
+<script>
+/* ================================================================
+   Motor de Decisao v2 — Dashboard Executivo
+   ================================================================ */
+
+const MESES = ['Janeiro','Fevereiro','Marco','Abril','Maio','Junho',
+  'Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+const CLS_COLORS = {
+  consistente: '#28a745', regular: '#17a2b8', monitorar: '#ffc107',
+  atencao_operacional: '#dc3545', dado_insuficiente: '#6c757d'
+};
+const CLS_LABELS = {
+  consistente: 'Consistente', regular: 'Regular', monitorar: 'Monitorar',
+  atencao_operacional: 'Atencao Operacional', dado_insuficiente: 'Dado Insuficiente'
+};
+const CONF_COLORS = { alta: '#28a745', media: '#ffc107', baixa: '#dc3545', indeterminada: '#6c757d' };
+const CONF_LABELS = { alta: 'Alta', media: 'Media', baixa: 'Baixa', indeterminada: 'Indeterminada' };
+
+const KPI_ICONS = {
+  headcount: '&#128101;', turnover: '&#128257;', producao: '&#9881;',
+  dias_sem_acidente: '&#128154;', estabilidade: '&#128170;'
+};
+
+let _perfil = null;
+let _authToken = null;
+
+/* ---- Formatting (delegated to API) ---- */
+function fmtNum(v, dec) { return API.fmtNum(v, dec); }
+function fmtPct(v) { return API.fmtPct(v); }
+function scoreColor(s) {
+  if (s == null) return 'var(--muted)';
+  const n = Number(s);
+  if (n >= 80) return '#28a745';
+  if (n >= 60) return '#17a2b8';
+  if (n >= 40) return '#ffc107';
+  if (n >= 20) return '#dc3545';
+  return '#6c757d';
+}
+function confColor(c) { return CONF_COLORS[c] || CONF_COLORS.indeterminada; }
+function confLabel(c) { return CONF_LABELS[c] || 'Indeterminada'; }
+function clsTag(c) {
+  const cls = (c || '').toLowerCase().replace(/ /g, '_');
+  const label = CLS_LABELS[cls] || c || '—';
+  return '<span class="tag tag-' + cls + '">' + label + '</span>';
+}
+function prioTag(p) {
+  const cls = (p || '').toLowerCase();
+  return '<span class="tag tag-' + cls + '">' + (p || '—') + '</span>';
+}
+function statusTag(s) {
+  const cls = (s || '').toLowerCase().replace(/ /g, '_');
+  return '<span class="tag tag-' + cls + '">' + (s || '—') + '</span>';
+}
+
+/* ---- Period selectors ---- */
+function initPeriodSelectors() {
+  const selM = document.getElementById('sel-month');
+  const selY = document.getElementById('sel-year');
+  const now = new Date();
+  for (let i = 0; i < 12; i++) {
+    const o = document.createElement('option');
+    o.value = String(i + 1).padStart(2, '0');
+    o.textContent = MESES[i];
+    if (i === now.getMonth()) o.selected = true;
+    selM.appendChild(o);
+  }
+  const curYear = now.getFullYear();
+  for (let y = curYear; y >= curYear - 2; y--) {
+    const o = document.createElement('option');
+    o.value = y;
+    o.textContent = y;
+    selY.appendChild(o);
+  }
+}
+
+function getSelectedPeriod() {
+  const m = document.getElementById('sel-month').value;
+  const y = document.getElementById('sel-year').value;
+  return y + '-' + m + '-01';
+}
+
+/* ---- RPC calls via API library ---- */
+
+/* ---- Render KPIs ---- */
+function renderKPIs(kpis) {
+  const row = document.getElementById('kpi-row');
+  if (!kpis || kpis.length === 0) {
+    row.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px">Sem KPIs disponiveis.</div>';
+    return;
+  }
+  row.innerHTML = kpis.map(k => {
+    const icon = KPI_ICONS[(k.categoria || '').toLowerCase()] || '&#128202;';
+    const unit = k.unidade || '';
+    let display = fmtNum(k.valor);
+    if (unit === '%') display = fmtPct(k.valor);
+    else if (unit === 'R$') display = 'R$ ' + fmtNum(k.valor, 2);
+    else if (unit === 'KG') display = fmtNum(k.valor, 0) + ' KG';
+    else if (unit === 'dias') display = fmtNum(k.valor, 0) + ' dias';
+    const ref = k.referencia_nome ? '<div class="kpi-ref">' + k.referencia_nome + '</div>' : '';
+    return '<div class="kpi"><div class="kpi-val">' + icon + ' ' + display + '</div>'
+      + '<div class="kpi-lbl">' + (k.indicador || k.categoria) + '</div>' + ref + '</div>';
+  }).join('');
+}
+
+/* ---- Render Quality Block ---- */
+function renderQualityBlock(resumo, confiabilidade) {
+  const block = document.getElementById('quality-block');
+  if (!resumo || resumo.length === 0) {
+    block.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px">Sem dados de confiabilidade.</div>';
+    return;
+  }
+
+  // Aggregate overall confidence
+  let totalAll = 0, totalAlta = 0, totalMedia = 0, totalBaixa = 0;
+  resumo.forEach(r => {
+    totalAll += Number(r.total || 0);
+    if (r.confiabilidade === 'alta') totalAlta += Number(r.total || 0);
+    else if (r.confiabilidade === 'media') totalMedia += Number(r.total || 0);
+    else if (r.confiabilidade === 'baixa') totalBaixa += Number(r.total || 0);
+  });
+  const pctAlta = totalAll > 0 ? (totalAlta / totalAll * 100) : 0;
+  const pctMedia = totalAll > 0 ? (totalMedia / totalAll * 100) : 0;
+  const pctBaixa = totalAll > 0 ? (totalBaixa / totalAll * 100) : 0;
+
+  let overallConf = 'indeterminada';
+  let overallColor = CONF_COLORS.indeterminada;
+  if (pctAlta >= 70) { overallConf = 'alta'; overallColor = CONF_COLORS.alta; }
+  else if (pctAlta + pctMedia >= 70) { overallConf = 'media'; overallColor = CONF_COLORS.media; }
+  else if (totalAll > 0) { overallConf = 'baixa'; overallColor = CONF_COLORS.baixa; }
+
+  // Coverage from first sector or aggregate
+  let covPresenca = 0, covProducao = 0, covTreinamento = 0, covEpi = 0, nSectors = 0;
+  if (confiabilidade && confiabilidade.length > 0) {
+    confiabilidade.forEach(c => {
+      covPresenca += Number(c.cob_presenca || 0);
+      covProducao += Number(c.cob_producao || 0);
+      covTreinamento += Number(c.cob_treinamento || 0);
+      covEpi += Number(c.cob_epi || 0);
+      nSectors++;
+    });
+    if (nSectors > 0) {
+      covPresenca /= nSectors; covProducao /= nSectors;
+      covTreinamento /= nSectors; covEpi /= nSectors;
+    }
+  }
+
+  const coverages = [
+    { label: 'Presenca (via Producao)', pct: covPresenca, color: coverageColor(covPresenca) },
+    { label: 'Producao (KG)', pct: covProducao, color: coverageColor(covProducao) },
+    { label: 'Treinamento', pct: covTreinamento, color: coverageColor(covTreinamento) },
+    { label: 'EPI', pct: covEpi, color: coverageColor(covEpi) },
+  ];
+
+  let html = '<div class="quality-header">'
+    + '<div class="quality-title">Confiabilidade dos Dados</div>'
+    + '<div class="quality-badge" style="background:' + overallColor + '20;color:' + overallColor + '">'
+    + '<span class="dot" style="background:' + overallColor + '"></span> '
+    + confLabel(overallConf).toUpperCase()
+    + ' (' + fmtPct(pctAlta) + ' alta)'
+    + '</div></div>';
+
+  // Confidence distribution bar
+  html += '<div style="margin-bottom:16px">'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Distribuicao de Confiabilidade</div>'
+    + '<div class="stacked-bar">'
+    + stackSegment(pctAlta, CONF_COLORS.alta, fmtPct(pctAlta) + ' Alta')
+    + stackSegment(pctMedia, CONF_COLORS.media, fmtPct(pctMedia) + ' Media')
+    + stackSegment(pctBaixa, CONF_COLORS.baixa, fmtPct(pctBaixa) + ' Baixa')
+    + '</div></div>';
+
+  // Coverage bars
+  html += '<div class="quality-grid">'
+    + coverages.map(c =>
+      '<div class="quality-card">'
+      + '<div class="quality-card-title">' + c.label + '</div>'
+      + '<div class="bar-track"><div class="bar-fill" style="width:' + Math.min(c.pct, 100) + '%;background:' + c.color + '"></div></div>'
+      + '<div class="bar-label"><span>' + c.label.split(' ')[0] + '</span><span class="pct">' + fmtPct(c.pct) + '</span></div>'
+      + '</div>'
+    ).join('')
+    + '</div>';
+
+  // Warning if low confidence
+  const lowCov = coverages.filter(c => c.pct < 50);
+  if (overallConf === 'baixa' || lowCov.length > 0) {
+    const sources = lowCov.map(c => c.label.split(' ')[0]).join(', ');
+    html += '<div class="quality-warning">'
+      + '<span class="warn-icon">&#9888;</span>'
+      + '<span>Atencao: A confiabilidade geral e <strong>' + confLabel(overallConf).toLowerCase() + '</strong>.'
+      + (sources ? ' Fontes com cobertura insuficiente: <strong>' + sources + '</strong>.' : '')
+      + ' Scores podem nao refletir a realidade operacional. Verifique os registros de entrada.</span>'
+      + '</div>';
+  }
+
+  block.innerHTML = html;
+}
+
+function coverageColor(pct) {
+  if (pct >= 80) return '#28a745';
+  if (pct >= 50) return '#ffc107';
+  return '#dc3545';
+}
+
+function stackSegment(pct, color, label) {
+  if (pct < 1) return '';
+  return '<div class="stacked-segment" style="width:' + pct + '%;background:' + color + '">'
+    + (pct >= 8 ? label : '') + '</div>';
+}
+
+/* ---- Render Score Distribution ---- */
+function renderDistribution(resumo) {
+  const block = document.getElementById('dist-block');
+  if (!resumo || resumo.length === 0) {
+    block.innerHTML = '<div style="color:var(--muted);font-size:13px">Sem dados.</div>';
+    return;
+  }
+  let total = 0;
+  const map = {};
+  resumo.forEach(r => {
+    const cls = r.classificacao || 'dado_insuficiente';
+    map[cls] = (map[cls] || 0) + Number(r.total || 0);
+    total += Number(r.total || 0);
+  });
+
+  const order = ['consistente','regular','monitorar','atencao_operacional','dado_insuficiente'];
+  let barHtml = '<div class="stacked-bar">';
+  order.forEach(cls => {
+    const cnt = map[cls] || 0;
+    const pct = total > 0 ? (cnt / total * 100) : 0;
+    if (pct > 0) {
+      barHtml += '<div class="stacked-segment" style="width:' + pct + '%;background:' + (CLS_COLORS[cls] || '#6c757d') + '">'
+        + (pct >= 6 ? cnt : '') + '</div>';
+    }
+  });
+  barHtml += '</div>';
+
+  let legendHtml = '<div class="dist-legend">';
+  order.forEach(cls => {
+    const cnt = map[cls] || 0;
+    const pct = total > 0 ? (cnt / total * 100) : 0;
+    legendHtml += '<div class="legend-item">'
+      + '<div class="legend-dot" style="background:' + (CLS_COLORS[cls] || '#6c757d') + '"></div>'
+      + (CLS_LABELS[cls] || cls) + ': ' + cnt + ' (' + fmtPct(pct) + ')'
+      + '</div>';
+  });
+  legendHtml += '</div>';
+
+  // Summary stats
+  let statsHtml = '<div style="display:flex;gap:20px;margin-top:14px;flex-wrap:wrap">';
+  resumo.forEach(r => {
+    if (r.score_medio != null) {
+      statsHtml += '<div style="font-size:11px;color:var(--muted)">'
+        + (CLS_LABELS[r.classificacao] || r.classificacao) + ': score medio '
+        + '<span style="font-family:DM Mono;color:' + scoreColor(r.score_medio) + '">' + fmtNum(r.score_medio, 1) + '</span>'
+        + '</div>';
+    }
+  });
+  statsHtml += '</div>';
+
+  block.innerHTML = '<div class="stacked-bar-container">' + barHtml + '</div>' + legendHtml + statsHtml;
+}
+
+/* ---- Render Evolution ---- */
+function renderEvolution(evolucao) {
+  const block = document.getElementById('evo-block');
+  if (!evolucao || evolucao.length === 0) {
+    block.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px">Sem historico de evolucao.</div>';
+    return;
+  }
+  const maxScore = Math.max(...evolucao.map(e => Number(e.score_medio || 0)), 1);
+  let barsHtml = '<div class="evo-chart">';
+  let labelsHtml = '<div class="evo-labels">';
+  evolucao.forEach(e => {
+    const s = Number(e.score_medio || 0);
+    const h = Math.max((s / maxScore) * 56, 2);
+    const per = e.periodo_referencia || '';
+    const short = per.substring(2, 7).replace('-', '/');
+    barsHtml += '<div class="evo-bar" style="height:' + h + 'px;background:' + scoreColor(s) + '"'
+      + ' title="' + per + ': Score ' + fmtNum(s, 1) + ' | Total: ' + (e.total || 0) + '"></div>';
+    labelsHtml += '<span>' + short + '</span>';
+  });
+  barsHtml += '</div>';
+  labelsHtml += '</div>';
+
+  // Summary line
+  const latest = evolucao[evolucao.length - 1];
+  const prev = evolucao.length > 1 ? evolucao[evolucao.length - 2] : null;
+  let trend = '';
+  if (prev && latest) {
+    const diff = Number(latest.score_medio) - Number(prev.score_medio);
+    if (diff > 0) trend = '<span style="color:#28a745">&#9650; +' + fmtNum(diff, 1) + '</span>';
+    else if (diff < 0) trend = '<span style="color:#dc3545">&#9660; ' + fmtNum(diff, 1) + '</span>';
+    else trend = '<span style="color:var(--muted)">&#9654; Estavel</span>';
+  }
+  const summary = '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;font-size:12px">'
+    + '<span style="color:var(--muted)">Ultimos ' + evolucao.length + ' periodos</span>'
+    + '<span>Score atual: <strong style="color:' + scoreColor(latest.score_medio) + '">'
+    + fmtNum(latest.score_medio, 1) + '</strong> ' + trend + '</span></div>';
+
+  block.innerHTML = barsHtml + labelsHtml + summary;
+}
+
+/* ---- Render Sector Table ---- */
+function renderSetores(setores) {
+  const tbody = document.getElementById('tbody-setores');
+  if (!setores || setores.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="color:var(--muted);text-align:center;padding:20px">Sem dados de setores.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = setores.map(s => {
+    const total = Number(s.total_funcionarios || 0);
+    const dist = miniDist(s, total);
+    return '<tr>'
+      + '<td><strong>' + (s.setor_nome || '—') + '</strong></td>'
+      + '<td class="num">' + fmtNum(s.total_funcionarios) + '</td>'
+      + '<td class="num"><div class="score-bar-inline">'
+      + '<div class="score-bar-track"><div class="score-bar-fill" style="width:' + Math.min(Number(s.score_medio || 0), 100) + '%;background:' + scoreColor(s.score_medio) + '"></div></div>'
+      + '<span class="score-val" style="color:' + scoreColor(s.score_medio) + '">' + fmtNum(s.score_medio, 1) + '</span>'
+      + '</div></td>'
+      + '<td>' + dist + '</td>'
+      + '<td class="num">' + fmtNum(s.fontes_media, 1) + '</td>'
+      + '<td class="num">' + fmtPct(s.qualidade_media) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function miniDist(s, total) {
+  if (total === 0) return '—';
+  const cats = [
+    { k: 'consistentes', c: CLS_COLORS.consistente },
+    { k: 'regulares', c: CLS_COLORS.regular },
+    { k: 'monitorar', c: CLS_COLORS.monitorar },
+    { k: 'atencao_op', c: CLS_COLORS.atencao_operacional },
+    { k: 'dado_insuf', c: CLS_COLORS.dado_insuficiente },
+  ];
+  let html = '<div style="display:flex;height:8px;border-radius:4px;overflow:hidden;min-width:100px">';
+  cats.forEach(cat => {
+    const v = Number(s[cat.k] || 0);
+    const pct = total > 0 ? (v / total * 100) : 0;
+    if (pct > 0) {
+      html += '<div style="width:' + pct + '%;background:' + cat.c + '" title="' + cat.k + ': ' + v + '"></div>';
+    }
+  });
+  html += '</div>';
+  return html;
+}
+
+/* ---- Render Confiabilidade por Setor ---- */
+function renderConfiabilidade(confiabilidade) {
+  const tbody = document.getElementById('tbody-conf');
+  if (!confiabilidade || confiabilidade.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="9" style="color:var(--muted);text-align:center;padding:20px">Sem dados.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = confiabilidade.map(c => {
+    return '<tr>'
+      + '<td><strong>' + (c.setor_nome || '—') + '</strong></td>'
+      + '<td class="num">' + fmtNum(c.total) + '</td>'
+      + '<td class="num" style="color:' + CONF_COLORS.alta + '">' + fmtNum(c.conf_alta) + '</td>'
+      + '<td class="num" style="color:' + CONF_COLORS.media + '">' + fmtNum(c.conf_media) + '</td>'
+      + '<td class="num" style="color:' + CONF_COLORS.baixa + '">' + fmtNum(c.conf_baixa) + '</td>'
+      + '<td class="num">' + fmtPct(c.cob_presenca) + '</td>'
+      + '<td class="num">' + fmtPct(c.cob_producao) + '</td>'
+      + '<td class="num">' + fmtPct(c.cob_treinamento) + '</td>'
+      + '<td class="num">' + fmtPct(c.cob_epi) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---- Render Alerts ---- */
+function renderAlertas(alertas, alertas_abertos, alertas_criticos) {
+  // Badge
+  const badge = document.getElementById('badge-alertas');
+  const countEl = document.getElementById('alertas-count');
+  const critEl = document.getElementById('alertas-criticos');
+  if (alertas_abertos > 0) {
+    badge.style.display = 'flex';
+    countEl.textContent = alertas_abertos;
+    if (alertas_criticos > 0) {
+      critEl.textContent = '(' + alertas_criticos + ' criticos)';
+    } else {
+      critEl.textContent = '';
+    }
+  } else {
+    badge.style.display = 'none';
+  }
+
+  const tbody = document.getElementById('tbody-alertas');
+  if (!alertas || alertas.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--muted);text-align:center;padding:20px">Nenhum alerta.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = alertas.map(a => {
+    return '<tr>'
+      + '<td>' + (a.tipo || a.tipo_alerta || '—') + '</td>'
+      + '<td>' + prioTag(a.prioridade || a.severidade || '') + '</td>'
+      + '<td>' + (a.titulo || a.mensagem || a.descricao || '—') + '</td>'
+      + '<td>' + (a.setor_nome || a.setor || '—') + '</td>'
+      + '<td>' + statusTag(a.status || '') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---- Render Patterns ---- */
+function renderPadroes(padroes) {
+  const section = document.getElementById('section-padroes');
+  const tbody = document.getElementById('tbody-padroes');
+  if (!padroes || padroes.length === 0) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  tbody.innerHTML = padroes.map(p => {
+    return '<tr>'
+      + '<td>' + (p.tipo || p.tipo_padrao || '—') + '</td>'
+      + '<td>' + (p.descricao || p.mensagem || '—') + '</td>'
+      + '<td>' + (p.setor_nome || p.setor || '—') + '</td>'
+      + '<td>' + prioTag(p.severidade || '') + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---- Render Detailed Scores (admin/rh) ---- */
+function renderDetalhado(scores) {
+  const section = document.getElementById('section-detalhado');
+  if (!scores || scores.length === 0 || !['administrador','rh'].includes(_perfil)) {
+    section.classList.add('hidden');
+    return;
+  }
+  section.classList.remove('hidden');
+  const tbody = document.getElementById('tbody-detalhado');
+  tbody.innerHTML = scores.map(s => {
+    return '<tr>'
+      + '<td>' + (s.funcionario_nome || s.nome || '—') + '</td>'
+      + '<td>' + (s.setor_nome || s.setor || '—') + '</td>'
+      + '<td class="num"><span style="color:' + scoreColor(s.score_final || s.score) + ';font-family:DM Mono;font-weight:700">'
+      + fmtNum(s.score_final || s.score, 1) + '</span></td>'
+      + '<td>' + clsTag(s.classificacao) + '</td>'
+      + '<td><span style="color:' + confColor(s.confiabilidade) + '">' + confLabel(s.confiabilidade) + '</span></td>'
+      + '<td class="num">' + fmtNum(s.fontes_com_dado || s.fontes, 0) + '</td>'
+      + '<td class="num">' + fmtPct(s.qualidade_dados || s.qualidade) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---- Main Load ---- */
+async function loadDashboard() {
+  try {
+    const res = await API.rpc('motor_v2_dashboard_executivo', {});
+    if (!res.ok) throw new Error(res.error || 'Erro ao carregar dashboard');
+    const data = res.data;
+
+    // Handle both direct object and array-wrapped response
+    const d = Array.isArray(data) ? data[0] : data;
+    if (!d) throw new Error('Resposta vazia do servidor');
+
+    _perfil = d.perfil || _perfil;
+
+    renderKPIs(d.kpis);
+    renderQualityBlock(d.resumo_score, d.confiabilidade);
+    renderDistribution(d.resumo_score);
+    renderEvolution(d.evolucao);
+    renderSetores(d.setores);
+    renderConfiabilidade(d.confiabilidade);
+    renderAlertas(d.alertas, d.alertas_abertos, d.alertas_criticos);
+    renderPadroes(d.padroes);
+    renderDetalhado(d.scores_detalhados);
+
+  } catch (e) {
+    console.error('Erro ao carregar dashboard:', e);
+    document.getElementById('kpi-row').innerHTML =
+      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--err)">'
+      + '&#9888; Erro ao carregar dados: ' + e.message + '</div>';
+  }
+}
+
+/* ---- Recalculate ---- */
+async function recalcular() {
+  const btn = document.getElementById('btn-exec');
+  btn.disabled = true;
+  btn.textContent = 'Recalculando...';
+  try {
+    const resExec = await API.rpc('motor_v2_executar', { p_periodo: getSelectedPeriod() });
+    if (!resExec.ok) throw new Error(resExec.error || 'Erro ao recalcular');
+    await loadDashboard();
+  } catch (e) {
+    alert('Erro ao recalcular: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Recalcular';
+  }
+}
+
+/* ---- Init ---- */
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await Shell.init({ page: 'motor_v2', title: 'Motor de Decisao v2' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+  _perfil = user.perfil;
+
+  initPeriodSelectors();
+
+  document.getElementById('btn-exec').addEventListener('click', recalcular);
+
+  // Visibility based on profile
+  if (!['administrador','rh'].includes(_perfil)) {
+    document.getElementById('section-detalhado').classList.add('hidden');
+    document.getElementById('btn-exec').classList.add('hidden');
+  }
+
+  await loadDashboard();
+});
+</script>
+</body>
+</html>

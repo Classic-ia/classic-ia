@@ -1,0 +1,60 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO RECONCILIAÇÃO DE DADOS
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql + MODULO_ETL_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- FLUXO DE RECONCILIAÇÃO:
+--
+--   1. Dados chegam no staging (stg_convenia_*, stg_buscaepi_*)
+--   2. reconc_executar_convenia() → calcula score → classifica
+--   3. Confirmados (>=95): match automático, sem intervenção
+--   4. Suspeitos (70-95): revisão humana via vw_reconc_revisao_pendente
+--   5. Conflitos (<70 com match): resolução via reconc_resolver_conflito()
+--   6. Pendentes (sem match): novo funcionário ou erro de dados
+--   7. reconc_detectar_conflitos_convenia() → divergências campo a campo
+--   8. reconc_detectar_duplicatas() → pares suspeitos no core
+--
+-- ALGORITMO DE SCORE (0-100):
+--   CPF exato                    → 100 (match definitivo)
+--   Email exato                  → 85
+--   Nome>=90% + data nascimento  → 80
+--   Nome fuzzy >=85%             → ~70 (similaridade × 0.7)
+--   Penalidade CPF divergente    → -50
+--   Penalidade nascimento div.   → -20
+--
+-- REGRAS DE RESOLUÇÃO DE CONFLITOS:
+--   Campos críticos (CPF, admissão, vínculo) → CORE prevalece sempre
+--   Outros campos → dados mais recentes prevalecem
+--   Override manual → com justificativa e auditoria
+--
+-- TABELAS (4):
+--   reconc_correspondencia       — 1 linha = 1 pessoa (IDs de todos os sistemas)
+--   reconc_conflito              — divergência campo × campo × fonte
+--   reconc_decisao               — log imutável de todas as decisões
+--   reconc_duplicata_candidato   — pares suspeitos com score
+--
+-- FUNCTIONS (6):
+--   reconc_similaridade_nome()          — Levenshtein normalizado
+--   reconc_calcular_score()             — score 0-100 entre dois registros
+--   reconc_detectar_duplicatas()        — varredura de pares no core
+--   reconc_executar_convenia()          — reconcilia staging com core
+--   reconc_detectar_conflitos_convenia() — divergências campo a campo
+--   reconc_resolver_conflito()          — resolve manual ou automático
+--   reconc_dashboard()                  — JSONB com contadores
+--
+-- VIEWS (2):
+--   vw_reconc_revisao_pendente   — registros para revisão humana
+--   vw_reconc_duplicatas_pendentes — pares para verificação
+--
+-- EXEMPLOS:
+--   SELECT * FROM reconc_executar_convenia();
+--   SELECT * FROM reconc_detectar_conflitos_convenia();
+--   SELECT * FROM reconc_detectar_duplicatas(60);
+--   SELECT reconc_dashboard();
+--   SELECT reconc_calcular_score('12345678901','12345678901',NULL,NULL,'JOAO SILVA','JOÃO SILVA',NULL,NULL);
+--   SELECT * FROM vw_reconc_revisao_pendente;
+--   SELECT reconc_resolver_conflito('conflito-uuid', 'convenia', 'Dados Convenia mais recentes');
+--
+-- TOTAL DO PROJETO: 61 tabelas, 12 views, 38 RPCs, 1 edge function.
+-- ════════════════════════════════════════════════════════════════════════════

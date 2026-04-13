@@ -1,0 +1,1172 @@
+<!--
+  Classic RH - Controle de Extintores
+
+  CREATE TABLE rh_extintores (
+    id                    UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    numero                TEXT NOT NULL,
+    tipo                  TEXT NOT NULL CHECK (tipo IN ('PQS','CO2','Agua','Espuma')),
+    capacidade            TEXT NOT NULL,
+    local_setor           TEXT NOT NULL,
+    data_fabricacao       DATE,
+    data_ultima_recarga   DATE,
+    validade_meses        INTEGER NOT NULL DEFAULT 12,
+    data_vencimento       DATE,
+    data_teste_hidrostatico DATE,
+    proximo_teste         DATE,
+    ativo                 BOOLEAN DEFAULT true,
+    criado_em             TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_extintores_local ON rh_extintores(local_setor);
+  CREATE INDEX idx_extintores_vencimento ON rh_extintores(data_vencimento);
+  CREATE INDEX idx_extintores_tipo ON rh_extintores(tipo);
+
+  ALTER TABLE rh_extintores ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_extintores_all" ON rh_extintores FOR ALL USING (true) WITH CHECK (true);
+
+  CREATE TABLE rh_extintores_inspecao (
+    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    extintor_id     UUID REFERENCES rh_extintores(id),
+    data_inspecao   DATE NOT NULL,
+    acessivel       BOOLEAN DEFAULT false,
+    sinalizado      BOOLEAN DEFAULT false,
+    manometro_ok    BOOLEAN DEFAULT false,
+    lacre_intacto   BOOLEAN DEFAULT false,
+    mangueira_ok    BOOLEAN DEFAULT false,
+    observacao      TEXT,
+    inspetor        TEXT,
+    criado_em       TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_ext_inspecao_extintor ON rh_extintores_inspecao(extintor_id);
+  CREATE INDEX idx_ext_inspecao_data ON rh_extintores_inspecao(data_inspecao);
+
+  ALTER TABLE rh_extintores_inspecao ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_extintores_inspecao_all" ON rh_extintores_inspecao FOR ALL USING (true) WITH CHECK (true);
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Controle de Extintores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #8b2500, #e74c3c);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 14px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 26px; color: var(--accent);
+}
+.kpi-value.red { color: var(--err); }
+.kpi-value.orange { color: var(--warn); }
+.kpi-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active { background: var(--info); color: white; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+  margin-bottom: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.form-group.full { flex: 1 1 100%; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group select option { background: var(--surface); color: var(--text); }
+.form-group textarea {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  min-height: 60px; resize: vertical; width: 100%;
+}
+
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center;
+}
+.toolbar input, .toolbar select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s;
+}
+.toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+.toolbar input::placeholder { color: var(--muted); }
+.toolbar select option { background: var(--surface); color: var(--text); }
+.filter-input { flex: 1; min-width: 200px; }
+
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+thead th:hover { color: var(--accent); }
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-err { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-info { background: rgba(46,107,138,.12); color: var(--info); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+.badge-muted { background: rgba(93,127,149,.1); color: var(--muted); }
+
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+/* Mapa - cards agrupados */
+.mapa-group {
+  margin-bottom: 20px;
+}
+.mapa-group-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 14px; color: var(--accent); margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.mapa-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+}
+.ext-card {
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px;
+  transition: border-color .2s;
+}
+.ext-card.status-ok { border-left: 3px solid var(--ok); }
+.ext-card.status-warn { border-left: 3px solid var(--warn); }
+.ext-card.status-err { border-left: 3px solid var(--err); }
+.ext-card-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 8px;
+}
+.ext-card-num {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 15px; color: var(--text);
+}
+.ext-card-body { font-size: 11px; color: var(--muted); line-height: 1.7; }
+.ext-card-body strong { color: var(--text); }
+
+/* Inspecao checklist */
+.insp-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.insp-row:last-child { border-bottom: none; }
+.insp-row:hover { background: rgba(46,107,138,.06); }
+.insp-ext-info {
+  flex: 1; min-width: 180px;
+}
+.insp-ext-info .ext-num {
+  font-weight: 700; color: var(--text); font-size: 13px;
+}
+.insp-ext-info .ext-local {
+  font-size: 10px; color: var(--muted);
+}
+.insp-checks {
+  display: flex; gap: 12px; flex-wrap: wrap; align-items: center;
+}
+.insp-check {
+  display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--muted);
+}
+.insp-check input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 16px; height: 16px; cursor: pointer;
+}
+.insp-obs {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-size: 11px; padding: 6px 8px; width: 140px;
+  outline: none; font-family: 'DM Sans', sans-serif;
+}
+.insp-obs:focus { border-color: var(--accent); }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+  display: none; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; max-width: 700px; width: 95%;
+  max-height: 85vh; overflow-y: auto;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 16px; color: var(--accent); margin-bottom: 16px;
+}
+.modal-close {
+  float: right; background: none; border: none; color: var(--muted);
+  font-size: 20px; cursor: pointer; transition: color .2s;
+}
+.modal-close:hover { color: var(--err); }
+
+.detail-row {
+  display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;
+}
+.detail-item { font-size: 12px; }
+.detail-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.detail-item .value { color: var(--text); font-weight: 600; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .form-group { min-width: 100%; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+  .toolbar { flex-direction: column; }
+  .mapa-grid { grid-template-columns: 1fr; }
+  .insp-row { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .insp-checks { gap: 8px; }
+}
+
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#9632;</div>
+    <div>
+      <div class="header-title">Controle de Extintores</div>
+      <div class="header-sub">Gestao e inspecao de extintores de incendio</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Total Extintores</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-validos" style="color:var(--ok);">--</div>
+      <div class="kpi-label">Dentro da Validade</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value red" id="kpi-vencidos">--</div>
+      <div class="kpi-label">Vencidos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value orange" id="kpi-vencendo">--</div>
+      <div class="kpi-label">Vencendo em 30 dias</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="mapa">Mapa</button>
+    <button class="tab-btn" data-tab="cadastro">Cadastro</button>
+    <button class="tab-btn" data-tab="inspecao">Inspecao Mensal</button>
+    <button class="tab-btn" data-tab="historico">Historico</button>
+  </div>
+
+  <!-- ============ TAB: MAPA ============ -->
+  <div id="tab-mapa" class="tab-pane active">
+    <div class="section">
+      <div class="section-title">Mapa de Extintores por Local</div>
+      <div id="mapa-content"></div>
+      <div id="mapa-empty" class="empty-state" style="display:none;">Nenhum extintor cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: CADASTRO ============ -->
+  <div id="tab-cadastro" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Cadastrar Extintor</div>
+        <button class="btn btn-outline btn-sm" id="cad-limpar-btn">Limpar</button>
+      </div>
+
+      <input type="hidden" id="cad-edit-id">
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Numero / Patrimonio</label>
+          <input type="text" id="cad-numero" placeholder="Ex: EXT-001">
+        </div>
+        <div class="form-group">
+          <label>Tipo</label>
+          <select id="cad-tipo">
+            <option value="">Selecione...</option>
+            <option value="PQS">PQS (Po Quimico Seco)</option>
+            <option value="CO2">CO2 (Gas Carbonico)</option>
+            <option value="Agua">Agua Pressurizada</option>
+            <option value="Espuma">Espuma Mecanica</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Capacidade (kg ou L)</label>
+          <input type="text" id="cad-capacidade" placeholder="Ex: 6 kg">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Local / Setor</label>
+          <input type="text" id="cad-local" placeholder="Ex: Corredor A - Producao">
+        </div>
+        <div class="form-group">
+          <label>Data de Fabricacao</label>
+          <input type="date" id="cad-fabricacao">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Ultima Recarga</label>
+          <input type="date" id="cad-recarga">
+        </div>
+        <div class="form-group">
+          <label>Validade Recarga (meses)</label>
+          <input type="number" id="cad-validade" value="12" min="1" max="60">
+        </div>
+        <div class="form-group">
+          <label>Data Vencimento (auto)</label>
+          <input type="date" id="cad-vencimento" readonly style="opacity:.7;">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Teste Hidrostatico</label>
+          <input type="date" id="cad-teste">
+        </div>
+        <div class="form-group">
+          <label>Proximo Teste Hidrostatico (auto - 5 anos)</label>
+          <input type="date" id="cad-proximo-teste" readonly style="opacity:.7;">
+        </div>
+      </div>
+
+      <div style="margin-top:18px; display:flex; gap:10px;">
+        <button class="btn btn-ok" id="cad-salvar-btn">Salvar Extintor</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Extintores Cadastrados</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Numero</th>
+              <th>Tipo</th>
+              <th>Capacidade</th>
+              <th>Local</th>
+              <th>Recarga</th>
+              <th>Vencimento</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="cad-tbody"></tbody>
+        </table>
+      </div>
+      <div id="cad-empty" class="empty-state" style="display:none;">Nenhum extintor cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: INSPECAO MENSAL ============ -->
+  <div id="tab-inspecao" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Inspecao Mensal de Extintores</div>
+        <div style="display:flex;gap:10px;align-items:center;">
+          <input type="month" id="insp-mes" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;">
+          <input type="text" id="insp-inspetor" placeholder="Nome do inspetor" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:9px 12px;color:var(--text);font-size:13px;outline:none;width:200px;">
+        </div>
+      </div>
+
+      <div id="insp-list"></div>
+      <div id="insp-empty" class="empty-state" style="display:none;">Nenhum extintor cadastrado para inspecao.</div>
+
+      <div style="margin-top:18px;display:flex;gap:10px;">
+        <button class="btn btn-ok" id="insp-salvar-btn">Salvar Todas as Inspecoes</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: HISTORICO ============ -->
+  <div id="tab-historico" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Historico de Inspecoes e Recargas</div>
+
+      <div class="toolbar">
+        <select id="hist-extintor-filter">
+          <option value="">Todos os extintores</option>
+        </select>
+        <input type="date" id="hist-data-inicio" title="Data inicio">
+        <input type="date" id="hist-data-fim" title="Data fim">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Extintor</th>
+              <th>Tipo</th>
+              <th>Acessivel</th>
+              <th>Sinalizado</th>
+              <th>Manometro</th>
+              <th>Lacre</th>
+              <th>Mangueira</th>
+              <th>Inspetor</th>
+              <th>Obs</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+      </div>
+      <div id="hist-empty" class="empty-state" style="display:none;">Nenhuma inspecao encontrada.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Editar Extintor -->
+<div class="modal-overlay" id="modal-extintor">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalExtintor()">&times;</button>
+    <div class="modal-title" id="modal-ext-title">Detalhes do Extintor</div>
+    <div id="modal-ext-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &mdash; Controle de Extintores v2026.03</div>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let extintores = [];
+let inspecoes = [];
+let inspChecklist = {}; // keyed by extintor_id for current inspection session
+
+const TIPOS_EXT = {
+  PQS: 'PQS (Po Quimico Seco)',
+  CO2: 'CO2 (Gas Carbonico)',
+  Agua: 'Agua Pressurizada',
+  Espuma: 'Espuma Mecanica'
+};
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  initTabs();
+  await loadAll();
+
+  // Auto-calc vencimento
+  document.getElementById('cad-recarga').addEventListener('change', calcVencimento);
+  document.getElementById('cad-validade').addEventListener('change', calcVencimento);
+  document.getElementById('cad-teste').addEventListener('change', calcProximoTeste);
+
+  document.getElementById('cad-salvar-btn').addEventListener('click', salvarExtintor);
+  document.getElementById('cad-limpar-btn').addEventListener('click', limparFormCad);
+  document.getElementById('insp-salvar-btn').addEventListener('click', salvarInspecoes);
+
+  document.getElementById('hist-extintor-filter').addEventListener('change', renderHistorico);
+  document.getElementById('hist-data-inicio').addEventListener('change', renderHistorico);
+  document.getElementById('hist-data-fim').addEventListener('change', renderHistorico);
+
+  // Default month for inspection
+  const now = new Date();
+  document.getElementById('insp-mes').value = now.toISOString().slice(0, 7);
+  document.getElementById('insp-inspetor').value = user.user_metadata?.nome || user.email || '';
+});
+
+// ============================================================
+//  TABS
+// ============================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+
+      if (btn.dataset.tab === 'inspecao') renderInspecao();
+      if (btn.dataset.tab === 'historico') renderHistorico();
+    });
+  });
+}
+
+// ============================================================
+//  DATA LOADING
+// ============================================================
+async function loadAll() {
+  await Promise.all([loadExtintores(), loadInspecoes()]);
+  renderKPIs();
+  renderMapa();
+  renderCadastroTable();
+  renderInspecao();
+  renderHistorico();
+  populateExtintorFilter();
+}
+
+async function loadExtintores() {
+  try {
+    const res = await API.get('rh_extintores?select=*&ativo=eq.true&order=numero');
+    extintores = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('[Extintores] Erro ao carregar:', e);
+    extintores = [];
+  }
+}
+
+async function loadInspecoes() {
+  try {
+    const res = await API.get('rh_extintores_inspecao?select=*&order=data_inspecao.desc');
+    inspecoes = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('[Extintores] Erro ao carregar inspecoes:', e);
+    inspecoes = [];
+  }
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+function fmtDate(d) {
+  if (!d) return '--';
+  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function diffDays(d) {
+  if (!d) return null;
+  const target = new Date(d + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  return Math.floor((target - now) / (1000 * 60 * 60 * 24));
+}
+
+function getStatus(ext) {
+  if (!ext.data_vencimento) return 'ok';
+  const diff = diffDays(ext.data_vencimento);
+  if (diff === null) return 'ok';
+  if (diff < 0) return 'vencido';
+  if (diff <= 30) return 'vencendo';
+  return 'ok';
+}
+
+function statusBadge(ext) {
+  const st = getStatus(ext);
+  if (st === 'vencido') return '<span class="badge badge-err">Vencido</span>';
+  if (st === 'vencendo') return '<span class="badge badge-warn">Vencendo</span>';
+  return '<span class="badge badge-ok">OK</span>';
+}
+
+function calcVencimento() {
+  const recarga = document.getElementById('cad-recarga').value;
+  const meses = parseInt(document.getElementById('cad-validade').value) || 12;
+  if (recarga) {
+    const dt = new Date(recarga + 'T00:00:00');
+    dt.setMonth(dt.getMonth() + meses);
+    document.getElementById('cad-vencimento').value = dt.toISOString().slice(0, 10);
+  }
+}
+
+function calcProximoTeste() {
+  const teste = document.getElementById('cad-teste').value;
+  if (teste) {
+    const dt = new Date(teste + 'T00:00:00');
+    dt.setFullYear(dt.getFullYear() + 5);
+    document.getElementById('cad-proximo-teste').value = dt.toISOString().slice(0, 10);
+  }
+}
+
+function getExtintorName(id) {
+  const e = extintores.find(x => x.id === id);
+  return e ? e.numero : '(desconhecido)';
+}
+
+function populateExtintorFilter() {
+  const sel = document.getElementById('hist-extintor-filter');
+  sel.innerHTML = '<option value="">Todos os extintores</option>';
+  extintores.forEach(e => {
+    const opt = document.createElement('option');
+    opt.value = e.id;
+    opt.textContent = e.numero + ' - ' + e.local_setor;
+    sel.appendChild(opt);
+  });
+}
+
+// ============================================================
+//  KPIs
+// ============================================================
+function renderKPIs() {
+  const total = extintores.length;
+  let validos = 0, vencidos = 0, vencendo = 0;
+
+  extintores.forEach(e => {
+    const st = getStatus(e);
+    if (st === 'ok') validos++;
+    else if (st === 'vencido') vencidos++;
+    else if (st === 'vencendo') vencendo++;
+  });
+
+  document.getElementById('kpi-total').textContent = total;
+  document.getElementById('kpi-validos').textContent = validos;
+  document.getElementById('kpi-vencidos').textContent = vencidos;
+  document.getElementById('kpi-vencendo').textContent = vencendo;
+}
+
+// ============================================================
+//  MAPA
+// ============================================================
+function renderMapa() {
+  const container = document.getElementById('mapa-content');
+  const empty = document.getElementById('mapa-empty');
+
+  if (extintores.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Group by local_setor
+  const groups = {};
+  extintores.forEach(e => {
+    const key = e.local_setor || 'Sem local';
+    if (!groups[key]) groups[key] = [];
+    groups[key].push(e);
+  });
+
+  container.innerHTML = Object.keys(groups).sort().map(local => {
+    const items = groups[local];
+    return `
+      <div class="mapa-group">
+        <div class="mapa-group-title">${local} <span style="font-size:11px;color:var(--muted);font-weight:400;">(${items.length})</span></div>
+        <div class="mapa-grid">
+          ${items.map(e => {
+            const st = getStatus(e);
+            const cls = st === 'vencido' ? 'status-err' : st === 'vencendo' ? 'status-warn' : 'status-ok';
+            return `
+              <div class="ext-card ${cls}">
+                <div class="ext-card-header">
+                  <span class="ext-card-num">${e.numero}</span>
+                  ${statusBadge(e)}
+                </div>
+                <div class="ext-card-body">
+                  <strong>Tipo:</strong> ${e.tipo} &nbsp; <strong>Cap:</strong> ${e.capacidade}<br>
+                  <strong>Recarga:</strong> ${fmtDate(e.data_ultima_recarga)} &nbsp; <strong>Venc:</strong> ${fmtDate(e.data_vencimento)}<br>
+                  <strong>Teste Hidrost.:</strong> ${fmtDate(e.data_teste_hidrostatico)} &nbsp; <strong>Prox:</strong> ${fmtDate(e.proximo_teste)}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ============================================================
+//  CADASTRO
+// ============================================================
+function renderCadastroTable() {
+  const tbody = document.getElementById('cad-tbody');
+  const empty = document.getElementById('cad-empty');
+
+  if (extintores.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = extintores.map(e => `
+    <tr>
+      <td style="font-weight:600;color:var(--text);">${e.numero}</td>
+      <td><span class="badge badge-accent">${e.tipo}</span></td>
+      <td class="mono">${e.capacidade}</td>
+      <td>${e.local_setor}</td>
+      <td class="mono">${fmtDate(e.data_ultima_recarga)}</td>
+      <td class="mono">${fmtDate(e.data_vencimento)}</td>
+      <td>${statusBadge(e)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="editExtintor('${e.id}')">Editar</button>
+        <button class="btn btn-err btn-sm" onclick="deleteExtintor('${e.id}')">Excluir</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function salvarExtintor() {
+  const editId = document.getElementById('cad-edit-id').value;
+  const numero = document.getElementById('cad-numero').value.trim();
+  const tipo = document.getElementById('cad-tipo').value;
+  const capacidade = document.getElementById('cad-capacidade').value.trim();
+  const local = document.getElementById('cad-local').value.trim();
+  const fabricacao = document.getElementById('cad-fabricacao').value || null;
+  const recarga = document.getElementById('cad-recarga').value || null;
+  const validade = parseInt(document.getElementById('cad-validade').value) || 12;
+  const vencimento = document.getElementById('cad-vencimento').value || null;
+  const teste = document.getElementById('cad-teste').value || null;
+  const proximoTeste = document.getElementById('cad-proximo-teste').value || null;
+
+  if (!numero || !tipo || !capacidade || !local) {
+    toast('Preencha numero, tipo, capacidade e local.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('cad-salvar-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const data = {
+      numero, tipo, capacidade,
+      local_setor: local,
+      data_fabricacao: fabricacao,
+      data_ultima_recarga: recarga,
+      validade_meses: validade,
+      data_vencimento: vencimento,
+      data_teste_hidrostatico: teste,
+      proximo_teste: proximoTeste
+    };
+
+    if (editId) {
+      const res = await API.patch('rh_extintores?id=eq.' + editId, data);
+      if (!res.ok) { toast('Erro ao atualizar: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+      toast('Extintor atualizado!');
+    } else {
+      const res = await API.post('rh_extintores', data);
+      if (!res.ok) { toast('Erro ao cadastrar: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+      toast('Extintor cadastrado com sucesso!');
+    }
+
+    limparFormCad();
+    await loadExtintores();
+    renderKPIs();
+    renderMapa();
+    renderCadastroTable();
+    renderInspecao();
+    populateExtintorFilter();
+  } catch (e) {
+    toast('Erro ao salvar: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar Extintor';
+  }
+}
+
+function editExtintor(id) {
+  const e = extintores.find(x => x.id === id);
+  if (!e) return;
+
+  document.getElementById('cad-edit-id').value = e.id;
+  document.getElementById('cad-numero').value = e.numero;
+  document.getElementById('cad-tipo').value = e.tipo;
+  document.getElementById('cad-capacidade').value = e.capacidade;
+  document.getElementById('cad-local').value = e.local_setor;
+  document.getElementById('cad-fabricacao').value = e.data_fabricacao || '';
+  document.getElementById('cad-recarga').value = e.data_ultima_recarga || '';
+  document.getElementById('cad-validade').value = e.validade_meses || 12;
+  document.getElementById('cad-vencimento').value = e.data_vencimento || '';
+  document.getElementById('cad-teste').value = e.data_teste_hidrostatico || '';
+  document.getElementById('cad-proximo-teste').value = e.proximo_teste || '';
+
+  // Switch to cadastro tab
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelector('[data-tab="cadastro"]').classList.add('active');
+  document.getElementById('tab-cadastro').classList.add('active');
+
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+async function deleteExtintor(id) {
+  if (!confirm('Deseja desativar este extintor?')) return;
+  try {
+    const res = await API.patch('rh_extintores?id=eq.' + id, { ativo: false });
+    if (!res.ok) { toast('Erro ao desativar: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+    toast('Extintor desativado!');
+    await loadExtintores();
+    renderKPIs();
+    renderMapa();
+    renderCadastroTable();
+    populateExtintorFilter();
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+function limparFormCad() {
+  document.getElementById('cad-edit-id').value = '';
+  document.getElementById('cad-numero').value = '';
+  document.getElementById('cad-tipo').value = '';
+  document.getElementById('cad-capacidade').value = '';
+  document.getElementById('cad-local').value = '';
+  document.getElementById('cad-fabricacao').value = '';
+  document.getElementById('cad-recarga').value = '';
+  document.getElementById('cad-validade').value = '12';
+  document.getElementById('cad-vencimento').value = '';
+  document.getElementById('cad-teste').value = '';
+  document.getElementById('cad-proximo-teste').value = '';
+}
+
+// ============================================================
+//  INSPECAO MENSAL
+// ============================================================
+function renderInspecao() {
+  const container = document.getElementById('insp-list');
+  const empty = document.getElementById('insp-empty');
+
+  if (extintores.length === 0) {
+    container.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  // Reset checklist
+  inspChecklist = {};
+  extintores.forEach(e => {
+    inspChecklist[e.id] = {
+      acessivel: false,
+      sinalizado: false,
+      manometro_ok: false,
+      lacre_intacto: false,
+      mangueira_ok: false,
+      observacao: ''
+    };
+  });
+
+  container.innerHTML = `
+    <div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <div style="background:var(--surface2);padding:10px 12px;display:flex;gap:12px;align-items:center;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;font-family:'Syne',sans-serif;font-weight:700;">
+        <span style="flex:1;min-width:180px;">Extintor</span>
+        <span style="width:70px;text-align:center;">Acessivel</span>
+        <span style="width:70px;text-align:center;">Sinalizado</span>
+        <span style="width:80px;text-align:center;">Manometro</span>
+        <span style="width:60px;text-align:center;">Lacre</span>
+        <span style="width:80px;text-align:center;">Mangueira</span>
+        <span style="width:140px;">Obs</span>
+      </div>
+      ${extintores.map(e => `
+        <div class="insp-row" data-id="${e.id}">
+          <div class="insp-ext-info">
+            <div class="ext-num">${e.numero} <span class="badge badge-accent" style="margin-left:4px;">${e.tipo}</span></div>
+            <div class="ext-local">${e.local_setor}</div>
+          </div>
+          <div class="insp-checks">
+            <div class="insp-check" style="width:70px;justify-content:center;">
+              <input type="checkbox" data-ext="${e.id}" data-field="acessivel">
+            </div>
+            <div class="insp-check" style="width:70px;justify-content:center;">
+              <input type="checkbox" data-ext="${e.id}" data-field="sinalizado">
+            </div>
+            <div class="insp-check" style="width:80px;justify-content:center;">
+              <input type="checkbox" data-ext="${e.id}" data-field="manometro_ok">
+            </div>
+            <div class="insp-check" style="width:60px;justify-content:center;">
+              <input type="checkbox" data-ext="${e.id}" data-field="lacre_intacto">
+            </div>
+            <div class="insp-check" style="width:80px;justify-content:center;">
+              <input type="checkbox" data-ext="${e.id}" data-field="mangueira_ok">
+            </div>
+            <input type="text" class="insp-obs" data-ext="${e.id}" data-field="observacao" placeholder="Obs...">
+          </div>
+        </div>
+      `).join('')}
+    </div>
+    <div style="margin-top:10px;text-align:right;">
+      <button class="btn btn-outline btn-sm" onclick="checkAllInsp()">Marcar Todos OK</button>
+    </div>
+  `;
+
+  // Bind checkbox/input events
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.addEventListener('change', () => {
+      inspChecklist[cb.dataset.ext][cb.dataset.field] = cb.checked;
+    });
+  });
+  container.querySelectorAll('.insp-obs').forEach(inp => {
+    inp.addEventListener('input', () => {
+      inspChecklist[inp.dataset.ext].observacao = inp.value;
+    });
+  });
+}
+
+function checkAllInsp() {
+  const container = document.getElementById('insp-list');
+  container.querySelectorAll('input[type="checkbox"]').forEach(cb => {
+    cb.checked = true;
+    inspChecklist[cb.dataset.ext][cb.dataset.field] = true;
+  });
+  toast('Todos marcados como OK.', 'ok');
+}
+
+async function salvarInspecoes() {
+  const mes = document.getElementById('insp-mes').value;
+  const inspetor = document.getElementById('insp-inspetor').value.trim();
+
+  if (!inspetor) {
+    toast('Informe o nome do inspetor.', 'err');
+    return;
+  }
+
+  // Use first day of selected month as inspection date
+  const dataInspecao = mes ? mes + '-15' : today();
+
+  const btn = document.getElementById('insp-salvar-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const promises = Object.keys(inspChecklist).map(extId => {
+      const c = inspChecklist[extId];
+      return API.post('rh_extintores_inspecao', {
+        extintor_id: extId,
+        data_inspecao: dataInspecao,
+        acessivel: c.acessivel,
+        sinalizado: c.sinalizado,
+        manometro_ok: c.manometro_ok,
+        lacre_intacto: c.lacre_intacto,
+        mangueira_ok: c.mangueira_ok,
+        observacao: c.observacao || null,
+        inspetor
+      });
+    });
+
+    const results = await Promise.all(promises);
+    const failed = results.filter(r => !r.ok);
+    if (failed.length > 0) { toast('Erro em ' + failed.length + ' inspecao(oes)', 'err'); }
+    else { toast('Inspecoes salvas com sucesso! (' + promises.length + ' extintores)'); }
+    await loadInspecoes();
+    renderHistorico();
+  } catch (e) {
+    toast('Erro ao salvar inspecoes: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar Todas as Inspecoes';
+  }
+}
+
+// ============================================================
+//  HISTORICO
+// ============================================================
+function renderHistorico() {
+  const extFilter = document.getElementById('hist-extintor-filter').value;
+  const dataInicio = document.getElementById('hist-data-inicio').value;
+  const dataFim = document.getElementById('hist-data-fim').value;
+
+  let filtered = inspecoes;
+
+  if (extFilter) {
+    filtered = filtered.filter(i => i.extintor_id === extFilter);
+  }
+  if (dataInicio) {
+    filtered = filtered.filter(i => i.data_inspecao >= dataInicio);
+  }
+  if (dataFim) {
+    filtered = filtered.filter(i => i.data_inspecao <= dataFim);
+  }
+
+  const tbody = document.getElementById('hist-tbody');
+  const empty = document.getElementById('hist-empty');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(i => {
+    const checkIcon = (val) => val ? '<span style="color:var(--ok);font-weight:700;">Sim</span>' : '<span style="color:var(--err);font-weight:700;">Nao</span>';
+    return `<tr>
+      <td class="mono">${fmtDate(i.data_inspecao)}</td>
+      <td style="font-weight:600;">${getExtintorName(i.extintor_id)}</td>
+      <td>Inspecao</td>
+      <td style="text-align:center;">${checkIcon(i.acessivel)}</td>
+      <td style="text-align:center;">${checkIcon(i.sinalizado)}</td>
+      <td style="text-align:center;">${checkIcon(i.manometro_ok)}</td>
+      <td style="text-align:center;">${checkIcon(i.lacre_intacto)}</td>
+      <td style="text-align:center;">${checkIcon(i.mangueira_ok)}</td>
+      <td>${i.inspetor || '--'}</td>
+      <td style="max-width:150px;overflow:hidden;text-overflow:ellipsis;">${i.observacao || '--'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function closeModalExtintor() {
+  document.getElementById('modal-extintor').classList.remove('open');
+}
+</script>
+
+</body>
+</html>

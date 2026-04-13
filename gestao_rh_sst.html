@@ -215,7 +215,7 @@ tbody td{padding:10px;vertical-align:middle;}
     <div class="table-wrap">
       <table>
         <thead><tr>
-          <th>Nome</th><th>CPF</th><th>Cargo</th><th>Setor</th><th>Admissão</th><th>Status</th><th>Motor</th><th>Ações</th>
+          <th class="sortable" onclick="sortFunc('nome_completo')">Nome <span id="sortIcon_nome_completo"></span></th><th class="sortable" onclick="sortFunc('cpf')">CPF</th><th class="sortable" onclick="sortFunc('cargo')">Cargo</th><th class="sortable" onclick="sortFunc('setor')">Setor</th><th class="sortable" onclick="sortFunc('data_admissao')">Admissão</th><th class="sortable" onclick="sortFunc('status')">Status</th><th>Motor</th><th>Ações</th>
         </tr></thead>
         <tbody id="tbFuncionarios"></tbody>
       </table>
@@ -1021,11 +1021,12 @@ function renderMotorBanner() {
 // ── API HELPERS ──────────────────────────────────────────
 async function carregarDados(tabela) {
   try {
-    // Apply filial filter to tables that have filial_id
     let filtro = '';
     if (tabela === TABELAS.func) filtro = FilialContext.filtroQuery('filial_id');
     else if (tabela === 'rh_setores') filtro = FilialContext.filtroQuery('filial_id');
-    return await RH_API.get(tabela + '?order=created_at.desc&limit=1000' + filtro) || [];
+    // Funcionários: carregar todos (necessário para resolver nomes em outras abas)
+    var lim = (tabela === TABELAS.func) ? '&limit=2000' : '&limit=500';
+    return await RH_API.get(tabela + '?order=created_at.desc' + lim + filtro) || [];
   } catch (e) {
     console.warn('Erro ao carregar ' + tabela, e);
     return [];
@@ -1178,6 +1179,9 @@ async function popularEmpresasFiliais() {
 // ══════════════════════════════════════════════════════════
 
 // ── FUNCIONÁRIOS ─────────────────────────────────────────
+var _funcPageSize = 50;
+var _funcShowAll = false;
+
 function renderFuncionarios(lista) {
   const tb = document.getElementById('tbFuncionarios');
   if (!lista) lista = FUNCIONARIOS;
@@ -1187,7 +1191,9 @@ function renderFuncionarios(lista) {
     return `<span class="badge ${map[s] || 'badge-muted'}">${s || '—'}</span>`;
   };
 
-  tb.innerHTML = lista.map(f => {
+  const visivel = _funcShowAll ? lista : lista.slice(0, _funcPageSize);
+
+  tb.innerHTML = visivel.map(f => {
     const motor = avaliarMotorLogico(f);
     const motorHtml = motor.apto
       ? '<span class="badge badge-green">APTO</span>'
@@ -1210,7 +1216,26 @@ function renderFuncionarios(lista) {
     </tr>`;
   }).join('');
 
+  // Load more button
+  if (!_funcShowAll && lista.length > _funcPageSize) {
+    tb.innerHTML += `<tr><td colspan="8" style="text-align:center;padding:12px">
+      <button onclick="_funcShowAll=true;filtrarFuncionarios()" style="padding:8px 20px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-size:12px;font-weight:600;font-family:inherit">
+        Mostrar todos (${lista.length})
+      </button>
+      <span style="font-size:11px;color:#64748b;margin-left:8px">Exibindo ${visivel.length} de ${lista.length}</span>
+    </td></tr>`;
+  }
+
   document.getElementById('countFunc').textContent = `(${lista.length})`;
+}
+
+var _funcSortCol = 'nome_completo';
+var _funcSortAsc = true;
+
+function sortFunc(col) {
+  if (_funcSortCol === col) { _funcSortAsc = !_funcSortAsc; }
+  else { _funcSortCol = col; _funcSortAsc = true; }
+  filtrarFuncionarios();
 }
 
 function filtrarFuncionarios() {
@@ -1221,7 +1246,35 @@ function filtrarFuncionarios() {
   if (busca) lista = lista.filter(f => (f.nome_completo || '').toLowerCase().includes(busca) || (f.cpf || '').includes(busca));
   if (setor) lista = lista.filter(f => f.setor_id === setor || f.setor === setor);
   if (status) lista = lista.filter(f => f.status === status);
-  lista.sort((a, b) => (a.nome_completo || '').localeCompare(b.nome_completo || ''));
+
+  // Sort by selected column
+  lista.sort((a, b) => {
+    var va, vb;
+    if (_funcSortCol === 'cargo') {
+      va = a.cargo_id ? ((CARGOS.find(c => c.id === a.cargo_id) || {}).nome || '') : '';
+      vb = b.cargo_id ? ((CARGOS.find(c => c.id === b.cargo_id) || {}).nome || '') : '';
+    } else if (_funcSortCol === 'setor') {
+      va = a.setor_id ? nomeSetor(a.setor_id) : '';
+      vb = b.setor_id ? nomeSetor(b.setor_id) : '';
+    } else {
+      va = a[_funcSortCol] || '';
+      vb = b[_funcSortCol] || '';
+    }
+    var cmp = String(va).localeCompare(String(vb), 'pt-BR');
+    return _funcSortAsc ? cmp : -cmp;
+  });
+
+  // Update sort icons
+  try {
+    var tbl = document.getElementById('tbFuncionarios');
+    if (tbl) tbl.closest('table').querySelectorAll('th.sortable').forEach(th => {
+      th.classList.remove('asc', 'desc');
+      if (th.getAttribute('onclick') && th.getAttribute('onclick').indexOf("'" + _funcSortCol + "'") !== -1) {
+        th.classList.add(_funcSortAsc ? 'asc' : 'desc');
+      }
+    });
+  } catch(e) {}
+
   renderFuncionarios(lista);
   // Contadores APAC e Jovem Aprendiz
   const ativos = FUNCIONARIOS.filter(f => f.status === 'ativo');
@@ -1748,6 +1801,7 @@ async function salvarFuncionario(e) {
     p_jovem_aprendiz: document.getElementById('funcJovemAprendiz').checked,
     p_apac: document.getElementById('funcApac').checked,
     p_utiliza_transporte: document.getElementById('funcTransporte').checked,
+    p_pis_pasep: document.getElementById('funcPis').value.trim() || null,
   };
 
   try {
@@ -2144,7 +2198,7 @@ async function recarregar() {
   await popularSetores();
   popularTiposTreinamento();
   popularCatalogoEpi();
-  renderFuncionarios();
+  filtrarFuncionarios();
   renderAso();
   renderTreinamentos();
   renderEpis();

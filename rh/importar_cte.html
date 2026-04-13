@@ -1,0 +1,533 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Importar CT-e</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<style>
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  background: var(--bg-card);
+}
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--primary);
+  background: #EFF6FF;
+}
+.upload-zone input[type="file"] { display: none; }
+.upload-zone svg { margin-bottom: 12px; }
+
+.progress-wrapper {
+  background: var(--border);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 8px;
+  transition: width .3s ease;
+  width: 0%;
+}
+
+.log-area {
+  max-height: 260px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 12px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+.log-ok { color: var(--success); }
+.log-dup { color: var(--warning); }
+.log-err { color: var(--danger); }
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.filter-row label { font-size: 13px; color: var(--text-secondary); }
+.filter-row input,
+.filter-row select {
+  min-width: 160px;
+}
+
+.totals-bar {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.totals-bar strong { color: var(--text-primary); }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- Upload Section -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Upload de Arquivos CT-e</h3></div>
+    <div class="card-body">
+      <div class="upload-zone" id="uploadZone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p class="font-medium" style="margin:0 0 4px">Arraste arquivos XML ou ZIP aqui</p>
+        <p class="text-muted text-sm" style="margin:0">ou clique para selecionar</p>
+        <input type="file" id="fileInput" multiple accept=".xml,.zip">
+      </div>
+      <div id="progressSection" style="display:none;margin-top:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+          <span class="text-sm font-medium" id="progressLabel">Processando...</span>
+          <span class="text-sm text-muted" id="progressPct">0%</span>
+        </div>
+        <div class="progress-wrapper"><div class="progress-bar" id="progressBar"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="kpi-row mb-6" id="statsRow" style="display:none">
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="kpi-value" id="statTotal">0</div>
+      <div class="kpi-label">Total Processados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="kpi-value" id="statImported">0</div>
+      <div class="kpi-label">Importados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon amber">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </div>
+      <div class="kpi-value" id="statDups">0</div>
+      <div class="kpi-label">Duplicados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon red">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </div>
+      <div class="kpi-value" id="statErrors">0</div>
+      <div class="kpi-label">Erros</div>
+    </div>
+  </div>
+
+  <!-- Import Log -->
+  <div class="card mb-6" id="logCard" style="display:none">
+    <div class="card-header"><h3>Log da Importacao</h3></div>
+    <div class="card-body">
+      <div class="log-area" id="logArea"></div>
+    </div>
+  </div>
+
+  <!-- CT-e Table -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>CT-e Importados</h3></div>
+    <div class="card-body">
+      <div class="filter-row">
+        <div>
+          <label>Competencia</label><br>
+          <input type="month" id="filterMonth">
+        </div>
+        <div>
+          <label>Status</label><br>
+          <select id="filterStatus">
+            <option value="">Todos</option>
+            <option value="autorizado">Autorizado</option>
+            <option value="cancelado">Cancelado</option>
+          </select>
+        </div>
+        <div>
+          <label>Buscar</label><br>
+          <input type="text" id="filterSearch" placeholder="Numero, emitente, remetente...">
+        </div>
+        <div>
+          <button class="btn btn-primary btn-sm" id="btnFilter">Filtrar</button>
+          <button class="btn btn-ghost btn-sm" id="btnClear">Limpar</button>
+        </div>
+      </div>
+
+      <div class="totals-bar mb-4" id="totalsBar">
+        <span><strong id="totCount">0</strong> registros</span>
+        <span>Valor total: <strong id="totValue">R$ 0,00</strong></span>
+        <span>Peso total: <strong id="totWeight">0,00 kg</strong></span>
+      </div>
+
+      <div class="data-table-wrapper">
+        <table class="data-table" id="cteTable">
+          <thead>
+            <tr>
+              <th>Numero</th>
+              <th>Serie</th>
+              <th>Data Emissao</th>
+              <th>Emitente</th>
+              <th>Remetente</th>
+              <th>Origem</th>
+              <th>Destino</th>
+              <th>Valor</th>
+              <th>Peso (kg)</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody id="cteBody">
+            <tr><td colspan="10" class="text-muted" style="text-align:center;padding:32px">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'importar_cte', title: 'Importar CT-e' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  /* ── DOM refs ── */
+  const uploadZone  = document.getElementById('uploadZone');
+  const fileInput   = document.getElementById('fileInput');
+  const progressSection = document.getElementById('progressSection');
+  const progressBar = document.getElementById('progressBar');
+  const progressLabel = document.getElementById('progressLabel');
+  const progressPct = document.getElementById('progressPct');
+  const statsRow    = document.getElementById('statsRow');
+  const logCard     = document.getElementById('logCard');
+  const logArea     = document.getElementById('logArea');
+
+  /* ── Upload zone events ── */
+  uploadZone.addEventListener('click', () => fileInput.click());
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('drag-over'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    handleFiles(e.dataTransfer.files);
+  });
+  fileInput.addEventListener('change', () => { if (fileInput.files.length) handleFiles(fileInput.files); });
+
+  /* ── Handle uploaded files ── */
+  async function handleFiles(fileList) {
+    const xmlTexts = [];
+    const files = Array.from(fileList);
+
+    for (const f of files) {
+      if (f.name.toLowerCase().endsWith('.zip')) {
+        try {
+          const zip = await JSZip.loadAsync(f);
+          for (const [name, entry] of Object.entries(zip.files)) {
+            if (!entry.dir && name.toLowerCase().endsWith('.xml')) {
+              const content = await entry.async('string');
+              xmlTexts.push({ name, xml: content });
+            }
+          }
+        } catch (e) {
+          addLog('Erro ao abrir ZIP ' + f.name + ': ' + e.message, 'err');
+        }
+      } else if (f.name.toLowerCase().endsWith('.xml')) {
+        const content = await f.text();
+        xmlTexts.push({ name: f.name, xml: content });
+      }
+    }
+
+    if (!xmlTexts.length) { addLog('Nenhum arquivo XML encontrado.', 'err'); return; }
+    await importCTes(xmlTexts);
+  }
+
+  /* ── XML Parser (SEFAZ CT-e) ── */
+  function parseCTeXML(xmlStr) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(xmlStr, 'text/xml');
+
+    const ns = 'http://www.portalfiscal.inf.br/cte';
+    const q = (parent, tag) => {
+      if (!parent) return '';
+      const el = parent.getElementsByTagNameNS(ns, tag)[0] || parent.getElementsByTagName(tag)[0];
+      return el ? el.textContent.trim() : '';
+    };
+    const qEl = (parent, tag) => {
+      if (!parent) return null;
+      return parent.getElementsByTagNameNS(ns, tag)[0] || parent.getElementsByTagName(tag)[0] || null;
+    };
+
+    const infCte = qEl(doc, 'infCte');
+    if (!infCte) throw new Error('Tag infCte nao encontrada');
+
+    const chave = (infCte.getAttribute('Id') || '').replace(/^CTe/, '');
+    const ide   = qEl(infCte, 'ide');
+    const emit  = qEl(infCte, 'emit');
+    const rem   = qEl(infCte, 'rem');
+    const dest  = qEl(infCte, 'dest');
+    const vPrest = qEl(infCte, 'vPrest');
+    const infCarga = qEl(infCte, 'infCarga');
+
+    // Value components
+    const componentes = [];
+    if (vPrest) {
+      const compNodes = vPrest.getElementsByTagNameNS(ns, 'Comp');
+      const comps = compNodes.length ? compNodes : vPrest.getElementsByTagName('Comp');
+      for (let i = 0; i < comps.length; i++) {
+        componentes.push({
+          nome: q(comps[i], 'xNome'),
+          valor: parseFloat(q(comps[i], 'vComp') || '0')
+        });
+      }
+    }
+
+    // Locations
+    const ufIni = q(ide, 'UFIni');
+    const ufFim = q(ide, 'UFFim');
+    const xMunIni = q(ide, 'xMunIni');
+    const xMunFim = q(ide, 'xMunFim');
+
+    // Weight from infCarga
+    let pesoBruto = 0;
+    if (infCarga) {
+      const infQNodes = infCarga.getElementsByTagNameNS(ns, 'infQ');
+      const infQs = infQNodes.length ? infQNodes : infCarga.getElementsByTagName('infQ');
+      for (let i = 0; i < infQs.length; i++) {
+        const cUnid = q(infQs[i], 'cUnid');
+        const tpMed = q(infQs[i], 'tpMed').toUpperCase();
+        if (cUnid === '01' || tpMed.includes('PESO') || tpMed.includes('BRUTO')) {
+          pesoBruto = parseFloat(q(infQs[i], 'qCarga') || '0');
+          break;
+        }
+      }
+      if (!pesoBruto && infQs.length) {
+        pesoBruto = parseFloat(q(infQs[0], 'qCarga') || '0');
+      }
+    }
+
+    const enderEmit = qEl(emit, 'enderEmit');
+    const dhEmi = q(ide, 'dhEmi');
+
+    return {
+      cte: {
+        chave_acesso:       chave,
+        numero_cte:         q(ide, 'nCT'),
+        serie:              q(ide, 'serie'),
+        data_emissao:       dhEmi ? dhEmi.substring(0, 10) : null,
+        emit_cnpj:          q(emit, 'CNPJ'),
+        emit_razao_social:  q(emit, 'xNome'),
+        emit_nome_fantasia: q(emit, 'xFant'),
+        emit_uf:            q(enderEmit, 'UF') || q(emit, 'UF'),
+        rem_cnpj:           q(rem, 'CNPJ') || q(rem, 'CPF'),
+        rem_razao_social:   q(rem, 'xNome'),
+        dest_cnpj:          q(dest, 'CNPJ') || q(dest, 'CPF'),
+        dest_razao_social:  q(dest, 'xNome'),
+        valor_total:        parseFloat(q(vPrest, 'vTPrest') || '0'),
+        valor_receber:      parseFloat(q(vPrest, 'vRec') || '0'),
+        peso_bruto:         pesoBruto,
+        uf_inicio:          ufIni,
+        uf_fim:             ufFim,
+        municipio_inicio:   xMunIni,
+        municipio_fim:      xMunFim,
+        local_origem:       xMunIni ? xMunIni + '/' + ufIni : ufIni,
+        local_destino:      xMunFim ? xMunFim + '/' + ufFim : ufFim,
+        status:             'autorizado',
+        xml_original:       xmlStr
+      },
+      componentes
+    };
+  }
+
+  /* ── Import CT-es ── */
+  async function importCTes(xmlTexts) {
+    progressSection.style.display = 'block';
+    statsRow.style.display = '';
+    logCard.style.display = '';
+    logArea.innerHTML = '';
+
+    let total = xmlTexts.length, imported = 0, dups = 0, errors = 0;
+    updateStats(total, imported, dups, errors);
+
+    for (let i = 0; i < xmlTexts.length; i++) {
+      const { name, xml } = xmlTexts[i];
+      const pct = Math.round(((i + 1) / total) * 100);
+      progressBar.style.width = pct + '%';
+      progressPct.textContent = pct + '%';
+      progressLabel.textContent = 'Processando ' + (i + 1) + '/' + total + ': ' + name;
+
+      try {
+        const parsed = parseCTeXML(xml);
+        parsed.cte.arquivo_origem = name;
+
+        // Check duplicate by chave_acesso
+        const { ok: chkOk, data: existing } = await API.get(
+          'rh_cte?chave_acesso=eq.' + encodeURIComponent(parsed.cte.chave_acesso) + '&select=id'
+        );
+        if (chkOk && existing && existing.length > 0) {
+          dups++;
+          addLog('[DUP] ' + name + ' - CT-e ' + parsed.cte.numero_cte + ' ja existe (chave: ...' + parsed.cte.chave_acesso.slice(-8) + ')', 'dup');
+          updateStats(total, imported, dups, errors);
+          continue;
+        }
+
+        // Insert CT-e
+        const { ok, data, error } = await API.post('rh_cte', parsed.cte, 'return=representation');
+        if (!ok) {
+          errors++;
+          addLog('[ERRO] ' + name + ' - ' + (error || 'Erro ao inserir'), 'err');
+          updateStats(total, imported, dups, errors);
+          continue;
+        }
+
+        // Insert value components
+        const cteId = data && data[0] ? data[0].id : null;
+        if (cteId && parsed.componentes.length) {
+          const compsPayload = parsed.componentes.map(function(c) {
+            return { cte_id: cteId, nome: c.nome, valor: c.valor };
+          });
+          await API.post('rh_cte_componente', compsPayload);
+        }
+
+        imported++;
+        addLog('[OK] ' + name + ' - CT-e ' + parsed.cte.numero_cte + ' | ' + parsed.cte.emit_razao_social + ' | ' + API.fmtMoeda(parsed.cte.valor_total), 'ok');
+
+      } catch (e) {
+        errors++;
+        addLog('[ERRO] ' + name + ' - ' + e.message, 'err');
+      }
+      updateStats(total, imported, dups, errors);
+    }
+
+    progressLabel.textContent = 'Importacao concluida!';
+
+    // Log import event
+    await API.post('rh_cte_importacao_log', {
+      total_arquivos: total,
+      importados: imported,
+      duplicados: dups,
+      erros: errors,
+      data_importacao: new Date().toISOString()
+    });
+
+    loadCTeTable();
+  }
+
+  function updateStats(total, imported, dups, errors) {
+    document.getElementById('statTotal').textContent = total;
+    document.getElementById('statImported').textContent = imported;
+    document.getElementById('statDups').textContent = dups;
+    document.getElementById('statErrors').textContent = errors;
+  }
+
+  function addLog(msg, type) {
+    const div = document.createElement('div');
+    div.className = 'log-' + type;
+    div.textContent = msg;
+    logArea.appendChild(div);
+    logArea.scrollTop = logArea.scrollHeight;
+  }
+
+  /* ── CT-e Table ── */
+  async function loadCTeTable() {
+    const month  = document.getElementById('filterMonth').value;
+    const status = document.getElementById('filterStatus').value;
+    const search = document.getElementById('filterSearch').value.trim();
+
+    let endpoint = 'rh_cte?select=*&order=data_emissao.desc&limit=500';
+
+    if (month) {
+      const parts = month.split('-');
+      const y = parts[0], m = parts[1];
+      const start = y + '-' + m + '-01';
+      const endDate = new Date(parseInt(y), parseInt(m), 0);
+      const end = y + '-' + m + '-' + String(endDate.getDate()).padStart(2, '0');
+      endpoint += '&data_emissao=gte.' + start + '&data_emissao=lte.' + end;
+    }
+    if (status) {
+      endpoint += '&status=eq.' + encodeURIComponent(status);
+    }
+    if (search) {
+      endpoint += '&or=(numero_cte.ilike.*' + encodeURIComponent(search) + '*,emit_razao_social.ilike.*' + encodeURIComponent(search) + '*,rem_razao_social.ilike.*' + encodeURIComponent(search) + '*,dest_razao_social.ilike.*' + encodeURIComponent(search) + '*)';
+    }
+
+    const { ok, data } = await API.get(endpoint);
+    const tbody = document.getElementById('cteBody');
+
+    if (!ok || !data || !data.length) {
+      tbody.innerHTML = '<tr><td colspan="10" class="text-muted" style="text-align:center;padding:32px">Nenhum registro encontrado.</td></tr>';
+      document.getElementById('totCount').textContent = '0';
+      document.getElementById('totValue').textContent = 'R$ 0,00';
+      document.getElementById('totWeight').textContent = '0,00 kg';
+      return;
+    }
+
+    let totalVal = 0, totalWeight = 0;
+    var rows = '';
+    for (var i = 0; i < data.length; i++) {
+      var r = data[i];
+      totalVal += r.valor_total || 0;
+      totalWeight += r.peso_bruto || 0;
+      var statusBadge = r.status === 'cancelado'
+        ? '<span class="badge badge-danger">Cancelado</span>'
+        : '<span class="badge badge-success">Autorizado</span>';
+      rows += '<tr>' +
+        '<td>' + API.esc(r.numero_cte || '-') + '</td>' +
+        '<td>' + API.esc(r.serie || '-') + '</td>' +
+        '<td>' + (r.data_emissao ? API.fmtData(r.data_emissao) : '-') + '</td>' +
+        '<td>' + API.esc(r.emit_nome_fantasia || r.emit_razao_social || '-') + '</td>' +
+        '<td>' + API.esc(r.rem_razao_social || '-') + '</td>' +
+        '<td>' + API.esc(r.local_origem || '-') + '</td>' +
+        '<td>' + API.esc(r.local_destino || '-') + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.valor_total) + '</td>' +
+        '<td style="text-align:right">' + API.fmtNum(r.peso_bruto, 2) + '</td>' +
+        '<td>' + statusBadge + '</td>' +
+        '</tr>';
+    }
+    tbody.innerHTML = rows;
+
+    document.getElementById('totCount').textContent = data.length;
+    document.getElementById('totValue').textContent = API.fmtMoeda(totalVal);
+    document.getElementById('totWeight').textContent = API.fmtNum(totalWeight, 2) + ' kg';
+  }
+
+  document.getElementById('btnFilter').addEventListener('click', loadCTeTable);
+  document.getElementById('btnClear').addEventListener('click', function() {
+    document.getElementById('filterMonth').value = '';
+    document.getElementById('filterStatus').value = '';
+    document.getElementById('filterSearch').value = '';
+    loadCTeTable();
+  });
+
+  // Initial load
+  loadCTeTable();
+})();
+</script>
+</body>
+</html>

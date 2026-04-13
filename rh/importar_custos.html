@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Custos por Colaborador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+.upload-zone {
+  border: 2px dashed var(--border);
+  border-radius: 12px;
+  padding: 48px 24px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color .2s, background .2s;
+  background: var(--bg-card);
+}
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-color: var(--primary);
+  background: #EFF6FF;
+}
+.upload-zone input[type="file"] { display: none; }
+.upload-zone svg { margin-bottom: 12px; }
+
+.mapping-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 12px;
+}
+@media (max-width: 768px) {
+  .mapping-grid { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .mapping-grid { grid-template-columns: 1fr; }
+}
+.mapping-grid label {
+  font-size: 13px;
+  color: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.mapping-grid select { width: 100%; }
+
+.preview-table-wrapper {
+  max-height: 300px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.preview-table-wrapper table {
+  font-size: 12px;
+  width: 100%;
+  border-collapse: collapse;
+}
+.preview-table-wrapper th,
+.preview-table-wrapper td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.preview-table-wrapper th {
+  background: #F8FAFC;
+  position: sticky;
+  top: 0;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.progress-wrapper {
+  background: var(--border);
+  border-radius: 8px;
+  height: 8px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+.progress-bar {
+  height: 100%;
+  background: var(--primary);
+  border-radius: 8px;
+  transition: width .3s ease;
+  width: 0%;
+}
+
+.filter-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.filter-row label { font-size: 13px; color: var(--text-secondary); }
+.filter-row input,
+.filter-row select { min-width: 160px; }
+
+.totals-bar {
+  display: flex;
+  gap: 24px;
+  padding: 12px 16px;
+  background: #F8FAFC;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-size: 14px;
+  color: var(--text-secondary);
+  flex-wrap: wrap;
+}
+.totals-bar strong { color: var(--text-primary); }
+
+.toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #fff;
+  z-index: 9999;
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity .3s, transform .3s;
+  max-width: 420px;
+  box-shadow: 0 4px 12px rgba(0,0,0,.15);
+}
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.toast-success { background: #16a34a; }
+.toast.toast-error { background: #dc2626; }
+.toast.toast-warning { background: #d97706; }
+.toast.toast-info { background: #2563eb; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- Nav -->
+  <div style="display:flex;gap:.75rem;margin-bottom:1.5rem;flex-wrap:wrap">
+    <a href="dashboard_custos.html" class="btn btn-ghost btn-sm">&#8592; Dashboard de Custos</a>
+  </div>
+
+  <!-- Upload Section -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Importar Custos de Colaboradores</h3></div>
+    <div class="card-body">
+      <div style="display:flex;gap:12px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap">
+        <div>
+          <label class="text-sm" style="color:var(--text-secondary)">Competencia (mes/ano)</label><br>
+          <input type="month" id="competencia" required>
+        </div>
+      </div>
+
+      <div class="upload-zone" id="uploadZone">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <p class="font-medium" style="margin:0 0 4px">Arraste arquivo Excel ou CSV aqui</p>
+        <p class="text-muted text-sm" style="margin:0">Formatos aceitos: .xlsx, .xls, .csv &mdash; ou clique para selecionar</p>
+        <input type="file" id="fileInput" accept=".xlsx,.xls,.csv">
+      </div>
+      <p class="text-sm text-muted" id="fileName" style="margin-top:8px;display:none"></p>
+    </div>
+  </div>
+
+  <!-- Column Mapping -->
+  <div class="card mb-6" id="mappingCard" style="display:none">
+    <div class="card-header"><h3>Mapeamento de Colunas</h3></div>
+    <div class="card-body">
+      <p class="text-sm text-muted" style="margin:0 0 16px">Associe as colunas do arquivo aos campos do sistema. Campos com <strong>*</strong> sao obrigatorios.</p>
+      <div class="mapping-grid" id="mappingGrid"></div>
+      <div style="margin-top:16px">
+        <h4 class="text-sm font-medium" style="margin:0 0 8px">Pre-visualizacao (primeiras 5 linhas)</h4>
+        <div class="preview-table-wrapper" id="previewWrapper"></div>
+      </div>
+      <div style="margin-top:16px;display:flex;gap:12px">
+        <button class="btn btn-primary" id="btnImport">Importar Dados</button>
+        <button class="btn btn-ghost" id="btnCancel">Cancelar</button>
+      </div>
+
+      <div id="importProgress" style="display:none;margin-top:16px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px">
+          <span class="text-sm font-medium" id="importLabel">Importando...</span>
+          <span class="text-sm text-muted" id="importPct">0%</span>
+        </div>
+        <div class="progress-wrapper"><div class="progress-bar" id="importBar"></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="kpi-row mb-6" id="statsRow" style="display:none">
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="kpi-value" id="statTotal">0</div>
+      <div class="kpi-label">Total Linhas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon green">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      </div>
+      <div class="kpi-value" id="statImported">0</div>
+      <div class="kpi-label">Importados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon amber">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4v16h16"/><polyline points="4 14 8 10 12 14 20 6"/></svg>
+      </div>
+      <div class="kpi-value" id="statUpdated">0</div>
+      <div class="kpi-label">Atualizados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon red">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+      </div>
+      <div class="kpi-value" id="statErrors">0</div>
+      <div class="kpi-label">Erros</div>
+    </div>
+  </div>
+
+  <!-- Existing Costs Table -->
+  <div class="card mb-6">
+    <div class="card-header"><h3>Custos Cadastrados</h3></div>
+    <div class="card-body">
+      <div class="filter-row">
+        <div>
+          <label>Competencia</label><br>
+          <input type="month" id="filterMonth">
+        </div>
+        <div>
+          <label>Setor</label><br>
+          <select id="filterSetor"><option value="">Todos</option></select>
+        </div>
+        <div>
+          <label>Buscar</label><br>
+          <input type="text" id="filterSearch" placeholder="Nome, CPF, cargo...">
+        </div>
+        <div>
+          <button class="btn btn-primary btn-sm" id="btnFilter">Filtrar</button>
+          <button class="btn btn-ghost btn-sm" id="btnClearFilter">Limpar</button>
+        </div>
+      </div>
+
+      <div class="totals-bar mb-4" id="totalsBar">
+        <span><strong id="totCount">0</strong> colaboradores</span>
+        <span>Custo total: <strong id="totCost">R$ 0,00</strong></span>
+        <span>Media por colaborador: <strong id="totAvg">R$ 0,00</strong></span>
+      </div>
+
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>CPF</th>
+              <th>Matricula</th>
+              <th>Cargo</th>
+              <th>Setor</th>
+              <th>Filial</th>
+              <th>Competencia</th>
+              <th style="text-align:right">Salario Base</th>
+              <th style="text-align:right">Horas Extras</th>
+              <th style="text-align:right">VT</th>
+              <th style="text-align:right">VA</th>
+              <th style="text-align:right">Plano Saude</th>
+              <th style="text-align:right">FGTS</th>
+              <th style="text-align:right">INSS Empresa</th>
+              <th style="text-align:right;font-weight:700">Custo Total</th>
+            </tr>
+          </thead>
+          <tbody id="costBody">
+            <tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer"></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'importar_custos', title: 'Custos por Colaborador' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  /* ── Toast helper ── */
+  function showToast(msg, type) {
+    type = type || 'info';
+    var container = document.getElementById('toastContainer');
+    var el = document.createElement('div');
+    el.className = 'toast toast-' + type;
+    el.textContent = msg;
+    container.appendChild(el);
+    requestAnimationFrame(function() { el.classList.add('show'); });
+    setTimeout(function() {
+      el.classList.remove('show');
+      setTimeout(function() { el.remove(); }, 300);
+    }, 4000);
+  }
+
+  /* ── Field definitions ── */
+  var FIELDS = [
+    { key: 'nome_colaborador',          label: 'Nome do Colaborador',       required: true },
+    { key: 'cpf',                       label: 'CPF',                       required: true },
+    { key: 'matricula',                 label: 'Matricula',                 required: false },
+    { key: 'cargo',                     label: 'Cargo',                     required: false },
+    { key: 'setor',                     label: 'Setor',                     required: false },
+    { key: 'filial',                    label: 'Filial',                    required: false },
+    { key: 'salario_base',              label: 'Salario Base',              required: false },
+    { key: 'horas_extras',              label: 'Horas Extras',              required: false },
+    { key: 'adicional_noturno',         label: 'Adicional Noturno',         required: false },
+    { key: 'adicional_insalubridade',   label: 'Adicional Insalubridade',   required: false },
+    { key: 'adicional_periculosidade',  label: 'Adicional Periculosidade',  required: false },
+    { key: 'vale_transporte',           label: 'Vale Transporte',           required: false },
+    { key: 'vale_alimentacao',          label: 'Vale Alimentacao',          required: false },
+    { key: 'plano_saude',              label: 'Plano de Saude',             required: false },
+    { key: 'fgts',                      label: 'FGTS',                      required: false },
+    { key: 'inss_empresa',              label: 'INSS Empresa',              required: false },
+    { key: 'auxilio_deslocamento',       label: 'Auxílio Deslocamento',       required: false },
+    { key: 'adicional_assiduidade',      label: 'Adicional Assiduidade',      required: false },
+    { key: 'outros_proventos',          label: 'Outros Proventos',          required: false },
+    { key: 'outros_descontos',          label: 'Outros Descontos',          required: false },
+    { key: 'custo_total',               label: 'Custo Total',               required: false }
+  ];
+
+  var NUMERIC_FIELDS = [
+    'salario_base', 'horas_extras', 'adicional_noturno', 'adicional_insalubridade',
+    'adicional_periculosidade', 'vale_transporte', 'vale_alimentacao', 'plano_saude',
+    'fgts', 'inss_empresa', 'auxilio_deslocamento', 'adicional_assiduidade', 'outros_proventos', 'outros_descontos', 'custo_total'
+  ];
+
+  /* ── Column alias map for auto-detect ── */
+  var ALIASES = {
+    nome_colaborador:         ['nome', 'colaborador', 'funcionario', 'empregado', 'nomecolaborador', 'nomefuncionario', 'nomeempregado'],
+    cpf:                      ['cpf', 'cpfcolaborador', 'cpffuncionario'],
+    matricula:                ['matricula', 'registro', 'mat', 'nrmatricula'],
+    cargo:                    ['cargo', 'funcao', 'ocupacao'],
+    setor:                    ['setor', 'departamento', 'depto', 'area', 'centrocusto'],
+    filial:                   ['filial', 'unidade', 'loja', 'estabelecimento'],
+    salario_base:             ['salariobase', 'salario', 'sal', 'remuneracao', 'remuneracaobase'],
+    horas_extras:             ['horasextras', 'horaextra', 'he', 'extras'],
+    adicional_noturno:        ['adicionalnoturno', 'adnoturno', 'noturno'],
+    adicional_insalubridade:  ['adicionalinsalubridade', 'insalubridade', 'adinsalubridade'],
+    adicional_periculosidade: ['adicionalpericulosidade', 'periculosidade', 'adpericulosidade'],
+    vale_transporte:          ['valetransporte', 'vt', 'transporte'],
+    vale_alimentacao:         ['valealimentacao', 'va', 'alimentacao', 'valerefeicao', 'vr'],
+    plano_saude:              ['planosaude', 'saude', 'planodesaude', 'assistmedica', 'assistenciamedica'],
+    fgts:                     ['fgts', 'fundegarantia'],
+    inss_empresa:             ['inssempresa', 'insspatronal', 'inss', 'contribuicaopatronal'],
+    auxilio_deslocamento:     ['auxiliodeslocamento', 'deslocamento', 'ajudacusto', 'ajudacustodeslocamento', 'auxdeslocamento', 'auxiliotransporte'],
+    adicional_assiduidade:    ['adicionalassiduidade', 'assiduidade', 'premiassiduidade', 'bonusassiduidade', 'premioassiduidade'],
+    outros_proventos:         ['outrosproventos', 'outrasverbas', 'demaisproventos'],
+    outros_descontos:         ['outrosdescontos', 'descontos', 'demaisdescontos'],
+    custo_total:              ['custototal', 'total', 'custoempregado', 'totalgeral', 'totalcusto', 'proventos', 'totalproventos']
+  };
+
+  function normalize(s) {
+    return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+  }
+
+  function autoDetect(headers) {
+    var mapping = {};
+    FIELDS.forEach(function(f) {
+      var aliasList = ALIASES[f.key] || [normalize(f.key)];
+      for (var i = 0; i < headers.length; i++) {
+        var nh = normalize(headers[i]);
+        for (var j = 0; j < aliasList.length; j++) {
+          if (nh === aliasList[j] || nh.indexOf(aliasList[j]) !== -1) {
+            mapping[f.key] = headers[i];
+            return;
+          }
+        }
+      }
+    });
+    return mapping;
+  }
+
+  /* ── State ── */
+  var sheetData = [];
+  var sheetHeaders = [];
+  var currentFileName = '';
+  var funcionariosCache = null;
+
+  /* ── Upload zone ── */
+  var uploadZone = document.getElementById('uploadZone');
+  var fileInput = document.getElementById('fileInput');
+
+  uploadZone.addEventListener('click', function() { fileInput.click(); });
+  uploadZone.addEventListener('dragover', function(e) { e.preventDefault(); uploadZone.classList.add('drag-over'); });
+  uploadZone.addEventListener('dragleave', function() { uploadZone.classList.remove('drag-over'); });
+  uploadZone.addEventListener('drop', function(e) {
+    e.preventDefault();
+    uploadZone.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fileInput.addEventListener('change', function() { if (fileInput.files.length) handleFile(fileInput.files[0]); });
+
+  /* ── Handle file ── */
+  function handleFile(file) {
+    var validExt = /\.(xlsx|xls|csv)$/i;
+    if (!validExt.test(file.name)) {
+      showToast('Formato de arquivo invalido. Use .xlsx, .xls ou .csv.', 'error');
+      return;
+    }
+
+    currentFileName = file.name;
+    var fnEl = document.getElementById('fileName');
+    fnEl.textContent = 'Arquivo: ' + file.name;
+    fnEl.style.display = '';
+
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var data = new Uint8Array(e.target.result);
+        var workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        var sheet = workbook.Sheets[workbook.SheetNames[0]];
+        var json = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+
+        if (json.length < 2) {
+          showToast('Arquivo vazio ou sem dados suficientes.', 'error');
+          return;
+        }
+
+        sheetHeaders = json[0].map(function(h) { return String(h).trim(); });
+        sheetData = [];
+        for (var i = 1; i < json.length; i++) {
+          if (json[i].some(function(c) { return c !== ''; })) {
+            sheetData.push(json[i]);
+          }
+        }
+
+        showToast(sheetData.length + ' linhas encontradas no arquivo.', 'success');
+        showMapping();
+      } catch (err) {
+        showToast('Erro ao ler o arquivo: ' + err.message, 'error');
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  /* ── Show mapping UI ── */
+  function showMapping() {
+    var mappingCard = document.getElementById('mappingCard');
+    var mappingGrid = document.getElementById('mappingGrid');
+    mappingCard.style.display = '';
+
+    var detected = autoDetect(sheetHeaders);
+    var html = '';
+
+    FIELDS.forEach(function(f) {
+      var req = f.required ? ' *' : '';
+      html += '<label>' + API.esc(f.label) + req;
+      html += '<select data-field="' + f.key + '">';
+      html += '<option value="">-- Nao mapear --</option>';
+      sheetHeaders.forEach(function(h) {
+        var sel = detected[f.key] === h ? ' selected' : '';
+        html += '<option value="' + API.esc(h) + '"' + sel + '>' + API.esc(h) + '</option>';
+      });
+      html += '</select></label>';
+    });
+
+    mappingGrid.innerHTML = html;
+
+    // Preview table
+    var previewHtml = '<table><thead><tr>';
+    sheetHeaders.forEach(function(h) { previewHtml += '<th>' + API.esc(h) + '</th>'; });
+    previewHtml += '</tr></thead><tbody>';
+    var previewCount = Math.min(5, sheetData.length);
+    for (var i = 0; i < previewCount; i++) {
+      previewHtml += '<tr>';
+      for (var j = 0; j < sheetHeaders.length; j++) {
+        previewHtml += '<td>' + API.esc(String(sheetData[i][j] || '')) + '</td>';
+      }
+      previewHtml += '</tr>';
+    }
+    previewHtml += '</tbody></table>';
+    document.getElementById('previewWrapper').innerHTML = previewHtml;
+
+    mappingCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  /* ── Fetch rh_funcionarios for matching ── */
+  async function loadFuncionarios() {
+    if (funcionariosCache) return funcionariosCache;
+    var res = await API.get('rh_funcionarios?select=id,nome,cpf,matricula&limit=5000');
+    if (res.ok && res.data) {
+      funcionariosCache = res.data;
+    } else {
+      funcionariosCache = [];
+    }
+    return funcionariosCache;
+  }
+
+  function cleanCpf(val) {
+    if (!val) return '';
+    return String(val).replace(/[^\d]/g, '').padStart(11, '0');
+  }
+
+  function matchFuncionario(funcionarios, cpf, nome) {
+    if (!funcionarios || !funcionarios.length) return null;
+    // Match by CPF first (most reliable)
+    if (cpf) {
+      for (var i = 0; i < funcionarios.length; i++) {
+        if (cleanCpf(funcionarios[i].cpf) === cpf) return funcionarios[i];
+      }
+    }
+    // Fallback: match by name (case-insensitive)
+    if (nome) {
+      var nomeNorm = nome.toLowerCase().trim();
+      for (var i = 0; i < funcionarios.length; i++) {
+        if (funcionarios[i].nome && funcionarios[i].nome.toLowerCase().trim() === nomeNorm) return funcionarios[i];
+      }
+    }
+    return null;
+  }
+
+  /* ── Import button ── */
+  document.getElementById('btnImport').addEventListener('click', startImport);
+  document.getElementById('btnCancel').addEventListener('click', function() {
+    document.getElementById('mappingCard').style.display = 'none';
+    sheetData = [];
+    sheetHeaders = [];
+    currentFileName = '';
+    document.getElementById('fileName').style.display = 'none';
+  });
+
+  async function startImport() {
+    var competencia = document.getElementById('competencia').value;
+    if (!competencia) {
+      showToast('Selecione a competencia antes de importar.', 'warning');
+      return;
+    }
+
+    // Gather mapping
+    var mapping = {};
+    var selects = document.querySelectorAll('#mappingGrid select');
+    selects.forEach(function(s) {
+      if (s.value) mapping[s.getAttribute('data-field')] = s.value;
+    });
+
+    if (!mapping.nome_colaborador && !mapping.cpf) {
+      showToast('Mapeie pelo menos o Nome do Colaborador ou CPF.', 'warning');
+      return;
+    }
+
+    // Confirm import
+    var confirmMsg = 'Importar ' + sheetData.length + ' linhas para a competencia ' + competencia + '?';
+    if (!confirm(confirmMsg)) return;
+
+    var headerIndex = {};
+    sheetHeaders.forEach(function(h, i) { headerIndex[h] = i; });
+
+    // Load employees for matching
+    var funcionarios = await loadFuncionarios();
+
+    var progressEl = document.getElementById('importProgress');
+    var barEl = document.getElementById('importBar');
+    var labelEl = document.getElementById('importLabel');
+    var pctEl = document.getElementById('importPct');
+    progressEl.style.display = 'block';
+    document.getElementById('statsRow').style.display = '';
+    document.getElementById('btnImport').disabled = true;
+
+    var total = sheetData.length, imported = 0, updated = 0, errors = 0;
+    var competenciaDate = competencia + '-01';
+
+    function getVal(row, field) {
+      var header = mapping[field];
+      if (!header) return null;
+      var idx = headerIndex[header];
+      return idx !== undefined ? row[idx] : null;
+    }
+
+    function toNum(val) {
+      if (val === null || val === undefined || val === '') return 0;
+      if (typeof val === 'number') return val;
+      return parseFloat(String(val).replace(/\./g, '').replace(',', '.')) || 0;
+    }
+
+    // Batch size for progress updates
+    var BATCH = 1;
+
+    for (var i = 0; i < sheetData.length; i++) {
+      var row = sheetData[i];
+      var pct = Math.round(((i + 1) / total) * 100);
+      barEl.style.width = pct + '%';
+      pctEl.textContent = pct + '%';
+      labelEl.textContent = 'Importando ' + (i + 1) + '/' + total;
+
+      try {
+        var nome = String(getVal(row, 'nome_colaborador') || '').trim();
+        var cpf = cleanCpf(getVal(row, 'cpf'));
+        var matricula = String(getVal(row, 'matricula') || '').trim();
+
+        if (!nome && !cpf) { errors++; updateStats(); continue; }
+
+        // Match employee
+        var func = matchFuncionario(funcionarios, cpf, nome);
+
+        var payload = {
+          competencia:                competenciaDate,
+          nome_colaborador:           nome,
+          cpf:                        cpf,
+          matricula:                  matricula || (func ? func.matricula || '' : ''),
+          cargo:                      String(getVal(row, 'cargo') || '').trim(),
+          setor:                      String(getVal(row, 'setor') || '').trim(),
+          filial:                     String(getVal(row, 'filial') || '').trim(),
+          salario_base:               toNum(getVal(row, 'salario_base')),
+          horas_extras:               toNum(getVal(row, 'horas_extras')),
+          adicional_noturno:          toNum(getVal(row, 'adicional_noturno')),
+          adicional_insalubridade:    toNum(getVal(row, 'adicional_insalubridade')),
+          adicional_periculosidade:   toNum(getVal(row, 'adicional_periculosidade')),
+          vale_transporte:            toNum(getVal(row, 'vale_transporte')),
+          vale_alimentacao:           toNum(getVal(row, 'vale_alimentacao')),
+          plano_saude:                toNum(getVal(row, 'plano_saude')),
+          fgts:                       toNum(getVal(row, 'fgts')),
+          inss_empresa:               toNum(getVal(row, 'inss_empresa')),
+          auxilio_deslocamento:       toNum(getVal(row, 'auxilio_deslocamento')),
+          adicional_assiduidade:      toNum(getVal(row, 'adicional_assiduidade')),
+          outros_proventos:           toNum(getVal(row, 'outros_proventos')),
+          outros_descontos:           toNum(getVal(row, 'outros_descontos')),
+          arquivo_origem:             currentFileName
+        };
+
+        // Link to funcionario if matched
+        if (func) {
+          payload.funcionario_id = func.id;
+        }
+
+        // Sum of individually mapped cost fields
+        var somaConhecidos =
+            payload.salario_base +
+            payload.horas_extras +
+            payload.adicional_noturno +
+            payload.adicional_insalubridade +
+            payload.adicional_periculosidade +
+            payload.vale_transporte +
+            payload.vale_alimentacao +
+            payload.plano_saude +
+            payload.fgts +
+            payload.inss_empresa +
+            payload.auxilio_deslocamento +
+            payload.adicional_assiduidade;
+
+        // Auto-calculate custo_total if not mapped or zero
+        var custoTotalMapped = toNum(getVal(row, 'custo_total'));
+        if (custoTotalMapped > 0) {
+          payload.custo_total = custoTotalMapped;
+          // If outros_proventos was mapped to the same total column (common Excel issue),
+          // recalculate it as the residual: what is NOT accounted for by known fields
+          if (payload.outros_proventos >= custoTotalMapped * 0.9 && somaConhecidos > 0) {
+            payload.outros_proventos = Math.max(0,
+              custoTotalMapped + payload.outros_descontos - somaConhecidos);
+          }
+        } else {
+          payload.custo_total = somaConhecidos + payload.outros_proventos - payload.outros_descontos;
+        }
+
+        // Upsert: check if record already exists for CPF + competencia
+        var existingEndpoint = 'rh_custo_colaborador?competencia=eq.' + encodeURIComponent(competenciaDate);
+        if (cpf) {
+          existingEndpoint += '&cpf=eq.' + encodeURIComponent(cpf);
+        } else {
+          existingEndpoint += '&nome_colaborador=eq.' + encodeURIComponent(nome);
+        }
+        existingEndpoint += '&select=id';
+
+        var checkResult = await API.get(existingEndpoint);
+        if (checkResult.ok && checkResult.data && checkResult.data.length > 0) {
+          var updateEndpoint = 'rh_custo_colaborador?id=eq.' + checkResult.data[0].id;
+          var patchResult = await API.patch(updateEndpoint, payload);
+          if (patchResult.ok) { updated++; } else { errors++; }
+        } else {
+          var insertResult = await API.post('rh_custo_colaborador', payload);
+          if (insertResult.ok) { imported++; } else { errors++; }
+        }
+      } catch (e) {
+        errors++;
+      }
+
+      updateStats();
+    }
+
+    function updateStats() {
+      document.getElementById('statTotal').textContent = API.fmtNum(total);
+      document.getElementById('statImported').textContent = API.fmtNum(imported);
+      document.getElementById('statUpdated').textContent = API.fmtNum(updated);
+      document.getElementById('statErrors').textContent = API.fmtNum(errors);
+    }
+
+    labelEl.textContent = 'Importacao concluida!';
+    document.getElementById('btnImport').disabled = false;
+
+    if (errors === 0) {
+      showToast('Importacao concluida com sucesso! ' + imported + ' novos, ' + updated + ' atualizados.', 'success');
+    } else {
+      showToast('Importacao concluida com ' + errors + ' erros. ' + imported + ' novos, ' + updated + ' atualizados.', 'warning');
+    }
+
+    document.getElementById('mappingCard').style.display = 'none';
+    loadCosts();
+  }
+
+  /* ── Load Costs Table ── */
+  async function loadCosts() {
+    var month  = document.getElementById('filterMonth').value;
+    var setor  = document.getElementById('filterSetor').value;
+    var search = document.getElementById('filterSearch').value.trim();
+
+    var endpoint = 'rh_custo_colaborador?select=*&order=nome_colaborador.asc&limit=500';
+    if (month) endpoint += '&competencia=eq.' + encodeURIComponent(month + '-01');
+    if (setor) endpoint += '&setor=eq.' + encodeURIComponent(setor);
+    if (search) {
+      endpoint += '&or=(nome_colaborador.ilike.*' + encodeURIComponent(search) + '*,cpf.ilike.*' + encodeURIComponent(search) + '*,cargo.ilike.*' + encodeURIComponent(search) + '*)';
+    }
+
+    var tbody = document.getElementById('costBody');
+    tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px"><span class="spinner"></span></td></tr>';
+
+    var result = await API.get(endpoint);
+
+    if (!result.ok) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px">Erro ao carregar dados.</td></tr>';
+      showToast('Erro ao carregar custos: ' + (result.error || 'erro desconhecido'), 'error');
+      resetTotals();
+      return;
+    }
+
+    if (!result.data || !result.data.length) {
+      tbody.innerHTML = '<tr><td colspan="15" class="text-muted" style="text-align:center;padding:32px">Nenhum registro encontrado.</td></tr>';
+      resetTotals();
+      return;
+    }
+
+    var data = result.data;
+    var totalCost = 0;
+    var rows = '';
+
+    for (var i = 0; i < data.length; i++) {
+      var r = data[i];
+      totalCost += r.custo_total || 0;
+      rows += '<tr>' +
+        '<td>' + API.esc(r.nome_colaborador || '-') + '</td>' +
+        '<td>' + API.esc(r.cpf || '-') + '</td>' +
+        '<td>' + API.esc(r.matricula || '-') + '</td>' +
+        '<td>' + API.esc(r.cargo || '-') + '</td>' +
+        '<td>' + API.esc(r.setor || '-') + '</td>' +
+        '<td>' + API.esc(r.filial || '-') + '</td>' +
+        '<td>' + (r.competencia ? API.fmtData(r.competencia) : '-') + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.salario_base) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.horas_extras) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.vale_transporte) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.vale_alimentacao) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.plano_saude) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.fgts) + '</td>' +
+        '<td style="text-align:right">' + API.fmtMoeda(r.inss_empresa) + '</td>' +
+        '<td style="text-align:right;font-weight:600">' + API.fmtMoeda(r.custo_total) + '</td>' +
+        '</tr>';
+    }
+
+    tbody.innerHTML = rows;
+
+    var avg = data.length > 0 ? totalCost / data.length : 0;
+    document.getElementById('totCount').textContent = API.fmtNum(data.length);
+    document.getElementById('totCost').textContent = API.fmtMoeda(totalCost);
+    document.getElementById('totAvg').textContent = API.fmtMoeda(avg);
+  }
+
+  function resetTotals() {
+    document.getElementById('totCount').textContent = '0';
+    document.getElementById('totCost').textContent = 'R$ 0,00';
+    document.getElementById('totAvg').textContent = 'R$ 0,00';
+  }
+
+  /* ── Load setores for filter dropdown ── */
+  async function loadSetores() {
+    var result = await API.get('rh_custo_colaborador?select=setor&order=setor.asc');
+    if (!result.ok || !result.data) return;
+    var setores = {};
+    result.data.forEach(function(r) { if (r.setor) setores[r.setor] = true; });
+    var select = document.getElementById('filterSetor');
+    Object.keys(setores).sort().forEach(function(s) {
+      var opt = document.createElement('option');
+      opt.value = s;
+      opt.textContent = s;
+      select.appendChild(opt);
+    });
+  }
+
+  /* ── Filter events ── */
+  document.getElementById('btnFilter').addEventListener('click', loadCosts);
+  document.getElementById('btnClearFilter').addEventListener('click', function() {
+    document.getElementById('filterMonth').value = '';
+    document.getElementById('filterSetor').value = '';
+    document.getElementById('filterSearch').value = '';
+    loadCosts();
+  });
+
+  // Allow search on Enter key
+  document.getElementById('filterSearch').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') loadCosts();
+  });
+
+  // Initial load
+  loadSetores();
+  loadCosts();
+})();
+</script>
+</body>
+</html>

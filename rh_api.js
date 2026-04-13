@@ -18,45 +18,75 @@ const RH_API = {
       ...(options.headers || {}),
     };
 
-    const res = await fetch(url, {
-      method: options.method || 'GET',
-      headers,
-      body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined,
-    });
+    try {
+      const res = await fetch(url, {
+        method: options.method || 'GET',
+        headers,
+        body: options.body ? (typeof options.body === 'string' ? options.body : JSON.stringify(options.body)) : undefined,
+      });
 
-    return res;
+      if (!res.ok && res.status >= 500) {
+        console.error('[RH_API] Server error:', res.status, endpoint);
+        RH_API._showError('Erro no servidor (' + res.status + '). Tente novamente.');
+      } else if (res.status === 401 || res.status === 403) {
+        console.warn('[RH_API] Auth error:', res.status, endpoint);
+        RH_API._showError('Sessão expirada. Faça login novamente.');
+      }
+
+      return res;
+    } catch (e) {
+      console.error('[RH_API] Network error:', e.message, endpoint);
+      RH_API._showError('Erro de conexão. Verifique sua internet.');
+      return { ok: false, status: 0, json: async () => [], text: async () => '' };
+    }
   },
 
   async get(endpoint) {
     const res = await this.fetch(endpoint);
-    return res.ok ? res.json() : [];
+    if (!res.ok) {
+      if (res.status !== 0) console.warn('[RH_API] GET failed:', res.status, endpoint);
+      return [];
+    }
+    try {
+      return await res.json();
+    } catch (e) {
+      console.error('[RH_API] JSON parse error:', endpoint);
+      return [];
+    }
   },
 
   async post(endpoint, data, prefer) {
     const headers = {};
     if (prefer) headers['Prefer'] = prefer;
-    const res = await this.fetch(endpoint, {
-      method: 'POST',
-      headers,
-      body: data,
-    });
-    return res;
+    return this.fetch(endpoint, { method: 'POST', headers, body: data });
   },
 
   async patch(endpoint, data) {
-    const res = await this.fetch(endpoint, {
+    return this.fetch(endpoint, {
       method: 'PATCH',
       headers: { 'Prefer': 'return=minimal' },
       body: data,
     });
-    return res;
   },
 
   async delete(endpoint) {
-    const res = await this.fetch(endpoint, {
+    return this.fetch(endpoint, {
       method: 'DELETE',
       headers: { 'Prefer': 'return=minimal' },
     });
-    return res;
   },
+
+  // Toast de erro global
+  _showError(msg) {
+    if (typeof UI !== 'undefined' && UI.toast) {
+      UI.toast(msg, 'error');
+    } else {
+      // Fallback: toast inline
+      var t = document.createElement('div');
+      t.style.cssText = 'position:fixed;bottom:20px;right:20px;background:#1e293b;color:#fff;padding:12px 20px;border-radius:10px;font-size:13px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,.15);max-width:360px;border-left:4px solid #ef4444;';
+      t.textContent = msg;
+      document.body.appendChild(t);
+      setTimeout(function() { t.remove(); }, 5000);
+    }
+  }
 };

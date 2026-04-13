@@ -1,0 +1,1380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Auditoria de Rescisao</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1300px; margin: 0 auto; padding: 24px 20px; position: relative; }
+
+/* Section cards */
+.section-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 15px;
+  color: var(--accent); margin-bottom: 16px; padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Form grid */
+.form-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 4px; }
+.form-group.full { grid-column: 1 / -1; }
+.form-group.half { grid-column: span 2; }
+.form-label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .06em; font-weight: 600;
+}
+.form-input, .form-select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s; width: 100%;
+}
+.form-input:focus, .form-select:focus { border-color: var(--accent); }
+.form-input::placeholder { color: var(--muted); }
+.form-input[readonly] { opacity: .6; cursor: not-allowed; }
+.form-select { cursor: pointer; }
+.form-select option { background: var(--surface); color: var(--text); }
+
+/* Buttons */
+.btn {
+  padding: 10px 18px; border: none; border-radius: 8px;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 6px;
+}
+.btn-primary { background: var(--accent); color: #0d1b2a; }
+.btn-primary:hover { background: var(--accent2); }
+.btn-secondary { background: var(--surface); border: 1px solid var(--border); color: var(--text); }
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+.btn-danger { background: rgba(231,76,60,.15); color: #e74c3c; border: 1px solid rgba(231,76,60,.3); }
+.btn-danger:hover { background: rgba(231,76,60,.25); }
+.btn-ok { background: rgba(39,174,96,.15); color: #27ae60; border: 1px solid rgba(39,174,96,.3); }
+.btn-ok:hover { background: rgba(39,174,96,.25); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+
+.btn-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+
+/* Employee search */
+.search-wrapper { position: relative; }
+.search-input {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 0 0 8px 8px; max-height: 240px; overflow-y: auto;
+  display: none;
+}
+.search-results.open { display: block; }
+.search-item {
+  padding: 10px 14px; cursor: pointer; font-size: 13px;
+  border-bottom: 1px solid var(--border); transition: background .15s;
+}
+.search-item:hover { background: var(--surface2); }
+.search-item .nome { color: var(--text); font-weight: 600; }
+.search-item .info { color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+.selected-emp {
+  background: var(--surface2); border: 1px solid var(--accent);
+  border-radius: 10px; padding: 14px 18px; margin-top: 12px;
+  display: none; gap: 20px; align-items: center; flex-wrap: wrap;
+}
+.selected-emp.visible { display: flex; }
+.selected-emp .emp-name {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 16px; color: var(--text);
+}
+.selected-emp .emp-detail { font-size: 12px; color: var(--muted); }
+.emp-tag {
+  display: inline-block; padding: 3px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;
+}
+.emp-tag.desligado { background: rgba(231,76,60,.15); color: #e74c3c; }
+.emp-tag.ativo { background: rgba(39,174,96,.15); color: #27ae60; }
+
+/* Comparison table */
+.comp-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.comp-table th {
+  text-align: left; padding: 10px 12px; font-size: 11px;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+  border-bottom: 2px solid var(--border); font-weight: 600;
+}
+.comp-table td {
+  padding: 10px 12px; border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.comp-table tr:last-child td { border-bottom: none; }
+.comp-table .val { font-family: 'DM Mono', monospace; font-size: 13px; text-align: right; }
+.comp-table .match { color: var(--ok); }
+.comp-table .diverge { color: var(--err); font-weight: 700; }
+.comp-table .label-col { color: var(--text); font-weight: 500; }
+.comp-table .na { color: var(--muted); font-style: italic; }
+.comp-total {
+  background: var(--surface2); font-weight: 700;
+}
+.comp-total td { border-top: 2px solid var(--accent); padding: 12px; }
+
+.diff-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 12px;
+  font-size: 11px; font-family: 'DM Mono', monospace;
+}
+.diff-badge.ok { background: rgba(39,174,96,.15); color: var(--ok); }
+.diff-badge.err { background: rgba(231,76,60,.15); color: var(--err); }
+
+/* History table */
+.hist-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hist-table th {
+  text-align: left; padding: 9px 10px; font-size: 10px;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .06em;
+  border-bottom: 2px solid var(--border); font-weight: 600;
+}
+.hist-table td {
+  padding: 9px 10px; border-bottom: 1px solid var(--border);
+}
+.hist-table tr:hover { background: var(--surface2); }
+.hist-status {
+  display: inline-block; padding: 2px 8px; border-radius: 10px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+}
+.hist-status.ok { background: rgba(39,174,96,.15); color: var(--ok); }
+.hist-status.diverge { background: rgba(231,76,60,.15); color: var(--err); }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; margin-bottom: 20px; border-bottom: 2px solid var(--border); }
+.tab {
+  padding: 10px 20px; font-size: 13px; font-weight: 600;
+  color: var(--muted); cursor: pointer; border-bottom: 2px solid transparent;
+  margin-bottom: -2px; transition: all .2s; background: none; border-top: none;
+  border-left: none; border-right: none; font-family: 'DM Sans', sans-serif;
+}
+.tab:hover { color: var(--text); }
+.tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Aviso prévio inline */
+.aviso-group {
+  display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;
+  grid-column: 1 / -1;
+}
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; right: 20px; z-index: 9999;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 20px; font-size: 13px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.5); transform: translateY(100px);
+  opacity: 0; transition: all .3s;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: var(--ok); color: var(--ok); }
+.toast.error { border-color: var(--err); color: var(--err); }
+
+/* Rules box */
+.rules-box {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 14px; font-size: 12px; color: var(--muted);
+  line-height: 1.8;
+}
+.rules-box strong { color: var(--text); }
+.rules-box .verb-sim { color: var(--ok); font-weight: 600; }
+.rules-box .verb-nao { color: var(--err); font-weight: 600; }
+
+/* Scroll overflow */
+.table-wrap { overflow-x: auto; }
+
+/* Loading overlay */
+#loading-overlay {
+  position: fixed; inset: 0; background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000; font-family: 'Syne', sans-serif;
+  font-size: 16px; color: var(--muted);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-grid { grid-template-columns: 1fr; }
+  .aviso-group { grid-template-columns: 1fr; }
+  .form-group.half { grid-column: span 1; }
+  .header { flex-wrap: wrap; gap: 8px; }
+  .tabs { overflow-x: auto; }
+  .comp-table, .hist-table { font-size: 11px; }
+}
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="loading-overlay">Carregando...</div>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div>
+      <div class="header-title">Auditoria de Rescisao</div>
+      <div class="header-sub">Conferencia de TRCT - Calculos da contabilidade</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab active" data-tab="tab-audit" onclick="switchTab('tab-audit')">Nova Auditoria</button>
+    <button class="tab" data-tab="tab-history" onclick="switchTab('tab-history')">Historico</button>
+    <button class="tab" data-tab="tab-rules" onclick="switchTab('tab-rules')">Regras por Tipo</button>
+  </div>
+
+  <!-- TAB: Nova Auditoria -->
+  <div id="tab-audit" class="tab-content active">
+
+    <!-- 1. Selecao de colaborador -->
+    <div class="section-card">
+      <div class="section-title">1. Selecionar Colaborador</div>
+      <div class="search-wrapper">
+        <input type="text" class="search-input" id="emp-search"
+               placeholder="Digite o nome do colaborador..." autocomplete="off">
+        <div class="search-results" id="emp-results"></div>
+      </div>
+      <div class="selected-emp" id="selected-emp">
+        <div>
+          <div class="emp-name" id="sel-name">--</div>
+          <div class="emp-detail" id="sel-detail">--</div>
+        </div>
+        <span class="emp-tag" id="sel-status">--</span>
+        <button class="btn btn-secondary" style="margin-left:auto;font-size:12px;" onclick="clearEmployee()">Limpar</button>
+      </div>
+    </div>
+
+    <!-- 2. Dados da rescisao -->
+    <div class="section-card">
+      <div class="section-title">2. Dados da Rescisao (TRCT da Contabilidade)</div>
+
+      <div class="form-grid">
+        <!-- Tipo -->
+        <div class="form-group half">
+          <label class="form-label">Tipo de Rescisao</label>
+          <select class="form-select" id="tipo-rescisao" onchange="onTipoChanged()">
+            <option value="">Selecione...</option>
+            <option value="sem_justa_causa">Sem Justa Causa</option>
+            <option value="pedido_demissao">Pedido de Demissao</option>
+            <option value="justa_causa">Justa Causa</option>
+            <option value="acordo_484a">Acordo (Art. 484-A)</option>
+            <option value="fim_experiencia">Termino Contrato Experiencia</option>
+          </select>
+        </div>
+
+        <!-- Datas -->
+        <div class="form-group">
+          <label class="form-label">Data Admissao</label>
+          <input type="date" class="form-input" id="dt-admissao" readonly>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Data Desligamento</label>
+          <input type="date" class="form-input" id="dt-desligamento" onchange="recalculate()">
+        </div>
+
+        <!-- Salarios -->
+        <div class="form-group">
+          <label class="form-label">Salario Base (sistema)</label>
+          <input type="text" class="form-input" id="salario-base" readonly placeholder="0,00">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ultimo Salario (TRCT)</label>
+          <input type="text" class="form-input" id="ultimo-salario" placeholder="0,00" oninput="maskMoney(this)" onchange="recalculate()">
+        </div>
+
+        <!-- Saldo de salario -->
+        <div class="form-group">
+          <label class="form-label">Saldo Salario - Dias</label>
+          <input type="number" class="form-input" id="ct-saldo-dias" min="0" max="31" placeholder="0" onchange="recalculate()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Saldo Salario - Valor (Contab.)</label>
+          <input type="text" class="form-input" id="ct-saldo-valor" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+
+        <!-- 13o proporcional -->
+        <div class="form-group">
+          <label class="form-label">13o Proporcional - Avos</label>
+          <input type="number" class="form-input" id="ct-13-avos" min="0" max="12" placeholder="0" onchange="recalculate()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">13o Proporcional - Valor (Contab.)</label>
+          <input type="text" class="form-input" id="ct-13-valor" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+
+        <!-- Ferias proporcionais -->
+        <div class="form-group">
+          <label class="form-label">Ferias Proporcionais - Avos</label>
+          <input type="number" class="form-input" id="ct-ferias-prop-avos" min="0" max="12" placeholder="0" onchange="recalculate()">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Ferias Proporcionais - Valor (Contab.)</label>
+          <input type="text" class="form-input" id="ct-ferias-prop-valor" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+
+        <!-- 1/3 ferias -->
+        <div class="form-group">
+          <label class="form-label">1/3 de Ferias Proporcionais (Contab.)</label>
+          <input type="text" class="form-input" id="ct-terco-ferias" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+
+        <!-- Ferias vencidas -->
+        <div class="form-group">
+          <label class="form-label">Ferias Vencidas - Valor (Contab.)</label>
+          <input type="text" class="form-input" id="ct-ferias-venc" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">1/3 Ferias Vencidas (Contab.)</label>
+          <input type="text" class="form-input" id="ct-terco-ferias-venc" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+
+        <!-- Aviso previo -->
+        <div class="aviso-group">
+          <div class="form-group">
+            <label class="form-label">Aviso Previo - Tipo</label>
+            <select class="form-select" id="ct-aviso-tipo" onchange="recalculate()">
+              <option value="nenhum">Nenhum</option>
+              <option value="trabalhado">Trabalhado</option>
+              <option value="indenizado">Indenizado</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Aviso Previo - Dias</label>
+            <input type="number" class="form-input" id="ct-aviso-dias" min="0" max="90" placeholder="0" onchange="recalculate()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Aviso Previo - Valor (Contab.)</label>
+            <input type="text" class="form-input" id="ct-aviso-valor" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+        </div>
+
+        <!-- FGTS -->
+        <div class="form-group">
+          <label class="form-label">FGTS sobre Rescisao (Contab.)</label>
+          <input type="text" class="form-input" id="ct-fgts-rescisao" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Multa FGTS 40%/20% (Contab.)</label>
+          <input type="text" class="form-input" id="ct-multa-fgts" placeholder="0,00" oninput="maskMoney(this)">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Saldo FGTS Estimado (para calculo)</label>
+          <input type="text" class="form-input" id="saldo-fgts-estimado" placeholder="0,00" oninput="maskMoney(this)" onchange="recalculate()">
+        </div>
+      </div>
+
+      <!-- Descontos -->
+      <div style="margin-top:20px;">
+        <div class="section-title" style="font-size:13px;">Descontos (Contabilidade)</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">INSS</label>
+            <input type="text" class="form-input" id="ct-desc-inss" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">IRRF</label>
+            <input type="text" class="form-input" id="ct-desc-irrf" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Aviso Previo (desc. ped. demissao)</label>
+            <input type="text" class="form-input" id="ct-desc-aviso" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Adiantamentos / Outros</label>
+            <input type="text" class="form-input" id="ct-desc-outros" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Totais contabilidade -->
+      <div style="margin-top:20px;">
+        <div class="section-title" style="font-size:13px;">Totais da Contabilidade</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label class="form-label">Total Bruto (Contab.)</label>
+            <input type="text" class="form-input" id="ct-total-bruto" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Total Descontos (Contab.)</label>
+            <input type="text" class="form-input" id="ct-total-descontos" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Total Liquido (Contab.)</label>
+            <input type="text" class="form-input" id="ct-total-liquido" placeholder="0,00" oninput="maskMoney(this)">
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="runComparison()" id="btn-compare" disabled>Comparar Calculos</button>
+        <button class="btn btn-secondary" onclick="clearForm()">Limpar Formulario</button>
+      </div>
+    </div>
+
+    <!-- 3. Painel de comparacao -->
+    <div class="section-card" id="comparison-panel" style="display:none;">
+      <div class="section-title">3. Comparacao: Contabilidade vs Calculado</div>
+      <div class="table-wrap">
+        <table class="comp-table" id="comp-table">
+          <thead>
+            <tr>
+              <th style="width:30%">Verba</th>
+              <th class="val" style="width:18%">Contabilidade</th>
+              <th class="val" style="width:18%">Calculado</th>
+              <th class="val" style="width:18%">Diferenca</th>
+              <th style="width:16%">Status</th>
+            </tr>
+          </thead>
+          <tbody id="comp-body"></tbody>
+        </table>
+      </div>
+      <div class="btn-row" style="margin-top:20px;">
+        <button class="btn btn-ok" onclick="saveAudit()">Salvar Auditoria</button>
+        <button class="btn btn-secondary" onclick="exportCSV()">Exportar CSV</button>
+        <button class="btn btn-secondary" onclick="exportSummary()">Exportar Resumo</button>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- TAB: Historico -->
+  <div id="tab-history" class="tab-content">
+    <div class="section-card">
+      <div class="section-title">Auditorias Realizadas</div>
+      <div class="table-wrap">
+        <table class="hist-table">
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Colaborador</th>
+              <th>Tipo Rescisao</th>
+              <th>Liq. Contab.</th>
+              <th>Liq. Calculado</th>
+              <th>Diferenca</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="hist-body"></tbody>
+        </table>
+      </div>
+      <div id="hist-empty" style="text-align:center;padding:40px;color:var(--muted);font-size:13px;display:none;">
+        Nenhuma auditoria salva ainda.
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: Regras -->
+  <div id="tab-rules" class="tab-content">
+    <div class="section-card">
+      <div class="section-title">Regras por Tipo de Rescisao</div>
+
+      <div class="rules-box" style="margin-bottom:14px;">
+        <strong>Sem Justa Causa</strong><br>
+        <span class="verb-sim">Paga:</span> Saldo de salario + 13o proporcional + Ferias proporcionais + 1/3 ferias + Ferias vencidas + 1/3 ferias vencidas + Aviso previo indenizado + Multa 40% FGTS<br>
+        <span class="verb-nao">Desconta:</span> INSS + IRRF (se aplicavel)
+      </div>
+      <div class="rules-box" style="margin-bottom:14px;">
+        <strong>Pedido de Demissao</strong><br>
+        <span class="verb-sim">Paga:</span> Saldo de salario + 13o proporcional + Ferias proporcionais + 1/3 ferias + Ferias vencidas + 1/3 ferias vencidas<br>
+        <span class="verb-nao">NAO paga:</span> Aviso previo (se nao cumpriu) + Multa FGTS<br>
+        <span class="verb-nao">Desconta:</span> INSS + IRRF + Aviso previo (se nao cumpriu)
+      </div>
+      <div class="rules-box" style="margin-bottom:14px;">
+        <strong>Justa Causa</strong><br>
+        <span class="verb-sim">Paga:</span> Saldo de salario + Ferias vencidas + 1/3 ferias vencidas<br>
+        <span class="verb-nao">NAO paga:</span> 13o proporcional + Ferias proporcionais + 1/3 ferias proporcionais + Aviso previo + Multa FGTS
+      </div>
+      <div class="rules-box" style="margin-bottom:14px;">
+        <strong>Acordo (Art. 484-A CLT)</strong><br>
+        <span class="verb-sim">Paga:</span> Saldo de salario + 13o proporcional + Ferias proporcionais + 1/3 ferias + Ferias vencidas + 1/3 ferias vencidas + 50% do Aviso previo + 20% Multa FGTS<br>
+        <span class="verb-nao">Desconta:</span> INSS + IRRF
+      </div>
+      <div class="rules-box">
+        <strong>Termino de Contrato de Experiencia</strong><br>
+        <span class="verb-sim">Paga:</span> Saldo de salario + 13o proporcional + Ferias proporcionais + 1/3 ferias + Ferias vencidas + 1/3 ferias vencidas<br>
+        <span class="verb-nao">NAO paga:</span> Aviso previo + Multa FGTS
+      </div>
+
+      <div style="margin-top:20px;padding:14px;background:var(--bg);border-radius:8px;border:1px solid var(--border);">
+        <div style="font-size:12px;color:var(--muted);line-height:1.8;">
+          <strong style="color:var(--accent);">Formulas de Calculo:</strong><br>
+          <strong>Saldo de salario:</strong> (salario / 30) x dias trabalhados no mes<br>
+          <strong>13o proporcional:</strong> (salario / 12) x meses trabalhados no ano (15+ dias = mes cheio)<br>
+          <strong>Ferias proporcionais:</strong> (salario / 12) x meses desde ultimo periodo aquisitivo<br>
+          <strong>1/3 de ferias:</strong> ferias proporcionais / 3<br>
+          <strong>Ferias vencidas:</strong> salario integral (se periodo aquisitivo completo sem gozo)<br>
+          <strong>Aviso previo indenizado:</strong> salario base + 3 dias por ano de servico (maximo 90 dias total)<br>
+          <strong>Multa FGTS 40%:</strong> saldo FGTS x 40% (ou 20% para acordo Art. 484-A)<br>
+          <strong>Tolerancia:</strong> diferenca de ate R$ 1,00 e considerada aceitavel.
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+// AUDITORIA DE RESCISAO — Classic RH
+// ═══════════════════════════════════════════════════════════════════
+
+const STORAGE_KEY = 'rh_auditoria_rescisao_v1';
+let allColaboradores = [];
+let selectedEmp = null;
+let lastComparison = null;
+
+// ─── Init ────────────────────────────────────────────────────────
+async function initPage() {
+  const user = await RHAuth.init();
+  if (!user) return;
+  await loadColaboradores();
+  loadHistory();
+  document.getElementById('loading-overlay').style.display = 'none';
+}
+
+// ─── Tabs ────────────────────────────────────────────────────────
+function switchTab(tabId) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelector(`[data-tab="${tabId}"]`).classList.add('active');
+  document.getElementById(tabId).classList.add('active');
+  if (tabId === 'tab-history') loadHistory();
+}
+
+// ─── Toast ───────────────────────────────────────────────────────
+function showToast(msg, type = 'success') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show ' + type;
+  setTimeout(() => el.classList.remove('show'), 3500);
+}
+
+// ─── Money mask ──────────────────────────────────────────────────
+function maskMoney(input) {
+  let v = input.value.replace(/[^\d,\.]/g, '');
+  // allow comma as decimal
+  input.value = v;
+}
+
+function parseMoney(str) {
+  if (!str) return 0;
+  let s = String(str).trim();
+  // Handle Brazilian format: 1.234,56
+  if (s.includes(',')) {
+    s = s.replace(/\./g, '').replace(',', '.');
+  }
+  const n = parseFloat(s);
+  return isNaN(n) ? 0 : Math.round(n * 100) / 100;
+}
+
+function fmtMoney(n) {
+  if (n === null || n === undefined || isNaN(n)) return '0,00';
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function fmtDate(d) {
+  if (!d) return '--';
+  const parts = d.split('-');
+  if (parts.length === 3) return parts[2] + '/' + parts[1] + '/' + parts[0];
+  return d;
+}
+
+// ─── Load colaboradores ─────────────────────────────────────────
+async function loadColaboradores() {
+  try {
+    const res = await API.get('rh_colaboradores?select=id,nome,cpf,cargo,salario_base,data_admissao,data_desligamento,status,categoria&order=nome.asc');
+    allColaboradores = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('Erro ao carregar colaboradores:', e);
+    allColaboradores = [];
+  }
+}
+
+// ─── Employee search ─────────────────────────────────────────────
+const searchInput = document.getElementById('emp-search');
+const searchResults = document.getElementById('emp-results');
+let searchTimeout = null;
+
+searchInput.addEventListener('input', function() {
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => filterEmployees(this.value), 200);
+});
+
+searchInput.addEventListener('focus', function() {
+  if (this.value.length >= 1) filterEmployees(this.value);
+});
+
+document.addEventListener('click', function(e) {
+  if (!e.target.closest('.search-wrapper')) {
+    searchResults.classList.remove('open');
+  }
+});
+
+function filterEmployees(query) {
+  if (!query || query.length < 1) {
+    searchResults.classList.remove('open');
+    return;
+  }
+  const q = query.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const matches = allColaboradores.filter(c => {
+    const nome = (c.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return nome.includes(q);
+  }).slice(0, 15);
+
+  if (matches.length === 0) {
+    searchResults.innerHTML = '<div class="search-item" style="color:var(--muted);">Nenhum colaborador encontrado</div>';
+  } else {
+    searchResults.innerHTML = matches.map(c => `
+      <div class="search-item" onclick="selectEmployee('${c.id}')">
+        <div class="nome">${c.nome}</div>
+        <div class="info">${c.cargo || '--'} | ${c.status} | Admissao: ${fmtDate(c.data_admissao)}</div>
+      </div>
+    `).join('');
+  }
+  searchResults.classList.add('open');
+}
+
+function selectEmployee(id) {
+  const emp = allColaboradores.find(c => c.id === id);
+  if (!emp) return;
+  selectedEmp = emp;
+  searchResults.classList.remove('open');
+  searchInput.value = emp.nome;
+
+  document.getElementById('sel-name').textContent = emp.nome;
+  document.getElementById('sel-detail').textContent =
+    (emp.cargo || '--') + ' | CPF: ' + (emp.cpf || '--') + ' | Admissao: ' + fmtDate(emp.data_admissao);
+  const statusEl = document.getElementById('sel-status');
+  statusEl.textContent = emp.status;
+  statusEl.className = 'emp-tag ' + (emp.status === 'desligado' ? 'desligado' : 'ativo');
+  document.getElementById('selected-emp').classList.add('visible');
+
+  // Auto-fill
+  document.getElementById('dt-admissao').value = emp.data_admissao || '';
+  document.getElementById('salario-base').value = emp.salario_base ? fmtMoney(parseFloat(emp.salario_base)) : '';
+  if (emp.data_desligamento) {
+    document.getElementById('dt-desligamento').value = emp.data_desligamento;
+  }
+  if (emp.salario_base) {
+    document.getElementById('ultimo-salario').value = fmtMoney(parseFloat(emp.salario_base));
+  }
+
+  document.getElementById('btn-compare').disabled = false;
+  recalculate();
+}
+
+function clearEmployee() {
+  selectedEmp = null;
+  searchInput.value = '';
+  document.getElementById('selected-emp').classList.remove('visible');
+  document.getElementById('dt-admissao').value = '';
+  document.getElementById('salario-base').value = '';
+  document.getElementById('btn-compare').disabled = true;
+}
+
+// ─── Tipo changed ────────────────────────────────────────────────
+function onTipoChanged() {
+  const tipo = document.getElementById('tipo-rescisao').value;
+
+  // Adjust aviso previo default based on type
+  const avisoTipo = document.getElementById('ct-aviso-tipo');
+  if (tipo === 'sem_justa_causa') {
+    avisoTipo.value = 'indenizado';
+  } else if (tipo === 'pedido_demissao') {
+    avisoTipo.value = 'nenhum';
+  } else if (tipo === 'justa_causa' || tipo === 'fim_experiencia') {
+    avisoTipo.value = 'nenhum';
+  } else if (tipo === 'acordo_484a') {
+    avisoTipo.value = 'indenizado';
+  }
+
+  recalculate();
+}
+
+// ─── Calculation Engine ──────────────────────────────────────────
+function calcularRescisao() {
+  const tipo = document.getElementById('tipo-rescisao').value;
+  const dtAdm = document.getElementById('dt-admissao').value;
+  const dtDesl = document.getElementById('dt-desligamento').value;
+  const salario = parseMoney(document.getElementById('ultimo-salario').value);
+  const diasSaldo = parseInt(document.getElementById('ct-saldo-dias').value) || 0;
+  const avosTreze = parseInt(document.getElementById('ct-13-avos').value) || 0;
+  const avosFerias = parseInt(document.getElementById('ct-ferias-prop-avos').value) || 0;
+  const avisoTipo = document.getElementById('ct-aviso-tipo').value;
+  const avisoDias = parseInt(document.getElementById('ct-aviso-dias').value) || 0;
+  const saldoFGTS = parseMoney(document.getElementById('saldo-fgts-estimado').value);
+
+  const result = {
+    saldo_salario: 0,
+    decimo_terceiro: 0,
+    ferias_prop: 0,
+    terco_ferias: 0,
+    ferias_venc: 0,
+    terco_ferias_venc: 0,
+    aviso_previo: 0,
+    fgts_rescisao: 0,
+    multa_fgts: 0,
+    aviso_dias_calc: 0,
+  };
+
+  if (!tipo || !salario) return result;
+
+  // ── Saldo de salario (todos os tipos recebem)
+  result.saldo_salario = round2((salario / 30) * diasSaldo);
+
+  // ── 13o proporcional
+  if (tipo !== 'justa_causa') {
+    result.decimo_terceiro = round2((salario / 12) * avosTreze);
+  }
+
+  // ── Ferias proporcionais
+  if (tipo !== 'justa_causa') {
+    result.ferias_prop = round2((salario / 12) * avosFerias);
+  }
+
+  // ── 1/3 de ferias proporcionais
+  if (tipo !== 'justa_causa') {
+    result.terco_ferias = round2(result.ferias_prop / 3);
+  }
+
+  // ── Ferias vencidas (input from user — we just validate, all types receive)
+  // The value is inputted by the user from TRCT. We calculate based on full salary.
+  const ctFeriasVenc = parseMoney(document.getElementById('ct-ferias-venc').value);
+  if (ctFeriasVenc > 0) {
+    result.ferias_venc = salario; // one full salary per vencidas period
+  }
+
+  // ── 1/3 ferias vencidas
+  result.terco_ferias_venc = round2(result.ferias_venc / 3);
+
+  // ── Aviso previo
+  if (tipo === 'sem_justa_causa' && avisoTipo === 'indenizado') {
+    // 30 dias base + 3 dias por ano de servico, max 90 dias total
+    let anosServico = 0;
+    if (dtAdm && dtDesl) {
+      anosServico = calcAnosServico(dtAdm, dtDesl);
+    }
+    const diasCalc = Math.min(30 + (3 * anosServico), 90);
+    result.aviso_dias_calc = diasCalc;
+    result.aviso_previo = round2((salario / 30) * diasCalc);
+  } else if (tipo === 'acordo_484a' && avisoTipo === 'indenizado') {
+    let anosServico = 0;
+    if (dtAdm && dtDesl) {
+      anosServico = calcAnosServico(dtAdm, dtDesl);
+    }
+    const diasCalc = Math.min(30 + (3 * anosServico), 90);
+    result.aviso_dias_calc = diasCalc;
+    // 50% do aviso para acordo
+    result.aviso_previo = round2(((salario / 30) * diasCalc) * 0.5);
+  } else if (avisoTipo === 'trabalhado') {
+    // Aviso trabalhado: o valor ja esta incluso no saldo, geralmente nao gera verba extra
+    result.aviso_previo = 0;
+  }
+
+  // ── FGTS sobre rescisao (8% sobre verbas rescisorias)
+  const baseFGTS = result.saldo_salario + result.decimo_terceiro + result.aviso_previo;
+  result.fgts_rescisao = round2(baseFGTS * 0.08);
+
+  // ── Multa FGTS
+  if (tipo === 'sem_justa_causa') {
+    result.multa_fgts = round2(saldoFGTS * 0.40);
+  } else if (tipo === 'acordo_484a') {
+    result.multa_fgts = round2(saldoFGTS * 0.20);
+  }
+  // pedido_demissao, justa_causa, fim_experiencia: sem multa
+
+  return result;
+}
+
+function calcAnosServico(dtAdmStr, dtDeslStr) {
+  const adm = new Date(dtAdmStr + 'T00:00:00');
+  const desl = new Date(dtDeslStr + 'T00:00:00');
+  let anos = desl.getFullYear() - adm.getFullYear();
+  const mDiff = desl.getMonth() - adm.getMonth();
+  if (mDiff < 0 || (mDiff === 0 && desl.getDate() < adm.getDate())) {
+    anos--;
+  }
+  return Math.max(anos, 0);
+}
+
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function recalculate() {
+  // Just trigger recalc visually if needed in future
+}
+
+// ─── Run Comparison ──────────────────────────────────────────────
+function runComparison() {
+  const tipo = document.getElementById('tipo-rescisao').value;
+  if (!tipo) { showToast('Selecione o tipo de rescisao.', 'error'); return; }
+  if (!selectedEmp) { showToast('Selecione um colaborador.', 'error'); return; }
+
+  const salario = parseMoney(document.getElementById('ultimo-salario').value);
+  if (!salario) { showToast('Informe o ultimo salario.', 'error'); return; }
+
+  const calc = calcularRescisao();
+
+  // Get contabilidade values
+  const ctSaldoValor = parseMoney(document.getElementById('ct-saldo-valor').value);
+  const ct13Valor = parseMoney(document.getElementById('ct-13-valor').value);
+  const ctFeriasPropValor = parseMoney(document.getElementById('ct-ferias-prop-valor').value);
+  const ctTercoFerias = parseMoney(document.getElementById('ct-terco-ferias').value);
+  const ctFeriasVenc = parseMoney(document.getElementById('ct-ferias-venc').value);
+  const ctTercoFeriasVenc = parseMoney(document.getElementById('ct-terco-ferias-venc').value);
+  const ctAvisoValor = parseMoney(document.getElementById('ct-aviso-valor').value);
+  const ctFgtsRescisao = parseMoney(document.getElementById('ct-fgts-rescisao').value);
+  const ctMultaFgts = parseMoney(document.getElementById('ct-multa-fgts').value);
+
+  // Descontos
+  const ctDescInss = parseMoney(document.getElementById('ct-desc-inss').value);
+  const ctDescIrrf = parseMoney(document.getElementById('ct-desc-irrf').value);
+  const ctDescAviso = parseMoney(document.getElementById('ct-desc-aviso').value);
+  const ctDescOutros = parseMoney(document.getElementById('ct-desc-outros').value);
+
+  const ctTotalBruto = parseMoney(document.getElementById('ct-total-bruto').value);
+  const ctTotalDescontos = parseMoney(document.getElementById('ct-total-descontos').value);
+  const ctTotalLiquido = parseMoney(document.getElementById('ct-total-liquido').value);
+
+  // Determine which lines are applicable based on tipo
+  const lines = [];
+
+  // Saldo de salario — always
+  lines.push({ label: 'Saldo de Salario', ct: ctSaldoValor, calc: calc.saldo_salario });
+
+  // 13o proporcional
+  if (tipo !== 'justa_causa') {
+    lines.push({ label: '13o Salario Proporcional', ct: ct13Valor, calc: calc.decimo_terceiro });
+  } else {
+    lines.push({ label: '13o Salario Proporcional', ct: ct13Valor, calc: 0, note: 'Nao devido (justa causa)' });
+  }
+
+  // Ferias proporcionais
+  if (tipo !== 'justa_causa') {
+    lines.push({ label: 'Ferias Proporcionais', ct: ctFeriasPropValor, calc: calc.ferias_prop });
+  } else {
+    lines.push({ label: 'Ferias Proporcionais', ct: ctFeriasPropValor, calc: 0, note: 'Nao devido (justa causa)' });
+  }
+
+  // 1/3 ferias proporcionais
+  if (tipo !== 'justa_causa') {
+    lines.push({ label: '1/3 de Ferias Proporcionais', ct: ctTercoFerias, calc: calc.terco_ferias });
+  } else {
+    lines.push({ label: '1/3 de Ferias Proporcionais', ct: ctTercoFerias, calc: 0, note: 'Nao devido (justa causa)' });
+  }
+
+  // Ferias vencidas — all types
+  lines.push({ label: 'Ferias Vencidas', ct: ctFeriasVenc, calc: calc.ferias_venc });
+  lines.push({ label: '1/3 Ferias Vencidas', ct: ctTercoFeriasVenc, calc: calc.terco_ferias_venc });
+
+  // Aviso previo
+  if (tipo === 'sem_justa_causa' || tipo === 'acordo_484a') {
+    const avisoLabel = tipo === 'acordo_484a' ? 'Aviso Previo (50% - Acordo)' : 'Aviso Previo Indenizado';
+    lines.push({ label: avisoLabel, ct: ctAvisoValor, calc: calc.aviso_previo });
+  } else {
+    lines.push({ label: 'Aviso Previo', ct: ctAvisoValor, calc: 0,
+      note: tipo === 'justa_causa' ? 'Nao devido (justa causa)' :
+            tipo === 'fim_experiencia' ? 'Nao devido (fim experiencia)' :
+            'Nao devido (pedido demissao)' });
+  }
+
+  // FGTS sobre rescisao
+  lines.push({ label: 'FGTS sobre Rescisao', ct: ctFgtsRescisao, calc: calc.fgts_rescisao });
+
+  // Multa FGTS
+  if (tipo === 'sem_justa_causa') {
+    lines.push({ label: 'Multa 40% FGTS', ct: ctMultaFgts, calc: calc.multa_fgts });
+  } else if (tipo === 'acordo_484a') {
+    lines.push({ label: 'Multa 20% FGTS (Acordo)', ct: ctMultaFgts, calc: calc.multa_fgts });
+  } else {
+    lines.push({ label: 'Multa FGTS', ct: ctMultaFgts, calc: 0, note: 'Nao devido' });
+  }
+
+  // Calculate totals
+  const totalCalcBruto = round2(lines.reduce((s, l) => s + l.calc, 0));
+  const totalCtBruto = round2(lines.reduce((s, l) => s + l.ct, 0));
+
+  // Descontos lines
+  const descLines = [];
+  if (ctDescInss > 0) descLines.push({ label: 'INSS', ct: ctDescInss, calc: null });
+  if (ctDescIrrf > 0) descLines.push({ label: 'IRRF', ct: ctDescIrrf, calc: null });
+  if (ctDescAviso > 0) descLines.push({ label: 'Desc. Aviso Previo', ct: ctDescAviso, calc: null });
+  if (ctDescOutros > 0) descLines.push({ label: 'Adiantamentos / Outros', ct: ctDescOutros, calc: null });
+
+  const totalDescCt = round2(ctDescInss + ctDescIrrf + ctDescAviso + ctDescOutros);
+
+  // Build table
+  const tbody = document.getElementById('comp-body');
+  let html = '';
+
+  // Verba lines
+  let totalDivergencias = 0;
+  for (const line of lines) {
+    const diff = round2(line.ct - line.calc);
+    const isMatch = Math.abs(diff) <= 1.00;
+    if (!isMatch) totalDivergencias++;
+    const diffClass = isMatch ? 'ok' : 'err';
+    const valClass = isMatch ? 'match' : 'diverge';
+
+    html += `<tr>
+      <td class="label-col">${line.label}${line.note ? ' <span style="font-size:10px;color:var(--muted);">(' + line.note + ')</span>' : ''}</td>
+      <td class="val">${fmtMoney(line.ct)}</td>
+      <td class="val ${valClass}">${fmtMoney(line.calc)}</td>
+      <td class="val"><span class="diff-badge ${diffClass}">${diff >= 0 ? '+' : ''}${fmtMoney(diff)}</span></td>
+      <td>${isMatch ? '<span style="color:var(--ok);font-weight:600;font-size:12px;">OK</span>' : '<span style="color:var(--err);font-weight:600;font-size:12px;">DIVERGENTE</span>'}</td>
+    </tr>`;
+  }
+
+  // Separator
+  html += `<tr><td colspan="5" style="padding:4px;border-bottom:2px solid var(--border);"></td></tr>`;
+
+  // Descontos header
+  if (descLines.length > 0) {
+    html += `<tr><td colspan="5" style="padding:8px 12px;color:var(--muted);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Descontos</td></tr>`;
+    for (const dl of descLines) {
+      html += `<tr>
+        <td class="label-col">${dl.label}</td>
+        <td class="val">${fmtMoney(dl.ct)}</td>
+        <td class="val na">--</td>
+        <td class="val na">--</td>
+        <td><span style="color:var(--muted);font-size:11px;">Informado</span></td>
+      </tr>`;
+    }
+    html += `<tr>
+      <td class="label-col" style="font-weight:700;">Total Descontos</td>
+      <td class="val" style="font-weight:700;">${fmtMoney(totalDescCt)}</td>
+      <td class="val na">--</td>
+      <td class="val na">--</td>
+      <td></td>
+    </tr>`;
+  }
+
+  // Total bruto
+  const diffBruto = round2(ctTotalBruto - totalCalcBruto);
+  const matchBruto = Math.abs(diffBruto) <= 1.00;
+  html += `<tr class="comp-total">
+    <td>Total Bruto</td>
+    <td class="val">${fmtMoney(ctTotalBruto)}</td>
+    <td class="val ${matchBruto ? 'match' : 'diverge'}">${fmtMoney(totalCalcBruto)}</td>
+    <td class="val"><span class="diff-badge ${matchBruto ? 'ok' : 'err'}">${diffBruto >= 0 ? '+' : ''}${fmtMoney(diffBruto)}</span></td>
+    <td>${matchBruto ? '<span style="color:var(--ok);font-weight:700;">OK</span>' : '<span style="color:var(--err);font-weight:700;">DIVERGENTE</span>'}</td>
+  </tr>`;
+
+  // Total liquido (using contabilidade's descontos since we don't calc INSS/IRRF)
+  const calcLiquido = round2(totalCalcBruto - totalDescCt);
+  const diffLiquido = round2(ctTotalLiquido - calcLiquido);
+  const matchLiquido = Math.abs(diffLiquido) <= 1.00;
+  html += `<tr class="comp-total">
+    <td>Total Liquido</td>
+    <td class="val">${fmtMoney(ctTotalLiquido)}</td>
+    <td class="val ${matchLiquido ? 'match' : 'diverge'}">${fmtMoney(calcLiquido)}</td>
+    <td class="val"><span class="diff-badge ${matchLiquido ? 'ok' : 'err'}">${diffLiquido >= 0 ? '+' : ''}${fmtMoney(diffLiquido)}</span></td>
+    <td>${matchLiquido ? '<span style="color:var(--ok);font-weight:700;">OK</span>' : '<span style="color:var(--err);font-weight:700;">DIVERGENTE</span>'}</td>
+  </tr>`;
+
+  tbody.innerHTML = html;
+  document.getElementById('comparison-panel').style.display = 'block';
+  document.getElementById('comparison-panel').scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Store for saving
+  lastComparison = {
+    colaborador_id: selectedEmp.id,
+    colaborador_nome: selectedEmp.nome,
+    tipo: tipo,
+    dt_desligamento: document.getElementById('dt-desligamento').value,
+    salario: salario,
+    ct_total_bruto: ctTotalBruto,
+    ct_total_descontos: ctTotalDescontos,
+    ct_total_liquido: ctTotalLiquido,
+    calc_total_bruto: totalCalcBruto,
+    calc_total_liquido: calcLiquido,
+    diff_bruto: diffBruto,
+    diff_liquido: diffLiquido,
+    divergencias: totalDivergencias,
+    status: totalDivergencias === 0 && matchBruto && matchLiquido ? 'ok' : 'divergente',
+    lines: lines,
+    descLines: descLines,
+    data_auditoria: new Date().toISOString(),
+  };
+}
+
+// ─── Save Audit ──────────────────────────────────────────────────
+function saveAudit() {
+  if (!lastComparison) { showToast('Execute a comparacao primeiro.', 'error'); return; }
+
+  const audits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+
+  // Check if already saved for same employee and date
+  const existing = audits.findIndex(a =>
+    a.colaborador_id === lastComparison.colaborador_id &&
+    a.dt_desligamento === lastComparison.dt_desligamento
+  );
+  if (existing >= 0) {
+    audits[existing] = lastComparison;
+  } else {
+    audits.unshift(lastComparison);
+  }
+
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(audits));
+  RHAuth.log('auditoria_rescisao_salva', {
+    colaborador: lastComparison.colaborador_nome,
+    tipo: lastComparison.tipo,
+    status: lastComparison.status,
+    diff_liquido: lastComparison.diff_liquido,
+  });
+  showToast('Auditoria salva com sucesso.');
+}
+
+// ─── Load History ────────────────────────────────────────────────
+function loadHistory() {
+  const audits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  const tbody = document.getElementById('hist-body');
+  const emptyEl = document.getElementById('hist-empty');
+
+  if (audits.length === 0) {
+    tbody.innerHTML = '';
+    emptyEl.style.display = 'block';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  const tipoLabels = {
+    'sem_justa_causa': 'Sem Justa Causa',
+    'pedido_demissao': 'Pedido Demissao',
+    'justa_causa': 'Justa Causa',
+    'acordo_484a': 'Acordo 484-A',
+    'fim_experiencia': 'Fim Experiencia',
+  };
+
+  tbody.innerHTML = audits.map((a, i) => {
+    const dt = a.data_auditoria ? new Date(a.data_auditoria).toLocaleDateString('pt-BR') : '--';
+    const statusClass = a.status === 'ok' ? 'ok' : 'diverge';
+    const statusLabel = a.status === 'ok' ? 'Conforme' : 'Divergente';
+    return `<tr>
+      <td>${dt}</td>
+      <td style="font-weight:600;">${a.colaborador_nome}</td>
+      <td>${tipoLabels[a.tipo] || a.tipo}</td>
+      <td style="font-family:'DM Mono',monospace;">${fmtMoney(a.ct_total_liquido)}</td>
+      <td style="font-family:'DM Mono',monospace;">${fmtMoney(a.calc_total_liquido)}</td>
+      <td style="font-family:'DM Mono',monospace;${Math.abs(a.diff_liquido) > 1 ? 'color:var(--err);font-weight:700;' : 'color:var(--ok);'}">${a.diff_liquido >= 0 ? '+' : ''}${fmtMoney(a.diff_liquido)}</td>
+      <td><span class="hist-status ${statusClass}">${statusLabel}</span></td>
+      <td>
+        <button class="btn btn-secondary" style="padding:4px 10px;font-size:11px;" onclick="loadAudit(${i})">Ver</button>
+        <button class="btn btn-danger" style="padding:4px 10px;font-size:11px;" onclick="deleteAudit(${i})">Excluir</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function loadAudit(index) {
+  const audits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  const a = audits[index];
+  if (!a) return;
+
+  switchTab('tab-audit');
+
+  // Find and select the employee
+  const emp = allColaboradores.find(c => c.id === a.colaborador_id);
+  if (emp) {
+    selectEmployee(emp.id);
+  }
+
+  // Fill tipo
+  document.getElementById('tipo-rescisao').value = a.tipo || '';
+
+  showToast('Auditoria carregada. Preencha os valores e compare novamente.');
+}
+
+function deleteAudit(index) {
+  if (!confirm('Deseja excluir esta auditoria?')) return;
+  const audits = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  audits.splice(index, 1);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(audits));
+  loadHistory();
+  showToast('Auditoria excluida.');
+}
+
+// ─── Export CSV ──────────────────────────────────────────────────
+function exportCSV() {
+  if (!lastComparison) { showToast('Execute a comparacao primeiro.', 'error'); return; }
+
+  const sep = ';';
+  let csv = 'Verba' + sep + 'Contabilidade' + sep + 'Calculado' + sep + 'Diferenca' + sep + 'Status\n';
+
+  for (const line of lastComparison.lines) {
+    const diff = round2(line.ct - line.calc);
+    const isMatch = Math.abs(diff) <= 1.00;
+    csv += line.label + sep +
+           fmtMoney(line.ct) + sep +
+           fmtMoney(line.calc) + sep +
+           fmtMoney(diff) + sep +
+           (isMatch ? 'OK' : 'DIVERGENTE') + '\n';
+  }
+
+  csv += '\n';
+  if (lastComparison.descLines && lastComparison.descLines.length > 0) {
+    csv += 'DESCONTOS\n';
+    for (const dl of lastComparison.descLines) {
+      csv += dl.label + sep + fmtMoney(dl.ct) + sep + '--' + sep + '--' + sep + 'Informado\n';
+    }
+  }
+
+  csv += '\nTOTAIS\n';
+  csv += 'Total Bruto' + sep + fmtMoney(lastComparison.ct_total_bruto) + sep + fmtMoney(lastComparison.calc_total_bruto) + sep + fmtMoney(lastComparison.diff_bruto) + sep + (Math.abs(lastComparison.diff_bruto) <= 1 ? 'OK' : 'DIVERGENTE') + '\n';
+  csv += 'Total Liquido' + sep + fmtMoney(lastComparison.ct_total_liquido) + sep + fmtMoney(lastComparison.calc_total_liquido) + sep + fmtMoney(lastComparison.diff_liquido) + sep + (Math.abs(lastComparison.diff_liquido) <= 1 ? 'OK' : 'DIVERGENTE') + '\n';
+
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'auditoria_rescisao_' + (selectedEmp ? selectedEmp.nome.replace(/\s+/g, '_') : 'export') + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('CSV exportado.');
+}
+
+// ─── Export Summary (printable HTML) ─────────────────────────────
+function exportSummary() {
+  if (!lastComparison) { showToast('Execute a comparacao primeiro.', 'error'); return; }
+
+  const tipoLabels = {
+    'sem_justa_causa': 'Sem Justa Causa',
+    'pedido_demissao': 'Pedido de Demissao',
+    'justa_causa': 'Justa Causa',
+    'acordo_484a': 'Acordo (Art. 484-A)',
+    'fim_experiencia': 'Termino Contrato Experiencia',
+  };
+
+  let linesHtml = '';
+  for (const line of lastComparison.lines) {
+    const diff = round2(line.ct - line.calc);
+    const isMatch = Math.abs(diff) <= 1.00;
+    linesHtml += `<tr>
+      <td>${line.label}</td>
+      <td style="text-align:right;">${fmtMoney(line.ct)}</td>
+      <td style="text-align:right;">${fmtMoney(line.calc)}</td>
+      <td style="text-align:right;color:${isMatch ? '#27ae60' : '#e74c3c'};font-weight:bold;">${fmtMoney(diff)}</td>
+      <td style="color:${isMatch ? '#27ae60' : '#e74c3c'};font-weight:bold;">${isMatch ? 'OK' : 'DIVERGENTE'}</td>
+    </tr>`;
+  }
+
+  let descHtml = '';
+  if (lastComparison.descLines && lastComparison.descLines.length > 0) {
+    descHtml = '<tr><td colspan="5" style="font-weight:bold;padding-top:12px;">DESCONTOS</td></tr>';
+    for (const dl of lastComparison.descLines) {
+      descHtml += `<tr><td>${dl.label}</td><td style="text-align:right;">${fmtMoney(dl.ct)}</td><td colspan="3" style="color:#888;">--</td></tr>`;
+    }
+  }
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Auditoria Rescisao - ${lastComparison.colaborador_nome}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; font-size: 12px; color: #222; }
+  h1 { font-size: 18px; margin-bottom: 4px; }
+  h2 { font-size: 14px; color: #555; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #ddd; text-align: left; }
+  th { background: #f5f5f5; font-size: 11px; text-transform: uppercase; }
+  .info { margin-bottom: 16px; }
+  .info span { display: inline-block; margin-right: 24px; }
+  .total td { border-top: 2px solid #333; font-weight: bold; font-size: 13px; }
+  .footer { margin-top: 30px; font-size: 10px; color: #888; border-top: 1px solid #ddd; padding-top: 8px; }
+  @media print { body { margin: 0; } }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+<h1>Auditoria de Rescisao - Classic RH</h1>
+<h2>${lastComparison.colaborador_nome}</h2>
+<div class="info">
+  <span><strong>Tipo:</strong> ${tipoLabels[lastComparison.tipo] || lastComparison.tipo}</span>
+  <span><strong>Desligamento:</strong> ${fmtDate(lastComparison.dt_desligamento)}</span>
+  <span><strong>Salario:</strong> R$ ${fmtMoney(lastComparison.salario)}</span>
+  <span><strong>Data Auditoria:</strong> ${new Date(lastComparison.data_auditoria).toLocaleDateString('pt-BR')}</span>
+</div>
+<table>
+  <thead><tr><th>Verba</th><th style="text-align:right;">Contabilidade</th><th style="text-align:right;">Calculado</th><th style="text-align:right;">Diferenca</th><th>Status</th></tr></thead>
+  <tbody>
+    ${linesHtml}
+    ${descHtml}
+    <tr class="total">
+      <td>Total Bruto</td>
+      <td style="text-align:right;">${fmtMoney(lastComparison.ct_total_bruto)}</td>
+      <td style="text-align:right;">${fmtMoney(lastComparison.calc_total_bruto)}</td>
+      <td style="text-align:right;color:${Math.abs(lastComparison.diff_bruto) <= 1 ? '#27ae60' : '#e74c3c'};">${fmtMoney(lastComparison.diff_bruto)}</td>
+      <td style="color:${Math.abs(lastComparison.diff_bruto) <= 1 ? '#27ae60' : '#e74c3c'};">${Math.abs(lastComparison.diff_bruto) <= 1 ? 'OK' : 'DIVERGENTE'}</td>
+    </tr>
+    <tr class="total">
+      <td>Total Liquido</td>
+      <td style="text-align:right;">${fmtMoney(lastComparison.ct_total_liquido)}</td>
+      <td style="text-align:right;">${fmtMoney(lastComparison.calc_total_liquido)}</td>
+      <td style="text-align:right;color:${Math.abs(lastComparison.diff_liquido) <= 1 ? '#27ae60' : '#e74c3c'};">${fmtMoney(lastComparison.diff_liquido)}</td>
+      <td style="color:${Math.abs(lastComparison.diff_liquido) <= 1 ? '#27ae60' : '#e74c3c'};">${Math.abs(lastComparison.diff_liquido) <= 1 ? 'OK' : 'DIVERGENTE'}</td>
+    </tr>
+  </tbody>
+</table>
+<div class="footer">
+  Resultado: <strong style="color:${lastComparison.status === 'ok' ? '#27ae60' : '#e74c3c'};">${lastComparison.status === 'ok' ? 'CONFORME' : 'DIVERGENTE (' + lastComparison.divergencias + ' itens)'}</strong>
+  &nbsp;|&nbsp; Gerado pelo Classic RH - Auditoria de Rescisao
+</div>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: 'text/html;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const win = window.open(url, '_blank');
+  if (win) {
+    win.onload = function() { win.print(); };
+  }
+  URL.revokeObjectURL(url);
+}
+
+// ─── Clear Form ──────────────────────────────────────────────────
+function clearForm() {
+  document.getElementById('tipo-rescisao').value = '';
+  document.getElementById('dt-desligamento').value = '';
+  document.getElementById('ultimo-salario').value = '';
+  document.getElementById('ct-saldo-dias').value = '';
+  document.getElementById('ct-saldo-valor').value = '';
+  document.getElementById('ct-13-avos').value = '';
+  document.getElementById('ct-13-valor').value = '';
+  document.getElementById('ct-ferias-prop-avos').value = '';
+  document.getElementById('ct-ferias-prop-valor').value = '';
+  document.getElementById('ct-terco-ferias').value = '';
+  document.getElementById('ct-ferias-venc').value = '';
+  document.getElementById('ct-terco-ferias-venc').value = '';
+  document.getElementById('ct-aviso-tipo').value = 'nenhum';
+  document.getElementById('ct-aviso-dias').value = '';
+  document.getElementById('ct-aviso-valor').value = '';
+  document.getElementById('ct-fgts-rescisao').value = '';
+  document.getElementById('ct-multa-fgts').value = '';
+  document.getElementById('saldo-fgts-estimado').value = '';
+  document.getElementById('ct-desc-inss').value = '';
+  document.getElementById('ct-desc-irrf').value = '';
+  document.getElementById('ct-desc-aviso').value = '';
+  document.getElementById('ct-desc-outros').value = '';
+  document.getElementById('ct-total-bruto').value = '';
+  document.getElementById('ct-total-descontos').value = '';
+  document.getElementById('ct-total-liquido').value = '';
+  document.getElementById('comparison-panel').style.display = 'none';
+  lastComparison = null;
+}
+
+// ─── Start ───────────────────────────────────────────────────────
+initPage();
+</script>
+</body>
+</html>

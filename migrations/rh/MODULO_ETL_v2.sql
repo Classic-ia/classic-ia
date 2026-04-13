@@ -1,0 +1,81 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO ETL — IMPORTAÇÃO DE DADOS (Convenia + BuscaEPI)
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql + MODULO_SST_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ARQUITETURA 3 CAMADAS:
+--
+--   ┌─────────────────────┐
+--   │  SISTEMAS EXTERNOS   │  Convenia API / BuscaEPI / Secullum / Atak
+--   └─────────┬───────────┘
+--             │ dados brutos (JSON)
+--   ┌─────────▼───────────┐
+--   │  1. STAGING          │  stg_convenia_*, stg_buscaepi_*
+--   │  (dados crus)        │  payload_json + hash + dedup
+--   └─────────┬───────────┘
+--             │ etl_normalizar_valor() + etl_resolver_funcionario()
+--   ┌─────────▼───────────┐
+--   │  2. NORMALIZAÇÃO     │  etl_depara (DE→PARA)
+--   │  (padronização)      │  etl_mapa_identidade (quem = quem)
+--   └─────────┬───────────┘
+--             │ etl_processar_*() — UPSERT controlado
+--   ┌─────────▼───────────┐
+--   │  3. CORE             │  rh_funcionarios, sst_catalogo_epi, etc.
+--   │  (dados definitivos) │  com histórico versionado (triggers)
+--   └─────────────────────┘
+--
+-- TABELAS (13):
+--   Controle:  etl_importacao, etl_sync_controle, etl_mapa_identidade, etl_depara
+--   Staging:   stg_convenia_funcionarios, stg_convenia_afastamentos,
+--              stg_convenia_ferias, stg_convenia_documentos,
+--              stg_buscaepi_epis, stg_buscaepi_entregas,
+--              stg_buscaepi_ca, stg_buscaepi_os
+--   Erros:     stg_erros_importacao
+--
+-- FUNCTIONS (7):
+--   etl_resolver_funcionario()          — mapa → CPF → email → nome
+--   etl_normalizar_valor()              — DE-PARA de qualquer campo
+--   etl_limpar_cpf()                    — limpeza e padding
+--   etl_parse_data()                    — parse flexível ISO/BR
+--   etl_processar_convenia_funcionarios() — staging → core (funcionários)
+--   etl_processar_buscaepi_epis()       — staging → catálogo EPI
+--   etl_resumo_importacao()             — resumo JSONB com erros
+--
+-- ESTRATÉGIA DE IDENTIDADE:
+--   1. Mapa de identidade (etl_mapa_identidade) — match por ID oficial
+--   2. Fallback por CPF (limpo) — confiança média
+--   3. Fallback por email — confiança média
+--   4. Fallback por nome exato — confiança baixa
+--   5. Não encontrado → erro para revisão manual
+--   Match por CPF/email auto-registra no mapa para próximas vezes.
+--
+-- REGRAS CRÍTICAS:
+--   - NUNCA insere funcionário automaticamente (exige processo de admissão)
+--   - NUNCA deleta dados existentes
+--   - Atualiza apenas campos não-críticos (telefone, email, etc.)
+--   - Hash SHA256 detecta mudanças (evita reprocessar iguais)
+--   - UNIQUE(id_origem, hash_registro) impede duplicidade no staging
+--   - Sync incremental via etl_sync_controle
+--
+-- EXEMPLOS:
+--
+--   -- 1. Criar importação
+--   INSERT INTO etl_importacao (origem_sistema, tipo_entidade) VALUES ('convenia', 'funcionarios');
+--
+--   -- 2. Inserir no staging
+--   INSERT INTO stg_convenia_funcionarios (id_origem, payload_json, hash_registro, importacao_id)
+--   VALUES ('CONV-123', '{"nome_completo":"João","cpf":"12345678901"}'::JSONB,
+--           encode(sha256('payload'::bytea), 'hex'), 'importacao-uuid');
+--
+--   -- 3. Processar
+--   SELECT * FROM etl_processar_convenia_funcionarios('importacao-uuid');
+--
+--   -- 4. Ver resultado
+--   SELECT etl_resumo_importacao('importacao-uuid');
+--
+--   -- Via Supabase JS
+--   const { data } = await supabase.rpc('etl_processar_convenia_funcionarios', { p_importacao_id: '...' });
+--   const { data } = await supabase.rpc('etl_resumo_importacao', { p_importacao_id: '...' });
+--
+-- ════════════════════════════════════════════════════════════════════════════

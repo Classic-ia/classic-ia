@@ -1,0 +1,1445 @@
+<!--
+  Classic RH - Gestao da CIPA
+  Comissao Interna de Prevencao de Acidentes
+
+  CREATE TABLE rh_cipa_mandatos (
+    id       UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    inicio   DATE NOT NULL,
+    fim      DATE NOT NULL,
+    status   TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','encerrado','futuro')),
+    criado_em TIMESTAMPTZ DEFAULT now()
+  );
+
+  ALTER TABLE rh_cipa_mandatos ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_cipa_mandatos_all" ON rh_cipa_mandatos FOR ALL USING (true) WITH CHECK (true);
+
+  CREATE TABLE rh_cipa_membros (
+    id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    mandato_id       UUID REFERENCES rh_cipa_mandatos(id),
+    colaborador_id   UUID REFERENCES rh_colaboradores(id),
+    cargo_cipa       TEXT NOT NULL CHECK (cargo_cipa IN ('presidente','vice','secretario','titular_empregador','titular_empregado','suplente')),
+    tipo             TEXT NOT NULL CHECK (tipo IN ('eleito','indicado')),
+    estabilidade_ate DATE,
+    criado_em        TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_cipa_membros_mandato ON rh_cipa_membros(mandato_id);
+  CREATE INDEX idx_cipa_membros_colab ON rh_cipa_membros(colaborador_id);
+
+  ALTER TABLE rh_cipa_membros ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_cipa_membros_all" ON rh_cipa_membros FOR ALL USING (true) WITH CHECK (true);
+
+  CREATE TABLE rh_cipa_reunioes (
+    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    mandato_id      UUID REFERENCES rh_cipa_mandatos(id),
+    data            DATE NOT NULL,
+    pauta           TEXT,
+    presentes       JSONB DEFAULT '[]',
+    deliberacoes    TEXT,
+    ata             TEXT,
+    local           TEXT,
+    proxima_reuniao DATE,
+    criado_em       TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_cipa_reunioes_mandato ON rh_cipa_reunioes(mandato_id);
+  CREATE INDEX idx_cipa_reunioes_data ON rh_cipa_reunioes(data);
+
+  ALTER TABLE rh_cipa_reunioes ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_cipa_reunioes_all" ON rh_cipa_reunioes FOR ALL USING (true) WITH CHECK (true);
+
+  CREATE TABLE rh_cipa_acoes (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    reuniao_id  UUID REFERENCES rh_cipa_reunioes(id),
+    acao        TEXT NOT NULL,
+    responsavel TEXT NOT NULL,
+    prazo       DATE,
+    status      TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','andamento','concluido')),
+    criado_em   TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_cipa_acoes_reuniao ON rh_cipa_acoes(reuniao_id);
+  CREATE INDEX idx_cipa_acoes_status ON rh_cipa_acoes(status);
+
+  ALTER TABLE rh_cipa_acoes ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_cipa_acoes_all" ON rh_cipa_acoes FOR ALL USING (true) WITH CHECK (true);
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Gestao da CIPA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 14px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 22px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+.kpi-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active { background: var(--info); color: white; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+  margin-bottom: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.form-group.full { flex: 1 1 100%; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group select option { background: var(--surface); color: var(--text); }
+.form-group textarea {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  min-height: 80px; resize: vertical; width: 100%;
+}
+
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.search-result-item:hover { background: rgba(46,107,138,.12); }
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item .sr-name { color: var(--text); font-weight: 600; }
+.search-result-item .sr-cargo { color: var(--muted); font-size: 11px; margin-left: 8px; }
+
+.multi-select-wrap { position: relative; }
+.multi-select-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; width: 100%; transition: border-color .2s;
+}
+.multi-select-input:focus { border-color: var(--accent); }
+.multi-select-input::placeholder { color: var(--muted); }
+.multi-select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 250px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.multi-select-dropdown.open { display: block; }
+.ms-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.ms-item:hover { background: rgba(46,107,138,.12); }
+.ms-item:last-child { border-bottom: none; }
+.ms-item.selected { background: rgba(200,169,110,.08); }
+.ms-check {
+  width: 16px; height: 16px; border: 1px solid var(--border); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--accent); flex-shrink: 0;
+}
+.ms-item.selected .ms-check { background: var(--accent); color: #0d1b2a; border-color: var(--accent); }
+
+.selected-tags {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(200,169,110,.1); border: 1px solid rgba(200,169,110,.3);
+  border-radius: 6px; padding: 3px 8px; font-size: 11px; color: var(--accent);
+}
+.tag-remove {
+  cursor: pointer; font-size: 13px; color: var(--muted);
+  transition: color .15s; line-height: 1;
+}
+.tag-remove:hover { color: var(--err); }
+
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center;
+}
+.toolbar input, .toolbar select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s;
+}
+.toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+.toolbar select option { background: var(--surface); color: var(--text); }
+
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+thead th:hover { color: var(--accent); }
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-err { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-info { background: rgba(46,107,138,.12); color: var(--info); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+.badge-muted { background: rgba(93,127,149,.1); color: var(--muted); }
+
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+  display: none; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; max-width: 800px; width: 95%;
+  max-height: 85vh; overflow-y: auto;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 16px; color: var(--accent); margin-bottom: 16px;
+}
+.modal-close {
+  float: right; background: none; border: none; color: var(--muted);
+  font-size: 20px; cursor: pointer; transition: color .2s;
+}
+.modal-close:hover { color: var(--err); }
+
+.detail-row {
+  display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;
+}
+.detail-item { font-size: 12px; }
+.detail-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.detail-item .value { color: var(--text); font-weight: 600; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .form-group { min-width: 100%; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+  .toolbar { flex-direction: column; }
+}
+
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#9881;</div>
+    <div>
+      <div class="header-title">Gestao da CIPA</div>
+      <div class="header-sub">Comissao Interna de Prevencao de Acidentes</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-mandato" style="font-size:16px;">--</div>
+      <div class="kpi-label">Mandato Atual</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-membros">--</div>
+      <div class="kpi-label">Membros Ativos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-reunioes">--</div>
+      <div class="kpi-label">Reunioes Realizadas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-proxima" style="font-size:16px;">--</div>
+      <div class="kpi-label">Proxima Reuniao</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="membros">Membros</button>
+    <button class="tab-btn" data-tab="reunioes">Reunioes</button>
+    <button class="tab-btn" data-tab="mandatos">Mandatos</button>
+    <button class="tab-btn" data-tab="acoes">Acoes</button>
+  </div>
+
+  <!-- ============ TAB: MEMBROS ============ -->
+  <div id="tab-membros" class="tab-pane active">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Membros do Mandato Atual</div>
+        <button class="btn btn-accent btn-sm" id="btn-add-membro">Adicionar Membro</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Cargo CIPA</th>
+              <th>Tipo</th>
+              <th>Inicio</th>
+              <th>Fim</th>
+              <th>Estabilidade Ate</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="membros-tbody"></tbody>
+        </table>
+      </div>
+      <div id="membros-empty" class="empty-state" style="display:none;">Nenhum membro cadastrado no mandato atual.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: REUNIOES ============ -->
+  <div id="tab-reunioes" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Registrar Reuniao</div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="reu-data">
+        </div>
+        <div class="form-group">
+          <label>Local</label>
+          <input type="text" id="reu-local" placeholder="Local da reuniao">
+        </div>
+        <div class="form-group">
+          <label>Proxima Reuniao</label>
+          <input type="date" id="reu-proxima">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Pauta</label>
+          <textarea id="reu-pauta" placeholder="Pauta da reuniao..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Presentes</label>
+          <div class="multi-select-wrap">
+            <input type="text" class="multi-select-input" id="reu-pres-search" placeholder="Buscar membros..." autocomplete="off">
+            <div class="multi-select-dropdown" id="reu-pres-dropdown"></div>
+          </div>
+          <div class="selected-tags" id="reu-pres-tags"></div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Deliberacoes</label>
+          <textarea id="reu-deliberacoes" placeholder="Deliberacoes e decisoes tomadas..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Ata</label>
+          <textarea id="reu-ata" placeholder="Texto da ata da reuniao..." style="min-height:120px;"></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:18px; display:flex; gap:10px;">
+        <button class="btn btn-ok" id="reu-salvar-btn">Salvar Reuniao</button>
+        <button class="btn btn-outline" id="reu-limpar-btn">Limpar</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Historico de Reunioes</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Pauta</th>
+              <th>Presentes</th>
+              <th>Local</th>
+              <th>Proxima</th>
+            </tr>
+          </thead>
+          <tbody id="reunioes-tbody"></tbody>
+        </table>
+      </div>
+      <div id="reunioes-empty" class="empty-state" style="display:none;">Nenhuma reuniao registrada.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: MANDATOS ============ -->
+  <div id="tab-mandatos" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Criar Novo Mandato</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data Inicio</label>
+          <input type="date" id="mand-inicio">
+        </div>
+        <div class="form-group">
+          <label>Data Fim</label>
+          <input type="date" id="mand-fim">
+        </div>
+        <div class="form-group" style="flex:0;min-width:auto;">
+          <label>&nbsp;</label>
+          <button class="btn btn-accent btn-sm" id="mand-criar-btn">Criar Mandato</button>
+        </div>
+      </div>
+      <p style="font-size:11px;color:var(--muted);margin-top:4px;">O mandato da CIPA tem duracao de 2 anos (NR-05). Ajuste as datas conforme necessario.</p>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Mandatos Cadastrados</div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Periodo</th>
+              <th>Inicio</th>
+              <th>Fim</th>
+              <th>Status</th>
+              <th>Membros</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="mandatos-tbody"></tbody>
+        </table>
+      </div>
+      <div id="mandatos-empty" class="empty-state" style="display:none;">Nenhum mandato cadastrado.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: ACOES ============ -->
+  <div id="tab-acoes" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Acoes Pendentes</div>
+        <button class="btn btn-accent btn-sm" id="btn-add-acao">Nova Acao</button>
+      </div>
+
+      <div class="toolbar">
+        <select id="acoes-filter-status">
+          <option value="">Todos os status</option>
+          <option value="aberto">Aberto</option>
+          <option value="andamento">Em Andamento</option>
+          <option value="concluido">Concluido</option>
+        </select>
+        <select id="acoes-filter-reuniao">
+          <option value="">Todas as reunioes</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Acao</th>
+              <th>Responsavel</th>
+              <th>Prazo</th>
+              <th>Reuniao</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="acoes-tbody"></tbody>
+        </table>
+      </div>
+      <div id="acoes-empty" class="empty-state" style="display:none;">Nenhuma acao cadastrada.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Membro -->
+<div class="modal-overlay" id="modal-membro">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalMembro()">&times;</button>
+    <div class="modal-title" id="modal-membro-title">Adicionar Membro</div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Colaborador</label>
+        <div class="search-wrap">
+          <input type="text" class="search-input" id="memb-colab-search" placeholder="Buscar colaborador..." autocomplete="off">
+          <div class="search-results" id="memb-colab-results"></div>
+        </div>
+        <input type="hidden" id="memb-colab-id">
+        <div id="memb-colab-name" style="font-size:12px;color:var(--accent);margin-top:4px;"></div>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cargo CIPA</label>
+        <select id="memb-cargo">
+          <option value="">Selecione...</option>
+          <option value="presidente">Presidente</option>
+          <option value="vice">Vice-Presidente</option>
+          <option value="secretario">Secretario</option>
+          <option value="titular_empregador">Titular Empregador</option>
+          <option value="titular_empregado">Titular Empregado</option>
+          <option value="suplente">Suplente</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Tipo</label>
+        <select id="memb-tipo">
+          <option value="eleito">Eleito</option>
+          <option value="indicado">Indicado</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Estabilidade Ate</label>
+        <input type="date" id="memb-estabilidade">
+        <span style="font-size:10px;color:var(--muted);margin-top:2px;">1 ano apos o fim do mandato (eleitos)</span>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;">
+      <button class="btn btn-ok" id="memb-salvar-btn">Salvar</button>
+      <button class="btn btn-outline" onclick="closeModalMembro()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Acao -->
+<div class="modal-overlay" id="modal-acao">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalAcao()">&times;</button>
+    <div class="modal-title">Nova Acao</div>
+    <div class="form-row">
+      <div class="form-group full">
+        <label>Acao</label>
+        <textarea id="acao-descricao" placeholder="Descreva a acao..." style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Responsavel</label>
+        <input type="text" id="acao-responsavel" placeholder="Nome do responsavel">
+      </div>
+      <div class="form-group">
+        <label>Prazo</label>
+        <input type="date" id="acao-prazo">
+      </div>
+      <div class="form-group">
+        <label>Reuniao Vinculada</label>
+        <select id="acao-reuniao">
+          <option value="">Nenhuma</option>
+        </select>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;">
+      <button class="btn btn-ok" id="acao-salvar-btn">Salvar Acao</button>
+      <button class="btn btn-outline" onclick="closeModalAcao()">Cancelar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Reuniao Detalhe -->
+<div class="modal-overlay" id="modal-reuniao">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalReuniao()">&times;</button>
+    <div class="modal-title">Detalhe da Reuniao</div>
+    <div id="modal-reuniao-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &mdash; Gestao CIPA v2026.03</div>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let colaboradores = [];
+let mandatos = [];
+let membros = [];
+let reunioes = [];
+let acoes = [];
+let currentMandato = null;
+let selectedPresentes = [];
+let editingMembroId = null;
+
+const CARGOS_CIPA = {
+  presidente: 'Presidente',
+  vice: 'Vice-Presidente',
+  secretario: 'Secretario',
+  titular_empregador: 'Titular Empregador',
+  titular_empregado: 'Titular Empregado',
+  suplente: 'Suplente'
+};
+
+const STATUS_ACAO = {
+  aberto: { label: 'Aberto', cls: 'badge-err' },
+  andamento: { label: 'Em Andamento', cls: 'badge-warn' },
+  concluido: { label: 'Concluido', cls: 'badge-ok' }
+};
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  initTabs();
+  await loadAll();
+
+  // Events
+  document.getElementById('btn-add-membro').addEventListener('click', () => openModalMembro());
+  document.getElementById('memb-salvar-btn').addEventListener('click', salvarMembro);
+  document.getElementById('reu-salvar-btn').addEventListener('click', salvarReuniao);
+  document.getElementById('reu-limpar-btn').addEventListener('click', limparFormReuniao);
+  document.getElementById('mand-criar-btn').addEventListener('click', criarMandato);
+  document.getElementById('btn-add-acao').addEventListener('click', () => openModalAcao());
+  document.getElementById('acao-salvar-btn').addEventListener('click', salvarAcao);
+  document.getElementById('acoes-filter-status').addEventListener('change', renderAcoes);
+  document.getElementById('acoes-filter-reuniao').addEventListener('change', renderAcoes);
+
+  initColabSearch();
+  initPresMultiSelect();
+
+  // Default mandato dates (2 years)
+  const now = new Date();
+  document.getElementById('mand-inicio').value = now.toISOString().slice(0, 10);
+  const fim = new Date(now.getFullYear() + 2, now.getMonth(), now.getDate());
+  document.getElementById('mand-fim').value = fim.toISOString().slice(0, 10);
+
+  document.getElementById('reu-data').value = now.toISOString().slice(0, 10);
+});
+
+// ============================================================
+//  TABS
+// ============================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ============================================================
+//  DATA LOADING
+// ============================================================
+async function loadAll() {
+  await Promise.all([loadColaboradores(), loadMandatos(), loadMembros(), loadReunioes(), loadAcoes()]);
+  findCurrentMandato();
+  renderKPIs();
+  renderMembros();
+  renderReunioes();
+  renderMandatos();
+  renderAcoes();
+  populateReuniaoSelects();
+}
+
+async function loadColaboradores() {
+  const res = await API.get('rh_colaboradores?select=id,nome,cargo,setor,status&status=eq.ativo&order=nome');
+  colaboradores = res.ok ? res.data : [];
+}
+
+async function loadMandatos() {
+  const res = await API.get('rh_cipa_mandatos?select=*&order=inicio.desc');
+  mandatos = res.ok ? res.data : [];
+}
+
+async function loadMembros() {
+  const res = await API.get('rh_cipa_membros?select=*&order=cargo_cipa');
+  membros = res.ok ? res.data : [];
+}
+
+async function loadReunioes() {
+  const res = await API.get('rh_cipa_reunioes?select=*&order=data.desc');
+  reunioes = res.ok ? res.data : [];
+}
+
+async function loadAcoes() {
+  const res = await API.get('rh_cipa_acoes?select=*&order=prazo');
+  acoes = res.ok ? res.data : [];
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+function fmtDate(d) {
+  if (!d) return '--';
+  return new Date(d + 'T00:00:00').toLocaleDateString('pt-BR');
+}
+
+function getColabName(id) {
+  const c = colaboradores.find(x => x.id === id);
+  return c ? c.nome : '(desconhecido)';
+}
+
+function findCurrentMandato() {
+  const today = new Date().toISOString().slice(0, 10);
+  currentMandato = mandatos.find(m => m.status === 'ativo') ||
+    mandatos.find(m => m.inicio <= today && m.fim >= today) ||
+    (mandatos.length > 0 ? mandatos[0] : null);
+}
+
+function getCurrentMembros() {
+  if (!currentMandato) return [];
+  return membros.filter(m => m.mandato_id === currentMandato.id);
+}
+
+function getCurrentReunioes() {
+  if (!currentMandato) return [];
+  return reunioes.filter(r => r.mandato_id === currentMandato.id);
+}
+
+// ============================================================
+//  KPIs
+// ============================================================
+function renderKPIs() {
+  if (currentMandato) {
+    document.getElementById('kpi-mandato').textContent = fmtDate(currentMandato.inicio) + ' a ' + fmtDate(currentMandato.fim);
+  } else {
+    document.getElementById('kpi-mandato').textContent = 'Sem mandato';
+  }
+
+  document.getElementById('kpi-membros').textContent = getCurrentMembros().length;
+  document.getElementById('kpi-reunioes').textContent = getCurrentReunioes().length;
+
+  // Proxima reuniao
+  const reus = getCurrentReunioes();
+  let proxima = null;
+  reus.forEach(r => {
+    if (r.proxima_reuniao && (!proxima || r.proxima_reuniao > proxima)) {
+      proxima = r.proxima_reuniao;
+    }
+  });
+  document.getElementById('kpi-proxima').textContent = proxima ? fmtDate(proxima) : '--';
+}
+
+// ============================================================
+//  MEMBROS
+// ============================================================
+function renderMembros() {
+  const list = getCurrentMembros();
+  const tbody = document.getElementById('membros-tbody');
+  const empty = document.getElementById('membros-empty');
+
+  if (list.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = list.map(m => {
+    const nome = getColabName(m.colaborador_id);
+    return `<tr>
+      <td style="font-weight:600;color:var(--text);">${nome}</td>
+      <td><span class="badge badge-accent">${CARGOS_CIPA[m.cargo_cipa] || m.cargo_cipa}</span></td>
+      <td><span class="badge ${m.tipo === 'eleito' ? 'badge-info' : 'badge-muted'}">${m.tipo === 'eleito' ? 'Eleito' : 'Indicado'}</span></td>
+      <td class="mono">${currentMandato ? fmtDate(currentMandato.inicio) : '--'}</td>
+      <td class="mono">${currentMandato ? fmtDate(currentMandato.fim) : '--'}</td>
+      <td class="mono">${fmtDate(m.estabilidade_ate)}</td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="editMembro('${m.id}')">Editar</button>
+        <button class="btn btn-err btn-sm" onclick="removeMembro('${m.id}')">Remover</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function initColabSearch() {
+  const input = document.getElementById('memb-colab-search');
+  const results = document.getElementById('memb-colab-results');
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    if (q.length < 2) { results.classList.remove('open'); return; }
+    const filtered = colaboradores.filter(c => c.nome.toLowerCase().includes(q)).slice(0, 15);
+    results.innerHTML = filtered.map(c => `
+      <div class="search-result-item" data-id="${c.id}">
+        <span class="sr-name">${c.nome}</span>
+        <span class="sr-cargo">${c.cargo || ''}</span>
+      </div>
+    `).join('');
+    results.classList.add('open');
+    results.querySelectorAll('.search-result-item').forEach(item => {
+      item.addEventListener('click', () => {
+        document.getElementById('memb-colab-id').value = item.dataset.id;
+        document.getElementById('memb-colab-name').textContent = item.querySelector('.sr-name').textContent;
+        input.value = item.querySelector('.sr-name').textContent;
+        results.classList.remove('open');
+      });
+    });
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.search-wrap')) results.classList.remove('open');
+  });
+}
+
+function openModalMembro(id) {
+  editingMembroId = id || null;
+  document.getElementById('modal-membro-title').textContent = id ? 'Editar Membro' : 'Adicionar Membro';
+
+  if (id) {
+    const m = membros.find(x => x.id === id);
+    if (m) {
+      document.getElementById('memb-colab-id').value = m.colaborador_id;
+      document.getElementById('memb-colab-search').value = getColabName(m.colaborador_id);
+      document.getElementById('memb-colab-name').textContent = getColabName(m.colaborador_id);
+      document.getElementById('memb-cargo').value = m.cargo_cipa;
+      document.getElementById('memb-tipo').value = m.tipo;
+      document.getElementById('memb-estabilidade').value = m.estabilidade_ate || '';
+    }
+  } else {
+    document.getElementById('memb-colab-id').value = '';
+    document.getElementById('memb-colab-search').value = '';
+    document.getElementById('memb-colab-name').textContent = '';
+    document.getElementById('memb-cargo').value = '';
+    document.getElementById('memb-tipo').value = 'eleito';
+    document.getElementById('memb-estabilidade').value = '';
+
+    // Auto-calc estabilidade
+    if (currentMandato) {
+      const fimDate = new Date(currentMandato.fim + 'T00:00:00');
+      fimDate.setFullYear(fimDate.getFullYear() + 1);
+      document.getElementById('memb-estabilidade').value = fimDate.toISOString().slice(0, 10);
+    }
+  }
+
+  document.getElementById('modal-membro').classList.add('open');
+}
+
+function closeModalMembro() {
+  document.getElementById('modal-membro').classList.remove('open');
+  editingMembroId = null;
+}
+
+function editMembro(id) { openModalMembro(id); }
+
+async function salvarMembro() {
+  if (!currentMandato) { toast('Crie um mandato antes de adicionar membros.', 'err'); return; }
+
+  const colabId = document.getElementById('memb-colab-id').value;
+  const cargo = document.getElementById('memb-cargo').value;
+  const tipo = document.getElementById('memb-tipo').value;
+  const estabilidade = document.getElementById('memb-estabilidade').value || null;
+
+  if (!colabId || !cargo) {
+    toast('Selecione o colaborador e o cargo.', 'err');
+    return;
+  }
+
+  try {
+    const data = {
+      mandato_id: currentMandato.id,
+      colaborador_id: colabId,
+      cargo_cipa: cargo,
+      tipo,
+      estabilidade_ate: estabilidade
+    };
+
+    let res;
+    if (editingMembroId) {
+      res = await API.patch('rh_cipa_membros?id=eq.' + editingMembroId, data);
+    } else {
+      res = await API.post('rh_cipa_membros', data);
+    }
+
+    if (!res.ok) { toast('Erro ao salvar membro: ' + res.error, 'err'); return; }
+    toast('Membro salvo com sucesso!');
+    closeModalMembro();
+    await loadMembros();
+    renderMembros();
+    renderKPIs();
+  } catch (e) {
+    toast('Erro ao salvar membro: ' + e.message, 'err');
+  }
+}
+
+async function removeMembro(id) {
+  if (!confirm('Tem certeza que deseja remover este membro?')) return;
+  try {
+    const res = await API.del('rh_cipa_membros?id=eq.' + id);
+    if (!res.ok) { toast('Erro ao remover membro: ' + res.error, 'err'); return; }
+    toast('Membro removido!');
+    await loadMembros();
+    renderMembros();
+    renderKPIs();
+  } catch (e) {
+    toast('Erro ao remover membro: ' + e.message, 'err');
+  }
+}
+
+// ============================================================
+//  REUNIOES
+// ============================================================
+function initPresMultiSelect() {
+  const input = document.getElementById('reu-pres-search');
+  const dropdown = document.getElementById('reu-pres-dropdown');
+
+  input.addEventListener('focus', () => renderPresDropdown());
+  input.addEventListener('input', () => renderPresDropdown());
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.multi-select-wrap')) dropdown.classList.remove('open');
+  });
+}
+
+function renderPresDropdown() {
+  const input = document.getElementById('reu-pres-search');
+  const dropdown = document.getElementById('reu-pres-dropdown');
+  const q = input.value.toLowerCase().trim();
+  const membrosList = getCurrentMembros();
+
+  let items = membrosList.map(m => ({
+    id: m.colaborador_id,
+    nome: getColabName(m.colaborador_id),
+    cargo: CARGOS_CIPA[m.cargo_cipa] || m.cargo_cipa
+  }));
+
+  if (q) {
+    items = items.filter(i => i.nome.toLowerCase().includes(q));
+  }
+
+  dropdown.innerHTML = items.map(i => {
+    const sel = selectedPresentes.includes(i.id);
+    return `<div class="ms-item${sel ? ' selected' : ''}" data-id="${i.id}">
+      <div class="ms-check">${sel ? '&#10003;' : ''}</div>
+      <div>
+        <span style="color:var(--text);font-weight:600;">${i.nome}</span>
+        <span style="color:var(--muted);font-size:11px;margin-left:6px;">${i.cargo}</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  dropdown.classList.add('open');
+  dropdown.querySelectorAll('.ms-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const id = item.dataset.id;
+      const idx = selectedPresentes.indexOf(id);
+      if (idx >= 0) selectedPresentes.splice(idx, 1);
+      else selectedPresentes.push(id);
+      renderPresDropdown();
+      renderPresTags();
+    });
+  });
+}
+
+function renderPresTags() {
+  const container = document.getElementById('reu-pres-tags');
+  container.innerHTML = selectedPresentes.map(id => {
+    const nome = getColabName(id);
+    return `<span class="tag">${nome} <span class="tag-remove" data-id="${id}">&times;</span></span>`;
+  }).join('');
+  container.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const idx = selectedPresentes.indexOf(btn.dataset.id);
+      if (idx >= 0) selectedPresentes.splice(idx, 1);
+      renderPresTags();
+    });
+  });
+}
+
+async function salvarReuniao() {
+  if (!currentMandato) { toast('Crie um mandato primeiro.', 'err'); return; }
+
+  const data = document.getElementById('reu-data').value;
+  const local = document.getElementById('reu-local').value.trim();
+  const pauta = document.getElementById('reu-pauta').value.trim();
+  const deliberacoes = document.getElementById('reu-deliberacoes').value.trim();
+  const ata = document.getElementById('reu-ata').value.trim();
+  const proxima = document.getElementById('reu-proxima').value || null;
+
+  if (!data || !pauta) {
+    toast('Preencha a data e a pauta.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('reu-salvar-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const res = await API.post('rh_cipa_reunioes', {
+      mandato_id: currentMandato.id,
+      data,
+      pauta,
+      presentes: selectedPresentes,
+      deliberacoes: deliberacoes || null,
+      ata: ata || null,
+      local: local || null,
+      proxima_reuniao: proxima
+    });
+
+    if (!res.ok) { toast('Erro ao salvar reuniao: ' + res.error, 'err'); return; }
+    toast('Reuniao registrada com sucesso!');
+    limparFormReuniao();
+    await loadReunioes();
+    renderReunioes();
+    renderKPIs();
+    populateReuniaoSelects();
+  } catch (e) {
+    toast('Erro ao salvar reuniao: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar Reuniao';
+  }
+}
+
+function limparFormReuniao() {
+  document.getElementById('reu-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('reu-local').value = '';
+  document.getElementById('reu-pauta').value = '';
+  document.getElementById('reu-deliberacoes').value = '';
+  document.getElementById('reu-ata').value = '';
+  document.getElementById('reu-proxima').value = '';
+  selectedPresentes = [];
+  document.getElementById('reu-pres-tags').innerHTML = '';
+  document.getElementById('reu-pres-search').value = '';
+}
+
+function renderReunioes() {
+  const list = getCurrentReunioes();
+  const tbody = document.getElementById('reunioes-tbody');
+  const empty = document.getElementById('reunioes-empty');
+
+  if (list.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = list.map(r => {
+    const pres = Array.isArray(r.presentes) ? r.presentes : [];
+    return `<tr style="cursor:pointer;" onclick="openReuniaoDetalhe('${r.id}')">
+      <td class="mono">${fmtDate(r.data)}</td>
+      <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${r.pauta || '--'}</td>
+      <td style="text-align:center;"><span class="badge badge-accent">${pres.length}</span></td>
+      <td>${r.local || '--'}</td>
+      <td class="mono">${fmtDate(r.proxima_reuniao)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function openReuniaoDetalhe(id) {
+  const r = reunioes.find(x => x.id === id);
+  if (!r) return;
+  const pres = Array.isArray(r.presentes) ? r.presentes : [];
+  const presNames = pres.map(pid => getColabName(pid));
+
+  document.getElementById('modal-reuniao-content').innerHTML = `
+    <div class="detail-row">
+      <div class="detail-item"><div class="label">Data</div><div class="value">${fmtDate(r.data)}</div></div>
+      <div class="detail-item"><div class="label">Local</div><div class="value">${r.local || '--'}</div></div>
+      <div class="detail-item"><div class="label">Proxima Reuniao</div><div class="value">${fmtDate(r.proxima_reuniao)}</div></div>
+    </div>
+    <div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Pauta</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--text);">${r.pauta || '--'}</div></div>
+    <div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Presentes (${pres.length})</div>
+    <div class="selected-tags">${presNames.map(n => `<span class="tag">${n}</span>`).join('')}</div></div>
+    ${r.deliberacoes ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Deliberacoes</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">${r.deliberacoes}</div></div>` : ''}
+    ${r.ata ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ata</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;">${r.ata}</div></div>` : ''}
+  `;
+  document.getElementById('modal-reuniao').classList.add('open');
+}
+
+function closeModalReuniao() {
+  document.getElementById('modal-reuniao').classList.remove('open');
+}
+
+// ============================================================
+//  MANDATOS
+// ============================================================
+async function criarMandato() {
+  const inicio = document.getElementById('mand-inicio').value;
+  const fim = document.getElementById('mand-fim').value;
+
+  if (!inicio || !fim) {
+    toast('Informe as datas de inicio e fim.', 'err');
+    return;
+  }
+
+  if (fim <= inicio) {
+    toast('A data de fim deve ser posterior ao inicio.', 'err');
+    return;
+  }
+
+  try {
+    const res = await API.post('rh_cipa_mandatos', { inicio, fim, status: 'ativo' });
+    if (!res.ok) { toast('Erro ao criar mandato: ' + res.error, 'err'); return; }
+    toast('Mandato criado com sucesso!');
+    await loadMandatos();
+    findCurrentMandato();
+    renderMandatos();
+    renderKPIs();
+    renderMembros();
+  } catch (e) {
+    toast('Erro ao criar mandato: ' + e.message, 'err');
+  }
+}
+
+function renderMandatos() {
+  const tbody = document.getElementById('mandatos-tbody');
+  const empty = document.getElementById('mandatos-empty');
+
+  if (mandatos.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = mandatos.map(m => {
+    const mCount = membros.filter(mb => mb.mandato_id === m.id).length;
+    const statusBadge = m.status === 'ativo' ? 'badge-ok' : m.status === 'encerrado' ? 'badge-muted' : 'badge-warn';
+    const statusLabel = m.status === 'ativo' ? 'Ativo' : m.status === 'encerrado' ? 'Encerrado' : 'Futuro';
+    return `<tr>
+      <td style="font-weight:600;color:var(--text);">${fmtDate(m.inicio)} a ${fmtDate(m.fim)}</td>
+      <td class="mono">${fmtDate(m.inicio)}</td>
+      <td class="mono">${fmtDate(m.fim)}</td>
+      <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
+      <td style="text-align:center;">${mCount}</td>
+      <td>
+        ${m.status === 'ativo' ? `<button class="btn btn-outline btn-sm" onclick="encerrarMandato('${m.id}')">Encerrar</button>` : ''}
+        ${m.status !== 'ativo' ? `<button class="btn btn-info btn-sm" onclick="ativarMandato('${m.id}')">Ativar</button>` : ''}
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function encerrarMandato(id) {
+  if (!confirm('Encerrar este mandato?')) return;
+  try {
+    const res = await API.patch('rh_cipa_mandatos?id=eq.' + id, { status: 'encerrado' });
+    if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
+    toast('Mandato encerrado.');
+    await loadMandatos();
+    findCurrentMandato();
+    renderMandatos();
+    renderKPIs();
+    renderMembros();
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+async function ativarMandato(id) {
+  try {
+    // Deactivate all others
+    for (const m of mandatos) {
+      if (m.status === 'ativo') {
+        await API.patch('rh_cipa_mandatos?id=eq.' + m.id, { status: 'encerrado' });
+      }
+    }
+    const res = await API.patch('rh_cipa_mandatos?id=eq.' + id, { status: 'ativo' });
+    if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
+    toast('Mandato ativado.');
+    await loadMandatos();
+    findCurrentMandato();
+    renderMandatos();
+    renderKPIs();
+    renderMembros();
+  } catch (e) { toast('Erro: ' + e.message, 'err'); }
+}
+
+// ============================================================
+//  ACOES
+// ============================================================
+function populateReuniaoSelects() {
+  const reus = getCurrentReunioes();
+  const selects = [
+    document.getElementById('acao-reuniao'),
+    document.getElementById('acoes-filter-reuniao')
+  ];
+  selects.forEach(sel => {
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    reus.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = fmtDate(r.data) + ' - ' + (r.pauta || '').slice(0, 40);
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function openModalAcao() {
+  document.getElementById('acao-descricao').value = '';
+  document.getElementById('acao-responsavel').value = '';
+  document.getElementById('acao-prazo').value = '';
+  document.getElementById('acao-reuniao').value = '';
+  document.getElementById('modal-acao').classList.add('open');
+}
+
+function closeModalAcao() {
+  document.getElementById('modal-acao').classList.remove('open');
+}
+
+async function salvarAcao() {
+  const acao = document.getElementById('acao-descricao').value.trim();
+  const responsavel = document.getElementById('acao-responsavel').value.trim();
+  const prazo = document.getElementById('acao-prazo').value || null;
+  const reuniaoId = document.getElementById('acao-reuniao').value || null;
+
+  if (!acao || !responsavel) {
+    toast('Preencha a acao e o responsavel.', 'err');
+    return;
+  }
+
+  try {
+    const res = await API.post('rh_cipa_acoes', {
+      reuniao_id: reuniaoId,
+      acao,
+      responsavel,
+      prazo,
+      status: 'aberto'
+    });
+
+    if (!res.ok) { toast('Erro ao salvar acao: ' + res.error, 'err'); return; }
+    toast('Acao cadastrada!');
+    closeModalAcao();
+    await loadAcoes();
+    renderAcoes();
+  } catch (e) {
+    toast('Erro ao salvar acao: ' + e.message, 'err');
+  }
+}
+
+function renderAcoes() {
+  const statusFilter = document.getElementById('acoes-filter-status').value;
+  const reuniaoFilter = document.getElementById('acoes-filter-reuniao').value;
+
+  let filtered = acoes;
+  if (statusFilter) filtered = filtered.filter(a => a.status === statusFilter);
+  if (reuniaoFilter) filtered = filtered.filter(a => a.reuniao_id === reuniaoFilter);
+
+  const tbody = document.getElementById('acoes-tbody');
+  const empty = document.getElementById('acoes-empty');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(a => {
+    const st = STATUS_ACAO[a.status] || { label: a.status, cls: 'badge-muted' };
+    const reuniao = reunioes.find(r => r.id === a.reuniao_id);
+    const isPastDue = a.prazo && a.status !== 'concluido' && a.prazo < new Date().toISOString().slice(0, 10);
+    return `<tr>
+      <td style="max-width:300px;white-space:normal;line-height:1.5;">${a.acao}</td>
+      <td>${a.responsavel}</td>
+      <td class="mono" style="${isPastDue ? 'color:var(--err);font-weight:700;' : ''}">${fmtDate(a.prazo)}</td>
+      <td class="mono">${reuniao ? fmtDate(reuniao.data) : '--'}</td>
+      <td><span class="badge ${st.cls}">${st.label}</span></td>
+      <td>
+        <select style="background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:11px;padding:4px 6px;" onchange="updateAcaoStatus('${a.id}',this.value)">
+          <option value="aberto" ${a.status === 'aberto' ? 'selected' : ''}>Aberto</option>
+          <option value="andamento" ${a.status === 'andamento' ? 'selected' : ''}>Andamento</option>
+          <option value="concluido" ${a.status === 'concluido' ? 'selected' : ''}>Concluido</option>
+        </select>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+async function updateAcaoStatus(id, status) {
+  try {
+    const res = await API.patch('rh_cipa_acoes?id=eq.' + id, { status });
+    if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
+    toast('Status atualizado!');
+    await loadAcoes();
+    renderAcoes();
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+</script>
+
+</body>
+</html>

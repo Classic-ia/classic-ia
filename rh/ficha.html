@@ -1,0 +1,1059 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - Ficha do Colaborador</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* ── Hero Card ── */
+  .hero-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-8);
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-6);
+    flex-wrap: wrap;
+  }
+  .hero-avatar {
+    width: 80px; height: 80px;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    color: var(--text-inverse);
+    display: flex; align-items: center; justify-content: center;
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-bold);
+    flex-shrink: 0;
+  }
+  .hero-info { flex: 1; min-width: 260px; }
+  .hero-name {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+    margin-bottom: var(--space-1);
+  }
+  .hero-role {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-2);
+  }
+  .hero-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2) var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-3);
+  }
+  .hero-meta span { display: flex; align-items: center; gap: 4px; }
+  .hero-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    margin-bottom: var(--space-3);
+  }
+  .hero-actions {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-self: flex-start;
+    flex-shrink: 0;
+  }
+
+  /* ── Badges ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 10px;
+    border-radius: var(--radius-full);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  .badge-green  { background: var(--success-light); color: var(--success-dark); }
+  .badge-yellow { background: var(--warning-light); color: var(--warning-dark); }
+  .badge-red    { background: var(--danger-light);  color: var(--danger-dark); }
+  .badge-blue   { background: var(--primary-100);   color: var(--primary-dark); }
+  .badge-gray   { background: var(--bg-alt);        color: var(--text-secondary); }
+  .badge-info   { background: var(--info-light);    color: var(--info-dark); }
+
+  /* ── Score Card ── */
+  .score-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-sm);
+  }
+  .score-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-5);
+    margin-bottom: var(--space-5);
+    flex-wrap: wrap;
+  }
+  .score-big {
+    font-size: 48px;
+    font-weight: var(--weight-bold);
+    line-height: 1;
+  }
+  .score-label-group { flex: 1; }
+  .score-classification {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+  }
+  .score-confiabilidade {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+  .score-bars {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: var(--space-3);
+  }
+  .score-bar-item { display: flex; flex-direction: column; gap: 3px; }
+  .score-bar-label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    text-transform: capitalize;
+    display: flex; justify-content: space-between;
+  }
+  .score-bar-track {
+    width: 100%; height: 6px;
+    background: var(--bg-alt);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.6s ease;
+  }
+
+  /* ── KPI Row ── */
+  .kpi-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: var(--space-4);
+  }
+  .kpi-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-xs);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+  .kpi-title {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text-muted);
+    font-weight: var(--weight-semibold);
+  }
+  .kpi-value {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+  }
+  .kpi-sub {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+  }
+
+  /* ── Tabs ── */
+  .tabs-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 2px solid var(--border);
+    overflow-x: auto;
+    margin-bottom: var(--space-5);
+  }
+  .tab-btn {
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    cursor: pointer;
+    border: none;
+    background: none;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -2px;
+    white-space: nowrap;
+    transition: color 0.15s, border-color 0.15s;
+    font-family: var(--font-family);
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: var(--weight-semibold);
+  }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ── Data Table ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+  }
+  .data-table th {
+    text-align: left;
+    padding: var(--space-3) var(--space-4);
+    color: var(--text-muted);
+    font-weight: var(--weight-semibold);
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface-hover);
+  }
+  .data-table td {
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-light);
+    color: var(--text);
+  }
+  .data-table tr:last-child td { border-bottom: none; }
+
+  /* ── Info Cards ── */
+  .info-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-3);
+  }
+  .info-card-title {
+    font-size: var(--text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    font-weight: var(--weight-semibold);
+    margin-bottom: var(--space-2);
+  }
+  .info-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-3) var(--space-5);
+  }
+  .info-item-label {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+  .info-item-value {
+    font-size: var(--text-sm);
+    color: var(--text);
+    font-weight: var(--weight-medium);
+  }
+
+  /* ── Timeline ── */
+  .timeline { list-style: none; padding: 0; margin: 0; }
+  .timeline-item {
+    display: flex;
+    gap: var(--space-4);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--border-light);
+  }
+  .timeline-item:last-child { border-bottom: none; }
+  .timeline-dot {
+    width: 10px; height: 10px;
+    border-radius: var(--radius-full);
+    margin-top: 5px;
+    flex-shrink: 0;
+  }
+  .timeline-content { flex: 1; }
+  .timeline-label {
+    font-size: var(--text-sm);
+    color: var(--text);
+    font-weight: var(--weight-medium);
+  }
+  .timeline-date {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+  }
+
+  /* ── Pendencia Alert ── */
+  .pendencia-card {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-3);
+    border-left: 4px solid;
+  }
+  .pendencia-card.critica { background: var(--danger-light); border-left-color: var(--danger); }
+  .pendencia-card.alta    { background: #FFF7ED; border-left-color: var(--warning); }
+  .pendencia-card.media   { background: var(--primary-50); border-left-color: var(--primary); }
+  .pendencia-card.baixa   { background: var(--bg); border-left-color: var(--border-strong); }
+  .pendencia-tipo {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    text-transform: uppercase;
+  }
+  .pendencia-desc {
+    font-size: var(--text-sm);
+    color: var(--text);
+  }
+
+  /* ── Benefit Card ── */
+  .benefit-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+  }
+  .benefit-name {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+  }
+  .benefit-value {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* ── Skeleton Loading ── */
+  .skeleton {
+    background: linear-gradient(90deg, var(--bg-alt) 25%, var(--border-light) 50%, var(--bg-alt) 75%);
+    background-size: 200% 100%;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+    border-radius: var(--radius-md);
+  }
+  @keyframes skeleton-pulse {
+    0%   { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+  }
+  .sk-line { height: 16px; margin-bottom: 8px; }
+  .sk-line-sm { height: 12px; width: 60%; margin-bottom: 6px; }
+  .sk-circle { width: 80px; height: 80px; border-radius: var(--radius-full); }
+  .sk-box { height: 120px; }
+
+  /* ── Section spacing ── */
+  .ficha-section { margin-bottom: var(--space-6); }
+
+  /* ── ASO status dot ── */
+  .aso-status-dot {
+    width: 12px; height: 12px;
+    border-radius: var(--radius-full);
+    display: inline-block;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+  .dot-green  { background: var(--success); }
+  .dot-yellow { background: var(--warning); }
+  .dot-red    { background: var(--danger); }
+
+  /* ── Empty state ── */
+  .empty-state {
+    text-align: center;
+    padding: var(--space-8) var(--space-4);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+  .empty-state svg {
+    display: block;
+    margin: 0 auto var(--space-3);
+    opacity: 0.4;
+  }
+
+  /* ── Restricted note ── */
+  .restricted-note {
+    background: var(--warning-light);
+    border: 1px solid var(--warning);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-xs);
+    color: var(--warning-dark);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+  }
+
+  /* ── Print ── */
+  @media print {
+    .sidebar, .topbar, .hero-actions, .tabs-nav { display: none !important; }
+    .main-content { margin-left: 0 !important; }
+    .tab-panel { display: block !important; page-break-inside: avoid; }
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .hero-card { padding: var(--space-4); gap: var(--space-4); }
+    .hero-avatar { width: 56px; height: 56px; font-size: var(--text-lg); }
+    .hero-name { font-size: var(--text-lg); }
+    .score-big { font-size: 36px; }
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content">
+
+  <!-- CONTENT AREA -->
+  <div id="contentArea">
+
+
+    <!-- Loading Skeleton -->
+    <div id="loadingSkeleton">
+      <div class="ficha-section" style="display:flex;gap:24px;align-items:flex-start;">
+        <div class="skeleton sk-circle"></div>
+        <div style="flex:1;">
+          <div class="skeleton sk-line" style="width:45%;"></div>
+          <div class="skeleton sk-line-sm"></div>
+          <div class="skeleton sk-line-sm" style="width:40%;"></div>
+        </div>
+      </div>
+      <div class="ficha-section">
+        <div class="skeleton sk-box"></div>
+      </div>
+      <div class="kpi-row ficha-section">
+        <div class="skeleton sk-box"></div>
+        <div class="skeleton sk-box"></div>
+        <div class="skeleton sk-box"></div>
+        <div class="skeleton sk-box"></div>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    <div id="errorState" style="display:none;">
+      <div class="empty-state">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
+        </svg>
+        <p id="errorMsg">Erro ao carregar ficha do colaborador.</p>
+        <div style="margin-top:16px;">
+          <a href="colaboradores.html" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;font-size:13px;text-decoration:none;">Voltar para Colaboradores</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Ficha Content (hidden until loaded) -->
+    <div id="fichaContent" style="display:none;">
+
+      <!-- HERO -->
+      <div class="ficha-section hero-card" id="heroCard"></div>
+
+      <!-- SCORE -->
+      <div class="ficha-section score-card" id="scoreCard"></div>
+
+      <!-- KPI ROW -->
+      <div class="ficha-section kpi-row" id="kpiRow"></div>
+
+      <!-- TABS -->
+      <div class="ficha-section">
+        <div class="tabs-nav" id="tabsNav"></div>
+        <div id="tabPanels"></div>
+      </div>
+
+    </div>
+
+  </div><!-- contentArea -->
+</div><!-- shell-content -->
+
+<script>
+(async function() {
+  // ── Shell ──
+  const currentUser = await Shell.init({ page: 'colaboradores', title: 'Ficha do Colaborador', breadcrumb: 'Colaboradores > Ficha' });
+  if (!currentUser) return;
+  API.setPerfil(currentUser.perfil);
+
+  const isRH = ['admin','rh'].includes((currentUser.perfil || '').toLowerCase());
+
+  // ── Get employee ID ──
+  const funcId = new URLSearchParams(window.location.search).get('id');
+  if (!funcId) {
+    showError('ID do colaborador nao informado na URL.');
+    return;
+  }
+
+  // ── Fetch data ──
+  try {
+    const res = await API.rpc('ficha_completa', { p_funcionario_id: funcId });
+    if (!res.ok) { showError(res.error || 'Erro ao carregar ficha.'); return; }
+    const raw = res.data;
+    const d = Array.isArray(raw) ? raw[0] : raw;
+    if (!d || !d.nome) throw new Error('Colaborador nao encontrado.');
+    render(d);
+  } catch (err) {
+    console.error(err);
+    API.logEvent('UI_ERROR', { page: 'ficha', error: err.message });
+    showError(err.message || 'Erro ao carregar ficha.');
+  }
+
+  // ── Show error ──
+  function showError(msg) {
+    document.getElementById('loadingSkeleton').style.display = 'none';
+    document.getElementById('errorState').style.display = 'block';
+    document.getElementById('errorMsg').textContent = msg;
+  }
+
+  // ── Helpers ──
+  function safe(v, fallback) { return (v !== null && v !== undefined && v !== '') ? v : (fallback || 'Sem registro'); }
+  function fmtDate(d) { return d ? API.fmtData(d) : 'Sem registro'; }
+  function fmtCPF(c) { return c ? API.fmtCPF(c) : 'Sem registro'; }
+  function fmtCurrency(v) { return (v !== null && v !== undefined) ? API.fmtMoeda(v) : 'Sem registro'; }
+  function tempoEmpresa(dias, meses) {
+    if (!meses && !dias) return 'Sem registro';
+    if (meses !== null && meses !== undefined) {
+      const a = Math.floor(meses / 12);
+      const m = meses % 12;
+      if (a > 0 && m > 0) return `${a}a ${m}m`;
+      if (a > 0) return `${a}a`;
+      return `${m}m`;
+    }
+    if (dias) {
+      const a = Math.floor(dias / 365);
+      const m = Math.floor((dias % 365) / 30);
+      if (a > 0 && m > 0) return `${a}a ${m}m`;
+      if (a > 0) return `${a}a`;
+      return `${m}m`;
+    }
+    return 'Sem registro';
+  }
+  function scoreColor(v) {
+    if (v >= 80) return 'var(--success)';
+    if (v >= 60) return 'var(--primary)';
+    if (v >= 40) return 'var(--warning)';
+    return 'var(--danger)';
+  }
+  function classBadge(cls) {
+    if (!cls) return 'badge-gray';
+    const c = cls.toLowerCase();
+    if (c.includes('excelente') || c.includes('otimo') || c.includes('a+') || c === 'a') return 'badge-green';
+    if (c.includes('bom') || c === 'b') return 'badge-blue';
+    if (c.includes('regular') || c === 'c') return 'badge-yellow';
+    return 'badge-red';
+  }
+  function statusBadge(st) {
+    if (!st) return '<span class="badge badge-gray">Sem status</span>';
+    const s = st.toLowerCase();
+    if (s === 'ativo') return '<span class="badge badge-green">Ativo</span>';
+    if (s === 'afastado') return '<span class="badge badge-yellow">Afastado</span>';
+    if (s === 'ferias') return '<span class="badge badge-blue">Ferias</span>';
+    if (s === 'desligado' || s === 'demitido') return '<span class="badge badge-red">Desligado</span>';
+    return `<span class="badge badge-gray">${st}</span>`;
+  }
+  function asoStatusInfo(d) {
+    if (!d.asos || !d.asos.validade) return { cls: 'dot-red', text: 'Sem ASO registrado' };
+    const val = new Date(d.asos.validade);
+    const now = new Date();
+    const diff = (val - now) / (1000*60*60*24);
+    if (diff < 0) return { cls: 'dot-red', text: 'Vencido' };
+    if (diff <= 30) return { cls: 'dot-yellow', text: 'Vence em breve' };
+    return { cls: 'dot-green', text: 'Valido' };
+  }
+
+  // ── RENDER ──
+  function render(d) {
+    document.getElementById('loadingSkeleton').style.display = 'none';
+    document.getElementById('fichaContent').style.display = 'block';
+
+    const breadcrumb = document.getElementById('breadcrumbName');
+    if (breadcrumb) breadcrumb.textContent = d.nome || 'Ficha';
+    document.title = `Classic RH - ${d.nome || 'Ficha'}`;
+
+    renderHero(d);
+    renderScore(d);
+    renderKPIs(d);
+    renderTabs(d);
+  }
+
+  // ── Hero ──
+  function renderHero(d) {
+    const initials = (d.nome || 'NN').split(' ').map(w => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+    const badges = [];
+    badges.push(statusBadge(d.status));
+    if (d.cargo_confianca) badges.push('<span class="badge badge-blue">Cargo Confianca</span>');
+    if (d.jovem_aprendiz) badges.push('<span class="badge badge-info">Jovem Aprendiz</span>');
+    if (d.transporte_onibus) {
+      const rota = d.transporte_rota ? `Onibus: Rota ${d.transporte_rota}` : 'Transporte Onibus';
+      badges.push(`<span class="badge badge-gray">${rota}</span>`);
+    }
+    if (d.turno) badges.push(`<span class="badge badge-gray">Turno: ${d.turno}</span>`);
+    if (d.ghe) badges.push(`<span class="badge badge-gray">GHE: ${d.ghe}</span>`);
+
+    document.getElementById('heroCard').innerHTML = `
+      <div class="hero-avatar">${initials}</div>
+      <div class="hero-info">
+        <div class="hero-name">${safe(d.nome, 'Colaborador')}</div>
+        <div class="hero-role">${safe(d.cargo, 'Sem cargo')} &mdash; ${safe(d.setor, 'Sem setor')}</div>
+        <div class="hero-meta">
+          <span>Matricula: <strong>${safe(d.matricula)}</strong></span>
+          <span>CPF: <strong>${fmtCPF(d.cpf)}</strong></span>
+          <span>Admissao: <strong>${fmtDate(d.data_admissao)}</strong></span>
+          <span>Tempo: <strong>${tempoEmpresa(d.tempo_empresa_dias, d.tempo_empresa_meses)}</strong></span>
+          ${d.salario_base ? `<span>Salario: <strong>${fmtCurrency(d.salario_base)}</strong></span>` : ''}
+        </div>
+        <div class="hero-badges">${badges.join('')}</div>
+      </div>
+      <div class="hero-actions">
+        <button class="btn btn-secondary" onclick="window.print()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;border-radius:var(--radius-md);">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+          Imprimir
+        </button>
+        <a href="colaboradores.html" class="btn btn-secondary" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;font-size:13px;border-radius:var(--radius-md);text-decoration:none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Voltar
+        </a>
+      </div>
+    `;
+  }
+
+  // ── Score ──
+  function renderScore(d) {
+    const s = d.score || {};
+    const final = s.final ?? '--';
+    const cls = s.classificacao || 'Sem classificacao';
+    const conf = s.confiabilidade;
+    const barData = [
+      { key: 'presenca',     label: 'Presenca' },
+      { key: 'producao',     label: 'Producao' },
+      { key: 'treinamento',  label: 'Treinamento' },
+      { key: 'estabilidade', label: 'Estabilidade' },
+      { key: 'epi',          label: 'EPI' },
+      { key: 'qualidade',    label: 'Qualidade' },
+    ];
+    const barsHTML = barData.map(b => {
+      const val = s[b.key] ?? 0;
+      return `
+        <div class="score-bar-item">
+          <div class="score-bar-label"><span>${b.label}</span><span>${val}</span></div>
+          <div class="score-bar-track">
+            <div class="score-bar-fill" style="width:${Math.min(val, 100)}%;background:${scoreColor(val)}"></div>
+          </div>
+        </div>`;
+    }).join('');
+
+    document.getElementById('scoreCard').innerHTML = `
+      <div class="score-header">
+        <div class="score-big" style="color:${scoreColor(typeof final === 'number' ? final : 0)}">${typeof final === 'number' ? Math.round(final) : final}</div>
+        <div class="score-label-group">
+          <div class="score-classification"><span class="badge ${classBadge(cls)}" style="font-size:var(--text-sm);padding:4px 14px;">${cls}</span></div>
+          ${conf !== null && conf !== undefined ? `<div class="score-confiabilidade">Confiabilidade: ${conf}%</div>` : ''}
+        </div>
+      </div>
+      <div class="score-bars">${barsHTML}</div>
+    `;
+  }
+
+  // ── KPIs ──
+  function renderKPIs(d) {
+    const at = d.atestados || {};
+    const pt = d.ponto || {};
+    const ep = d.epi || {};
+    const tr = d.treinamentos || {};
+
+    document.getElementById('kpiRow').innerHTML = `
+      <div class="kpi-card">
+        <div class="kpi-title">Atestados</div>
+        <div class="kpi-value">${safe(at.total, 0)}</div>
+        <div class="kpi-sub">Ultimos 6m: ${safe(at.ultimos_6m, 0)} | ${safe(at.dias_total, 0)} dias total</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Ponto</div>
+        <div class="kpi-value">${safe(pt.dias_trabalhados, 0)}</div>
+        <div class="kpi-sub">Dias trabalhados | Faltas 30d: ${safe(pt.faltas_30d, 0)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">EPI</div>
+        <div class="kpi-value">${safe(ep.entregas_12m, 0)}</div>
+        <div class="kpi-sub">Entregas 12m | Ultima: ${fmtDate(ep.ultima_entrega)}</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-title">Treinamentos</div>
+        <div class="kpi-value">${safe(tr.validos, 0)} <span style="font-size:var(--text-sm);color:var(--text-secondary);font-weight:400;">validos</span></div>
+        <div class="kpi-sub">Total: ${safe(tr.total, 0)} | Vencidos: <span style="color:${(tr.vencidos||0) > 0 ? 'var(--danger)' : 'inherit'}">${safe(tr.vencidos, 0)}</span></div>
+      </div>
+    `;
+  }
+
+  // ── Tabs ──
+  function renderTabs(d) {
+    const tabs = [
+      { id: 'resumo',     label: 'Resumo' },
+      { id: 'atestados',  label: 'Atestados', restricted: true },
+      { id: 'ponto',      label: 'Ponto' },
+      { id: 'sst',        label: 'SST' },
+      { id: 'beneficios', label: 'Beneficios' },
+      { id: 'documentos', label: 'Documentos' },
+      { id: 'pendencias', label: 'Pendencias' },
+    ];
+
+    // Nav
+    const navEl = document.getElementById('tabsNav');
+    navEl.innerHTML = tabs.map((t, i) =>
+      `<button class="tab-btn${i===0 ? ' active' : ''}" data-tab="${t.id}">${t.label}</button>`
+    ).join('');
+
+    // Panels
+    const panelsEl = document.getElementById('tabPanels');
+    panelsEl.innerHTML = tabs.map((t, i) =>
+      `<div class="tab-panel${i===0 ? ' active' : ''}" id="tab-${t.id}"></div>`
+    ).join('');
+
+    // Tab switching
+    navEl.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        navEl.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        panelsEl.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Render each tab content
+    renderTabResumo(d);
+    renderTabAtestados(d);
+    renderTabPonto(d);
+    renderTabSST(d);
+    renderTabBeneficios(d);
+    renderTabDocumentos(d);
+    renderTabPendencias(d);
+  }
+
+  // Tab: Resumo
+  function renderTabResumo(d) {
+    const el = document.getElementById('tab-resumo');
+    const at = d.atestados || {};
+    const ep = d.epi || {};
+    const as = d.asos || {};
+    const fe = d.ferias || {};
+    const s = d.score || {};
+
+    // Timeline events
+    const events = [];
+    if (at.ultimo) events.push({ date: at.ultimo, label: 'Ultimo atestado', color: 'var(--warning)' });
+    if (ep.ultima_entrega) events.push({ date: ep.ultima_entrega, label: 'Ultima entrega de EPI', color: 'var(--primary)' });
+    if (as.ultima_data) events.push({ date: as.ultima_data, label: `Ultimo ASO (${safe(as.ultimo_tipo, 'N/A')})`, color: 'var(--success)' });
+    if (d.data_admissao) events.push({ date: d.data_admissao, label: 'Admissao', color: 'var(--info)' });
+    events.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const timelineHTML = events.length > 0
+      ? `<ul class="timeline">${events.map(e => `
+          <li class="timeline-item">
+            <div class="timeline-dot" style="background:${e.color}"></div>
+            <div class="timeline-content">
+              <div class="timeline-label">${e.label}</div>
+              <div class="timeline-date">${fmtDate(e.date)}</div>
+            </div>
+          </li>`).join('')}</ul>`
+      : '<div class="empty-state"><p>Sem eventos recentes.</p></div>';
+
+    // Ferias
+    const feriasHTML = `
+      <div class="info-card">
+        <div class="info-card-title">Ferias</div>
+        <div class="info-grid">
+          <div>
+            <div class="info-item-label">Periodo Aquisitivo</div>
+            <div class="info-item-value">${fmtDate(fe.periodo_aquisitivo_inicio)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Dias de Direito</div>
+            <div class="info-item-value">${safe(fe.dias_direito, 30)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Dias Gozados (Ponto)</div>
+            <div class="info-item-value">${safe(fe.dias_gozados_ponto, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Saldo</div>
+            <div class="info-item-value" style="font-weight:var(--weight-bold);color:var(--primary);">${(fe.dias_direito || 30) - (fe.dias_gozados_ponto || 0)} dias</div>
+          </div>
+        </div>
+      </div>`;
+
+    // Score breakdown
+    const scoreItems = [
+      { l: 'Presenca', v: s.presenca },
+      { l: 'Producao', v: s.producao },
+      { l: 'Treinamento', v: s.treinamento },
+      { l: 'Estabilidade', v: s.estabilidade },
+      { l: 'EPI', v: s.epi },
+      { l: 'Qualidade', v: s.qualidade },
+    ];
+    const scoreHTML = `
+      <div class="info-card">
+        <div class="info-card-title">Detalhamento Score</div>
+        <div class="info-grid">
+          ${scoreItems.map(i => `
+            <div>
+              <div class="info-item-label">${i.l}</div>
+              <div class="info-item-value" style="color:${scoreColor(i.v ?? 0)}">${i.v ?? '--'}</div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+
+    el.innerHTML = `
+      <div class="info-card">
+        <div class="info-card-title">Eventos Recentes</div>
+        ${timelineHTML}
+      </div>
+      ${feriasHTML}
+      ${scoreHTML}
+    `;
+  }
+
+  // Tab: Atestados
+  function renderTabAtestados(d) {
+    const el = document.getElementById('tab-atestados');
+    const at = d.atestados || {};
+    const recentes = at.recentes || [];
+
+    if (!isRH) {
+      el.innerHTML = `
+        <div class="restricted-note">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>
+          Dados restritos a RH. Voce nao tem permissao para visualizar atestados medicos.
+        </div>`;
+      return;
+    }
+
+    const summary = `
+      <div class="info-grid" style="margin-bottom:var(--space-5);">
+        <div>
+          <div class="info-item-label">Total Atestados</div>
+          <div class="info-item-value">${safe(at.total, 0)}</div>
+        </div>
+        <div>
+          <div class="info-item-label">Ultimos 6 meses</div>
+          <div class="info-item-value">${safe(at.ultimos_6m, 0)}</div>
+        </div>
+        <div>
+          <div class="info-item-label">Dias Totais</div>
+          <div class="info-item-value">${safe(at.dias_total, 0)}</div>
+        </div>
+        <div>
+          <div class="info-item-label">Ultimo Atestado</div>
+          <div class="info-item-value">${fmtDate(at.ultimo)}</div>
+        </div>
+      </div>`;
+
+    if (recentes.length === 0) {
+      el.innerHTML = summary + '<div class="empty-state"><p>Nenhum atestado registrado.</p></div>';
+      return;
+    }
+
+    const rows = recentes.map(r => `
+      <tr>
+        <td>${fmtDate(r.data)}</td>
+        <td>${safe(r.dias, '-')}</td>
+        <td>${safe(r.obs || r.categoria, '-')}</td>
+      </tr>`).join('');
+
+    el.innerHTML = `
+      ${summary}
+      <table class="data-table">
+        <thead><tr><th>Data</th><th>Dias</th><th>Observacao</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  // Tab: Ponto
+  function renderTabPonto(d) {
+    const el = document.getElementById('tab-ponto');
+    const pt = d.ponto || {};
+
+    el.innerHTML = `
+      <div class="info-card">
+        <div class="info-card-title">Resumo de Ponto</div>
+        <div class="info-grid">
+          <div>
+            <div class="info-item-label">Dias Registrados</div>
+            <div class="info-item-value">${safe(pt.dias_registrados, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Dias Trabalhados</div>
+            <div class="info-item-value">${safe(pt.dias_trabalhados, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Faltas (30 dias)</div>
+            <div class="info-item-value" style="color:${(pt.faltas_30d||0) > 0 ? 'var(--danger)' : 'inherit'};">${safe(pt.faltas_30d, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Ferias (30 dias)</div>
+            <div class="info-item-value">${safe(pt.ferias_30d, 0)}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Tab: SST
+  function renderTabSST(d) {
+    const el = document.getElementById('tab-sst');
+    const as = d.asos || {};
+    const tr = d.treinamentos || {};
+    const ep = d.epi || {};
+    const asoSt = asoStatusInfo(d);
+
+    el.innerHTML = `
+      <!-- ASO -->
+      <div class="info-card">
+        <div class="info-card-title">ASO - Atestado de Saude Ocupacional</div>
+        <div class="info-grid">
+          <div>
+            <div class="info-item-label">Status</div>
+            <div class="info-item-value"><span class="aso-status-dot ${asoSt.cls}"></span>${asoSt.text}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Ultimo Tipo</div>
+            <div class="info-item-value">${safe(as.ultimo_tipo)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Data</div>
+            <div class="info-item-value">${fmtDate(as.ultima_data)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Validade</div>
+            <div class="info-item-value">${fmtDate(as.validade)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Total ASOs</div>
+            <div class="info-item-value">${safe(as.total, 0)}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Treinamentos -->
+      <div class="info-card">
+        <div class="info-card-title">Treinamentos</div>
+        <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-2);">
+          <div>
+            <span class="badge badge-green" style="font-size:var(--text-sm);padding:4px 12px;">${safe(tr.validos, 0)} Validos</span>
+          </div>
+          <div>
+            <span class="badge badge-red" style="font-size:var(--text-sm);padding:4px 12px;">${safe(tr.vencidos, 0)} Vencidos</span>
+          </div>
+          <div>
+            <span class="badge badge-gray" style="font-size:var(--text-sm);padding:4px 12px;">${safe(tr.total, 0)} Total</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- EPI -->
+      <div class="info-card">
+        <div class="info-card-title">EPI - Entregas</div>
+        <div class="info-grid">
+          <div>
+            <div class="info-item-label">Total Entregas</div>
+            <div class="info-item-value">${safe(ep.total_entregas, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Entregas 12 meses</div>
+            <div class="info-item-value">${safe(ep.entregas_12m, 0)}</div>
+          </div>
+          <div>
+            <div class="info-item-label">Ultima Entrega</div>
+            <div class="info-item-value">${fmtDate(ep.ultima_entrega)}</div>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // Tab: Beneficios
+  function renderTabBeneficios(d) {
+    const el = document.getElementById('tab-beneficios');
+    const bens = d.beneficios || [];
+    if (bens.length === 0) {
+      el.innerHTML = '<div class="empty-state"><p>Nenhum beneficio registrado.</p></div>';
+      return;
+    }
+    el.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:var(--space-3);">
+        ${bens.map(b => {
+          const stCls = (b.status || '').toLowerCase() === 'ativo' ? 'badge-green' : 'badge-gray';
+          return `
+            <div class="benefit-card">
+              <div>
+                <div class="benefit-name">${safe(b.tipo)}</div>
+                <span class="badge ${stCls}" style="margin-top:4px;">${safe(b.status, '-')}</span>
+              </div>
+              <div class="benefit-value">${b.valor !== null && b.valor !== undefined ? fmtCurrency(b.valor) : '-'}</div>
+            </div>`;
+        }).join('')}
+      </div>`;
+  }
+
+  // Tab: Documentos
+  function renderTabDocumentos(d) {
+    const el = document.getElementById('tab-documentos');
+    const docs = d.documentos || [];
+    if (docs.length === 0) {
+      el.innerHTML = '<div class="empty-state"><p>Nenhum documento registrado.</p></div>';
+      return;
+    }
+    el.innerHTML = `
+      <table class="data-table">
+        <thead><tr><th>Categoria</th><th>Quantidade</th></tr></thead>
+        <tbody>
+          ${docs.map(dc => `
+            <tr>
+              <td>${safe(dc.categoria)}</td>
+              <td><span class="badge badge-gray">${safe(dc.total, 0)}</span></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>`;
+  }
+
+  // Tab: Pendencias
+  function renderTabPendencias(d) {
+    const el = document.getElementById('tab-pendencias');
+    const pends = d.pendencias || [];
+    if (pends.length === 0) {
+      el.innerHTML = '<div class="empty-state"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg><p>Nenhuma pendencia aberta.</p></div>';
+      return;
+    }
+    el.innerHTML = pends.map(p => {
+      const crit = (p.criticidade || 'baixa').toLowerCase();
+      return `
+        <div class="pendencia-card ${crit}">
+          <div style="flex:1;">
+            <div class="pendencia-tipo" style="color:${crit === 'critica' ? 'var(--danger)' : crit === 'alta' ? 'var(--warning)' : 'var(--text-secondary)'};">
+              ${safe(p.tipo)} &mdash; <span class="badge ${crit === 'critica' ? 'badge-red' : crit === 'alta' ? 'badge-yellow' : 'badge-gray'}">${crit}</span>
+            </div>
+            <div class="pendencia-desc">${safe(p.descricao)}</div>
+            ${p.status ? `<div style="margin-top:4px;font-size:var(--text-xs);color:var(--text-muted);">Status: ${p.status}</div>` : ''}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Absenteismo - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.filter-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+.filter-row label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px}
+.filter-row input,.filter-row select{min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-page);color:var(--text-primary)}
+.filter-row input[type="text"]{min-width:200px}
+.tbl-footer{padding:10px 16px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)}
+.badge-atestado{background:#dbeafe;color:#1d4ed8}
+.badge-falta_justificada{background:#fef3c7;color:#92400e}
+.badge-falta_injustificada{background:#fee2e2;color:#991b1b}
+.badge-afastamento_inss{background:#ede9fe;color:#6d28d9}
+.badge-licenca_maternidade{background:#fce7f3;color:#9d174d}
+.badge-licenca_paternidade{background:#ccfbf1;color:#0f766e}
+.badge-tipo{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;white-space:nowrap}
+.btn-icon{background:none;border:none;cursor:pointer;color:var(--text-secondary);padding:4px;border-radius:6px;transition:color .2s,background .2s}
+.btn-icon:hover{color:var(--primary);background:rgba(37,99,235,.08)}
+.obs-cell{max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.data-table th.sortable{cursor:pointer;user-select:none}
+.data-table th.sortable:hover{color:var(--primary)}
+.data-table th.sortable::after{content:'';display:inline-block;margin-left:4px;opacity:.3}
+.data-table th.sort-asc::after{content:'\25B2';opacity:.7}
+.data-table th.sort-desc::after{content:'\25BC';opacity:.7}
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.open{opacity:1;pointer-events:auto}
+.modal-box{background:var(--bg-card);border-radius:12px;width:95%;max-width:520px;max-height:90vh;overflow-y:auto;padding:24px;box-shadow:0 8px 32px rgba(0,0,0,.18)}
+.modal-box h3{font-size:16px;font-weight:700;margin:0 0 20px}
+.form-group{margin-bottom:14px}
+.form-group label{display:block;font-size:12px;font-weight:500;color:var(--text-secondary);margin-bottom:4px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-page);color:var(--text-primary);box-sizing:border-box}
+.form-group textarea{resize:vertical;min-height:60px}
+.modal-actions{display:flex;gap:10px;justify-content:flex-end;margin-top:20px}
+.modal-actions button{padding:8px 20px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;border:1px solid var(--border);background:var(--bg-page);color:var(--text-primary);transition:background .2s}
+.modal-actions .btn-primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+.modal-actions .btn-primary:hover{opacity:.9}
+.modal-actions .btn-primary:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:640px){.filter-row{flex-direction:column}.filter-row input,.filter-row select{min-width:100%}.modal-box{padding:16px}}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+<!-- KPIs -->
+<div class="kpi-row mb-6">
+  <div class="kpi-card">
+    <div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v2m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"/></svg></div>
+    <div class="kpi-value" id="kFaltas"><span class="spinner"></span></div>
+    <div class="kpi-label">Faltas no Mes</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <div class="kpi-value" id="kAtestados"><span class="spinner"></span></div>
+    <div class="kpi-label">Atestados no Mes</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></div>
+    <div class="kpi-value" id="kAbsenteismo"><span class="spinner"></span></div>
+    <div class="kpi-label">% Absenteismo</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon purple"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="kpi-value" id="kSetorCritico"><span class="spinner"></span></div>
+    <div class="kpi-label">Setor Critico</div>
+  </div>
+</div>
+
+<!-- Action bar -->
+<div class="filter-row">
+  <div><label>Buscar funcionario</label><input type="text" id="fBusca" placeholder="Nome..." oninput="renderTable()"></div>
+  <div><label>Tipo</label>
+    <select id="fTipo" onchange="renderTable()">
+      <option value="">Todos</option>
+      <option value="atestado">Atestado</option>
+      <option value="falta_justificada">Falta Justificada</option>
+      <option value="falta_injustificada">Falta Injustificada</option>
+      <option value="afastamento_inss">INSS</option>
+      <option value="licenca_maternidade">Lic. Maternidade</option>
+      <option value="licenca_paternidade">Lic. Paternidade</option>
+    </select>
+  </div>
+  <div><label>Competencia</label><input type="month" id="fCompetencia" onchange="renderTable()"></div>
+  <div style="margin-left:auto">
+    <label>&nbsp;</label>
+    <button class="btn btn-primary" onclick="openModal()" style="padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;background:var(--primary);color:#fff;border:none">+ Nova Ocorrencia</button>
+  </div>
+</div>
+
+<!-- Table -->
+<div class="card">
+  <div class="data-table-wrapper"><table class="data-table" id="tblOcorrencias"><thead><tr>
+    <th class="sortable" data-col="nome">Funcionario</th>
+    <th class="sortable" data-col="tipo">Tipo</th>
+    <th class="sortable" data-col="data_inicio">Data Inicio</th>
+    <th>Data Fim</th>
+    <th style="text-align:right" class="sortable" data-col="dias">Dias</th>
+    <th>Competencia</th>
+    <th>Observacoes</th>
+    <th style="width:60px">Acoes</th>
+  </tr></thead><tbody id="tbOcorrencias"></tbody></table></div>
+  <div class="tbl-footer" id="ftOcorrencias"></div>
+</div>
+
+</div>
+
+<!-- Modal CRUD -->
+<div class="modal-overlay" id="modal">
+  <div class="modal-box">
+    <h3 id="modalTitle">Nova Ocorrencia</h3>
+    <input type="hidden" id="mId">
+    <div class="form-group">
+      <label>Funcionario *</label>
+      <select id="mColaborador"><option value="">Selecione...</option></select>
+    </div>
+    <div class="form-group">
+      <label>Tipo *</label>
+      <select id="mTipo">
+        <option value="">Selecione...</option>
+        <option value="atestado">Atestado</option>
+        <option value="falta_justificada">Falta Justificada</option>
+        <option value="falta_injustificada">Falta Injustificada</option>
+        <option value="afastamento_inss">Afastamento INSS</option>
+        <option value="licenca_maternidade">Licenca Maternidade</option>
+        <option value="licenca_paternidade">Licenca Paternidade</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Data Inicio *</label>
+      <input type="date" id="mDataInicio" onchange="autoFillCompetencia(); calcDias()">
+    </div>
+    <div class="form-group">
+      <label>Data Fim</label>
+      <input type="date" id="mDataFim" onchange="calcDias()">
+    </div>
+    <div class="form-group">
+      <label>Dias</label>
+      <input type="number" id="mDias" min="1" value="1">
+    </div>
+    <div class="form-group">
+      <label>Competencia</label>
+      <input type="text" id="mCompetencia" placeholder="YYYY-MM" maxlength="7">
+    </div>
+    <div class="form-group">
+      <label>Observacoes</label>
+      <textarea id="mObs" rows="3"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button onclick="closeModal()">Cancelar</button>
+      <button class="btn-primary" id="btnSave" onclick="salvar()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+Shell.init({ page: 'absenteismo', title: 'Absenteismo' });
+
+const esc = s => API.esc(s);
+const fmtD = d => d ? API.fmtData(d) : '--';
+
+/* ===== State ===== */
+let ocorrencias = [];
+let funcionarios = [];
+let setores = [];
+let funcMap = {};
+let setorMap = {};
+let sortCol = 'data_inicio';
+let sortDir = 'desc';
+
+const TIPO_LABELS = {
+  atestado: 'Atestado',
+  falta_justificada: 'Falta Justificada',
+  falta_injustificada: 'Falta Injustificada',
+  afastamento_inss: 'Afastamento INSS',
+  licenca_maternidade: 'Lic. Maternidade',
+  licenca_paternidade: 'Lic. Paternidade'
+};
+
+/* ===== Helpers ===== */
+function currentYM() {
+  const d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0');
+}
+
+function badgeTipo(tipo) {
+  const label = TIPO_LABELS[tipo] || tipo || '--';
+  return '<span class="badge-tipo badge-' + esc(tipo || '') + '">' + esc(label) + '</span>';
+}
+
+/* ===== Sort ===== */
+document.getElementById('tblOcorrencias').addEventListener('click', function(e) {
+  const th = e.target.closest('th.sortable');
+  if (!th) return;
+  const col = th.dataset.col;
+  if (sortCol === col) {
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortCol = col;
+    sortDir = 'asc';
+  }
+  /* Update header classes */
+  document.querySelectorAll('#tblOcorrencias th.sortable').forEach(h => {
+    h.classList.remove('sort-asc', 'sort-desc');
+  });
+  th.classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  renderTable();
+});
+
+/* ===== Keyboard ===== */
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') closeModal();
+});
+
+/* ===== Auto-calc dias from date range ===== */
+function calcDias() {
+  const ini = document.getElementById('mDataInicio').value;
+  const fim = document.getElementById('mDataFim').value;
+  if (ini && fim && fim >= ini) {
+    const d1 = new Date(ini + 'T00:00:00');
+    const d2 = new Date(fim + 'T00:00:00');
+    const diff = Math.round((d2 - d1) / (1000 * 60 * 60 * 24)) + 1;
+    document.getElementById('mDias').value = diff;
+  }
+}
+
+/* ===== Load ===== */
+(async function init() {
+  try {
+    const [rOc, rFunc, rSet] = await Promise.all([
+      API.get('rh_ocorrencias?order=data_inicio.desc&limit=500'),
+      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,ferias)&order=nome_completo'),
+      API.get('rh_setores?select=id,nome&order=nome')
+    ]);
+
+    ocorrencias = rOc.ok ? rOc.data : [];
+    funcionarios = rFunc.ok ? rFunc.data : [];
+    setores = rSet.ok ? rSet.data : [];
+
+    funcionarios.forEach(f => { funcMap[f.id] = f; });
+    setores.forEach(s => { setorMap[s.id] = s; });
+
+    populateColaboradorSelect();
+    renderKPIs();
+    renderTable();
+  } catch (err) {
+    console.error('Erro ao carregar dados de absenteismo:', err);
+  }
+})();
+
+/* ===== Populate select ===== */
+function populateColaboradorSelect() {
+  const sel = document.getElementById('mColaborador');
+  funcionarios.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.id;
+    o.textContent = f.nome_completo;
+    sel.appendChild(o);
+  });
+}
+
+/* ===== KPIs ===== */
+function renderKPIs() {
+  const ym = currentYM();
+  const mesData = ocorrencias.filter(o => (o.competencia || '').startsWith(ym));
+
+  const faltas = mesData.filter(o => (o.tipo || '').startsWith('falta')).length;
+  const atestados = mesData.filter(o => o.tipo === 'atestado').length;
+
+  const totalDiasMes = mesData.reduce((s, o) => s + (Number(o.dias) || 0), 0);
+  const ativos = funcionarios.filter(f => f.status === 'ativo').length;
+  const pctAbsenteismo = ativos > 0 ? ((totalDiasMes / (ativos * 22)) * 100) : 0;
+
+  /* Setor critico: setor with most dias in current month */
+  const diasPorSetor = {};
+  mesData.forEach(o => {
+    const func = funcMap[o.colaborador_id];
+    if (!func || !func.setor_id) return;
+    diasPorSetor[func.setor_id] = (diasPorSetor[func.setor_id] || 0) + (Number(o.dias) || 0);
+  });
+  let setorCritico = '--';
+  let maxDias = 0;
+  Object.entries(diasPorSetor).forEach(([sid, dias]) => {
+    if (dias > maxDias) {
+      maxDias = dias;
+      const s = setorMap[sid];
+      setorCritico = s ? s.nome : '--';
+    }
+  });
+
+  document.getElementById('kFaltas').textContent = faltas.toLocaleString('pt-BR');
+  document.getElementById('kAtestados').textContent = atestados.toLocaleString('pt-BR');
+  document.getElementById('kAbsenteismo').textContent = pctAbsenteismo.toFixed(1).replace('.', ',') + '%';
+  document.getElementById('kSetorCritico').textContent = setorCritico;
+}
+
+/* ===== Render Table ===== */
+function renderTable() {
+  const busca = (document.getElementById('fBusca').value || '').toLowerCase();
+  const tipo = document.getElementById('fTipo').value;
+  const comp = document.getElementById('fCompetencia').value; /* YYYY-MM */
+
+  let filtered = ocorrencias.filter(o => {
+    if (tipo && o.tipo !== tipo) return false;
+    if (comp && !(o.competencia || '').startsWith(comp)) return false;
+    if (busca) {
+      const func = funcMap[o.colaborador_id];
+      const nome = (func ? func.nome_completo : '').toLowerCase();
+      if (!nome.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  /* Apply sort */
+  filtered = filtered.slice().sort((a, b) => {
+    let va, vb;
+    if (sortCol === 'nome') {
+      va = (funcMap[a.colaborador_id] || {}).nome_completo || '';
+      vb = (funcMap[b.colaborador_id] || {}).nome_completo || '';
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    } else if (sortCol === 'dias') {
+      va = Number(a.dias) || 0;
+      vb = Number(b.dias) || 0;
+      return sortDir === 'asc' ? va - vb : vb - va;
+    } else if (sortCol === 'tipo') {
+      va = a.tipo || '';
+      vb = b.tipo || '';
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    } else {
+      /* data_inicio (default) */
+      va = a.data_inicio || '';
+      vb = b.data_inicio || '';
+      return sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+    }
+  });
+
+  /* Compute total dias for footer */
+  const totalDias = filtered.reduce((s, o) => s + (Number(o.dias) || 0), 0);
+
+  const tbody = document.getElementById('tbOcorrencias');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="text-muted" style="text-align:center;padding:24px">Nenhuma ocorrencia encontrada</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(o => {
+      const func = funcMap[o.colaborador_id] || {};
+      const obsText = o.observacoes || '--';
+      const obsTrunc = obsText.length > 40 ? obsText.slice(0, 40) + '...' : obsText;
+      return '<tr>'
+        + '<td>' + esc(func.nome_completo || '--') + '</td>'
+        + '<td>' + badgeTipo(o.tipo) + '</td>'
+        + '<td>' + esc(fmtD(o.data_inicio)) + '</td>'
+        + '<td>' + esc(fmtD(o.data_fim)) + '</td>'
+        + '<td style="text-align:right">' + (Number(o.dias) || '--') + '</td>'
+        + '<td>' + esc(o.competencia || '--') + '</td>'
+        + '<td class="obs-cell" title="' + esc(obsText) + '">' + esc(obsTrunc) + '</td>'
+        + '<td><button class="btn-icon" title="Editar" onclick="editarOcorrencia(\'' + esc(o.id) + '\')">'
+        + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>'
+        + '</button></td>'
+        + '</tr>';
+    }).join('');
+  }
+  document.getElementById('ftOcorrencias').textContent = filtered.length + ' de ' + ocorrencias.length + ' ocorrencias | Total dias: ' + totalDias.toLocaleString('pt-BR');
+}
+
+/* ===== Modal ===== */
+function openModal(data) {
+  const modal = document.getElementById('modal');
+  document.getElementById('modalTitle').textContent = data ? 'Editar Ocorrencia' : 'Nova Ocorrencia';
+  document.getElementById('mId').value = data ? data.id : '';
+  document.getElementById('mColaborador').value = data ? (data.colaborador_id || '') : '';
+  document.getElementById('mTipo').value = data ? (data.tipo || '') : '';
+  document.getElementById('mDataInicio').value = data ? (data.data_inicio || '') : '';
+  document.getElementById('mDataFim').value = data ? (data.data_fim || '') : '';
+  document.getElementById('mDias').value = data ? (data.dias || 1) : 1;
+  document.getElementById('mCompetencia').value = data ? (data.competencia || '') : '';
+  document.getElementById('mObs').value = data ? (data.observacoes || '') : '';
+  modal.classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('open');
+}
+
+function autoFillCompetencia() {
+  const dt = document.getElementById('mDataInicio').value;
+  if (dt && dt.length >= 7) {
+    document.getElementById('mCompetencia').value = dt.slice(0, 7);
+  }
+}
+
+/* Close modal on backdrop click */
+document.getElementById('modal').addEventListener('click', function(e) {
+  if (e.target === this) closeModal();
+});
+
+/* ===== Edit ===== */
+function editarOcorrencia(id) {
+  const oc = ocorrencias.find(o => o.id === id);
+  if (oc) openModal(oc);
+}
+
+/* ===== Save (create / update) ===== */
+async function salvar() {
+  const id = document.getElementById('mId').value;
+  const colaborador_id = document.getElementById('mColaborador').value;
+  const tipo = document.getElementById('mTipo').value;
+  const data_inicio = document.getElementById('mDataInicio').value;
+  const data_fim = document.getElementById('mDataFim').value || null;
+  const dias = parseInt(document.getElementById('mDias').value) || 1;
+  const competencia = document.getElementById('mCompetencia').value || (data_inicio ? data_inicio.slice(0, 7) : '');
+  const observacoes = document.getElementById('mObs').value || null;
+
+  if (!colaborador_id || !tipo || !data_inicio) {
+    alert('Preencha os campos obrigatorios: Funcionario, Tipo e Data Inicio.');
+    return;
+  }
+
+  const payload = { colaborador_id, tipo, data_inicio, data_fim, dias, competencia, observacoes };
+  const btn = document.getElementById('btnSave');
+  btn.disabled = true;
+  btn.textContent = 'Salvando...';
+
+  try {
+    let res;
+    if (id) {
+      res = await API.patch('rh_ocorrencias?id=eq.' + id, payload);
+    } else {
+      res = await API.post('rh_ocorrencias', payload);
+    }
+
+    if (res.ok) {
+      closeModal();
+      /* Reload data */
+      const rOc = await API.get('rh_ocorrencias?order=data_inicio.desc&limit=500');
+      ocorrencias = rOc.ok ? rOc.data : [];
+      renderKPIs();
+      renderTable();
+    } else {
+      alert('Erro ao salvar: ' + (res.error || 'Erro desconhecido'));
+    }
+  } catch (err) {
+    console.error('Erro ao salvar ocorrencia:', err);
+    alert('Erro ao salvar ocorrencia.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar';
+  }
+}
+</script>
+</body>
+</html>

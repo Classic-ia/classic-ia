@@ -1,0 +1,1471 @@
+<!--
+  Classic RH - Controle de ASOs (Atestados de Saude Ocupacional)
+  NR-07 / PCMSO
+
+  CREATE TABLE rh_asos (
+    id                   UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    colaborador_id       UUID REFERENCES rh_colaboradores(id),
+    tipo                 TEXT NOT NULL CHECK (tipo IN ('admissional','periodico','retorno','mudanca_funcao','demissional')),
+    data_exame           DATE NOT NULL,
+    medico               TEXT NOT NULL,
+    crm                  TEXT NOT NULL,
+    resultado            TEXT NOT NULL CHECK (resultado IN ('apto','inapto','apto_restricao')),
+    restricoes           TEXT,
+    validade_meses       INTEGER NOT NULL DEFAULT 12,
+    data_vencimento      DATE NOT NULL,
+    exames_complementares TEXT,
+    observacoes          TEXT,
+    criado_em            TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_asos_colaborador ON rh_asos(colaborador_id);
+  CREATE INDEX idx_asos_vencimento ON rh_asos(data_vencimento);
+  CREATE INDEX idx_asos_tipo ON rh_asos(tipo);
+
+  -- RLS
+  ALTER TABLE rh_asos ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_asos_all" ON rh_asos FOR ALL USING (true) WITH CHECK (true);
+
+  -- Tabela de configuracao de risco por cargo
+  CREATE TABLE rh_asos_config (
+    id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    cargo         TEXT NOT NULL,
+    cbo           TEXT,
+    risco         TEXT NOT NULL DEFAULT 'baixo' CHECK (risco IN ('baixo','alto')),
+    exames_admissional    TEXT,
+    exames_periodico      TEXT,
+    exames_retorno        TEXT,
+    exames_mudanca_funcao TEXT,
+    exames_demissional    TEXT,
+    criado_em     TIMESTAMPTZ DEFAULT now()
+  );
+
+  ALTER TABLE rh_asos_config ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_asos_config_all" ON rh_asos_config FOR ALL USING (true) WITH CHECK (true);
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Controle de ASOs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* KPI Row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 14px; text-align: center;
+}
+.kpi-card.alert-red { border-color: var(--err); }
+.kpi-card.alert-orange { border-color: var(--warn); }
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 26px; color: var(--accent);
+}
+.kpi-value.red { color: var(--err); }
+.kpi-value.orange { color: var(--warn); }
+.kpi-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active { background: var(--info); color: white; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Section */
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+/* Alert Cards */
+.alert-card {
+  border-radius: 10px; padding: 14px 18px; margin-bottom: 14px;
+  font-size: 13px; line-height: 1.6; display: flex; align-items: center; gap: 12px;
+}
+.alert-card.alert-red {
+  background: rgba(231,76,60,.08); border: 1px solid rgba(231,76,60,.3); color: #f1a9a0;
+}
+.alert-card.alert-orange {
+  background: rgba(243,156,18,.08); border: 1px solid rgba(243,156,18,.3); color: #f5d89a;
+}
+.alert-card .alert-icon { font-size: 20px; flex-shrink: 0; }
+.alert-card strong { color: var(--text); }
+
+/* Form Controls */
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+  margin-bottom: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.form-group.full { flex: 1 1 100%; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group select option { background: var(--surface); color: var(--text); }
+.form-group textarea {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  min-height: 80px; resize: vertical; width: 100%;
+}
+
+/* Search with dropdown */
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.search-result-item:hover { background: rgba(46,107,138,.12); }
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item .sr-name { color: var(--text); font-weight: 600; }
+.search-result-item .sr-cargo { color: var(--muted); font-size: 11px; margin-left: 8px; }
+
+/* Toolbar */
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center;
+}
+.toolbar input, .toolbar select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s;
+}
+.toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+.toolbar input::placeholder { color: var(--muted); }
+.toolbar select option { background: var(--surface); color: var(--text); }
+.filter-input { flex: 1; min-width: 200px; }
+
+/* Table */
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--accent); }
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-vigente { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-vencendo { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-vencido { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-sem { background: rgba(93,127,149,.1); color: var(--muted); }
+.badge-apto { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-inapto { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-restricao { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+
+/* Buttons */
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+/* Checkbox multi-select */
+.checkbox-group {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.checkbox-item {
+  display: flex; align-items: center; gap: 6px;
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  padding: 6px 10px; font-size: 12px; cursor: pointer; transition: all .2s;
+}
+.checkbox-item:hover { border-color: var(--accent); }
+.checkbox-item.checked { border-color: var(--accent); background: rgba(200,169,110,.08); }
+.checkbox-item input { display: none; }
+
+/* Config table */
+.config-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.config-table th {
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 12px; text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+.config-table td {
+  padding: 10px 12px; border-bottom: 1px solid rgba(30,58,82,.3);
+}
+.config-table input, .config-table select {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
+  color: var(--text); font-size: 12px; padding: 6px 8px; outline: none;
+  transition: border-color .2s;
+}
+.config-table input:focus, .config-table select:focus { border-color: var(--accent); }
+
+/* History timeline */
+.timeline { position: relative; padding-left: 20px; }
+.timeline::before {
+  content: ''; position: absolute; left: 6px; top: 0; bottom: 0;
+  width: 2px; background: var(--border);
+}
+.timeline-item {
+  position: relative; margin-bottom: 20px; padding: 14px 16px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.timeline-item::before {
+  content: ''; position: absolute; left: -18px; top: 18px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--info); border: 2px solid var(--bg);
+}
+.timeline-item.current::before { background: var(--ok); }
+.timeline-item.expired::before { background: var(--err); }
+.timeline-meta {
+  display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 8px;
+  font-size: 11px; color: var(--muted);
+}
+.timeline-meta strong { color: var(--text); }
+.timeline-detail { font-size: 12px; color: var(--muted); line-height: 1.6; }
+.timeline-detail strong { color: var(--text); }
+
+/* Colaborador info card */
+.colab-info {
+  display: flex; flex-wrap: wrap; gap: 20px;
+  background: var(--surface2); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 20px; margin-bottom: 20px;
+}
+.colab-info-item { font-size: 12px; }
+.colab-info-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.colab-info-item .value { color: var(--text); font-weight: 600; }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .form-group { min-width: 100%; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+  .toolbar { flex-direction: column; }
+  .colab-info { flex-direction: column; gap: 12px; }
+}
+
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#9764;</div>
+    <div>
+      <div class="header-title">Controle de ASOs</div>
+      <div class="header-sub">NR-07 / PCMSO - Saude Ocupacional</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card" id="kpi-vigentes">
+      <div class="kpi-value" id="kpi-vigentes-val">--</div>
+      <div class="kpi-label">ASOs Vigentes</div>
+    </div>
+    <div class="kpi-card" id="kpi-vencidos">
+      <div class="kpi-value red" id="kpi-vencidos-val">--</div>
+      <div class="kpi-label">Vencidos</div>
+    </div>
+    <div class="kpi-card" id="kpi-vencendo">
+      <div class="kpi-value orange" id="kpi-vencendo-val">--</div>
+      <div class="kpi-label">Vencendo em 30 dias</div>
+    </div>
+    <div class="kpi-card" id="kpi-sem">
+      <div class="kpi-value" id="kpi-sem-val">--</div>
+      <div class="kpi-label">Sem ASO Cadastrado</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="painel">Painel</button>
+    <button class="tab-btn" data-tab="cadastrar">Cadastrar ASO</button>
+    <button class="tab-btn" data-tab="colaborador">Por Colaborador</button>
+    <button class="tab-btn" data-tab="config">Configuracao</button>
+  </div>
+
+  <!-- ============ TAB: PAINEL ============ -->
+  <div id="tab-painel" class="tab-pane active">
+
+    <!-- Alerts -->
+    <div id="painel-alerts"></div>
+
+    <!-- Filters -->
+    <div class="toolbar">
+      <input type="text" class="filter-input" id="painel-search" placeholder="Buscar por nome do colaborador...">
+      <select id="painel-filter-status">
+        <option value="">Todos os status</option>
+        <option value="vigente">Vigente</option>
+        <option value="vencendo">Vencendo em 30 dias</option>
+        <option value="vencido">Vencido</option>
+        <option value="sem">Sem cadastro</option>
+      </select>
+      <select id="painel-filter-tipo">
+        <option value="">Todos os tipos</option>
+        <option value="admissional">Admissional</option>
+        <option value="periodico">Periodico</option>
+        <option value="retorno">Retorno ao Trabalho</option>
+        <option value="mudanca_funcao">Mudanca de Funcao</option>
+        <option value="demissional">Demissional</option>
+      </select>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th data-sort="nome">Nome</th>
+            <th data-sort="cargo">Cargo</th>
+            <th data-sort="tipo">Ultimo ASO</th>
+            <th>Tipo</th>
+            <th data-sort="data_exame">Data Exame</th>
+            <th>Validade</th>
+            <th data-sort="data_vencimento">Data Vencimento</th>
+            <th data-sort="status">Status</th>
+          </tr>
+        </thead>
+        <tbody id="painel-tbody"></tbody>
+      </table>
+    </div>
+    <div id="painel-empty" class="empty-state" style="display:none;">Nenhum colaborador encontrado.</div>
+  </div>
+
+  <!-- ============ TAB: CADASTRAR ASO ============ -->
+  <div id="tab-cadastrar" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Novo Registro de ASO</div>
+
+      <!-- Colaborador search -->
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Colaborador</label>
+          <div class="search-wrap">
+            <input type="text" class="search-input" id="cad-colab-search" placeholder="Digite o nome do colaborador..." autocomplete="off">
+            <div class="search-results" id="cad-colab-results"></div>
+          </div>
+          <input type="hidden" id="cad-colab-id">
+        </div>
+      </div>
+      <div id="cad-colab-info" class="colab-info" style="display:none;"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tipo do ASO</label>
+          <select id="cad-tipo">
+            <option value="">Selecione...</option>
+            <option value="admissional">Admissional</option>
+            <option value="periodico">Periodico</option>
+            <option value="retorno">Retorno ao Trabalho</option>
+            <option value="mudanca_funcao">Mudanca de Funcao</option>
+            <option value="demissional">Demissional</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Data do Exame</label>
+          <input type="date" id="cad-data-exame">
+        </div>
+        <div class="form-group">
+          <label>Resultado</label>
+          <select id="cad-resultado">
+            <option value="">Selecione...</option>
+            <option value="apto">Apto</option>
+            <option value="inapto">Inapto</option>
+            <option value="apto_restricao">Apto com Restricoes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row" id="cad-restricoes-row" style="display:none;">
+        <div class="form-group full">
+          <label>Restricoes</label>
+          <textarea id="cad-restricoes" placeholder="Descreva as restricoes do colaborador..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Medico Responsavel</label>
+          <input type="text" id="cad-medico" placeholder="Nome do medico">
+        </div>
+        <div class="form-group">
+          <label>CRM do Medico</label>
+          <input type="text" id="cad-crm" placeholder="Ex: CRM/SP 123456">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Validade (meses)</label>
+          <input type="number" id="cad-validade" value="12" min="1" max="48">
+          <span style="font-size:10px;color:var(--muted);margin-top:2px;" id="cad-validade-hint">
+            Auto-calculado com base na idade e risco do cargo.
+          </span>
+        </div>
+        <div class="form-group">
+          <label>Data de Vencimento</label>
+          <input type="date" id="cad-vencimento" readonly style="opacity:.7;">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Exames Complementares Realizados</label>
+          <div class="checkbox-group" id="cad-exames-group">
+            <!-- populated by JS -->
+          </div>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Observacoes</label>
+          <textarea id="cad-observacoes" placeholder="Observacoes adicionais..."></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:18px; display:flex; gap:10px;">
+        <button class="btn btn-ok" id="cad-salvar-btn">Salvar ASO</button>
+        <button class="btn btn-outline" id="cad-limpar-btn">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: POR COLABORADOR ============ -->
+  <div id="tab-colaborador" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Historico de ASOs por Colaborador</div>
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Buscar Colaborador</label>
+          <div class="search-wrap">
+            <input type="text" class="search-input" id="hist-colab-search" placeholder="Digite o nome do colaborador..." autocomplete="off">
+            <div class="search-results" id="hist-colab-results"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="hist-content" style="display:none;">
+      <div id="hist-colab-card" class="colab-info"></div>
+
+      <div class="section">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <div class="section-title" style="margin-bottom:0;">Status Atual</div>
+          <div id="hist-status-badge"></div>
+        </div>
+        <div id="hist-status-info" style="font-size:13px;color:var(--muted);line-height:1.7;"></div>
+      </div>
+
+      <div class="section">
+        <div class="section-title">Historico Completo</div>
+        <div class="timeline" id="hist-timeline"></div>
+        <div id="hist-empty" class="empty-state" style="display:none;">Nenhum ASO registrado para este colaborador.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: CONFIGURACAO ============ -->
+  <div id="tab-config" class="tab-pane">
+
+    <div class="section">
+      <div class="section-title">Periodicidade Padrao (NR-07)</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Regras de periodicidade dos exames periodicos conforme NR-07.
+        Estas regras sao usadas no calculo automatico da validade ao cadastrar um ASO.
+      </p>
+      <div class="table-wrap" style="margin-top:0;">
+        <table class="config-table">
+          <thead>
+            <tr>
+              <th>Faixa Etaria</th>
+              <th>Risco Baixo</th>
+              <th>Risco Alto</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="color:var(--text);font-weight:600;">Menores de 18 anos</td>
+              <td class="mono">12 meses</td>
+              <td class="mono">12 meses</td>
+            </tr>
+            <tr>
+              <td style="color:var(--text);font-weight:600;">Entre 18 e 45 anos</td>
+              <td class="mono">24 meses</td>
+              <td class="mono">12 meses</td>
+            </tr>
+            <tr>
+              <td style="color:var(--text);font-weight:600;">Maiores de 45 anos</td>
+              <td class="mono">12 meses</td>
+              <td class="mono">12 meses</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Nivel de Risco por Cargo</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Defina o nivel de risco para cada cargo/CBO. Cargos nao configurados serao considerados como risco baixo.
+      </p>
+      <div class="form-row" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Cargo</label>
+          <input type="text" id="cfg-cargo" placeholder="Nome do cargo">
+        </div>
+        <div class="form-group">
+          <label>CBO</label>
+          <input type="text" id="cfg-cbo" placeholder="Codigo CBO (opcional)">
+        </div>
+        <div class="form-group">
+          <label>Nivel de Risco</label>
+          <select id="cfg-risco">
+            <option value="baixo">Baixo</option>
+            <option value="alto">Alto</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0;min-width:auto;">
+          <label>&nbsp;</label>
+          <button class="btn btn-accent btn-sm" id="cfg-add-risco-btn">Adicionar</button>
+        </div>
+      </div>
+      <div class="table-wrap" style="margin-top:0;">
+        <table>
+          <thead>
+            <tr>
+              <th>Cargo</th>
+              <th>CBO</th>
+              <th>Risco</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="cfg-risco-tbody"></tbody>
+        </table>
+      </div>
+      <div id="cfg-risco-empty" class="empty-state" style="display:none;">Nenhum cargo configurado. Todos os cargos serao considerados risco baixo.</div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Exames Padrao por Tipo de ASO</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.6;">
+        Configure os exames complementares sugeridos para cada tipo de ASO.
+        Estes exames serao pre-selecionados ao cadastrar um novo ASO.
+      </p>
+      <div id="cfg-exames-por-tipo"></div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &mdash; Controle de ASOs v2026.03</div>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let colaboradores = [];
+let asos = [];
+let configRiscos = [];
+const EXAMES_DISPONIVEIS = [
+  'Audiometria','Espirometria','Hemograma','EAS','Glicemia',
+  'Acuidade Visual','Raio-X Torax','ECG','Toxicologico',
+  'Hepatograma','Creatinina','PSA','Colesterol Total'
+];
+const TIPOS_ASO = {
+  admissional: 'Admissional',
+  periodico: 'Periodico',
+  retorno: 'Retorno ao Trabalho',
+  mudanca_funcao: 'Mudanca de Funcao',
+  demissional: 'Demissional'
+};
+const RESULTADOS = {
+  apto: 'Apto',
+  inapto: 'Inapto',
+  apto_restricao: 'Apto c/ Restricoes'
+};
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  initTabs();
+  initExamesCheckboxes();
+  initConfigExamesPorTipo();
+  await loadAll();
+
+  // Event listeners
+  document.getElementById('painel-search').addEventListener('input', renderPainel);
+  document.getElementById('painel-filter-status').addEventListener('change', renderPainel);
+  document.getElementById('painel-filter-tipo').addEventListener('change', renderPainel);
+
+  initColabSearch('cad-colab-search', 'cad-colab-results', onCadColabSelected);
+  initColabSearch('hist-colab-search', 'hist-colab-results', onHistColabSelected);
+
+  document.getElementById('cad-resultado').addEventListener('change', () => {
+    const v = document.getElementById('cad-resultado').value;
+    document.getElementById('cad-restricoes-row').style.display = v === 'apto_restricao' ? '' : 'none';
+  });
+
+  document.getElementById('cad-data-exame').addEventListener('change', calcVencimento);
+  document.getElementById('cad-validade').addEventListener('change', calcVencimento);
+  document.getElementById('cad-tipo').addEventListener('change', onTipoChange);
+
+  document.getElementById('cad-salvar-btn').addEventListener('click', salvarASO);
+  document.getElementById('cad-limpar-btn').addEventListener('click', limparFormCadastro);
+
+  document.getElementById('cfg-add-risco-btn').addEventListener('click', addConfigRisco);
+});
+
+// ============================================================
+//  TABS
+// ============================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ============================================================
+//  DATA LOADING
+// ============================================================
+async function loadAll() {
+  await Promise.all([loadColaboradores(), loadASOs(), loadConfigRiscos()]);
+  renderPainel();
+  renderConfigRiscos();
+}
+
+async function loadColaboradores() {
+  try {
+    const _res = await API.get('rh_colaboradores?select=id,nome,cargo,data_nascimento,data_admissao,status&status=eq.ativo&order=nome');
+    colaboradores = _res.ok ? _res.data : [];
+  } catch (e) {
+    console.warn('[ASOs] Erro ao carregar colaboradores:', e);
+    colaboradores = [];
+  }
+}
+
+async function loadASOs() {
+  try {
+    const _res = await API.get('rh_asos?select=*&order=data_exame.desc');
+    asos = _res.ok ? _res.data : [];
+  } catch (e) {
+    console.warn('[ASOs] Erro ao carregar ASOs:', e);
+    asos = [];
+  }
+}
+
+async function loadConfigRiscos() {
+  try {
+    const _res = await API.get('rh_asos_config?select=*&order=cargo');
+    configRiscos = _res.ok ? _res.data : [];
+  } catch (e) {
+    console.warn('[ASOs] Erro ao carregar config riscos:', e);
+    configRiscos = [];
+  }
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+function fmtDate(d) {
+  return API.fmtData(d);
+}
+
+function parseDate(d) {
+  if (!d) return null;
+  return new Date(d + 'T00:00:00');
+}
+
+function today() {
+  return new Date();
+}
+
+function diffDays(d1, d2) {
+  return Math.floor((d1 - d2) / (1000 * 60 * 60 * 24));
+}
+
+function calcIdade(dataNasc) {
+  if (!dataNasc) return null;
+  const nasc = parseDate(dataNasc);
+  const now = today();
+  let idade = now.getFullYear() - nasc.getFullYear();
+  const m = now.getMonth() - nasc.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < nasc.getDate())) idade--;
+  return idade;
+}
+
+function getRisco(cargo) {
+  if (!cargo) return 'baixo';
+  const cfg = configRiscos.find(c => c.cargo.toLowerCase() === cargo.toLowerCase());
+  return cfg ? cfg.risco : 'baixo';
+}
+
+function calcValidadeMeses(dataNasc, cargo) {
+  const idade = calcIdade(dataNasc);
+  const risco = getRisco(cargo);
+  if (idade !== null && (idade < 18 || idade > 45)) return 12;
+  if (risco === 'alto') return 12;
+  return 24;
+}
+
+function getUltimoASO(colabId) {
+  const colabAsos = asos.filter(a => a.colaborador_id === colabId);
+  if (colabAsos.length === 0) return null;
+  colabAsos.sort((a, b) => b.data_exame.localeCompare(a.data_exame));
+  return colabAsos[0];
+}
+
+function getStatusASO(aso) {
+  if (!aso) return 'sem';
+  const venc = parseDate(aso.data_vencimento);
+  if (!venc) return 'sem';
+  const now = today();
+  const dias = diffDays(venc, now);
+  if (dias < 0) return 'vencido';
+  if (dias <= 30) return 'vencendo';
+  return 'vigente';
+}
+
+function statusLabel(st) {
+  switch (st) {
+    case 'vigente': return '<span class="badge badge-vigente">Vigente</span>';
+    case 'vencendo': return '<span class="badge badge-vencendo">Vencendo</span>';
+    case 'vencido': return '<span class="badge badge-vencido">Vencido</span>';
+    default: return '<span class="badge badge-sem">Sem cadastro</span>';
+  }
+}
+
+function resultadoLabel(r) {
+  switch (r) {
+    case 'apto': return '<span class="badge badge-apto">Apto</span>';
+    case 'inapto': return '<span class="badge badge-inapto">Inapto</span>';
+    case 'apto_restricao': return '<span class="badge badge-restricao">Apto c/ Restricoes</span>';
+    default: return '--';
+  }
+}
+
+// ============================================================
+//  PAINEL TAB
+// ============================================================
+function renderPainel() {
+  const search = (document.getElementById('painel-search').value || '').toLowerCase();
+  const filterStatus = document.getElementById('painel-filter-status').value;
+  const filterTipo = document.getElementById('painel-filter-tipo').value;
+
+  // Build rows with latest ASO per colaborador
+  let rows = colaboradores.map(c => {
+    const aso = getUltimoASO(c.id);
+    const status = getStatusASO(aso);
+    return { colab: c, aso, status };
+  });
+
+  // Filter
+  if (search) {
+    rows = rows.filter(r => r.colab.nome.toLowerCase().includes(search));
+  }
+  if (filterStatus) {
+    rows = rows.filter(r => r.status === filterStatus);
+  }
+  if (filterTipo && rows.length) {
+    rows = rows.filter(r => r.aso && r.aso.tipo === filterTipo);
+  }
+
+  // Sort by vencimento (vencidos first, then vencendo, then vigentes, then sem)
+  const statusOrder = { vencido: 0, vencendo: 1, vigente: 2, sem: 3 };
+  rows.sort((a, b) => {
+    const oa = statusOrder[a.status] ?? 3;
+    const ob = statusOrder[b.status] ?? 3;
+    if (oa !== ob) return oa - ob;
+    const da = a.aso ? a.aso.data_vencimento : 'zzzz';
+    const db = b.aso ? b.aso.data_vencimento : 'zzzz';
+    return da.localeCompare(db);
+  });
+
+  // KPI
+  const totalVigentes = rows.filter(r => r.status === 'vigente').length;
+  const totalVencidos = rows.filter(r => r.status === 'vencido').length;
+  const totalVencendo = rows.filter(r => r.status === 'vencendo').length;
+  const totalSem = rows.filter(r => r.status === 'sem').length;
+
+  document.getElementById('kpi-vigentes-val').textContent = totalVigentes;
+  document.getElementById('kpi-vencidos-val').textContent = totalVencidos;
+  document.getElementById('kpi-vencendo-val').textContent = totalVencendo;
+  document.getElementById('kpi-sem-val').textContent = totalSem;
+
+  // Color KPI cards
+  const kpiVencidos = document.getElementById('kpi-vencidos');
+  kpiVencidos.className = 'kpi-card' + (totalVencidos > 0 ? ' alert-red' : '');
+  const kpiVencendo = document.getElementById('kpi-vencendo');
+  kpiVencendo.className = 'kpi-card' + (totalVencendo > 0 ? ' alert-orange' : '');
+
+  // Alerts
+  const alertsEl = document.getElementById('painel-alerts');
+  let alertsHTML = '';
+  if (totalVencidos > 0) {
+    alertsHTML += `<div class="alert-card alert-red">
+      <span class="alert-icon">&#9888;</span>
+      <div><strong>${totalVencidos} colaborador(es)</strong> com ASO vencido. E obrigatorio realizar novo exame antes de manter o colaborador em atividade.</div>
+    </div>`;
+  }
+  if (totalVencendo > 0) {
+    alertsHTML += `<div class="alert-card alert-orange">
+      <span class="alert-icon">&#9888;</span>
+      <div><strong>${totalVencendo} colaborador(es)</strong> com ASO vencendo nos proximos 30 dias. Agende os exames periodicos com antecedencia.</div>
+    </div>`;
+  }
+  alertsEl.innerHTML = alertsHTML;
+
+  // Table
+  const tbody = document.getElementById('painel-tbody');
+  const empty = document.getElementById('painel-empty');
+
+  if (rows.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = rows.map(r => {
+    const c = r.colab;
+    const a = r.aso;
+    return `<tr>
+      <td style="color:var(--text);font-weight:600;">${esc(c.nome)}</td>
+      <td>${esc(c.cargo || '--')}</td>
+      <td>${a ? resultadoLabel(a.resultado) : '--'}</td>
+      <td>${a ? '<span class="badge badge-accent">' + esc(TIPOS_ASO[a.tipo] || a.tipo) + '</span>' : '--'}</td>
+      <td class="mono">${a ? fmtDate(a.data_exame) : '--'}</td>
+      <td class="mono">${a ? a.validade_meses + 'm' : '--'}</td>
+      <td class="mono">${a ? fmtDate(a.data_vencimento) : '--'}</td>
+      <td>${statusLabel(r.status)}</td>
+    </tr>`;
+  }).join('');
+}
+
+function esc(s) {
+  return API.esc(s);
+}
+
+// ============================================================
+//  COLABORADOR SEARCH
+// ============================================================
+function initColabSearch(inputId, resultsId, onSelect) {
+  const input = document.getElementById(inputId);
+  const results = document.getElementById(resultsId);
+  let debounce = null;
+
+  input.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => {
+      const q = input.value.toLowerCase().trim();
+      if (q.length < 2) { results.classList.remove('open'); return; }
+      const matches = colaboradores.filter(c => c.nome.toLowerCase().includes(q)).slice(0, 10);
+      if (matches.length === 0) { results.classList.remove('open'); return; }
+      results.innerHTML = matches.map(c =>
+        `<div class="search-result-item" data-id="${c.id}">
+          <span class="sr-name">${esc(c.nome)}</span>
+          <span class="sr-cargo">${esc(c.cargo || '')}</span>
+        </div>`
+      ).join('');
+      results.classList.add('open');
+      results.querySelectorAll('.search-result-item').forEach(item => {
+        item.addEventListener('click', () => {
+          const colab = colaboradores.find(c => c.id === item.dataset.id);
+          if (colab) {
+            input.value = colab.nome;
+            results.classList.remove('open');
+            onSelect(colab);
+          }
+        });
+      });
+    }, 200);
+  });
+
+  input.addEventListener('blur', () => {
+    setTimeout(() => results.classList.remove('open'), 200);
+  });
+}
+
+// ============================================================
+//  CADASTRAR TAB
+// ============================================================
+let cadColabSelecionado = null;
+
+function onCadColabSelected(colab) {
+  cadColabSelecionado = colab;
+  document.getElementById('cad-colab-id').value = colab.id;
+
+  const idade = calcIdade(colab.data_nascimento);
+  const risco = getRisco(colab.cargo);
+  const validade = calcValidadeMeses(colab.data_nascimento, colab.cargo);
+
+  const info = document.getElementById('cad-colab-info');
+  info.style.display = '';
+  info.innerHTML = `
+    <div class="colab-info-item"><div class="label">Nome</div><div class="value">${esc(colab.nome)}</div></div>
+    <div class="colab-info-item"><div class="label">Cargo</div><div class="value">${esc(colab.cargo || '--')}</div></div>
+    <div class="colab-info-item"><div class="label">Idade</div><div class="value">${idade !== null ? idade + ' anos' : '--'}</div></div>
+    <div class="colab-info-item"><div class="label">Risco do Cargo</div><div class="value">${risco === 'alto' ? 'Alto' : 'Baixo'}</div></div>
+    <div class="colab-info-item"><div class="label">Validade Sugerida</div><div class="value">${validade} meses</div></div>
+  `;
+
+  document.getElementById('cad-validade').value = validade;
+  document.getElementById('cad-validade-hint').textContent =
+    `Auto: ${validade}m (idade ${idade !== null ? idade : '?'} / risco ${risco})`;
+
+  calcVencimento();
+}
+
+function onTipoChange() {
+  const tipo = document.getElementById('cad-tipo').value;
+  if (!tipo) return;
+
+  // Pre-select exams based on config
+  const configEntry = configRiscos.find(c =>
+    cadColabSelecionado && c.cargo.toLowerCase() === (cadColabSelecionado.cargo || '').toLowerCase()
+  );
+  const field = 'exames_' + tipo;
+  if (configEntry && configEntry[field]) {
+    const exames = configEntry[field].split(',').map(e => e.trim().toLowerCase());
+    document.querySelectorAll('#cad-exames-group .checkbox-item').forEach(item => {
+      const name = item.dataset.exame.toLowerCase();
+      const checked = exames.includes(name);
+      item.classList.toggle('checked', checked);
+      item.querySelector('input').checked = checked;
+    });
+  }
+}
+
+function calcVencimento() {
+  const dataExame = document.getElementById('cad-data-exame').value;
+  const validade = parseInt(document.getElementById('cad-validade').value) || 12;
+  if (!dataExame) { document.getElementById('cad-vencimento').value = ''; return; }
+
+  const dt = new Date(dataExame + 'T00:00:00');
+  dt.setMonth(dt.getMonth() + validade);
+  const yyyy = dt.getFullYear();
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const dd = String(dt.getDate()).padStart(2, '0');
+  document.getElementById('cad-vencimento').value = `${yyyy}-${mm}-${dd}`;
+}
+
+function initExamesCheckboxes() {
+  const group = document.getElementById('cad-exames-group');
+  group.innerHTML = EXAMES_DISPONIVEIS.map(ex =>
+    `<div class="checkbox-item" data-exame="${ex}">
+      <input type="checkbox" value="${ex}">
+      ${ex}
+    </div>`
+  ).join('');
+  group.querySelectorAll('.checkbox-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const cb = item.querySelector('input');
+      cb.checked = !cb.checked;
+      item.classList.toggle('checked', cb.checked);
+    });
+  });
+}
+
+async function salvarASO() {
+  const colabId = document.getElementById('cad-colab-id').value;
+  const tipo = document.getElementById('cad-tipo').value;
+  const dataExame = document.getElementById('cad-data-exame').value;
+  const resultado = document.getElementById('cad-resultado').value;
+  const medico = document.getElementById('cad-medico').value.trim();
+  const crm = document.getElementById('cad-crm').value.trim();
+  const validade = parseInt(document.getElementById('cad-validade').value) || 12;
+  const vencimento = document.getElementById('cad-vencimento').value;
+  const restricoes = document.getElementById('cad-restricoes').value.trim();
+  const observacoes = document.getElementById('cad-observacoes').value.trim();
+
+  const examesSel = [];
+  document.querySelectorAll('#cad-exames-group .checkbox-item.checked').forEach(item => {
+    examesSel.push(item.dataset.exame);
+  });
+
+  // Validation
+  if (!colabId) { toast('Selecione um colaborador.', 'err'); return; }
+  if (!tipo) { toast('Selecione o tipo do ASO.', 'err'); return; }
+  if (!dataExame) { toast('Informe a data do exame.', 'err'); return; }
+  if (!resultado) { toast('Selecione o resultado.', 'err'); return; }
+  if (!medico) { toast('Informe o medico responsavel.', 'err'); return; }
+  if (!crm) { toast('Informe o CRM do medico.', 'err'); return; }
+  if (!vencimento) { toast('Data de vencimento nao calculada. Informe a data do exame.', 'err'); return; }
+
+  const payload = {
+    funcionario_id: colabId,
+    tipo_aso: tipo,
+    data_realizacao: dataExame,
+    medico,
+    crm,
+    resultado,
+    restricoes: resultado === 'apto_restricao' ? restricoes : null,
+    validade_meses: validade,
+    data_vencimento: vencimento,
+    exames_complementares: examesSel.length > 0 ? examesSel.join(', ') : null,
+    observacoes: observacoes || null,
+    criado_em: new Date().toISOString()
+  };
+
+  const btn = document.getElementById('cad-salvar-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const res = await API.post('sst_aso', payload, 'return=minimal');
+    if (res.ok) {
+      toast('ASO registrado com sucesso!', 'ok');
+      await RHAuth.log('aso_cadastrado', { colaborador_id: colabId, tipo, resultado });
+      limparFormCadastro();
+      await loadASOs();
+      renderPainel();
+    } else {
+      toast('Erro ao salvar: ' + (res.error || 'Erro desconhecido'), 'err');
+    }
+  } catch (e) {
+    toast('Erro de conexao: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar ASO';
+  }
+}
+
+function limparFormCadastro() {
+  cadColabSelecionado = null;
+  document.getElementById('cad-colab-search').value = '';
+  document.getElementById('cad-colab-id').value = '';
+  document.getElementById('cad-colab-info').style.display = 'none';
+  document.getElementById('cad-tipo').value = '';
+  document.getElementById('cad-data-exame').value = '';
+  document.getElementById('cad-resultado').value = '';
+  document.getElementById('cad-restricoes').value = '';
+  document.getElementById('cad-restricoes-row').style.display = 'none';
+  document.getElementById('cad-medico').value = '';
+  document.getElementById('cad-crm').value = '';
+  document.getElementById('cad-validade').value = '12';
+  document.getElementById('cad-vencimento').value = '';
+  document.getElementById('cad-validade-hint').textContent = 'Auto-calculado com base na idade e risco do cargo.';
+  document.getElementById('cad-observacoes').value = '';
+  document.querySelectorAll('#cad-exames-group .checkbox-item').forEach(item => {
+    item.classList.remove('checked');
+    item.querySelector('input').checked = false;
+  });
+}
+
+// ============================================================
+//  POR COLABORADOR TAB
+// ============================================================
+function onHistColabSelected(colab) {
+  const content = document.getElementById('hist-content');
+  content.style.display = '';
+
+  const idade = calcIdade(colab.data_nascimento);
+  const risco = getRisco(colab.cargo);
+  const validade = calcValidadeMeses(colab.data_nascimento, colab.cargo);
+
+  // Info card
+  const card = document.getElementById('hist-colab-card');
+  card.innerHTML = `
+    <div class="colab-info-item"><div class="label">Nome</div><div class="value">${esc(colab.nome)}</div></div>
+    <div class="colab-info-item"><div class="label">Cargo</div><div class="value">${esc(colab.cargo || '--')}</div></div>
+    <div class="colab-info-item"><div class="label">Idade</div><div class="value">${idade !== null ? idade + ' anos' : '--'}</div></div>
+    <div class="colab-info-item"><div class="label">Data Admissao</div><div class="value">${fmtDate(colab.data_admissao)}</div></div>
+    <div class="colab-info-item"><div class="label">Risco</div><div class="value">${risco === 'alto' ? 'Alto' : 'Baixo'}</div></div>
+    <div class="colab-info-item"><div class="label">Periodicidade</div><div class="value">${validade} meses</div></div>
+  `;
+
+  // ASOs for this colaborador
+  const colabAsos = asos
+    .filter(a => a.colaborador_id === colab.id)
+    .sort((a, b) => b.data_exame.localeCompare(a.data_exame));
+
+  // Current status
+  const ultimo = colabAsos.length > 0 ? colabAsos[0] : null;
+  const status = getStatusASO(ultimo);
+  document.getElementById('hist-status-badge').innerHTML = statusLabel(status);
+
+  const statusInfo = document.getElementById('hist-status-info');
+  if (ultimo) {
+    const venc = parseDate(ultimo.data_vencimento);
+    const diasRestantes = diffDays(venc, today());
+    let proximoExame = new Date(venc);
+    proximoExame.setDate(proximoExame.getDate() - 30); // agendar 30 dias antes
+
+    statusInfo.innerHTML = `
+      <div>Ultimo exame: <strong>${fmtDate(ultimo.data_exame)}</strong> (${TIPOS_ASO[ultimo.tipo] || ultimo.tipo})</div>
+      <div>Resultado: ${resultadoLabel(ultimo.resultado)}</div>
+      <div>Vencimento: <strong>${fmtDate(ultimo.data_vencimento)}</strong>
+        (${diasRestantes >= 0 ? diasRestantes + ' dias restantes' : Math.abs(diasRestantes) + ' dias vencido'})</div>
+      <div>Proximo exame sugerido ate: <strong>${fmtDate(proximoExame.toISOString().slice(0, 10))}</strong></div>
+    `;
+  } else {
+    statusInfo.innerHTML = '<div>Nenhum ASO registrado. O exame admissional deve ser realizado antes do inicio das atividades.</div>';
+  }
+
+  // Timeline
+  const timeline = document.getElementById('hist-timeline');
+  const histEmpty = document.getElementById('hist-empty');
+
+  if (colabAsos.length === 0) {
+    timeline.innerHTML = '';
+    histEmpty.style.display = '';
+    return;
+  }
+  histEmpty.style.display = 'none';
+
+  timeline.innerHTML = colabAsos.map((a, i) => {
+    const st = getStatusASO(a);
+    const cls = i === 0 && st === 'vigente' ? 'current' : (st === 'vencido' ? 'expired' : '');
+    return `<div class="timeline-item ${cls}">
+      <div class="timeline-meta">
+        <span><strong>${TIPOS_ASO[a.tipo] || a.tipo}</strong></span>
+        <span>${fmtDate(a.data_exame)}</span>
+        ${statusLabel(st)}
+        ${resultadoLabel(a.resultado)}
+      </div>
+      <div class="timeline-detail">
+        <div>Medico: <strong>${esc(a.medico)}</strong> (CRM: ${esc(a.crm)})</div>
+        <div>Validade: <strong>${a.validade_meses} meses</strong> | Vencimento: <strong>${fmtDate(a.data_vencimento)}</strong></div>
+        ${a.restricoes ? '<div>Restricoes: <strong>' + esc(a.restricoes) + '</strong></div>' : ''}
+        ${a.exames_complementares ? '<div>Exames: ' + esc(a.exames_complementares) + '</div>' : ''}
+        ${a.observacoes ? '<div>Obs: ' + esc(a.observacoes) + '</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ============================================================
+//  CONFIGURACAO TAB
+// ============================================================
+function renderConfigRiscos() {
+  const tbody = document.getElementById('cfg-risco-tbody');
+  const empty = document.getElementById('cfg-risco-empty');
+
+  if (configRiscos.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = configRiscos.map(c => `<tr>
+    <td style="color:var(--text);font-weight:600;">${esc(c.cargo)}</td>
+    <td class="mono">${esc(c.cbo || '--')}</td>
+    <td>${c.risco === 'alto'
+      ? '<span class="badge badge-vencido">Alto</span>'
+      : '<span class="badge badge-vigente">Baixo</span>'}</td>
+    <td>
+      <button class="btn btn-outline btn-sm" onclick="removeConfigRisco('${c.id}')">Remover</button>
+    </td>
+  </tr>`).join('');
+}
+
+async function addConfigRisco() {
+  const cargo = document.getElementById('cfg-cargo').value.trim();
+  const cbo = document.getElementById('cfg-cbo').value.trim();
+  const risco = document.getElementById('cfg-risco').value;
+
+  if (!cargo) { toast('Informe o cargo.', 'err'); return; }
+
+  const payload = {
+    cargo,
+    cbo: cbo || null,
+    risco,
+    criado_em: new Date().toISOString()
+  };
+
+  try {
+    const res = await API.post('rh_asos_config', payload, 'return=minimal');
+    if (res.ok) {
+      toast('Cargo configurado com sucesso!', 'ok');
+      document.getElementById('cfg-cargo').value = '';
+      document.getElementById('cfg-cbo').value = '';
+      document.getElementById('cfg-risco').value = 'baixo';
+      await loadConfigRiscos();
+      renderConfigRiscos();
+    } else {
+      toast('Erro ao salvar configuracao.', 'err');
+    }
+  } catch (e) {
+    toast('Erro de conexao: ' + e.message, 'err');
+  }
+}
+
+async function removeConfigRisco(id) {
+  if (!confirm('Remover esta configuracao de risco?')) return;
+  try {
+    const res = await API.del(`rh_asos_config?id=eq.${id}`);
+    if (res.ok) {
+      toast('Configuracao removida.', 'ok');
+      await loadConfigRiscos();
+      renderConfigRiscos();
+    } else {
+      toast('Erro ao remover.', 'err');
+    }
+  } catch (e) {
+    toast('Erro de conexao: ' + e.message, 'err');
+  }
+}
+
+function initConfigExamesPorTipo() {
+  const container = document.getElementById('cfg-exames-por-tipo');
+  const tipos = Object.entries(TIPOS_ASO);
+
+  container.innerHTML = tipos.map(([key, label]) => `
+    <div style="margin-bottom:16px;">
+      <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;">${label}</div>
+      <div class="checkbox-group" id="cfg-exames-${key}">
+        ${EXAMES_DISPONIVEIS.map(ex =>
+          `<div class="checkbox-item" data-exame="${ex}" data-tipo="${key}">
+            <input type="checkbox" value="${ex}">
+            ${ex}
+          </div>`
+        ).join('')}
+      </div>
+    </div>
+  `).join('');
+
+  container.querySelectorAll('.checkbox-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const cb = item.querySelector('input');
+      cb.checked = !cb.checked;
+      item.classList.toggle('checked', cb.checked);
+    });
+  });
+}
+</script>
+</body>
+</html>

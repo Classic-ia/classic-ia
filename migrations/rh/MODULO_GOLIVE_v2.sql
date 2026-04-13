@@ -1,0 +1,53 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO GO-LIVE CONTROLADO — 7 DIAS
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- FASES DO GO-LIVE:
+--
+--   DIA 0: Ativação
+--     - Configurar tokens
+--     - Ativar pg_cron
+--     - Cadastrar dados base (empresas, filiais, setores, cargos)
+--
+--   DIA 1: Carga inicial
+--     - Primeiro sync real (Convenia)
+--     - Validar staging → processamento → core
+--     - Verificar conflitos e erros
+--
+--   DIA 1-2: Validação de integridade
+--     - Duplicidade, inconsistências, reconciliação
+--
+--   DIA 2-7: Operação assistida
+--     - Monitoramento diário via golive_relatorio_do_dia()
+--     - Verificar taxa de sucesso, alertas, tarefas
+--
+--   DIA 7: Avaliação final
+--     - golive_avaliacao_final() → PRONTO / AJUSTES / INSTAVEL
+--
+-- TABELAS (2):
+--   golive_relatorio_diario  — 1 registro por dia, métricas 24h
+--   golive_checklist         — 39 itens por fase (seed)
+--
+-- FUNCTIONS (3):
+--   golive_relatorio_do_dia(dia) — gera relatório automático (verde/amarelo/vermelho)
+--   golive_avaliacao_final()     — decisão final baseada nos 7 dias
+--   golive_checklist_status()    — progresso por fase
+--
+-- CRITÉRIOS PARA "PRONTO PARA PRODUÇÃO PLENA":
+--   - 0 dias vermelhos
+--   - 3+ dias verdes
+--   - Taxa de sucesso >=90%
+--   - Total syncs > 0
+--   - 0 jobs mortos
+--   - 0 erros pendentes
+--
+-- EXEMPLOS:
+--   SELECT golive_relatorio_do_dia(0);     -- gerar relatório dia 0
+--   SELECT golive_checklist_status();       -- progresso por fase
+--   SELECT golive_avaliacao_final();        -- decisão final
+--   SELECT * FROM golive_relatorio_diario ORDER BY dia;
+--   SELECT * FROM golive_checklist WHERE fase = 'dia0_ativacao' ORDER BY ordem;
+--
+-- TOTAL PROJETO: 67 tabelas, 15 views, 45 RPCs, 3 edge functions.
+-- ════════════════════════════════════════════════════════════════════════════

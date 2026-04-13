@@ -69,7 +69,7 @@ const UI = (() => {
   // ============================================================
   // EMPTY STATE
   // ============================================================
-  function emptyState(msg = 'Nenhum registro encontrado', icon = '\u{1F4CB}') {
+  function emptyState(msg = 'Nenhum registro encontrado', icon = '📋') {
     return `<div style="text-align:center;padding:40px 20px;color:#94A3B8;">
       <div style="font-size:32px;margin-bottom:8px;">${icon}</div>
       <div style="font-size:14px;">${msg}</div>
@@ -82,11 +82,8 @@ const UI = (() => {
   function toast(msg, tipo = 'ok') {
     const colors = {
       ok: ['#DCFCE7','#166534','#86EFAC'],
-      success: ['#DCFCE7','#166534','#86EFAC'],
       warn: ['#FEF3C7','#92400E','#FCD34D'],
-      warning: ['#FEF3C7','#92400E','#FCD34D'],
       err: ['#FEE2E2','#991B1B','#FECACA'],
-      error: ['#FEE2E2','#991B1B','#FECACA'],
       info: ['#EFF6FF','#1E40AF','#BFDBFE']
     };
     const [bg, color, border] = colors[tipo] || colors.ok;
@@ -111,7 +108,7 @@ const UI = (() => {
       };
       color = colors[(text || '').toLowerCase()] || '#64748B';
     }
-    return `<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:${color}15;color:${color}">${API.esc(text || '\u2014')}</span>`;
+    return `<span style="display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;background:${color}15;color:${color}">${API.esc(text || '—')}</span>`;
   }
 
   // ============================================================

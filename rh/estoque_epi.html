@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - Estoque de EPI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px; height: 18px; stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .tab-bar { display: flex; gap: 0; border-bottom: 2px solid var(--border); margin-bottom: 20px; }
+  .tab-btn {
+    padding: 10px 20px; background: none; border: none;
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+    color: var(--text-secondary); cursor: pointer;
+    border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all .2s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table thead th {
+    background: var(--surface-hover); padding: 10px 12px; text-align: left;
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .04em; border-bottom: 2px solid var(--border);
+  }
+  .data-table tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); color: var(--text); }
+  .data-table tbody tr:hover td { background: var(--surface-hover); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+  .badge-green { background: var(--success-light); color: var(--success); }
+  .badge-red { background: var(--danger-light); color: var(--danger); }
+  .badge-yellow { background: var(--warning-light); color: var(--warning); }
+  .badge-blue { background: var(--primary-50); color: var(--primary); }
+  .badge-gray { background: #F1F5F9; color: #64748B; }
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .table-scroll { overflow-x: auto; }
+  .table-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+  .empty-msg { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+  .search-box { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .search-box input, .search-box select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text);
+  }
+  .search-box input { flex: 1; min-width: 200px; }
+  .search-box input:focus, .search-box select:focus { outline: none; border-color: var(--primary); }
+
+  .row-danger td { background: var(--danger-light) !important; }
+
+  .form-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px 24px; box-shadow: var(--shadow-sm); max-width: 500px; }
+  .form-card h3 { font-size: 15px; font-weight: 600; margin: 0 0 16px; color: var(--text); }
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text); box-sizing: border-box;
+  }
+  .form-group input:focus, .form-group select:focus { outline: none; border-color: var(--primary); }
+  .btn { padding: 8px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; border: 1px solid transparent; transition: all .15s; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--surface-hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: var(--success-dark); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-xs); }
+  .kpi-value { font-size: 24px; font-weight: 700; color: var(--primary); }
+  .kpi-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-md); color: #fff; font-size: 13px; font-weight: 500; z-index: 2000; animation: fadeUp .3s; }
+  .toast-success { background: var(--success); }
+  .toast-error { background: var(--danger); }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<div class="sidebar-mobile-overlay" id="sidebarOverlay"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros">
+    <span class="sidebar-brand-text">Classic RH</span>
+  </div>
+  <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <nav class="sidebar-nav" id="sidebarNav">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inicio</div>
+      <a href="app.html" class="sidebar-item" data-page="app">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+        <span class="sidebar-item-label">Dashboard</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Pessoas</div>
+      <a href="colaboradores.html" class="sidebar-item" data-page="colaboradores">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="sidebar-item-label">Colaboradores</span>
+      </a>
+      <a href="recrutamento_selecao.html" class="sidebar-item" data-page="recrutamento_selecao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+        <span class="sidebar-item-label">Admissoes</span>
+      </a>
+      <a href="desligamentos_turnover.html" class="sidebar-item" data-page="desligamentos_turnover">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></span>
+        <span class="sidebar-item-label">Desligamentos</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Processos</div>
+      <a href="ocorrencias.html" class="sidebar-item" data-page="ocorrencias">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Processos RH</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Contratos Experiencia</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">SST</div>
+      <a href="asos.html" class="sidebar-item" data-page="asos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        <span class="sidebar-item-label">ASOs</span>
+      </a>
+      <a href="treinamentos.html" class="sidebar-item" data-page="treinamentos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></span>
+        <span class="sidebar-item-label">Treinamentos</span>
+      </a>
+      <a href="epis.html" class="sidebar-item" data-page="epis">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">EPIs</span>
+      </a>
+      <a href="estoque_epi.html" class="sidebar-item active" data-page="estoque_epi">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 003 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg></span>
+        <span class="sidebar-item-label">Estoque EPI</span>
+      </a>
+      <a href="entrega_epi.html" class="sidebar-item" data-page="entrega_epi">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="sidebar-item-label">Entrega EPI</span>
+      </a>
+      <a href="ordem_servico.html" class="sidebar-item" data-page="ordem_servico">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></span>
+        <span class="sidebar-item-label">Ordens de Servico</span>
+      </a>
+      <a href="acidentes.html" class="sidebar-item" data-page="acidentes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Acidentes</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Operacional</div>
+      <a href="importar_secullum.html" class="sidebar-item" data-page="importar_secullum">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        <span class="sidebar-item-label">Ponto</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao_mensal">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Apuracao</span>
+      </a>
+      <a href="beneficios.html" class="sidebar-item" data-page="beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></span>
+        <span class="sidebar-item-label">Beneficios</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Gestao</div>
+      <a href="motor_decisoes.html" class="sidebar-item" data-page="motor_decisoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+        <span class="sidebar-item-label">Motor de Decisao</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+        <span class="sidebar-item-label">Pendencias</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh_plano">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="sidebar-item-label">Plano de Acao</span>
+      </a>
+      <a href="lideranca.html" class="sidebar-item" data-page="lideranca">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span>
+        <span class="sidebar-item-label">Lideranca</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inteligencia</div>
+      <a href="dashboard_gerencial.html" class="sidebar-item" data-page="dashboard_gerencial">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        <span class="sidebar-item-label">Dashboard Executivo</span>
+      </a>
+      <a href="motor_v2_auditoria.html" class="sidebar-item" data-page="motor_v2_auditoria">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <span class="sidebar-item-label">Auditoria de Score</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Sistema</div>
+      <a href="integracoes.html" class="sidebar-item" data-page="integracoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+        <span class="sidebar-item-label">Integracoes</span>
+      </a>
+      <a href="relatorio_beneficios.html" class="sidebar-item" data-page="relatorio_beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <span class="sidebar-item-label">Relatorios</span>
+      </a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">Classic RH v2026.03</div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="topbar-menu-btn" id="menuBtn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div>
+        <h1 class="page-title">Estoque de EPI</h1>
+        <p class="page-subtitle">Controle de estoque e movimentacoes</p>
+      </div>
+    </div>
+    <div class="topbar-right"><div id="rh-user-chip"></div></div>
+  </header>
+
+  <div class="page-body">
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-value" id="kpi-itens">--</div><div class="kpi-label">Itens em Estoque</div></div>
+      <div class="kpi-card"><div class="kpi-value" id="kpi-baixo" style="color:var(--danger)">--</div><div class="kpi-label">Abaixo do Minimo</div></div>
+      <div class="kpi-card"><div class="kpi-value" id="kpi-ult-entrada" style="font-size:16px">--</div><div class="kpi-label">Ultima Entrada</div></div>
+      <div class="kpi-card"><div class="kpi-value" id="kpi-ult-saida" style="font-size:16px">--</div><div class="kpi-label">Ultima Saida</div></div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="estoque">Estoque Atual</button>
+      <button class="tab-btn" data-tab="movimentacoes">Movimentacoes</button>
+      <button class="tab-btn" data-tab="entrada">Entrada</button>
+      <button class="tab-btn" data-tab="saida">Saida</button>
+    </div>
+
+    <!-- TAB: Estoque Atual -->
+    <div class="tab-panel active" id="tab-estoque">
+      <div class="search-box">
+        <input type="text" id="searchEstoque" placeholder="Buscar por descricao...">
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>EPI</th><th>CA</th><th>Quantidade</th><th>Minimo</th><th>Status</th><th>Localizacao</th></tr>
+            </thead>
+            <tbody id="tbodyEstoque"></tbody>
+          </table>
+        </div>
+        <div class="table-footer" id="footerEstoque">Carregando...</div>
+      </div>
+    </div>
+
+    <!-- TAB: Movimentacoes -->
+    <div class="tab-panel" id="tab-movimentacoes">
+      <div class="search-box">
+        <select id="filterTipoMov">
+          <option value="">Todos tipos</option>
+          <option value="entrada">Entrada</option>
+          <option value="saida">Saida</option>
+          <option value="ajuste">Ajuste</option>
+          <option value="devolucao">Devolucao</option>
+        </select>
+      </div>
+      <div class="table-card">
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr><th>Data</th><th>EPI</th><th>Tipo</th><th>Quantidade</th><th>Motivo</th><th>Responsavel</th></tr>
+            </thead>
+            <tbody id="tbodyMov"></tbody>
+          </table>
+        </div>
+        <div class="table-footer" id="footerMov">Carregando...</div>
+      </div>
+    </div>
+
+    <!-- TAB: Entrada -->
+    <div class="tab-panel" id="tab-entrada">
+      <div class="form-card">
+        <h3>Registrar Entrada</h3>
+        <div class="form-group"><label>EPI *</label><select id="entrada-epi"><option value="">Selecione o EPI...</option></select></div>
+        <div class="form-group"><label>Quantidade *</label><input type="number" id="entrada-qtd" min="1" value="1"></div>
+        <div class="form-group"><label>Motivo</label><input type="text" id="entrada-motivo" placeholder="Compra, reposicao..."></div>
+        <div class="form-group"><label>Responsavel</label><input type="text" id="entrada-resp" placeholder="Nome do responsavel"></div>
+        <button class="btn btn-success" id="btnEntrada">Registrar Entrada</button>
+      </div>
+    </div>
+
+    <!-- TAB: Saida -->
+    <div class="tab-panel" id="tab-saida">
+      <div class="form-card">
+        <h3>Registrar Saida</h3>
+        <div class="form-group"><label>EPI *</label><select id="saida-epi"><option value="">Selecione o EPI...</option></select></div>
+        <div class="form-group">
+          <label>Motivo *</label>
+          <select id="saida-motivo">
+            <option value="entrega">Entrega</option>
+            <option value="descarte">Descarte</option>
+            <option value="defeito">Defeito</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Quantidade *</label><input type="number" id="saida-qtd" min="1" value="1"></div>
+        <div class="form-group"><label>Responsavel</label><input type="text" id="saida-resp" placeholder="Nome do responsavel"></div>
+        <button class="btn btn-primary" id="btnSaida">Registrar Saida</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast toast-success" style="display:none;"></div>
+
+<script>
+(async () => {
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','visualizador'] });
+  if (!user) return;
+
+  // Sidebar
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const menuBtn = document.getElementById('menuBtn');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  if (menuBtn) menuBtn.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
+  if (overlay) overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+  if (toggleBtn) toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('collapsed'); });
+
+  // Tabs
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+
+  // State
+  let catalogo = [], estoque = [], movimentacoes = [];
+
+  // Helpers
+  function esc(s) { if (!s) return ''; const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+  function fmtDate(d) { if (!d) return '--'; const p = d.split('T')[0].split('-'); return p.length === 3 ? p[2]+'/'+p[1]+'/'+p[0] : d; }
+  function fmtDateTime(d) { if (!d) return '--'; return fmtDate(d) + ' ' + (d.split('T')[1] || '').slice(0, 5); }
+
+  function toast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast toast-' + type;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  // Load data
+  async function loadAll() {
+    try {
+      const [resCat, resEst, resMov] = await Promise.all([
+        API.get('sst_catalogo_epi?ativo=eq.true&order=descricao'),
+        API.get('sst_estoque_epi?select=*,sst_catalogo_epi(descricao,ca_numero)&order=quantidade_atual'),
+        API.get('sst_estoque_movimentacao?select=*,sst_catalogo_epi(descricao)&order=created_at.desc&limit=50'),
+      ]);
+      catalogo = resCat.ok ? resCat.data : [];
+      estoque = resEst.ok ? resEst.data : [];
+      movimentacoes = resMov.ok ? resMov.data : [];
+    } catch (e) {
+      console.error('Erro ao carregar dados estoque:', e);
+      catalogo = []; estoque = []; movimentacoes = [];
+    }
+    populateSelects();
+    updateKPIs();
+    renderEstoque();
+    renderMovimentacoes();
+  }
+
+  function populateSelects() {
+    const opts = '<option value="">Selecione o EPI...</option>' + catalogo.map(c => `<option value="${esc(c.id)}">${esc(c.descricao)} ${c.ca_numero ? '(CA: ' + esc(c.ca_numero) + ')' : ''}</option>`).join('');
+    document.getElementById('entrada-epi').innerHTML = opts;
+    document.getElementById('saida-epi').innerHTML = opts;
+  }
+
+  function updateKPIs() {
+    document.getElementById('kpi-itens').textContent = estoque.length;
+    const abaixo = estoque.filter(e => e.quantidade_atual != null && e.quantidade_minima != null && e.quantidade_atual < e.quantidade_minima).length;
+    document.getElementById('kpi-baixo').textContent = abaixo;
+
+    const entradas = movimentacoes.filter(m => m.tipo === 'entrada');
+    const saidas = movimentacoes.filter(m => m.tipo === 'saida');
+    document.getElementById('kpi-ult-entrada').textContent = entradas.length ? fmtDate(entradas[0].created_at) : '--';
+    document.getElementById('kpi-ult-saida').textContent = saidas.length ? fmtDate(saidas[0].created_at) : '--';
+  }
+
+  function renderEstoque() {
+    const search = (document.getElementById('searchEstoque').value || '').toLowerCase();
+    let data = [...estoque];
+    if (search) data = data.filter(e => (e.sst_catalogo_epi?.descricao || '').toLowerCase().includes(search));
+
+    const tbody = document.getElementById('tbodyEstoque');
+    const footer = document.getElementById('footerEstoque');
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-msg">Nenhum item em estoque</div></td></tr>';
+      footer.textContent = '0 itens';
+      return;
+    }
+
+    tbody.innerHTML = data.map(e => {
+      const qty = e.quantidade_atual ?? 0;
+      const min = e.quantidade_minima ?? 0;
+      let statusCls = 'badge-green', statusLabel = 'OK';
+      if (qty === 0) { statusCls = 'badge-red'; statusLabel = 'Zerado'; }
+      else if (qty < min) { statusCls = 'badge-yellow'; statusLabel = 'Baixo'; }
+      const rowCls = qty < min ? 'row-danger' : '';
+      return `<tr class="${rowCls}">
+        <td style="font-weight:500">${esc(e.sst_catalogo_epi?.descricao || '--')}</td>
+        <td style="font-family:monospace;font-size:12px">${esc(e.sst_catalogo_epi?.ca_numero || '--')}</td>
+        <td style="text-align:center;font-weight:600">${qty}</td>
+        <td style="text-align:center">${min}</td>
+        <td><span class="badge ${statusCls}">${statusLabel}</span></td>
+        <td>${esc(e.localizacao || '--')}</td>
+      </tr>`;
+    }).join('');
+
+    footer.textContent = data.length + ' item(ns)';
+  }
+
+  function renderMovimentacoes() {
+    const tipoFilter = document.getElementById('filterTipoMov').value;
+    let data = [...movimentacoes];
+    if (tipoFilter) data = data.filter(m => m.tipo === tipoFilter);
+
+    const tbody = document.getElementById('tbodyMov');
+    const footer = document.getElementById('footerMov');
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-msg">Nenhuma movimentacao encontrada</div></td></tr>';
+      footer.textContent = '0 movimentacoes';
+      return;
+    }
+
+    const tipoBadge = { entrada: 'badge-green', saida: 'badge-red', ajuste: 'badge-blue', devolucao: 'badge-yellow' };
+    tbody.innerHTML = data.map(m => `<tr>
+      <td>${fmtDateTime(m.created_at)}</td>
+      <td>${esc(m.sst_catalogo_epi?.descricao || '--')}</td>
+      <td><span class="badge ${tipoBadge[m.tipo] || 'badge-gray'}">${esc(m.tipo || '--')}</span></td>
+      <td style="text-align:center;font-weight:600">${m.quantidade || 0}</td>
+      <td>${esc(m.motivo || '--')}</td>
+      <td>${esc(m.responsavel || '--')}</td>
+    </tr>`).join('');
+
+    footer.textContent = data.length + ' movimentacao(oes)';
+  }
+
+  // Filters
+  document.getElementById('searchEstoque').addEventListener('input', renderEstoque);
+  document.getElementById('filterTipoMov').addEventListener('change', renderMovimentacoes);
+
+  // ── Entrada ──
+  document.getElementById('btnEntrada').addEventListener('click', async () => {
+    const epiId = document.getElementById('entrada-epi').value;
+    const qtd = parseInt(document.getElementById('entrada-qtd').value) || 0;
+    if (!epiId || qtd <= 0) { toast('Selecione EPI e quantidade valida', 'error'); return; }
+
+    const movPayload = {
+      catalogo_epi_id: epiId,
+      tipo: 'entrada',
+      quantidade: qtd,
+      motivo: document.getElementById('entrada-motivo').value.trim() || null,
+      responsavel: document.getElementById('entrada-resp').value.trim() || null,
+    };
+
+    const resM = await API.post('sst_estoque_movimentacao', movPayload);
+    if (!resM.ok) { toast('Erro ao registrar movimentacao', 'error'); return; }
+
+    // Update estoque
+    const item = estoque.find(e => e.catalogo_epi_id === epiId);
+    if (item) {
+      await API.patch(`sst_estoque_epi?id=eq.${item.id}`, { quantidade_atual: (item.quantidade_atual || 0) + qtd });
+    } else {
+      await API.post('sst_estoque_epi', { catalogo_epi_id: epiId, quantidade_atual: qtd, quantidade_minima: 0 });
+    }
+
+    toast('Entrada registrada com sucesso!');
+    document.getElementById('entrada-qtd').value = '1';
+    document.getElementById('entrada-motivo').value = '';
+    document.getElementById('entrada-resp').value = '';
+    await loadAll();
+  });
+
+  // ── Saida ──
+  document.getElementById('btnSaida').addEventListener('click', async () => {
+    const epiId = document.getElementById('saida-epi').value;
+    const qtd = parseInt(document.getElementById('saida-qtd').value) || 0;
+    if (!epiId || qtd <= 0) { toast('Selecione EPI e quantidade valida', 'error'); return; }
+
+    const item = estoque.find(e => e.catalogo_epi_id === epiId);
+    if (item && (item.quantidade_atual || 0) < qtd) {
+      toast('Quantidade insuficiente em estoque', 'error');
+      return;
+    }
+
+    const movPayload = {
+      catalogo_epi_id: epiId,
+      tipo: 'saida',
+      quantidade: qtd,
+      motivo: document.getElementById('saida-motivo').value || null,
+      responsavel: document.getElementById('saida-resp').value.trim() || null,
+    };
+
+    const resM = await API.post('sst_estoque_movimentacao', movPayload);
+    if (!resM.ok) { toast('Erro ao registrar movimentacao', 'error'); return; }
+
+    if (item) {
+      await API.patch(`sst_estoque_epi?id=eq.${item.id}`, { quantidade_atual: Math.max(0, (item.quantidade_atual || 0) - qtd) });
+    }
+
+    toast('Saida registrada com sucesso!');
+    document.getElementById('saida-qtd').value = '1';
+    document.getElementById('saida-resp').value = '';
+    await loadAll();
+  });
+
+  // Initial load
+  await loadAll();
+})();
+</script>
+</body>
+</html>

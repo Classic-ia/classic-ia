@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS rh_colaboradores (
   data_desligamento DATE,
   cidade          TEXT,
   estado          TEXT DEFAULT 'PR',
+  setor           TEXT,                              -- usado por policies RLS (SEGURANCA)
+  setor_id        UUID,                              -- FK para rh_setores (quando normalizado)
   categoria       TEXT DEFAULT '101',              -- 101=CLT, 103=experiência
   estabelecimento TEXT,
   turno           TEXT DEFAULT 'comercial',         -- comercial, 1º turno, 2º turno
@@ -42,12 +44,13 @@ CREATE TABLE IF NOT EXISTS rh_colaboradores (
   unidade         TEXT DEFAULT 'classic'
                   CHECK (unidade IN ('classic','apac')),
   criado_em       TIMESTAMPTZ DEFAULT now(),
-  atualizado_em   TIMESTAMPTZ DEFAULT now()
+  atualizado_em   TIMESTAMPTZ DEFAULT now(),
+  auth_uid        UUID
 );
 
-CREATE INDEX idx_colab_status ON rh_colaboradores(status);
-CREATE INDEX idx_colab_cidade ON rh_colaboradores(cidade);
-CREATE INDEX idx_colab_cpf    ON rh_colaboradores(cpf);
+CREATE INDEX IF NOT EXISTS idx_colab_status ON rh_colaboradores(status);
+CREATE INDEX IF NOT EXISTS idx_colab_cidade ON rh_colaboradores(cidade);
+CREATE INDEX IF NOT EXISTS idx_colab_cpf    ON rh_colaboradores(cpf);
 
 -- ────────────────────────────────────────────────────────────────
 -- 3. BENEFÍCIOS — CONFIGURAÇÃO POR COLABORADOR
@@ -106,7 +109,8 @@ INSERT INTO rh_deslocamento_cidades (cidade, valor, distancia_km) VALUES
   ('Ivaiporã',      200.00, 16.5),
   ('Lunardelli',    270.00, 8.0),
   ('São João do Ivaí', 270.00, NULL),
-  ('São Pedro do Ivaí', 320.00, NULL);
+  ('São Pedro do Ivaí', 320.00, NULL)
+ON CONFLICT (cidade) DO NOTHING;
 
 -- ────────────────────────────────────────────────────────────────
 -- 5. APURAÇÃO MENSAL (competência 27–26)
@@ -164,8 +168,8 @@ CREATE TABLE IF NOT EXISTS rh_apuracao_mensal (
   UNIQUE(colaborador_id, competencia)
 );
 
-CREATE INDEX idx_apuracao_comp   ON rh_apuracao_mensal(competencia);
-CREATE INDEX idx_apuracao_status ON rh_apuracao_mensal(status);
+CREATE INDEX IF NOT EXISTS idx_apuracao_comp   ON rh_apuracao_mensal(competencia);
+CREATE INDEX IF NOT EXISTS idx_apuracao_status ON rh_apuracao_mensal(status);
 
 -- ────────────────────────────────────────────────────────────────
 -- 5b. OCORRÊNCIAS (atestados, advertências, suspensões)
@@ -186,9 +190,9 @@ CREATE TABLE IF NOT EXISTS rh_ocorrencias (
   atualizado_em   TIMESTAMPTZ DEFAULT now()
 );
 
-CREATE INDEX idx_ocorr_colab ON rh_ocorrencias(colaborador_id);
-CREATE INDEX idx_ocorr_comp  ON rh_ocorrencias(competencia);
-CREATE INDEX idx_ocorr_tipo  ON rh_ocorrencias(tipo);
+CREATE INDEX IF NOT EXISTS idx_ocorr_colab ON rh_ocorrencias(colaborador_id);
+CREATE INDEX IF NOT EXISTS idx_ocorr_comp  ON rh_ocorrencias(competencia);
+CREATE INDEX IF NOT EXISTS idx_ocorr_tipo  ON rh_ocorrencias(tipo);
 
 -- ────────────────────────────────────────────────────────────────
 -- 6. SESSÕES E AUDIT LOG
@@ -244,16 +248,27 @@ ALTER TABLE rh_ocorrencias         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rh_audit_log           ENABLE ROW LEVEL SECURITY;
 
 -- Política: usuários autenticados podem ler/escrever
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_usuarios;
 CREATE POLICY "rh_all_auth" ON rh_usuarios          FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_colaboradores;
 CREATE POLICY "rh_all_auth" ON rh_colaboradores     FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_vale_alimentacao;
 CREATE POLICY "rh_all_auth" ON rh_vale_alimentacao  FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_auxilio_deslocamento;
 CREATE POLICY "rh_all_auth" ON rh_auxilio_deslocamento FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_plano_alianca;
 CREATE POLICY "rh_all_auth" ON rh_plano_alianca     FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_deslocamento_cidades;
 CREATE POLICY "rh_all_auth" ON rh_deslocamento_cidades FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_apuracao_mensal;
 CREATE POLICY "rh_all_auth" ON rh_apuracao_mensal   FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_sessoes;
 CREATE POLICY "rh_all_auth" ON rh_sessoes           FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_ocorrencias;
 CREATE POLICY "rh_all_auth" ON rh_ocorrencias        FOR ALL USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "rh_all_auth" ON rh_audit_log;
 CREATE POLICY "rh_all_auth" ON rh_audit_log         FOR ALL USING (auth.role() = 'authenticated');
 
 -- Leitura anon para cidades (referência pública)
+DROP POLICY IF EXISTS "rh_cidades_anon" ON rh_deslocamento_cidades;
 CREATE POLICY "rh_cidades_anon" ON rh_deslocamento_cidades FOR SELECT USING (true);

@@ -53,29 +53,29 @@
 -- PARTE 0: LIMPEZA DO SCHEMA ANTIGO
 -- ════════════════════════════════════════════════════════════════
 
-DROP TABLE IF EXISTS rh_audit_log CASCADE;
-DROP TABLE IF EXISTS rh_sessoes CASCADE;
-DROP TABLE IF EXISTS rh_ocorrencias CASCADE;
-DROP TABLE IF EXISTS rh_apuracao_mensal CASCADE;
-DROP TABLE IF EXISTS rh_plano_alianca CASCADE;
-DROP TABLE IF EXISTS rh_auxilio_deslocamento CASCADE;
-DROP TABLE IF EXISTS rh_vale_alimentacao CASCADE;
-DROP TABLE IF EXISTS rh_deslocamento_cidades CASCADE;
-DROP TABLE IF EXISTS rh_colaboradores CASCADE;
-DROP TABLE IF EXISTS rh_usuarios CASCADE;
-DROP TABLE IF EXISTS rs_vagas CASCADE;
-DROP TABLE IF EXISTS rs_candidatos CASCADE;
-DROP TABLE IF EXISTS rs_pipeline CASCADE;
-DROP TABLE IF EXISTS rs_entrevistas CASCADE;
-DROP TABLE IF EXISTS rs_avaliacoes CASCADE;
-DROP TABLE IF EXISTS rs_banco_talentos CASCADE;
-DROP TABLE IF EXISTS rh_epi_entregas CASCADE;
-DROP TABLE IF EXISTS rh_aso CASCADE;
-DROP TABLE IF EXISTS rh_desligamentos CASCADE;
-DROP TABLE IF EXISTS cadastros_atak CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_audit_log CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_sessoes CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_ocorrencias CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_apuracao_mensal CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_plano_alianca CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_auxilio_deslocamento CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_vale_alimentacao CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_deslocamento_cidades CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_colaboradores CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_usuarios CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_vagas CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_candidatos CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_pipeline CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_entrevistas CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_avaliacoes CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rs_banco_talentos CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_epi_entregas CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_aso CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS rh_desligamentos CASCADE;
+-- [DISABLED for rebuild] DROP TABLE IF EXISTS cadastros_atak CASCADE;
 
 -- Drop old functions
-DROP FUNCTION IF EXISTS rh_meu_perfil() CASCADE;
+-- [DISABLED for rebuild] DROP FUNCTION IF EXISTS rh_meu_perfil() CASCADE;
 
 
 -- ════════════════════════════════════════════════════════════════
@@ -93,40 +93,14 @@ BEGIN
 END;
 $$;
 
--- 1.2 Função para obter o perfil do usuário autenticado (usada em RLS)
-CREATE OR REPLACE FUNCTION rh_perfil_atual()
-RETURNS TEXT
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT perfil FROM rh_usuarios
-  WHERE auth_uid = auth.uid()
-    AND ativo = TRUE
-  LIMIT 1;
-$$;
+-- [MOVED] rh_perfil_atual() e rh_funcionario_atual_id() movidas para depois dos CREATE TABLEs
+-- (necessario porque referenciam rh_usuarios e rh_funcionarios)
 
--- 1.3 Função para obter o ID do funcionário vinculado ao usuário (para gestores)
-CREATE OR REPLACE FUNCTION rh_funcionario_atual_id()
-RETURNS UUID
-LANGUAGE sql
-STABLE
-SECURITY DEFINER
-AS $$
-  SELECT f.id FROM rh_funcionarios f
-  INNER JOIN rh_usuarios u ON u.auth_uid = auth.uid()
-  WHERE f.email_pessoal = u.email
-    AND f.status != 'desligado'
-  LIMIT 1;
-$$;
-
-
--- ════════════════════════════════════════════════════════════════
 -- PARTE 2: ESTRUTURA ORGANIZACIONAL
 -- ════════════════════════════════════════════════════════════════
 
 -- 2.1 EMPRESAS
-CREATE TABLE rh_empresas (
+CREATE TABLE IF NOT EXISTS rh_empresas (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   razao_social    TEXT NOT NULL,
   nome_fantasia   TEXT,
@@ -146,7 +120,7 @@ COMMENT ON TABLE rh_empresas IS 'Empresas do grupo (Classic, APAC, etc.)';
 COMMENT ON COLUMN rh_empresas.endereco IS 'JSONB: {logradouro, numero, complemento, bairro, cidade, uf, cep}';
 
 -- 2.2 FILIAIS
-CREATE TABLE rh_filiais (
+CREATE TABLE IF NOT EXISTS rh_filiais (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   empresa_id      UUID NOT NULL REFERENCES rh_empresas(id),
   razao_social    TEXT NOT NULL,
@@ -164,7 +138,7 @@ CREATE TABLE rh_filiais (
 COMMENT ON TABLE rh_filiais IS 'Filiais/estabelecimentos vinculados a uma empresa';
 
 -- 2.3 CENTROS DE CUSTO
-CREATE TABLE rh_centros_custo (
+CREATE TABLE IF NOT EXISTS rh_centros_custo (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   empresa_id      UUID NOT NULL REFERENCES rh_empresas(id),
   codigo          TEXT NOT NULL,
@@ -179,7 +153,7 @@ CREATE TABLE rh_centros_custo (
 COMMENT ON TABLE rh_centros_custo IS 'Centros de custo para alocação contábil. Vinculados à empresa (não filial) para flexibilidade.';
 
 -- 2.4 NÍVEIS HIERÁRQUICOS
-CREATE TABLE rh_niveis_hierarquicos (
+CREATE TABLE IF NOT EXISTS rh_niveis_hierarquicos (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   nome            TEXT NOT NULL UNIQUE,
   ordem           SMALLINT NOT NULL UNIQUE, -- 1 = topo (Diretor), 9+ = base
@@ -193,7 +167,7 @@ CREATE TABLE rh_niveis_hierarquicos (
 COMMENT ON TABLE rh_niveis_hierarquicos IS 'Níveis da hierarquia organizacional. Ordem 1 = mais alto.';
 
 -- 2.5 SETORES
-CREATE TABLE rh_setores (
+CREATE TABLE IF NOT EXISTS rh_setores (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   filial_id       UUID NOT NULL REFERENCES rh_filiais(id),
   nome            TEXT NOT NULL,
@@ -210,7 +184,7 @@ CREATE TABLE rh_setores (
 COMMENT ON TABLE rh_setores IS 'Setores/departamentos vinculados a uma filial. grau_risco indica exposição SST.';
 
 -- 2.6 CARGOS
-CREATE TABLE rh_cargos (
+CREATE TABLE IF NOT EXISTS rh_cargos (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   nome            TEXT NOT NULL,
   cbo             VARCHAR(10),  -- Classificação Brasileira de Ocupações
@@ -230,7 +204,7 @@ COMMENT ON TABLE rh_cargos IS 'Cargos com CBO e vínculo ao nível hierárquico.
 -- PARTE 3: USUÁRIOS DO SISTEMA (RBAC)
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE rh_usuarios (
+CREATE TABLE IF NOT EXISTS rh_usuarios (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   auth_uid        UUID UNIQUE REFERENCES auth.users(id),
   nome            TEXT NOT NULL,
@@ -253,7 +227,7 @@ COMMENT ON COLUMN rh_usuarios.perfil IS 'administrador: total | rh: CRUD dados |
 -- PARTE 4: FUNCIONÁRIOS (TABELA PRINCIPAL)
 -- ════════════════════════════════════════════════════════════════
 
-CREATE TABLE rh_funcionarios (
+CREATE TABLE IF NOT EXISTS rh_funcionarios (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
 
   -- ── Dados pessoais ──
@@ -331,15 +305,15 @@ CREATE TABLE rh_funcionarios (
 );
 
 -- Índices para queries frequentes
-CREATE INDEX idx_func_status      ON rh_funcionarios(status);
-CREATE INDEX idx_func_empresa     ON rh_funcionarios(empresa_id);
-CREATE INDEX idx_func_filial      ON rh_funcionarios(filial_id);
-CREATE INDEX idx_func_setor       ON rh_funcionarios(setor_id);
-CREATE INDEX idx_func_cargo       ON rh_funcionarios(cargo_id);
-CREATE INDEX idx_func_gestor      ON rh_funcionarios(gestor_id);
-CREATE INDEX idx_func_cpf         ON rh_funcionarios(cpf);
-CREATE INDEX idx_func_vinculo     ON rh_funcionarios(tipo_vinculo);
-CREATE INDEX idx_func_admissao    ON rh_funcionarios(data_admissao);
+CREATE INDEX IF NOT EXISTS idx_func_status      ON rh_funcionarios(status);
+CREATE INDEX IF NOT EXISTS idx_func_empresa     ON rh_funcionarios(empresa_id);
+CREATE INDEX IF NOT EXISTS idx_func_filial      ON rh_funcionarios(filial_id);
+CREATE INDEX IF NOT EXISTS idx_func_setor       ON rh_funcionarios(setor_id);
+CREATE INDEX IF NOT EXISTS idx_func_cargo       ON rh_funcionarios(cargo_id);
+CREATE INDEX IF NOT EXISTS idx_func_gestor      ON rh_funcionarios(gestor_id);
+CREATE INDEX IF NOT EXISTS idx_func_cpf         ON rh_funcionarios(cpf);
+CREATE INDEX IF NOT EXISTS idx_func_vinculo     ON rh_funcionarios(tipo_vinculo);
+CREATE INDEX IF NOT EXISTS idx_func_admissao    ON rh_funcionarios(data_admissao);
 
 COMMENT ON TABLE rh_funcionarios IS 'Tabela principal de funcionários. Campos desnormalizados (cargo_id, setor_id, salario_base) são mantidos em sincronia com tabelas de histórico via triggers.';
 COMMENT ON COLUMN rh_funcionarios.tipo_vinculo IS 'CLT = regime CLT | APAC = cooperativa | PJ = pessoa jurídica | Terceiro = terceirizado';
@@ -354,7 +328,7 @@ COMMENT ON COLUMN rh_funcionarios.status IS 'desligado = registro permanente, nu
 -- vigencia_fim NULL = registro vigente atual
 
 -- 5.1 HISTÓRICO DE CARGO
-CREATE TABLE rh_hist_cargo (
+CREATE TABLE IF NOT EXISTS rh_hist_cargo (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   funcionario_id  UUID NOT NULL REFERENCES rh_funcionarios(id),
   cargo_id        UUID NOT NULL REFERENCES rh_cargos(id),
@@ -365,13 +339,13 @@ CREATE TABLE rh_hist_cargo (
   created_by      UUID REFERENCES auth.users(id)
 );
 
-CREATE INDEX idx_hist_cargo_func ON rh_hist_cargo(funcionario_id);
-CREATE INDEX idx_hist_cargo_vig  ON rh_hist_cargo(vigencia_fim) WHERE vigencia_fim IS NULL;
+CREATE INDEX IF NOT EXISTS idx_hist_cargo_func ON rh_hist_cargo(funcionario_id);
+CREATE INDEX IF NOT EXISTS idx_hist_cargo_vig  ON rh_hist_cargo(vigencia_fim) WHERE vigencia_fim IS NULL;
 
 COMMENT ON TABLE rh_hist_cargo IS 'Histórico de mudanças de cargo. Cada UPDATE em rh_funcionarios.cargo_id gera registro aqui.';
 
 -- 5.2 HISTÓRICO DE SALÁRIO
-CREATE TABLE rh_hist_salario (
+CREATE TABLE IF NOT EXISTS rh_hist_salario (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   funcionario_id  UUID NOT NULL REFERENCES rh_funcionarios(id),
   salario_anterior NUMERIC(12,2),
@@ -384,13 +358,13 @@ CREATE TABLE rh_hist_salario (
   created_by      UUID REFERENCES auth.users(id)
 );
 
-CREATE INDEX idx_hist_sal_func ON rh_hist_salario(funcionario_id);
-CREATE INDEX idx_hist_sal_vig  ON rh_hist_salario(vigencia_fim) WHERE vigencia_fim IS NULL;
+CREATE INDEX IF NOT EXISTS idx_hist_sal_func ON rh_hist_salario(funcionario_id);
+CREATE INDEX IF NOT EXISTS idx_hist_sal_vig  ON rh_hist_salario(vigencia_fim) WHERE vigencia_fim IS NULL;
 
 COMMENT ON TABLE rh_hist_salario IS 'Histórico de reajustes salariais. Calcula percentual automaticamente.';
 
 -- 5.3 HISTÓRICO DE SETOR
-CREATE TABLE rh_hist_setor (
+CREATE TABLE IF NOT EXISTS rh_hist_setor (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   funcionario_id  UUID NOT NULL REFERENCES rh_funcionarios(id),
   setor_id        UUID NOT NULL REFERENCES rh_setores(id),
@@ -401,11 +375,11 @@ CREATE TABLE rh_hist_setor (
   created_by      UUID REFERENCES auth.users(id)
 );
 
-CREATE INDEX idx_hist_setor_func ON rh_hist_setor(funcionario_id);
-CREATE INDEX idx_hist_setor_vig  ON rh_hist_setor(vigencia_fim) WHERE vigencia_fim IS NULL;
+CREATE INDEX IF NOT EXISTS idx_hist_setor_func ON rh_hist_setor(funcionario_id);
+CREATE INDEX IF NOT EXISTS idx_hist_setor_vig  ON rh_hist_setor(vigencia_fim) WHERE vigencia_fim IS NULL;
 
 -- 5.4 HISTÓRICO DE GESTOR
-CREATE TABLE rh_hist_gestor (
+CREATE TABLE IF NOT EXISTS rh_hist_gestor (
   id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   funcionario_id  UUID NOT NULL REFERENCES rh_funcionarios(id),
   gestor_id       UUID REFERENCES rh_funcionarios(id),  -- NULL = sem gestor
@@ -416,8 +390,8 @@ CREATE TABLE rh_hist_gestor (
   created_by      UUID REFERENCES auth.users(id)
 );
 
-CREATE INDEX idx_hist_gestor_func ON rh_hist_gestor(funcionario_id);
-CREATE INDEX idx_hist_gestor_vig  ON rh_hist_gestor(vigencia_fim) WHERE vigencia_fim IS NULL;
+CREATE INDEX IF NOT EXISTS idx_hist_gestor_func ON rh_hist_gestor(funcionario_id);
+CREATE INDEX IF NOT EXISTS idx_hist_gestor_vig  ON rh_hist_gestor(vigencia_fim) WHERE vigencia_fim IS NULL;
 
 
 -- ════════════════════════════════════════════════════════════════
@@ -537,34 +511,70 @@ BEGIN
 END;
 $$;
 
--- Vincular triggers à tabela de funcionários
+-- Vincular triggers à tabela de funcionários (idempotente)
+DROP TRIGGER IF EXISTS trg_func_hist_cargo ON rh_funcionarios;
 CREATE TRIGGER trg_func_hist_cargo
   AFTER UPDATE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_hist_cargo();
 
+DROP TRIGGER IF EXISTS trg_func_hist_salario ON rh_funcionarios;
 CREATE TRIGGER trg_func_hist_salario
   AFTER UPDATE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_hist_salario();
 
+DROP TRIGGER IF EXISTS trg_func_hist_setor ON rh_funcionarios;
 CREATE TRIGGER trg_func_hist_setor
   AFTER UPDATE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_hist_setor();
 
+DROP TRIGGER IF EXISTS trg_func_hist_gestor ON rh_funcionarios;
 CREATE TRIGGER trg_func_hist_gestor
   AFTER UPDATE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_hist_gestor();
 
+DROP TRIGGER IF EXISTS trg_func_hist_inicial ON rh_funcionarios;
 CREATE TRIGGER trg_func_hist_inicial
   AFTER INSERT ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_hist_inicial();
 
 
 -- ════════════════════════════════════════════════════════════════
+-- PARTE 6b: FUNÇÕES RBAC (movidas para depois dos CREATE TABLEs)
+-- 1.2 Função para obter o perfil do usuário autenticado (usada em RLS)
+CREATE OR REPLACE FUNCTION rh_perfil_atual()
+RETURNS TEXT
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT perfil FROM rh_usuarios
+  WHERE auth_uid = auth.uid()
+    AND ativo = TRUE
+  LIMIT 1;
+$$;
+
+-- 1.3 Função para obter o ID do funcionário vinculado ao usuário (para gestores)
+CREATE OR REPLACE FUNCTION rh_funcionario_atual_id()
+RETURNS UUID
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $$
+  SELECT f.id FROM rh_funcionarios f
+  INNER JOIN rh_usuarios u ON u.auth_uid = auth.uid()
+  WHERE f.email_pessoal = u.email
+    AND f.status != 'desligado'
+  LIMIT 1;
+$$;
+
+
 -- PARTE 7: AUDITORIA E GOVERNANÇA
 -- ════════════════════════════════════════════════════════════════
 
 -- 7.1 Tabela de auditoria (log de todas as alterações)
-CREATE TABLE rh_audit_log (
+CREATE TABLE IF NOT EXISTS rh_audit_log (
   id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   tabela          TEXT NOT NULL,
   registro_id     TEXT NOT NULL,  -- TEXT para suportar UUID e BIGINT
@@ -576,10 +586,10 @@ CREATE TABLE rh_audit_log (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_audit_tabela    ON rh_audit_log(tabela);
-CREATE INDEX idx_audit_registro  ON rh_audit_log(registro_id);
-CREATE INDEX idx_audit_data      ON rh_audit_log(created_at);
-CREATE INDEX idx_audit_usuario   ON rh_audit_log(usuario_id);
+CREATE INDEX IF NOT EXISTS idx_audit_tabela    ON rh_audit_log(tabela);
+CREATE INDEX IF NOT EXISTS idx_audit_registro  ON rh_audit_log(registro_id);
+CREATE INDEX IF NOT EXISTS idx_audit_data      ON rh_audit_log(created_at);
+CREATE INDEX IF NOT EXISTS idx_audit_usuario   ON rh_audit_log(usuario_id);
 
 COMMENT ON TABLE rh_audit_log IS 'Log imutável de todas as alterações. acao DELETE_BLOCKED registra tentativas de exclusão bloqueadas.';
 
@@ -642,29 +652,46 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS trg_block_delete_func ON rh_funcionarios;
 CREATE TRIGGER trg_block_delete_func
   BEFORE DELETE ON rh_funcionarios
   FOR EACH ROW EXECUTE FUNCTION fn_block_delete_funcionario();
 
--- 7.4 Vincular triggers de auditoria a TODAS as tabelas
+-- 7.4 Vincular triggers de auditoria a TODAS as tabelas (idempotente)
 -- updated_at triggers
+DROP TRIGGER IF EXISTS trg_updated_empresas ON rh_empresas;
 CREATE TRIGGER trg_updated_empresas     BEFORE UPDATE ON rh_empresas     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_filiais ON rh_filiais;
 CREATE TRIGGER trg_updated_filiais      BEFORE UPDATE ON rh_filiais      FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_cc ON rh_centros_custo;
 CREATE TRIGGER trg_updated_cc           BEFORE UPDATE ON rh_centros_custo FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_niveis ON rh_niveis_hierarquicos;
 CREATE TRIGGER trg_updated_niveis       BEFORE UPDATE ON rh_niveis_hierarquicos FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_setores ON rh_setores;
 CREATE TRIGGER trg_updated_setores      BEFORE UPDATE ON rh_setores      FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_cargos ON rh_cargos;
 CREATE TRIGGER trg_updated_cargos       BEFORE UPDATE ON rh_cargos       FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_usuarios ON rh_usuarios;
 CREATE TRIGGER trg_updated_usuarios     BEFORE UPDATE ON rh_usuarios     FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
+DROP TRIGGER IF EXISTS trg_updated_func ON rh_funcionarios;
 CREATE TRIGGER trg_updated_func         BEFORE UPDATE ON rh_funcionarios FOR EACH ROW EXECUTE FUNCTION fn_set_updated_at();
 
 -- Audit triggers
+DROP TRIGGER IF EXISTS trg_audit_empresas ON rh_empresas;
 CREATE TRIGGER trg_audit_empresas     AFTER INSERT OR UPDATE ON rh_empresas     FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_filiais ON rh_filiais;
 CREATE TRIGGER trg_audit_filiais      AFTER INSERT OR UPDATE ON rh_filiais      FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_cc ON rh_centros_custo;
 CREATE TRIGGER trg_audit_cc           AFTER INSERT OR UPDATE ON rh_centros_custo FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_niveis ON rh_niveis_hierarquicos;
 CREATE TRIGGER trg_audit_niveis       AFTER INSERT OR UPDATE ON rh_niveis_hierarquicos FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_setores ON rh_setores;
 CREATE TRIGGER trg_audit_setores      AFTER INSERT OR UPDATE ON rh_setores      FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_cargos ON rh_cargos;
 CREATE TRIGGER trg_audit_cargos       AFTER INSERT OR UPDATE ON rh_cargos       FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_usuarios ON rh_usuarios;
 CREATE TRIGGER trg_audit_usuarios     AFTER INSERT OR UPDATE ON rh_usuarios     FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
+DROP TRIGGER IF EXISTS trg_audit_func ON rh_funcionarios;
 CREATE TRIGGER trg_audit_func         AFTER INSERT OR UPDATE ON rh_funcionarios FOR EACH ROW EXECUTE FUNCTION fn_audit_trigger();
 
 
@@ -693,66 +720,91 @@ ALTER TABLE rh_audit_log             ENABLE ROW LEVEL SECURITY;
 -- Escrita: apenas administrador e rh
 
 -- EMPRESAS
+DROP POLICY IF EXISTS "empresas_select" ON rh_empresas;
 CREATE POLICY "empresas_select" ON rh_empresas
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "empresas_insert" ON rh_empresas;
 CREATE POLICY "empresas_insert" ON rh_empresas
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "empresas_update" ON rh_empresas;
 CREATE POLICY "empresas_update" ON rh_empresas
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "empresas_delete" ON rh_empresas;
 CREATE POLICY "empresas_delete" ON rh_empresas
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- FILIAIS
+DROP POLICY IF EXISTS "filiais_select" ON rh_filiais;
 CREATE POLICY "filiais_select" ON rh_filiais
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "filiais_insert" ON rh_filiais;
 CREATE POLICY "filiais_insert" ON rh_filiais
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "filiais_update" ON rh_filiais;
 CREATE POLICY "filiais_update" ON rh_filiais
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "filiais_delete" ON rh_filiais;
 CREATE POLICY "filiais_delete" ON rh_filiais
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- CENTROS DE CUSTO
+DROP POLICY IF EXISTS "cc_select" ON rh_centros_custo;
 CREATE POLICY "cc_select" ON rh_centros_custo
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "cc_insert" ON rh_centros_custo;
 CREATE POLICY "cc_insert" ON rh_centros_custo
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "cc_update" ON rh_centros_custo;
 CREATE POLICY "cc_update" ON rh_centros_custo
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "cc_delete" ON rh_centros_custo;
 CREATE POLICY "cc_delete" ON rh_centros_custo
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- NÍVEIS HIERÁRQUICOS
+DROP POLICY IF EXISTS "niveis_select" ON rh_niveis_hierarquicos;
 CREATE POLICY "niveis_select" ON rh_niveis_hierarquicos
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "niveis_insert" ON rh_niveis_hierarquicos;
 CREATE POLICY "niveis_insert" ON rh_niveis_hierarquicos
   FOR INSERT WITH CHECK (rh_perfil_atual() = 'administrador');
+DROP POLICY IF EXISTS "niveis_update" ON rh_niveis_hierarquicos;
 CREATE POLICY "niveis_update" ON rh_niveis_hierarquicos
   FOR UPDATE USING (rh_perfil_atual() = 'administrador');
+DROP POLICY IF EXISTS "niveis_delete" ON rh_niveis_hierarquicos;
 CREATE POLICY "niveis_delete" ON rh_niveis_hierarquicos
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- SETORES
+DROP POLICY IF EXISTS "setores_select" ON rh_setores;
 CREATE POLICY "setores_select" ON rh_setores
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "setores_insert" ON rh_setores;
 CREATE POLICY "setores_insert" ON rh_setores
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "setores_update" ON rh_setores;
 CREATE POLICY "setores_update" ON rh_setores
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "setores_delete" ON rh_setores;
 CREATE POLICY "setores_delete" ON rh_setores
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- CARGOS
+DROP POLICY IF EXISTS "cargos_select" ON rh_cargos;
 CREATE POLICY "cargos_select" ON rh_cargos
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "cargos_insert" ON rh_cargos;
 CREATE POLICY "cargos_insert" ON rh_cargos
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "cargos_update" ON rh_cargos;
 CREATE POLICY "cargos_update" ON rh_cargos
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
+DROP POLICY IF EXISTS "cargos_delete" ON rh_cargos;
 CREATE POLICY "cargos_delete" ON rh_cargos
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- ── 8.2 USUÁRIOS (somente administrador gerencia) ──
+DROP POLICY IF EXISTS "usuarios_select" ON rh_usuarios;
 CREATE POLICY "usuarios_select" ON rh_usuarios
   FOR SELECT USING (
     auth.role() = 'authenticated'
@@ -761,16 +813,20 @@ CREATE POLICY "usuarios_select" ON rh_usuarios
       OR auth_uid = auth.uid()  -- pode ver a si mesmo
     )
   );
+DROP POLICY IF EXISTS "usuarios_insert" ON rh_usuarios;
 CREATE POLICY "usuarios_insert" ON rh_usuarios
   FOR INSERT WITH CHECK (rh_perfil_atual() = 'administrador');
+DROP POLICY IF EXISTS "usuarios_update" ON rh_usuarios;
 CREATE POLICY "usuarios_update" ON rh_usuarios
   FOR UPDATE USING (rh_perfil_atual() = 'administrador');
+DROP POLICY IF EXISTS "usuarios_delete" ON rh_usuarios;
 CREATE POLICY "usuarios_delete" ON rh_usuarios
   FOR DELETE USING (rh_perfil_atual() = 'administrador');
 
 -- ── 8.3 FUNCIONÁRIOS (RBAC granular) ──
 
 -- SELECT: admin/rh veem todos; gestor vê subordinados diretos; visualizador vê todos (read-only)
+DROP POLICY IF EXISTS "func_select" ON rh_funcionarios;
 CREATE POLICY "func_select" ON rh_funcionarios
   FOR SELECT USING (
     auth.role() = 'authenticated'
@@ -784,44 +840,57 @@ CREATE POLICY "func_select" ON rh_funcionarios
   );
 
 -- INSERT: admin e rh
+DROP POLICY IF EXISTS "func_insert" ON rh_funcionarios;
 CREATE POLICY "func_insert" ON rh_funcionarios
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
 -- UPDATE: admin e rh
+DROP POLICY IF EXISTS "func_update" ON rh_funcionarios;
 CREATE POLICY "func_update" ON rh_funcionarios
   FOR UPDATE USING (rh_perfil_atual() IN ('administrador','rh'));
 
 -- DELETE: ninguém (trigger já bloqueia, mas defense in depth)
+DROP POLICY IF EXISTS "func_delete" ON rh_funcionarios;
 CREATE POLICY "func_delete" ON rh_funcionarios
   FOR DELETE USING (FALSE);
 
 -- ── 8.4 HISTÓRICO (leitura ampla, escrita apenas via trigger) ──
 
+DROP POLICY IF EXISTS "hist_cargo_select" ON rh_hist_cargo;
 CREATE POLICY "hist_cargo_select" ON rh_hist_cargo
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "hist_cargo_insert" ON rh_hist_cargo;
 CREATE POLICY "hist_cargo_insert" ON rh_hist_cargo
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
+DROP POLICY IF EXISTS "hist_salario_select" ON rh_hist_salario;
 CREATE POLICY "hist_salario_select" ON rh_hist_salario
   FOR SELECT USING (
     rh_perfil_atual() IN ('administrador','rh')
   );
+DROP POLICY IF EXISTS "hist_salario_insert" ON rh_hist_salario;
 CREATE POLICY "hist_salario_insert" ON rh_hist_salario
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
+DROP POLICY IF EXISTS "hist_setor_select" ON rh_hist_setor;
 CREATE POLICY "hist_setor_select" ON rh_hist_setor
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "hist_setor_insert" ON rh_hist_setor;
 CREATE POLICY "hist_setor_insert" ON rh_hist_setor
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
+DROP POLICY IF EXISTS "hist_gestor_select" ON rh_hist_gestor;
 CREATE POLICY "hist_gestor_select" ON rh_hist_gestor
   FOR SELECT USING (auth.role() = 'authenticated');
+DROP POLICY IF EXISTS "hist_gestor_insert" ON rh_hist_gestor;
 CREATE POLICY "hist_gestor_insert" ON rh_hist_gestor
   FOR INSERT WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
 -- ── 8.5 AUDIT LOG (somente leitura para admin) ──
+DROP POLICY IF EXISTS "audit_select" ON rh_audit_log;
 CREATE POLICY "audit_select" ON rh_audit_log
   FOR SELECT USING (rh_perfil_atual() = 'administrador');
+DROP POLICY IF EXISTS "audit_insert" ON rh_audit_log;
 CREATE POLICY "audit_insert" ON rh_audit_log
   FOR INSERT WITH CHECK (TRUE);  -- triggers precisam inserir
 
@@ -841,7 +910,8 @@ INSERT INTO rh_niveis_hierarquicos (nome, ordem, descricao) VALUES
   ('Assistente',    7, 'Suporte administrativo/operacional'),
   ('Operacional',   8, 'Execução operacional'),
   ('Aprendiz',      9, 'Programa de aprendizagem'),
-  ('Estagiário',   10, 'Programa de estágio');
+  ('Estagiário',   10, 'Programa de estágio')
+ON CONFLICT (nome) DO NOTHING;
 
 
 -- ════════════════════════════════════════════════════════════════

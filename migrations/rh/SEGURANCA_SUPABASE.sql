@@ -233,40 +233,50 @@ $$;
 ALTER TABLE rh_colaboradores ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: admin/rh vê tudo; líder vê seu setor; sst/financeiro vê dados não-sensíveis; colaborador vê só ele
+DROP POLICY IF EXISTS "colab_select_admin_rh" ON rh_colaboradores;
 CREATE POLICY "colab_select_admin_rh" ON rh_colaboradores FOR SELECT
     USING (has_perfil('admin') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "colab_select_lider" ON rh_colaboradores;
 CREATE POLICY "colab_select_lider" ON rh_colaboradores FOR SELECT
     USING (
         has_perfil('lider')
         AND setor = ANY(get_setores_lider())
     );
 
+DROP POLICY IF EXISTS "colab_select_sst" ON rh_colaboradores;
 CREATE POLICY "colab_select_sst" ON rh_colaboradores FOR SELECT
     USING (has_perfil('sst'));
 
+DROP POLICY IF EXISTS "colab_select_financeiro" ON rh_colaboradores;
 CREATE POLICY "colab_select_financeiro" ON rh_colaboradores FOR SELECT
     USING (has_perfil('financeiro'));
 
+DROP POLICY IF EXISTS "colab_select_diretoria" ON rh_colaboradores;
 CREATE POLICY "colab_select_diretoria" ON rh_colaboradores FOR SELECT
     USING (has_perfil('diretoria'));
 
+DROP POLICY IF EXISTS "colab_select_psicologa" ON rh_colaboradores;
 CREATE POLICY "colab_select_psicologa" ON rh_colaboradores FOR SELECT
     USING (has_perfil('psicologa'));
 
+DROP POLICY IF EXISTS "colab_select_proprio" ON rh_colaboradores;
 CREATE POLICY "colab_select_proprio" ON rh_colaboradores FOR SELECT
     USING (auth_uid = auth.uid());
 
 -- INSERT: apenas admin e rh
+DROP POLICY IF EXISTS "colab_insert" ON rh_colaboradores;
 CREATE POLICY "colab_insert" ON rh_colaboradores FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('rh'));
 
 -- UPDATE: admin e rh (dados gerais); financeiro NÃO altera
+DROP POLICY IF EXISTS "colab_update" ON rh_colaboradores;
 CREATE POLICY "colab_update" ON rh_colaboradores FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('rh'))
     WITH CHECK (has_perfil('admin') OR has_perfil('rh'));
 
 -- DELETE: apenas admin (soft delete preferível)
+DROP POLICY IF EXISTS "colab_delete" ON rh_colaboradores;
 CREATE POLICY "colab_delete" ON rh_colaboradores FOR DELETE
     USING (has_perfil('admin'));
 
@@ -277,9 +287,11 @@ CREATE POLICY "colab_delete" ON rh_colaboradores FOR DELETE
 ALTER TABLE rh_asos ENABLE ROW LEVEL SECURITY;
 
 -- SELECT: admin/sst/rh vê tudo; líder vê seu setor; colaborador vê só os dele
+DROP POLICY IF EXISTS "aso_select_admin_sst_rh" ON rh_asos;
 CREATE POLICY "aso_select_admin_sst_rh" ON rh_asos FOR SELECT
     USING (has_perfil('admin') OR has_perfil('sst') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "aso_select_lider" ON rh_asos;
 CREATE POLICY "aso_select_lider" ON rh_asos FOR SELECT
     USING (
         has_perfil('lider')
@@ -290,19 +302,23 @@ CREATE POLICY "aso_select_lider" ON rh_asos FOR SELECT
         )
     );
 
+DROP POLICY IF EXISTS "aso_select_proprio" ON rh_asos;
 CREATE POLICY "aso_select_proprio" ON rh_asos FOR SELECT
     USING (colaborador_id = get_meu_colaborador_id());
 
 -- INSERT: sst e admin
+DROP POLICY IF EXISTS "aso_insert" ON rh_asos;
 CREATE POLICY "aso_insert" ON rh_asos FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
 -- UPDATE: sst e admin
+DROP POLICY IF EXISTS "aso_update" ON rh_asos;
 CREATE POLICY "aso_update" ON rh_asos FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('sst'))
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
 -- DELETE: apenas admin
+DROP POLICY IF EXISTS "aso_delete" ON rh_asos;
 CREATE POLICY "aso_delete" ON rh_asos FOR DELETE
     USING (has_perfil('admin'));
 
@@ -312,29 +328,35 @@ CREATE POLICY "aso_delete" ON rh_asos FOR DELETE
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_treinamentos ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "trein_select_admin_sst_rh" ON rh_treinamentos;
 CREATE POLICY "trein_select_admin_sst_rh" ON rh_treinamentos FOR SELECT
     USING (has_perfil('admin') OR has_perfil('sst') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "trein_select_lider" ON rh_treinamentos;
 CREATE POLICY "trein_select_lider" ON rh_treinamentos FOR SELECT
     USING (
         has_perfil('lider')
         AND EXISTS (
             SELECT 1 FROM rh_colaboradores c
-            WHERE c.id = rh_treinamentos.colaborador_id
+            WHERE c.id = rh_treinamentos.funcionario_id
               AND c.setor = ANY(get_setores_lider())
         )
     );
 
+DROP POLICY IF EXISTS "trein_select_proprio" ON rh_treinamentos;
 CREATE POLICY "trein_select_proprio" ON rh_treinamentos FOR SELECT
-    USING (colaborador_id = get_meu_colaborador_id());
+    USING (funcionario_id = get_meu_colaborador_id());
 
+DROP POLICY IF EXISTS "trein_insert" ON rh_treinamentos;
 CREATE POLICY "trein_insert" ON rh_treinamentos FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
+DROP POLICY IF EXISTS "trein_update" ON rh_treinamentos;
 CREATE POLICY "trein_update" ON rh_treinamentos FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('sst'))
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
+DROP POLICY IF EXISTS "trein_delete" ON rh_treinamentos;
 CREATE POLICY "trein_delete" ON rh_treinamentos FOR DELETE
     USING (has_perfil('admin'));
 
@@ -348,6 +370,7 @@ ALTER TABLE rh_saude_mental ENABLE ROW LEVEL SECURITY;
 -- Diretoria NÃO vê registros individuais (apenas views agregadas)
 -- RH NÃO vê dados de saúde mental
 -- Líder NÃO vê dados de saúde mental
+DROP POLICY IF EXISTS "smental_select" ON rh_saude_mental;
 CREATE POLICY "smental_select" ON rh_saude_mental FOR SELECT
     USING (has_perfil('admin') OR has_perfil('psicologa'));
 
@@ -355,15 +378,18 @@ CREATE POLICY "smental_select" ON rh_saude_mental FOR SELECT
 -- Implementado via view específica (ver PARTE 7)
 
 -- INSERT: apenas psicóloga e admin
+DROP POLICY IF EXISTS "smental_insert" ON rh_saude_mental;
 CREATE POLICY "smental_insert" ON rh_saude_mental FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('psicologa'));
 
 -- UPDATE: apenas psicóloga e admin
+DROP POLICY IF EXISTS "smental_update" ON rh_saude_mental;
 CREATE POLICY "smental_update" ON rh_saude_mental FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('psicologa'))
     WITH CHECK (has_perfil('admin') OR has_perfil('psicologa'));
 
 -- DELETE: apenas admin
+DROP POLICY IF EXISTS "smental_delete" ON rh_saude_mental;
 CREATE POLICY "smental_delete" ON rh_saude_mental FOR DELETE
     USING (has_perfil('admin'));
 
@@ -373,9 +399,11 @@ CREATE POLICY "smental_delete" ON rh_saude_mental FOR DELETE
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_ocorrencias ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "ocorr_select_admin_rh" ON rh_ocorrencias;
 CREATE POLICY "ocorr_select_admin_rh" ON rh_ocorrencias FOR SELECT
     USING (has_perfil('admin') OR has_perfil('rh') OR has_perfil('sst'));
 
+DROP POLICY IF EXISTS "ocorr_select_lider" ON rh_ocorrencias;
 CREATE POLICY "ocorr_select_lider" ON rh_ocorrencias FOR SELECT
     USING (
         has_perfil('lider')
@@ -386,16 +414,20 @@ CREATE POLICY "ocorr_select_lider" ON rh_ocorrencias FOR SELECT
         )
     );
 
+DROP POLICY IF EXISTS "ocorr_select_proprio" ON rh_ocorrencias;
 CREATE POLICY "ocorr_select_proprio" ON rh_ocorrencias FOR SELECT
     USING (colaborador_id = get_meu_colaborador_id());
 
+DROP POLICY IF EXISTS "ocorr_insert" ON rh_ocorrencias;
 CREATE POLICY "ocorr_insert" ON rh_ocorrencias FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "ocorr_update" ON rh_ocorrencias;
 CREATE POLICY "ocorr_update" ON rh_ocorrencias FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('rh'))
     WITH CHECK (has_perfil('admin') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "ocorr_delete" ON rh_ocorrencias;
 CREATE POLICY "ocorr_delete" ON rh_ocorrencias FOR DELETE
     USING (has_perfil('admin'));
 
@@ -405,21 +437,26 @@ CREATE POLICY "ocorr_delete" ON rh_ocorrencias FOR DELETE
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_desligamentos ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "deslig_select_admin_rh" ON rh_desligamentos;
 CREATE POLICY "deslig_select_admin_rh" ON rh_desligamentos FOR SELECT
     USING (has_perfil('admin') OR has_perfil('rh') OR has_perfil('diretoria'));
 
+DROP POLICY IF EXISTS "deslig_select_financeiro" ON rh_desligamentos;
 CREATE POLICY "deslig_select_financeiro" ON rh_desligamentos FOR SELECT
     USING (has_perfil('financeiro'));
 
 -- INSERT/UPDATE/DELETE: SOMENTE via RPC (backend) — ver PARTE 4
 -- Nenhum perfil insere diretamente
+DROP POLICY IF EXISTS "deslig_insert" ON rh_desligamentos;
 CREATE POLICY "deslig_insert" ON rh_desligamentos FOR INSERT
     WITH CHECK (has_perfil('admin'));
 
+DROP POLICY IF EXISTS "deslig_update" ON rh_desligamentos;
 CREATE POLICY "deslig_update" ON rh_desligamentos FOR UPDATE
     USING (has_perfil('admin'))
     WITH CHECK (has_perfil('admin'));
 
+DROP POLICY IF EXISTS "deslig_delete" ON rh_desligamentos;
 CREATE POLICY "deslig_delete" ON rh_desligamentos FOR DELETE
     USING (has_perfil('admin'));
 
@@ -429,29 +466,35 @@ CREATE POLICY "deslig_delete" ON rh_desligamentos FOR DELETE
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_epi_entregas ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "epi_select_admin_sst_rh" ON rh_epi_entregas;
 CREATE POLICY "epi_select_admin_sst_rh" ON rh_epi_entregas FOR SELECT
     USING (has_perfil('admin') OR has_perfil('sst') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "epi_select_lider" ON rh_epi_entregas;
 CREATE POLICY "epi_select_lider" ON rh_epi_entregas FOR SELECT
     USING (
         has_perfil('lider')
         AND EXISTS (
             SELECT 1 FROM rh_colaboradores c
-            WHERE c.id = rh_epi_entregas.colaborador_id
+            WHERE c.id = rh_epi_entregas.funcionario_id
               AND c.setor = ANY(get_setores_lider())
         )
     );
 
+DROP POLICY IF EXISTS "epi_select_proprio" ON rh_epi_entregas;
 CREATE POLICY "epi_select_proprio" ON rh_epi_entregas FOR SELECT
-    USING (colaborador_id = get_meu_colaborador_id());
+    USING (funcionario_id = get_meu_colaborador_id());
 
+DROP POLICY IF EXISTS "epi_insert" ON rh_epi_entregas;
 CREATE POLICY "epi_insert" ON rh_epi_entregas FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
+DROP POLICY IF EXISTS "epi_update" ON rh_epi_entregas;
 CREATE POLICY "epi_update" ON rh_epi_entregas FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('sst'))
     WITH CHECK (has_perfil('admin') OR has_perfil('sst'));
 
+DROP POLICY IF EXISTS "epi_delete" ON rh_epi_entregas;
 CREATE POLICY "epi_delete" ON rh_epi_entregas FOR DELETE
     USING (has_perfil('admin'));
 
@@ -472,9 +515,13 @@ DECLARE
 BEGIN
     FOREACH t IN ARRAY ARRAY['rh_vale_alimentacao','rh_auxilio_deslocamento','rh_plano_alianca']
     LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "benef_select_admin_rh_%s" ON %I', t, t);
         EXECUTE format('CREATE POLICY "benef_select_admin_rh_%s" ON %I FOR SELECT USING (has_perfil(''admin'') OR has_perfil(''rh'') OR has_perfil(''financeiro''))', t, t);
+        EXECUTE format('DROP POLICY IF EXISTS "benef_select_proprio_%s" ON %I', t, t);
         EXECUTE format('CREATE POLICY "benef_select_proprio_%s" ON %I FOR SELECT USING (colaborador_id = get_meu_colaborador_id())', t, t);
+        EXECUTE format('DROP POLICY IF EXISTS "benef_insert_%s" ON %I', t, t);
         EXECUTE format('CREATE POLICY "benef_insert_%s" ON %I FOR INSERT WITH CHECK (has_perfil(''admin'') OR has_perfil(''rh''))', t, t);
+        EXECUTE format('DROP POLICY IF EXISTS "benef_update_%s" ON %I', t, t);
         EXECUTE format('CREATE POLICY "benef_update_%s" ON %I FOR UPDATE USING (has_perfil(''admin'') OR has_perfil(''rh'')) WITH CHECK (has_perfil(''admin'') OR has_perfil(''rh''))', t, t);
         EXECUTE format('CREATE POLICY "benef_delete_%s" ON %I FOR DELETE USING (has_perfil(''admin''))', t, t);
     END LOOP;
@@ -486,9 +533,11 @@ END $$;
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_producao ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "prod_select_admin_rh" ON rh_producao;
 CREATE POLICY "prod_select_admin_rh" ON rh_producao FOR SELECT
     USING (has_perfil('admin') OR has_perfil('rh') OR has_perfil('diretoria'));
 
+DROP POLICY IF EXISTS "prod_select_lider" ON rh_producao;
 CREATE POLICY "prod_select_lider" ON rh_producao FOR SELECT
     USING (
         has_perfil('lider')
@@ -499,16 +548,20 @@ CREATE POLICY "prod_select_lider" ON rh_producao FOR SELECT
         )
     );
 
+DROP POLICY IF EXISTS "prod_select_proprio" ON rh_producao;
 CREATE POLICY "prod_select_proprio" ON rh_producao FOR SELECT
     USING (colaborador_id = get_meu_colaborador_id());
 
+DROP POLICY IF EXISTS "prod_insert" ON rh_producao;
 CREATE POLICY "prod_insert" ON rh_producao FOR INSERT
     WITH CHECK (has_perfil('admin') OR has_perfil('rh') OR has_perfil('lider'));
 
+DROP POLICY IF EXISTS "prod_update" ON rh_producao;
 CREATE POLICY "prod_update" ON rh_producao FOR UPDATE
     USING (has_perfil('admin') OR has_perfil('rh'))
     WITH CHECK (has_perfil('admin') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "prod_delete" ON rh_producao;
 CREATE POLICY "prod_delete" ON rh_producao FOR DELETE
     USING (has_perfil('admin'));
 
@@ -519,21 +572,26 @@ CREATE POLICY "prod_delete" ON rh_producao FOR DELETE
 ALTER TABLE rh_perfis_acesso ENABLE ROW LEVEL SECURITY;
 
 -- Apenas admin vê todos os perfis
+DROP POLICY IF EXISTS "perfis_select_admin" ON rh_perfis_acesso;
 CREATE POLICY "perfis_select_admin" ON rh_perfis_acesso FOR SELECT
     USING (has_perfil('admin'));
 
 -- Cada usuário vê seus próprios perfis
+DROP POLICY IF EXISTS "perfis_select_proprio" ON rh_perfis_acesso;
 CREATE POLICY "perfis_select_proprio" ON rh_perfis_acesso FOR SELECT
     USING (auth_uid = auth.uid());
 
 -- Apenas admin gerencia perfis
+DROP POLICY IF EXISTS "perfis_insert" ON rh_perfis_acesso;
 CREATE POLICY "perfis_insert" ON rh_perfis_acesso FOR INSERT
     WITH CHECK (has_perfil('admin'));
 
+DROP POLICY IF EXISTS "perfis_update" ON rh_perfis_acesso;
 CREATE POLICY "perfis_update" ON rh_perfis_acesso FOR UPDATE
     USING (has_perfil('admin'))
     WITH CHECK (has_perfil('admin'));
 
+DROP POLICY IF EXISTS "perfis_delete" ON rh_perfis_acesso;
 CREATE POLICY "perfis_delete" ON rh_perfis_acesso FOR DELETE
     USING (has_perfil('admin'));
 
@@ -543,10 +601,12 @@ CREATE POLICY "perfis_delete" ON rh_perfis_acesso FOR DELETE
 -- ────────────────────────────────────────────────
 ALTER TABLE rh_audit_log ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "audit_select" ON rh_audit_log;
 CREATE POLICY "audit_select" ON rh_audit_log FOR SELECT
     USING (has_perfil('admin') OR has_perfil('diretoria'));
 
 -- INSERT via trigger (SECURITY DEFINER), não via frontend direto
+DROP POLICY IF EXISTS "audit_insert" ON rh_audit_log;
 CREATE POLICY "audit_insert" ON rh_audit_log FOR INSERT
     WITH CHECK (true);  -- triggers inserem com service_role
 
@@ -1139,13 +1199,13 @@ CREATE INDEX IF NOT EXISTS idx_aso_colab ON rh_asos(colaborador_id);
 CREATE INDEX IF NOT EXISTS idx_aso_vencimento ON rh_asos(data_vencimento) WHERE status = 'valido';
 
 -- rh_treinamentos
-CREATE INDEX IF NOT EXISTS idx_trein_colab ON rh_treinamentos(colaborador_id);
-CREATE INDEX IF NOT EXISTS idx_trein_vencimento ON rh_treinamentos(data_vencimento) WHERE status = 'valido';
+CREATE INDEX IF NOT EXISTS idx_trein_colab ON rh_treinamentos(funcionario_id);
+CREATE INDEX IF NOT EXISTS idx_trein_vencimento ON rh_treinamentos(data_validade);
 
 -- rh_saude_mental
-CREATE INDEX IF NOT EXISTS idx_smental_colab ON rh_saude_mental(colaborador_id);
+CREATE INDEX IF NOT EXISTS idx_smental_colab ON rh_saude_mental(funcionario_id);
 CREATE INDEX IF NOT EXISTS idx_smental_risco ON rh_saude_mental(classificacao_risco);
-CREATE INDEX IF NOT EXISTS idx_smental_data ON rh_saude_mental(data_avaliacao DESC);
+CREATE INDEX IF NOT EXISTS idx_smental_data ON rh_saude_mental(created_at DESC);
 
 -- rh_ocorrencias
 CREATE INDEX IF NOT EXISTS idx_ocorr_colab ON rh_ocorrencias(colaborador_id);
@@ -1156,15 +1216,15 @@ CREATE INDEX IF NOT EXISTS idx_prod_colab ON rh_producao(colaborador_id);
 CREATE INDEX IF NOT EXISTS idx_prod_data ON rh_producao(data_referencia);
 
 -- rh_epi_entregas
-CREATE INDEX IF NOT EXISTS idx_epi_colab ON rh_epi_entregas(colaborador_id);
+CREATE INDEX IF NOT EXISTS idx_epi_colab ON rh_epi_entregas(funcionario_id);
 CREATE INDEX IF NOT EXISTS idx_epi_validade ON rh_epi_entregas(data_validade);
 
 -- rh_desligamentos
-CREATE INDEX IF NOT EXISTS idx_deslig_colab ON rh_desligamentos(colaborador_id);
+CREATE INDEX IF NOT EXISTS idx_deslig_colab ON rh_desligamentos(funcionario_id);
 CREATE INDEX IF NOT EXISTS idx_deslig_data ON rh_desligamentos(data_desligamento);
 
 -- rh_audit_log
-CREATE INDEX IF NOT EXISTS idx_audit_data ON rh_audit_log(criado_em DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_data ON rh_audit_log(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_acao ON rh_audit_log(acao);
 CREATE INDEX IF NOT EXISTS idx_audit_usuario ON rh_audit_log(usuario_id);
 
@@ -1193,9 +1253,9 @@ SELECT
     COUNT(*) as quantidade,
     ROUND(COUNT(*)::NUMERIC / NULLIF(SUM(COUNT(*)) OVER(), 0) * 100, 1) as percentual
 FROM (
-    SELECT DISTINCT ON (colaborador_id) colaborador_id, classificacao_risco
+    SELECT DISTINCT ON (funcionario_id) funcionario_id, classificacao_risco
     FROM rh_saude_mental
-    ORDER BY colaborador_id, data_avaliacao DESC
+    ORDER BY funcionario_id, created_at DESC
 ) ult
 GROUP BY classificacao_risco;
 

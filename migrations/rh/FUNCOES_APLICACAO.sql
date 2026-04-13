@@ -33,6 +33,7 @@ CREATE OR REPLACE FUNCTION public.sst_dashboard_completo()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   RETURN jsonb_build_object(
@@ -98,6 +99,7 @@ CREATE OR REPLACE FUNCTION public.ferias_dashboard()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   RETURN jsonb_build_object(
@@ -127,6 +129,7 @@ CREATE OR REPLACE FUNCTION public.gestor_dashboard()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE v_setor_id UUID; v_setor_nome TEXT;
 BEGIN
@@ -179,6 +182,7 @@ CREATE OR REPLACE FUNCTION public.gestor_confianca_dashboard()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE v_setor_id UUID; v_setor_nome TEXT; v_gestor_id UUID;
 BEGIN
@@ -242,6 +246,7 @@ CREATE OR REPLACE FUNCTION public.motor_v2_dashboard_executivo()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_perfil TEXT;
@@ -289,6 +294,7 @@ CREATE OR REPLACE FUNCTION public.motor_v2_executar(p_periodo text DEFAULT to_ch
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_exec_id UUID;
@@ -331,6 +337,7 @@ CREATE OR REPLACE FUNCTION public.motor_v2_auditoria()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE
   v_perfil TEXT;
@@ -528,6 +535,7 @@ CREATE OR REPLACE FUNCTION public.relatorio_atestados_dashboard(p_ano integer DE
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   IF rh_perfil_atual() NOT IN ('administrador', 'rh') THEN
@@ -614,6 +622,7 @@ CREATE OR REPLACE FUNCTION public.contar_notificacoes()
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 BEGIN
   RETURN jsonb_build_object(
@@ -635,6 +644,7 @@ CREATE OR REPLACE FUNCTION public.ficha_completa(p_funcionario_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE v_perfil TEXT; v_result JSONB;
 BEGIN
@@ -755,6 +765,7 @@ CREATE OR REPLACE FUNCTION public.ficha_360_colaborador(p_funcionario_id uuid)
  RETURNS jsonb
  LANGUAGE plpgsql
  STABLE SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE 
   v_perfil TEXT;
@@ -926,6 +937,7 @@ CREATE OR REPLACE FUNCTION public.registrar_acompanhamento(p_funcionario_id uuid
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE v_gestor_id UUID; v_id UUID;
 BEGIN
@@ -1047,6 +1059,7 @@ CREATE OR REPLACE FUNCTION public.importar_ocorrencias_lote(p_dados jsonb)
  RETURNS jsonb
  LANGUAGE plpgsql
  SECURITY DEFINER
+ SET search_path TO 'public'
 AS $function$
 DECLARE r JSONB; v_func_id UUID; v_count INT := 0; v_sem INT := 0;
 BEGIN

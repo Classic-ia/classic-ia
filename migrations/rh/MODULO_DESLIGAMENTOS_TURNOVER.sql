@@ -217,10 +217,12 @@ DECLARE
   v_func            RECORD;
 BEGIN
   -- Buscar dados do funcionario
-  SELECT nome_completo, cargo, setor, salario_base, data_admissao
+  SELECT f.nome_completo, c.nome AS cargo, s.nome AS setor, f.salario_base, f.data_admissao
     INTO v_func
-    FROM rh_funcionarios
-   WHERE id = p_funcionario_id;
+    FROM rh_funcionarios f
+    LEFT JOIN rh_cargos c ON c.id = f.cargo_id
+    LEFT JOIN rh_setores s ON s.id = f.setor_id
+   WHERE f.id = p_funcionario_id;
 
   IF NOT FOUND THEN
     RAISE EXCEPTION 'Funcionario % nao encontrado', p_funcionario_id;
@@ -400,20 +402,20 @@ BEGIN
   SELECT COALESCE(jsonb_agg(row_to_json(r)), '[]'::JSONB)
     INTO v_por_setor
     FROM (
-      SELECT f.setor,
+      SELECT s.nome,
              COUNT(*) AS desligados,
-             (SELECT COUNT(*) FROM rh_funcionarios f2
-               WHERE f2.setor = f.setor AND f2.status = 'ativo') AS ativos,
+             (SELECT COUNT(*) FROM rh_funcionarios f2 LEFT JOIN rh_setores s2 ON s2.id = f2.setor_id
+               WHERE s2.nome = s.nome AND f2.status = 'ativo') AS ativos,
              ROUND(
                COUNT(*)::NUMERIC /
-               NULLIF((SELECT COUNT(*) FROM rh_funcionarios f2
-                 WHERE f2.setor = f.setor), 0) * 100,
+               NULLIF((SELECT COUNT(*) FROM rh_funcionarios f2 LEFT JOIN rh_setores s2 ON s2.id = f2.setor_id
+                 WHERE s2.nome = s.nome), 0) * 100,
                1
              ) AS taxa_turnover
         FROM rh_desligamentos d
         JOIN rh_funcionarios f ON f.id = d.funcionario_id
        WHERE d.data_desligamento >= v_data_inicio
-       GROUP BY f.setor
+       GROUP BY s.nome
        ORDER BY desligados DESC
     ) r;
 
@@ -497,12 +499,12 @@ BEGIN
     INTO v_prod_desligados
     FROM (
       SELECT
-        f.setor,
+        s.nome,
         ROUND(AVG(p.percentual_atingimento), 1) AS media_prod_desligados,
         (SELECT ROUND(AVG(p2.percentual_atingimento), 1)
            FROM rh_producao p2
            JOIN rh_funcionarios f2 ON f2.id = p2.colaborador_id
-          WHERE f2.setor = f.setor AND f2.status = 'ativo'
+          WHERE s2.nome = s.nome AND f2.status = 'ativo'
         ) AS media_prod_ativos,
         COUNT(DISTINCT f.id) AS total_desligados
       FROM rh_desligamentos d
@@ -510,7 +512,7 @@ BEGIN
       LEFT JOIN rh_producao p ON p.colaborador_id = f.id
       WHERE d.data_desligamento >= v_data_inicio
         AND p.data_referencia IS NOT NULL
-      GROUP BY f.setor
+      GROUP BY s.nome
       HAVING COUNT(p.id) > 0
       ORDER BY media_prod_desligados ASC NULLS LAST
     ) r;
@@ -548,15 +550,15 @@ BEGIN
     INTO v_setor_causa
     FROM (
       SELECT
-        f.setor,
+        s.nome,
         d.categoria_causa AS causa,
         COUNT(*) AS total,
         ROUND(AVG(d.data_desligamento - f.data_admissao), 0) AS media_dias_empresa
       FROM rh_desligamentos d
       JOIN rh_funcionarios f ON f.id = d.funcionario_id
       WHERE d.data_desligamento >= v_data_inicio
-      GROUP BY f.setor, d.categoria_causa
-      ORDER BY f.setor, total DESC
+      GROUP BY s.nome, d.categoria_causa
+      ORDER BY s.nome, total DESC
     ) r;
 
   -- 5. Perfil de risco (funcionarios ativos com indicadores similares aos desligados)
@@ -566,7 +568,7 @@ BEGIN
       SELECT
         f.id AS funcionario_id,
         f.nome_completo,
-        f.setor,
+        s.nome,
         f.cargo,
         (CURRENT_DATE - f.data_admissao) AS dias_empresa,
         COALESCE(ausencias.total_dias, 0) AS dias_ausencia_90d,
@@ -580,7 +582,7 @@ BEGIN
                OR COALESCE(ausencias.total_dias, 0) > 3 THEN 'medio'
           ELSE 'baixo'
         END AS nivel_risco
-      FROM rh_funcionarios f
+      FROM rh_funcionarios f LEFT JOIN rh_setores s ON s.id = f.setor_id
       LEFT JOIN LATERAL (
         SELECT COALESCE(SUM(
           CASE
@@ -653,7 +655,7 @@ deslig_mes AS (
 headcount_mes AS (
   SELECT
     m.mes,
-    (SELECT COUNT(*) FROM rh_funcionarios f
+    (SELECT COUNT(*) FROM rh_funcionarios f LEFT JOIN rh_setores s ON s.id = f.setor_id
       WHERE f.data_admissao <= (m.mes + INTERVAL '1 month' - INTERVAL '1 day')::DATE
         AND (f.data_desligamento IS NULL OR f.data_desligamento >= m.mes)
     ) AS headcount
@@ -723,36 +725,40 @@ ORDER BY total DESC;
 
 CREATE OR REPLACE VIEW vw_turnover_setor AS
 WITH setores AS (
-  SELECT DISTINCT setor FROM rh_funcionarios WHERE setor IS NOT NULL
+  SELECT DISTINCT s.nome AS setor FROM rh_funcionarios f JOIN rh_setores s ON s.id = f.setor_id WHERE f.setor_id IS NOT NULL
 ),
 dados AS (
   SELECT
     s.setor,
-    (SELECT COUNT(*) FROM rh_funcionarios f WHERE f.setor = s.setor AND f.status = 'ativo') AS ativos,
-    (SELECT COUNT(*) FROM rh_funcionarios f WHERE f.setor = s.setor) AS total_historico,
+    (SELECT COUNT(*) FROM rh_funcionarios f LEFT JOIN rh_setores s3 ON s3.id = f.setor_id WHERE s3.nome = s.setor AND f.status = 'ativo') AS ativos,
+    (SELECT COUNT(*) FROM rh_funcionarios f LEFT JOIN rh_setores s3 ON s3.id = f.setor_id WHERE s3.nome = s.setor) AS total_historico,
     (SELECT COUNT(*)
        FROM rh_desligamentos d
        JOIN rh_funcionarios f ON f.id = d.funcionario_id
-      WHERE f.setor = s.setor
+       LEFT JOIN rh_setores sx ON sx.id = f.setor_id
+      WHERE sx.nome = s.setor
         AND d.data_desligamento >= CURRENT_DATE - INTERVAL '12 months'
     ) AS desligados_12m,
     (SELECT COUNT(*)
        FROM rh_desligamentos d
        JOIN rh_funcionarios f ON f.id = d.funcionario_id
-      WHERE f.setor = s.setor
+       LEFT JOIN rh_setores sx ON sx.id = f.setor_id
+      WHERE sx.nome = s.setor
         AND d.data_desligamento >= CURRENT_DATE - INTERVAL '12 months'
         AND (d.data_desligamento - f.data_admissao) < 90
     ) AS desligados_curto_prazo,
     (SELECT ROUND(AVG(d.data_desligamento - f.data_admissao), 0)
        FROM rh_desligamentos d
        JOIN rh_funcionarios f ON f.id = d.funcionario_id
-      WHERE f.setor = s.setor
+       LEFT JOIN rh_setores sx ON sx.id = f.setor_id
+      WHERE sx.nome = s.setor
         AND d.data_desligamento >= CURRENT_DATE - INTERVAL '12 months'
     ) AS media_dias_empresa,
     (SELECT d.categoria_causa
        FROM rh_desligamentos d
        JOIN rh_funcionarios f ON f.id = d.funcionario_id
-      WHERE f.setor = s.setor
+       LEFT JOIN rh_setores sx ON sx.id = f.setor_id
+      WHERE sx.nome = s.setor
         AND d.data_desligamento >= CURRENT_DATE - INTERVAL '12 months'
       GROUP BY d.categoria_causa
       ORDER BY COUNT(*) DESC
@@ -797,8 +803,8 @@ CREATE OR REPLACE VIEW vw_correlacao_produtividade AS
 SELECT
   f.id AS funcionario_id,
   f.nome_completo,
-  f.setor,
-  f.cargo,
+  s.nome AS setor,
+  c.nome AS cargo,
   d.data_desligamento,
   d.tipo_desligamento,
   d.categoria_causa,
@@ -841,7 +847,8 @@ SELECT
   (SELECT ROUND(AVG(p.percentual_atingimento), 1)
      FROM rh_producao p
      JOIN rh_funcionarios f2 ON f2.id = p.colaborador_id
-    WHERE f2.setor = f.setor AND f2.status = 'ativo'
+     LEFT JOIN rh_setores s2 ON s2.id = f2.setor_id
+    WHERE s2.nome = s.nome AND f2.status = 'ativo'
       AND p.data_referencia >= CURRENT_DATE - INTERVAL '90 days'
   ) AS media_setor_ativos,
   -- Diferenca vs media do setor
@@ -855,13 +862,16 @@ SELECT
     (SELECT ROUND(AVG(p.percentual_atingimento), 1)
        FROM rh_producao p
        JOIN rh_funcionarios f2 ON f2.id = p.colaborador_id
-      WHERE f2.setor = f.setor AND f2.status = 'ativo'
+       LEFT JOIN rh_setores s2 ON s2.id = f2.setor_id
+      WHERE s2.nome = s.nome AND f2.status = 'ativo'
         AND p.data_referencia >= CURRENT_DATE - INTERVAL '90 days'
     ),
     0
   ) AS delta_vs_setor
 FROM rh_desligamentos d
 JOIN rh_funcionarios f ON f.id = d.funcionario_id
+LEFT JOIN rh_setores s ON s.id = f.setor_id
+LEFT JOIN rh_cargos c ON c.id = f.cargo_id
 ORDER BY d.data_desligamento DESC;
 
 
@@ -874,8 +884,8 @@ CREATE OR REPLACE VIEW vw_entrevista_consolidada AS
 SELECT
   d.id AS desligamento_id,
   f.nome_completo,
-  f.setor,
-  f.cargo,
+  s.nome AS setor,
+  c.nome AS cargo,
   d.data_desligamento,
   d.tipo_desligamento,
   ep.codigo AS pergunta_codigo,
@@ -886,6 +896,8 @@ SELECT
 FROM rh_desligamento_entrevista de
 JOIN rh_desligamentos d ON d.id = de.desligamento_id
 JOIN rh_funcionarios f ON f.id = d.funcionario_id
+LEFT JOIN rh_setores s ON s.id = f.setor_id
+LEFT JOIN rh_cargos c ON c.id = f.cargo_id
 JOIN rh_entrevista_perguntas ep ON ep.id = de.pergunta_id
 ORDER BY d.data_desligamento DESC, ep.ordem;
 

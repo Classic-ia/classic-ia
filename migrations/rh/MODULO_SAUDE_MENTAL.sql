@@ -164,6 +164,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_sm_agenda_updated ON rh_sm_agenda;
 CREATE TRIGGER trg_sm_agenda_updated
     BEFORE UPDATE ON rh_sm_agenda
     FOR EACH ROW EXECUTE FUNCTION rh_set_updated_at();
@@ -184,9 +185,11 @@ ALTER TABLE rh_sm_encaminhamentos ENABLE ROW LEVEL SECURITY;
 -- ─────────────────────────────────────────────────────────
 
 -- SELECT
+DROP POLICY IF EXISTS "sm_agenda_select_psi_admin_rh" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_select_psi_admin_rh" ON rh_sm_agenda FOR SELECT
     USING (has_perfil('psicologa') OR has_perfil('admin') OR has_perfil('rh'));
 
+DROP POLICY IF EXISTS "sm_agenda_select_lider" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_select_lider" ON rh_sm_agenda FOR SELECT
     USING (
         has_perfil('lider')
@@ -200,19 +203,23 @@ CREATE POLICY "sm_agenda_select_lider" ON rh_sm_agenda FOR SELECT
         )
     );
 
+DROP POLICY IF EXISTS "sm_agenda_select_proprio" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_select_proprio" ON rh_sm_agenda FOR SELECT
     USING (colaborador_id = get_meu_colaborador_id());
 
 -- INSERT
+DROP POLICY IF EXISTS "sm_agenda_insert" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_insert" ON rh_sm_agenda FOR INSERT
     WITH CHECK (has_perfil('psicologa') OR has_perfil('admin') OR has_perfil('rh'));
 
 -- UPDATE
+DROP POLICY IF EXISTS "sm_agenda_update" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_update" ON rh_sm_agenda FOR UPDATE
     USING (has_perfil('psicologa') OR has_perfil('admin'))
     WITH CHECK (has_perfil('psicologa') OR has_perfil('admin'));
 
 -- DELETE (apenas admin — cancelamento preferível)
+DROP POLICY IF EXISTS "sm_agenda_delete" ON rh_sm_agenda;
 CREATE POLICY "sm_agenda_delete" ON rh_sm_agenda FOR DELETE
     USING (has_perfil('admin'));
 
@@ -222,16 +229,20 @@ CREATE POLICY "sm_agenda_delete" ON rh_sm_agenda FOR DELETE
 -- APENAS psicóloga e admin. Nenhum outro perfil tem acesso.
 -- ─────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "sm_sessoes_select" ON rh_sm_sessoes;
 CREATE POLICY "sm_sessoes_select" ON rh_sm_sessoes FOR SELECT
     USING (has_perfil('psicologa') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_sessoes_insert" ON rh_sm_sessoes;
 CREATE POLICY "sm_sessoes_insert" ON rh_sm_sessoes FOR INSERT
     WITH CHECK (has_perfil('psicologa') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_sessoes_update" ON rh_sm_sessoes;
 CREATE POLICY "sm_sessoes_update" ON rh_sm_sessoes FOR UPDATE
     USING (has_perfil('psicologa') OR has_perfil('admin'))
     WITH CHECK (has_perfil('psicologa') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_sessoes_delete" ON rh_sm_sessoes;
 CREATE POLICY "sm_sessoes_delete" ON rh_sm_sessoes FOR DELETE
     USING (has_perfil('admin'));
 
@@ -241,16 +252,20 @@ CREATE POLICY "sm_sessoes_delete" ON rh_sm_sessoes FOR DELETE
 -- Psicóloga, RH e Admin.
 -- ─────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "sm_alertas_select" ON rh_sm_alertas;
 CREATE POLICY "sm_alertas_select" ON rh_sm_alertas FOR SELECT
     USING (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_alertas_insert" ON rh_sm_alertas;
 CREATE POLICY "sm_alertas_insert" ON rh_sm_alertas FOR INSERT
     WITH CHECK (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_alertas_update" ON rh_sm_alertas;
 CREATE POLICY "sm_alertas_update" ON rh_sm_alertas FOR UPDATE
     USING (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'))
     WITH CHECK (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_alertas_delete" ON rh_sm_alertas;
 CREATE POLICY "sm_alertas_delete" ON rh_sm_alertas FOR DELETE
     USING (has_perfil('admin'));
 
@@ -260,24 +275,29 @@ CREATE POLICY "sm_alertas_delete" ON rh_sm_alertas FOR DELETE
 -- Psicóloga/RH/Admin vê tudo. Líder vê apenas os seus.
 -- ─────────────────────────────────────────────────────────
 
+DROP POLICY IF EXISTS "sm_encam_select_psi_rh_admin" ON rh_sm_encaminhamentos;
 CREATE POLICY "sm_encam_select_psi_rh_admin" ON rh_sm_encaminhamentos FOR SELECT
     USING (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_encam_select_lider" ON rh_sm_encaminhamentos;
 CREATE POLICY "sm_encam_select_lider" ON rh_sm_encaminhamentos FOR SELECT
     USING (
         has_perfil('lider')
         AND encaminhado_por = auth.uid()
     );
 
+DROP POLICY IF EXISTS "sm_encam_insert" ON rh_sm_encaminhamentos;
 CREATE POLICY "sm_encam_insert" ON rh_sm_encaminhamentos FOR INSERT
     WITH CHECK (
         has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin') OR has_perfil('lider')
     );
 
+DROP POLICY IF EXISTS "sm_encam_update" ON rh_sm_encaminhamentos;
 CREATE POLICY "sm_encam_update" ON rh_sm_encaminhamentos FOR UPDATE
     USING (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'))
     WITH CHECK (has_perfil('psicologa') OR has_perfil('rh') OR has_perfil('admin'));
 
+DROP POLICY IF EXISTS "sm_encam_delete" ON rh_sm_encaminhamentos;
 CREATE POLICY "sm_encam_delete" ON rh_sm_encaminhamentos FOR DELETE
     USING (has_perfil('admin'));
 

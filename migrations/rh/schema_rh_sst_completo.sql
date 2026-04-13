@@ -88,7 +88,7 @@ CREATE TABLE IF NOT EXISTS rh_funcionarios (
 );
 
 CREATE INDEX IF NOT EXISTS idx_func_status ON rh_funcionarios(status);
-CREATE INDEX IF NOT EXISTS idx_func_setor ON rh_funcionarios(setor);
+CREATE INDEX IF NOT EXISTS idx_func_setor ON rh_funcionarios(setor_id);
 CREATE INDEX IF NOT EXISTS idx_func_cpf ON rh_funcionarios(cpf);
 
 -- ══════════════════════════════════════════════════════════

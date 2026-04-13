@@ -609,6 +609,7 @@ BEGIN
 END; $function$;
 
 -- ── contar_notificacoes() ── chamada por: notificacoes.html
+-- CORRIGIDO 2026-04-13: ORDER BY duplicado causava erro GROUP BY
 CREATE OR REPLACE FUNCTION public.contar_notificacoes()
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -618,8 +619,14 @@ BEGIN
   RETURN jsonb_build_object(
     'total', (SELECT COUNT(*) FROM rh_notificacao WHERE lida = false),
     'criticas', (SELECT COUNT(*) FROM rh_notificacao WHERE lida = false AND criticidade IN ('critica','alta')),
-    'recentes', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', id, 'tipo', tipo, 'titulo', titulo, 'criticidade', criticidade, 'created_at', created_at) ORDER BY created_at DESC)
-      FROM rh_notificacao WHERE lida = false ORDER BY created_at DESC LIMIT 10), '[]'::jsonb)
+    'recentes', COALESCE((
+      SELECT jsonb_agg(sub ORDER BY sub.created_at DESC)
+      FROM (
+        SELECT id, tipo, titulo, criticidade, created_at
+        FROM rh_notificacao WHERE lida = false
+        ORDER BY created_at DESC LIMIT 10
+      ) sub
+    ), '[]'::jsonb)
   );
 END; $function$;
 

@@ -110,8 +110,8 @@ Tabela de ocorrências: `rh_acidentes` (campo `tipo`, não `tipo_acidente`; camp
 
 ## Pendências (próximas sessões)
 
-1. **Parser planilha ponto Secullum** — formato muito largo, precisa debug
-2. **Organograma visual** — hierarquia de cargos/setores com dados reais do banco (página própria)
+1. **UNIFICAR REPOS** — classic-rh (Classic-ia/classic-rh, privado) tem páginas que não existem no classic-ia (ex: importar_secullum.html). Mergear tudo no classic-ia e desativar classic-rh. Deploy classic-rh.vercel.app aponta para o repo separado.
+2. **Parser planilha ponto Secullum** — formato muito largo, precisa debug
 3. **Backup do banco** — página para admin baixar JSON das tabelas críticas
 4. **Organizar migrations SQL** — 80+ arquivos na raiz sem ordem
 5. **Unificar auth CQ + RH** — dois sistemas paralelos

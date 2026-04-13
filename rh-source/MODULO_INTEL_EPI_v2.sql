@@ -1,0 +1,58 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO INTELIGÊNCIA EPI — ANALYTICS OPERACIONAL
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql + MODULO_SST_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- NÃO é dashboard frontend. É MOTOR DE INTELIGÊNCIA em SQL puro.
+--
+-- ═══════ VIEWS ANALÍTICAS (5) ═══════
+--   vw_intel_epi_por_colaborador  — consumo individual + tempo médio uso
+--   vw_intel_epi_por_setor        — benchmark setorial + % substituição
+--   vw_intel_epi_por_tipo         — reposição média + desvio padrão + motivos
+--   vw_intel_epi_setor_tipo       — matriz setor × EPI cruzada
+--   vw_intel_epi_cross_setor      — EPI × acidentes × NCs × restrições
+--
+-- ═══════ FUNCTIONS (6 RPCs) ═══════
+--   intel_epi_rankings(dias)          — top 10 EPIs, setores, colaboradores
+--   intel_epi_anomalias(desvios,dias) — z-score: consumo, reposição, perdas
+--   intel_epi_alertas_risco()         — sem EPI, CA vencido, entrega irregular
+--   intel_epi_previsao_reposicao(dias)— previsão baseada em histórico individual
+--   intel_epi_cargo_vs_real()         — obrigatório vs realmente entregue (gap)
+--   intel_epi_dashboard()             — JSONB consolidado
+--
+-- ═══════ DETECÇÃO DE ANOMALIAS ═══════
+--   Usa z-score (desvios-padrão) para detectar:
+--   1. Consumo total acima da média do cargo (≥2σ)
+--   2. Reposição mais rápida que a média do EPI (≥2σ)
+--   3. Perdas excessivas por colaborador (≥2σ)
+--
+-- ═══════ PREVISÃO DE REPOSIÇÃO ═══════
+--   Calcula média de intervalo entre entregas por funcionário×EPI.
+--   Confiança: ≥5 amostras=alta, ≥3=média, <3=baixa.
+--   Retorna apenas previsões dentro do horizonte (default 60 dias).
+--
+-- ═══════ CROSS-MODULE ═══════
+--   vw_intel_epi_cross_setor cruza por setor:
+--     EPIs + Acidentes + NCs + Restrições (últimos 12 meses)
+--   Permite correlação: setores com mais consumo EPI vs acidentes.
+--
+-- ═══════ EXEMPLOS ═══════
+--   SELECT * FROM vw_intel_epi_por_setor;
+--   SELECT intel_epi_rankings(365);
+--   SELECT * FROM intel_epi_anomalias(2.0, 180);
+--   SELECT * FROM intel_epi_alertas_risco();
+--   SELECT * FROM intel_epi_previsao_reposicao(60);
+--   SELECT * FROM intel_epi_cargo_vs_real();
+--   SELECT * FROM vw_intel_epi_cross_setor;
+--   SELECT intel_epi_dashboard();
+--
+-- ═══════ SUPABASE JS ═══════
+--   const { data } = await supabase.rpc('intel_epi_rankings', { p_periodo_dias: 365 });
+--   const { data } = await supabase.rpc('intel_epi_anomalias', { p_desvios: 2, p_periodo_dias: 180 });
+--   const { data } = await supabase.rpc('intel_epi_alertas_risco');
+--   const { data } = await supabase.rpc('intel_epi_previsao_reposicao', { p_dias_horizonte: 60 });
+--   const { data } = await supabase.rpc('intel_epi_dashboard');
+--
+-- TOTAL PROJETO: 61 tabelas, 17 views, 44 RPCs, 1 edge function.
+-- ════════════════════════════════════════════════════════════════════════════

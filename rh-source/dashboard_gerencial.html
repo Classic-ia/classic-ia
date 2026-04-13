@@ -1,0 +1,1118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dashboard Gerencial - Classic RH &amp; SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+/* grid bg removed */
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px; color: var(--text); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+
+.btn-print {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+  padding: 6px 14px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; transition: all .2s;
+  display: flex; align-items: center; gap: 6px;
+}
+.btn-print:hover { border-color: var(--accent); color: var(--accent); }
+
+/* Main */
+.main { max-width: 1200px; margin: 0 auto; padding: 24px 20px; }
+
+/* Filter bar */
+.filter-bar {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+.filter-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 4px; }
+.filter-bar select {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 14px; color: var(--text);
+  font-size: 13px; font-family: 'DM Sans', sans-serif; cursor: pointer;
+}
+.filter-bar select:focus { outline: none; border-color: var(--accent); }
+.filter-bar select option { background: var(--surface); color: var(--text); }
+
+/* KPI Grid */
+.kpi-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 28px;
+}
+.kpi {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px 16px; text-align: center;
+  transition: border-color .2s;
+}
+.kpi:hover { border-color: rgba(200,169,110,.3); }
+.kpi-val {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 26px;
+}
+.kpi-val.gold { color: var(--accent); }
+.kpi-val.green { color: var(--ok); }
+.kpi-val.orange { color: var(--warn); }
+.kpi-val.red { color: var(--err); }
+.kpi-val.blue { color: var(--info); }
+.kpi-lbl {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+.kpi-sub {
+  font-size: 11px; color: var(--muted); margin-top: 2px;
+  font-family: 'DM Mono', monospace;
+}
+
+/* Section titles */
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  color: var(--muted); text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px; margin-top: 8px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title::before {
+  content: ''; display: inline-block; width: 3px; height: 14px;
+  background: var(--accent); border-radius: 2px;
+}
+
+/* Card grid */
+.card-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 16px; margin-bottom: 28px;
+}
+.card-grid-3 {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px; margin-bottom: 28px;
+}
+.card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px;
+}
+.card-title {
+  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 13px;
+  color: var(--text); margin-bottom: 14px;
+}
+.chart-wrap { position: relative; height: 240px; }
+.chart-wrap-sm { position: relative; height: 200px; }
+
+/* Table */
+.table-wrap { overflow-x: auto; margin-bottom: 28px; }
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; font-family: 'DM Mono', monospace;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  font-weight: 500; white-space: nowrap;
+}
+tbody td {
+  padding: 10px 12px; border-bottom: 1px solid rgba(30,58,82,.3);
+  color: var(--text); white-space: nowrap;
+}
+tbody tr:hover { background: rgba(46,107,138,.06); }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 10px; font-weight: 600;
+}
+.badge-ok { background: rgba(39,174,96,.15); color: #27ae60; }
+.badge-warn { background: rgba(243,156,18,.15); color: #f39c12; }
+.badge-err { background: rgba(231,76,60,.15); color: #e74c3c; }
+.badge-info { background: rgba(46,107,138,.15); color: #2E6B8A; }
+.badge-gold { background: rgba(200,169,110,.15); color: #c8a96e; }
+
+/* Alertas */
+.alert-list { display: flex; flex-direction: column; gap: 8px; }
+.alert-item {
+  display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 12px;
+}
+.alert-icon {
+  width: 28px; height: 28px; border-radius: 8px; display: flex;
+  align-items: center; justify-content: center; font-size: 13px;
+  flex-shrink: 0;
+}
+.alert-icon.warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.alert-icon.err { background: rgba(231,76,60,.12); color: var(--err); }
+.alert-text { flex: 1; color: var(--text); }
+.alert-count {
+  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 16px;
+  color: var(--accent);
+}
+
+/* Footer */
+.footer {
+  text-align: center; padding: 24px 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+
+/* Loading */
+.loading { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+.spin { display: inline-block; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Print */
+@media print {
+  body { background: #fff !important; color: #222 !important; }
+  body::before { display: none; }
+  .header { position: static; background: #fff; border-bottom: 2px solid #ddd; backdrop-filter: none; }
+  .back-link, .btn-print, #rh-user-chip { display: none !important; }
+  .header-title { color: #222; }
+  .filter-bar { display: none; }
+  .main { max-width: 100%; padding: 10px; }
+  .kpi { background: #f8f8f8; border: 1px solid #ddd; }
+  .kpi-val { color: #222 !important; }
+  .kpi-lbl { color: #666; }
+  .card { background: #f8f8f8; border: 1px solid #ddd; break-inside: avoid; }
+  .card-title { color: #222; }
+  .section-title { color: #666; }
+  .section-title::before { background: #999; }
+  table { font-size: 10px; }
+  thead th { background: #eee; color: #555; }
+  tbody td { color: #222; }
+  .alert-item { background: #f8f8f8; border: 1px solid #ddd; }
+  .alert-text { color: #222; }
+  .footer { color: #aaa; }
+  :root {
+    --bg: #fff; --surface: #f8f8f8; --surface2: #eee;
+    --border: #ddd; --text: #222; --muted: #666;
+  }
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .card-grid, .card-grid-3 { grid-template-columns: 1fr; }
+  .header-title { font-size: 14px; }
+  .chart-wrap { height: 200px; }
+}
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&larr; Painel</a>
+    <div class="header-title">Dashboard Gerencial</div>
+  </div>
+  <div class="header-right">
+    <button class="btn-print" onclick="window.print()">
+      <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8" rx="1"/></svg>
+      Imprimir
+    </button>
+    <div id="rh-user-chip"></div>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div>
+      <div class="filter-label">Periodo</div>
+      <select id="f-periodo">
+        <option value="3">Ultimos 3 meses</option>
+        <option value="6" selected>Ultimos 6 meses</option>
+        <option value="12">Ultimos 12 meses</option>
+      </select>
+    </div>
+    <div>
+      <div class="filter-label">Setor</div>
+      <select id="f-setor">
+        <option value="">Todos</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- ========== 1. KPI CARDS ========== -->
+  <div class="kpi-grid" id="kpis">
+    <div class="kpi">
+      <div class="kpi-val gold" id="k-ativos">--</div>
+      <div class="kpi-lbl">Total Ativos</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val orange" id="k-afastados">--</div>
+      <div class="kpi-lbl">Afastados</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val red" id="k-desligados">--</div>
+      <div class="kpi-lbl">Desligados (periodo)</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val blue" id="k-turnover">--</div>
+      <div class="kpi-lbl">Turnover Anual</div>
+      <div class="kpi-sub" id="k-turnover-sub"></div>
+    </div>
+  </div>
+
+  <!-- ========== 2. TURNOVER ========== -->
+  <div class="section-title">Turnover e Desligamentos</div>
+  <div class="card-grid">
+    <div class="card" style="grid-column: span 2;">
+      <div class="card-title">Turnover Mensal (%)</div>
+      <div class="chart-wrap"><canvas id="chart-turnover-line"></canvas></div>
+    </div>
+  </div>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">Motivos de Desligamento</div>
+      <div class="chart-wrap"><canvas id="chart-motivos"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Tempo de Permanencia (desligados)</div>
+      <div class="chart-wrap"><canvas id="chart-permanencia"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ========== 3. ABSENTEISMO ========== -->
+  <div class="section-title">Absenteismo</div>
+  <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 16px;">
+    <div class="kpi">
+      <div class="kpi-val orange" id="k-absenteismo">--</div>
+      <div class="kpi-lbl">Taxa de Absenteismo</div>
+      <div class="kpi-sub" id="k-abs-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val gold" id="k-total-atestados">--</div>
+      <div class="kpi-lbl">Total Atestados (periodo)</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val red" id="k-total-dias">--</div>
+      <div class="kpi-lbl">Total Dias Afastados</div>
+    </div>
+  </div>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">Atestados por Mes</div>
+      <div class="chart-wrap"><canvas id="chart-atestados"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Top 10 — Colaboradores com Mais Atestados</div>
+      <div class="table-wrap" style="margin-bottom:0;">
+        <table>
+          <thead>
+            <tr><th>#</th><th>Colaborador</th><th>Atestados</th><th>Total Dias</th></tr>
+          </thead>
+          <tbody id="tbody-top-atestados">
+            <tr><td colspan="4" class="loading">Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 4. PERFIL DA EQUIPE ========== -->
+  <div class="section-title">Perfil da Equipe</div>
+  <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-bottom: 16px;">
+    <div class="kpi">
+      <div class="kpi-val gold" id="k-tempo-casa">--</div>
+      <div class="kpi-lbl">Tempo Medio de Casa</div>
+      <div class="kpi-sub" id="k-tempo-sub"></div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val blue" id="k-idade-media">--</div>
+      <div class="kpi-lbl">Idade Media</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val green" id="k-setores">--</div>
+      <div class="kpi-lbl">Setores Ativos</div>
+    </div>
+  </div>
+  <div class="card-grid">
+    <div class="card">
+      <div class="card-title">Distribuicao por Setor</div>
+      <div class="chart-wrap"><canvas id="chart-setores"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="card-title">Piramide Etaria</div>
+      <div class="chart-wrap"><canvas id="chart-piramide"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ========== 5. ASOs e SEGURANCA ========== -->
+  <div class="section-title">ASOs e Seguranca</div>
+  <div class="kpi-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); margin-bottom: 16px;">
+    <div class="kpi">
+      <div class="kpi-val red" id="k-aso-30">--</div>
+      <div class="kpi-lbl">ASOs vencendo em 30 dias</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val orange" id="k-aso-60">--</div>
+      <div class="kpi-lbl">ASOs vencendo em 60 dias</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val gold" id="k-aso-90">--</div>
+      <div class="kpi-lbl">ASOs vencendo em 90 dias</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val green" id="k-epi-mes">--</div>
+      <div class="kpi-lbl">EPIs Entregues no Mes</div>
+    </div>
+  </div>
+
+  <!-- ========== 6. ALERTAS ========== -->
+  <div class="section-title">Alertas</div>
+  <div class="card-grid" style="margin-bottom: 28px;">
+    <div class="card">
+      <div class="card-title">Contratos de Experiencia</div>
+      <div class="alert-list" id="alertas-contratos">
+        <div class="loading">Carregando...</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-title">ASOs Vencidos</div>
+      <div class="alert-list" id="alertas-asos">
+        <div class="loading">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="footer">Classic RH &amp; SST v2026.03</div>
+
+<script>
+/* ================================================================
+   DASHBOARD GERENCIAL — Classic RH & SST
+   ================================================================ */
+Chart.defaults.color = '#5d7f95';
+Chart.defaults.font.family = "'DM Sans', sans-serif";
+Chart.defaults.font.size = 11;
+
+const CHART_COLORS = ['#c8a96e','#2E6B8A','#27ae60','#f39c12','#e74c3c','#8e44ad','#3498db','#1abc9c','#e67e22','#9b59b6'];
+const MONTH_NAMES = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+
+let charts = {};
+let DATA = { colabs: [], desligamentos: [], ocorrencias: [], asos: [], epis: [] };
+
+// ─── Helpers ───
+function today() { return new Date(); }
+
+function toISO(d) {
+  return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+}
+
+function monthKey(dateStr) {
+  if (!dateStr) return '';
+  return dateStr.substring(0, 7);
+}
+
+function diffDays(a, b) {
+  return Math.round((new Date(b) - new Date(a)) / 86400000);
+}
+
+function parseDate(s) { return s ? new Date(s + 'T00:00:00') : null; }
+
+function getMonthsBack(n) {
+  const months = [];
+  const now = today();
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push({
+      key: d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0'),
+      label: MONTH_NAMES[d.getMonth()] + '/' + String(d.getFullYear()).slice(2),
+      start: toISO(d),
+      end: toISO(new Date(d.getFullYear(), d.getMonth()+1, 0)),
+    });
+  }
+  return months;
+}
+
+function destroyChart(name) {
+  if (charts[name]) { charts[name].destroy(); charts[name] = null; }
+}
+
+function workingDays(year, month) {
+  let count = 0;
+  const d = new Date(year, month - 1, 1);
+  while (d.getMonth() === month - 1) {
+    const dow = d.getDay();
+    if (dow !== 0 && dow !== 6) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+// ─── Init ───
+(async () => {
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','visualizador'] });
+  if (!user) return;
+
+  await loadAllData();
+  populateSetorFilter();
+  await renderAll();
+
+  document.getElementById('f-periodo').addEventListener('change', renderAll);
+  document.getElementById('f-setor').addEventListener('change', renderAll);
+})();
+
+// ─── Load all data once ───
+async function loadAllData() {
+  const [rColabs, rDeslig, rAsos, rEpis] = await Promise.all([
+    API.get('rh_colaboradores?select=id,nome,cpf,cargo,setor,status,data_admissao,data_nascimento,salario_base,cidade'),
+    API.get('rh_desligamentos?select=*&order=data_desligamento.desc'),
+    API.get('rh_asos?select=*&order=data_vencimento.asc'),
+    API.get('sst_epi_entrega?select=*&order=data_entrega.desc'),
+  ]);
+  // TODO: modulo de ocorrencias pendente de implementacao
+  const ocorr = [];
+  DATA = {
+    colabs: rColabs.ok ? rColabs.data : [],
+    desligamentos: rDeslig.ok ? rDeslig.data : [],
+    ocorrencias: ocorr,
+    asos: rAsos.ok ? rAsos.data : [],
+    epis: rEpis.ok ? rEpis.data : [],
+  };
+}
+
+function populateSetorFilter() {
+  const setores = [...new Set(DATA.colabs.filter(c => c.setor).map(c => c.setor))].sort();
+  const sel = document.getElementById('f-setor');
+  setores.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+}
+
+// ─── Master render ───
+async function renderAll() {
+  const periodo = parseInt(document.getElementById('f-periodo').value);
+  const setor = document.getElementById('f-setor').value;
+  const months = getMonthsBack(periodo);
+  const periodStart = months[0].start;
+  const todayStr = toISO(today());
+
+  // Filter colabs by setor
+  const colabs = setor ? DATA.colabs.filter(c => c.setor === setor) : DATA.colabs;
+  const colabIds = new Set(colabs.map(c => c.id));
+  const colabNames = new Set(colabs.map(c => c.nome));
+
+  const ativos = colabs.filter(c => c.status === 'ativo');
+  const afastados = colabs.filter(c => c.status === 'afastado');
+
+  // Desligamentos in period — match by setor if filtered
+  let desligPeriodo = DATA.desligamentos.filter(d => d.data_desligamento >= periodStart);
+  if (setor) desligPeriodo = desligPeriodo.filter(d => d.setor === setor);
+
+  // Ocorrencias - match by colaborador_id if setor filtered
+  let ocorrencias = DATA.ocorrencias;
+  if (setor) ocorrencias = ocorrencias.filter(o => colabIds.has(o.colaborador_id));
+
+  // ─── 1. KPI Cards ───
+  document.getElementById('k-ativos').textContent = ativos.length;
+  document.getElementById('k-afastados').textContent = afastados.length;
+  document.getElementById('k-desligados').textContent = desligPeriodo.length;
+
+  // Turnover anual: (desligamentos 12m / headcount medio) * 100
+  const deslig12m = setor
+    ? DATA.desligamentos.filter(d => d.data_desligamento >= getMonthsBack(12)[0].start && d.setor === setor)
+    : DATA.desligamentos.filter(d => d.data_desligamento >= getMonthsBack(12)[0].start);
+  const headcountMedio = ativos.length + (deslig12m.length / 2);
+  const turnoverAnual = headcountMedio > 0 ? ((deslig12m.length / headcountMedio) * 100).toFixed(1) : '0.0';
+  document.getElementById('k-turnover').textContent = turnoverAnual + '%';
+  document.getElementById('k-turnover-sub').textContent = deslig12m.length + ' desl. / ' + Math.round(headcountMedio) + ' HC medio';
+
+  // ─── 2. Turnover section ───
+  renderTurnoverLine(months, ativos.length, setor);
+  renderMotivosDonut(desligPeriodo);
+  renderPermanenciaBar(desligPeriodo);
+
+  // ─── 3. Absenteismo ───
+  renderAbsenteismo(months, ocorrencias, ativos.length);
+
+  // ─── 4. Perfil ───
+  renderPerfil(ativos);
+
+  // ─── 5. ASOs e Seguranca ───
+  renderASOs();
+  renderEPIs();
+
+  // ─── 6. Alertas ───
+  renderAlertaContratos(ativos);
+  renderAlertaASOs();
+}
+
+// ================================================================
+// 2. TURNOVER
+// ================================================================
+function renderTurnoverLine(months, headcount, setor) {
+  destroyChart('turnoverLine');
+  const ctx = document.getElementById('chart-turnover-line').getContext('2d');
+
+  const data = months.map(m => {
+    let desligMes = DATA.desligamentos.filter(d => monthKey(d.data_desligamento) === m.key);
+    if (setor) desligMes = desligMes.filter(d => d.setor === setor);
+    const hcMedio = headcount + (desligMes.length / 2);
+    return hcMedio > 0 ? parseFloat(((desligMes.length / hcMedio) * 100).toFixed(2)) : 0;
+  });
+
+  charts.turnoverLine = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: 'Turnover %',
+        data,
+        borderColor: '#c8a96e',
+        backgroundColor: 'rgba(200,169,110,.12)',
+        fill: true,
+        tension: 0.35,
+        pointRadius: 4,
+        pointBackgroundColor: '#c8a96e',
+        pointBorderColor: '#0d1b2a',
+        pointBorderWidth: 2,
+        borderWidth: 2.5,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y.toFixed(2) + '%' } },
+      },
+      scales: {
+        y: {
+          grid: { color: 'rgba(30,58,82,.3)' },
+          ticks: { callback: v => v + '%' },
+          beginAtZero: true,
+        },
+        x: { grid: { display: false } },
+      }
+    }
+  });
+}
+
+function renderMotivosDonut(desligamentos) {
+  destroyChart('motivos');
+  const ctx = document.getElementById('chart-motivos').getContext('2d');
+
+  const tipoMap = {};
+  const LABELS = {
+    'pedido': 'Pedido',
+    'sem_justa_causa': 'Sem Justa Causa',
+    'termino_contrato': 'Termino Contrato',
+    'acordo': 'Acordo',
+    'outro': 'Outro',
+  };
+  desligamentos.forEach(d => {
+    const t = d.tipo || 'outro';
+    tipoMap[t] = (tipoMap[t] || 0) + 1;
+  });
+
+  const entries = Object.entries(tipoMap).sort((a, b) => b[1] - a[1]);
+
+  if (entries.length === 0) {
+    // Empty state
+    charts.motivos = new Chart(ctx, {
+      type: 'doughnut',
+      data: { labels: ['Sem dados'], datasets: [{ data: [1], backgroundColor: ['rgba(30,58,82,.3)'], borderWidth: 0 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } } }
+    });
+    return;
+  }
+
+  charts.motivos = new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(e => LABELS[e[0]] || e[0]),
+      datasets: [{
+        data: entries.map(e => e[1]),
+        backgroundColor: entries.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '55%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, padding: 10, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + ' (' + ((ctx.parsed / desligamentos.length) * 100).toFixed(0) + '%)' } },
+      }
+    }
+  });
+}
+
+function renderPermanenciaBar(desligamentos) {
+  destroyChart('permanencia');
+  const ctx = document.getElementById('chart-permanencia').getContext('2d');
+
+  const faixas = { 'Ate 90d': 0, '91-180d': 0, '181-365d': 0, '> 1 ano': 0 };
+  desligamentos.forEach(d => {
+    const dias = d.tempo_empresa_dias || 0;
+    if (dias <= 90) faixas['Ate 90d']++;
+    else if (dias <= 180) faixas['91-180d']++;
+    else if (dias <= 365) faixas['181-365d']++;
+    else faixas['> 1 ano']++;
+  });
+
+  charts.permanencia = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(faixas),
+      datasets: [{
+        label: 'Desligados',
+        data: Object.values(faixas),
+        backgroundColor: ['#e74c3c', '#f39c12', '#c8a96e', '#2E6B8A'],
+        borderRadius: 6,
+        maxBarThickness: 50,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.y + ' colaboradores' } },
+      },
+      scales: {
+        y: { grid: { color: 'rgba(30,58,82,.3)' }, beginAtZero: true, ticks: { stepSize: 1 } },
+        x: { grid: { display: false } },
+      }
+    }
+  });
+}
+
+// ================================================================
+// 3. ABSENTEISMO
+// ================================================================
+function renderAbsenteismo(months, ocorrencias, headcount) {
+  // Filter atestados
+  const atestados = ocorrencias.filter(o => o.tipo === 'atestado');
+
+  // Count per month using competencia field
+  const perMonth = {};
+  const diasPerMonth = {};
+  months.forEach(m => { perMonth[m.key] = 0; diasPerMonth[m.key] = 0; });
+
+  atestados.forEach(a => {
+    const comp = a.competencia || monthKey(a.data_inicio);
+    if (perMonth[comp] !== undefined) {
+      perMonth[comp]++;
+      diasPerMonth[comp] += Number(a.dias || 0);
+    }
+  });
+
+  const totalAtestados = Object.values(perMonth).reduce((s, v) => s + v, 0);
+  const totalDias = Object.values(diasPerMonth).reduce((s, v) => s + v, 0);
+
+  // Taxa absenteismo = (total dias / (dias uteis * headcount)) * 100
+  let totalDiasUteis = 0;
+  months.forEach(m => {
+    const [y, mo] = m.key.split('-').map(Number);
+    totalDiasUteis += workingDays(y, mo);
+  });
+  const taxaAbs = (headcount > 0 && totalDiasUteis > 0)
+    ? ((totalDias / (totalDiasUteis * headcount)) * 100).toFixed(2)
+    : '0.00';
+
+  document.getElementById('k-absenteismo').textContent = taxaAbs + '%';
+  document.getElementById('k-abs-sub').textContent = totalDias + ' dias / ' + (totalDiasUteis * headcount) + ' dias uteis';
+  document.getElementById('k-total-atestados').textContent = totalAtestados;
+  document.getElementById('k-total-dias').textContent = totalDias;
+
+  // Bar chart
+  destroyChart('atestados');
+  const ctx = document.getElementById('chart-atestados').getContext('2d');
+  charts.atestados = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: months.map(m => m.label),
+      datasets: [{
+        label: 'Atestados',
+        data: months.map(m => perMonth[m.key]),
+        backgroundColor: 'rgba(243,156,18,.7)',
+        borderRadius: 6,
+        maxBarThickness: 42,
+      }, {
+        label: 'Dias Afastados',
+        data: months.map(m => diasPerMonth[m.key]),
+        backgroundColor: 'rgba(231,76,60,.5)',
+        borderRadius: 6,
+        maxBarThickness: 42,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { boxWidth: 10, padding: 10, font: { size: 10 } } },
+      },
+      scales: {
+        y: { grid: { color: 'rgba(30,58,82,.3)' }, beginAtZero: true, ticks: { stepSize: 1 } },
+        x: { grid: { display: false } },
+      }
+    }
+  });
+
+  // Top 10 table
+  renderTopAtestados(atestados, months);
+}
+
+function renderTopAtestados(atestados, months) {
+  const tbody = document.getElementById('tbody-top-atestados');
+  const validKeys = new Set(months.map(m => m.key));
+
+  // Group by colaborador
+  const grouped = {};
+  atestados.forEach(a => {
+    const comp = a.competencia || monthKey(a.data_inicio);
+    if (!validKeys.has(comp)) return;
+    const id = a.colaborador_id;
+    if (!grouped[id]) grouped[id] = { count: 0, dias: 0, nome: '' };
+    grouped[id].count++;
+    grouped[id].dias += Number(a.dias || 0);
+  });
+
+  // Resolve names from colabs
+  const colabMap = {};
+  DATA.colabs.forEach(c => colabMap[c.id] = c.nome);
+  Object.keys(grouped).forEach(id => {
+    grouped[id].nome = colabMap[id] || 'ID ' + id;
+  });
+
+  const sorted = Object.values(grouped).sort((a, b) => b.count - a.count).slice(0, 10);
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);">Nenhum atestado no periodo</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map((r, i) => `<tr>
+    <td>${i + 1}</td>
+    <td>${r.nome}</td>
+    <td><span class="badge ${r.count >= 3 ? 'badge-err' : 'badge-warn'}">${r.count}</span></td>
+    <td>${r.dias} dias</td>
+  </tr>`).join('');
+}
+
+// ================================================================
+// 4. PERFIL DA EQUIPE
+// ================================================================
+function renderPerfil(ativos) {
+  const todayDate = today();
+
+  // Tempo medio de casa
+  let totalDias = 0;
+  let countAdm = 0;
+  ativos.forEach(c => {
+    if (c.data_admissao) {
+      totalDias += diffDays(c.data_admissao, toISO(todayDate));
+      countAdm++;
+    }
+  });
+  const mediaAnos = countAdm > 0 ? (totalDias / countAdm / 365).toFixed(1) : '0';
+  const mediaMeses = countAdm > 0 ? Math.round(totalDias / countAdm / 30.4) : 0;
+  document.getElementById('k-tempo-casa').textContent = mediaAnos + ' anos';
+  document.getElementById('k-tempo-sub').textContent = mediaMeses + ' meses em media';
+
+  // Idade media
+  let totalIdade = 0, countIdade = 0;
+  const faixasIdade = { '18-25': 0, '26-35': 0, '36-45': 0, '46-55': 0, '56+': 0 };
+  ativos.forEach(c => {
+    if (c.data_nascimento) {
+      const nasc = parseDate(c.data_nascimento);
+      const idade = Math.floor((todayDate - nasc) / 31557600000);
+      totalIdade += idade;
+      countIdade++;
+      if (idade <= 25) faixasIdade['18-25']++;
+      else if (idade <= 35) faixasIdade['26-35']++;
+      else if (idade <= 45) faixasIdade['36-45']++;
+      else if (idade <= 55) faixasIdade['46-55']++;
+      else faixasIdade['56+']++;
+    }
+  });
+  document.getElementById('k-idade-media').textContent = countIdade > 0 ? Math.round(totalIdade / countIdade) + ' anos' : '--';
+
+  // Setores
+  const setorCount = {};
+  ativos.forEach(c => {
+    const s = c.setor || 'Nao informado';
+    setorCount[s] = (setorCount[s] || 0) + 1;
+  });
+  document.getElementById('k-setores').textContent = Object.keys(setorCount).length;
+
+  // Donut setores
+  destroyChart('setores');
+  const ctxS = document.getElementById('chart-setores').getContext('2d');
+  const sortedSetores = Object.entries(setorCount).sort((a, b) => b[1] - a[1]);
+
+  charts.setores = new Chart(ctxS, {
+    type: 'doughnut',
+    data: {
+      labels: sortedSetores.map(s => s[0]),
+      datasets: [{
+        data: sortedSetores.map(s => s[1]),
+        backgroundColor: sortedSetores.map((_, i) => CHART_COLORS[i % CHART_COLORS.length]),
+        borderWidth: 0,
+        hoverOffset: 6,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      cutout: '50%',
+      plugins: {
+        legend: { position: 'right', labels: { boxWidth: 10, padding: 8, font: { size: 10 } } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + ctx.parsed + ' (' + ((ctx.parsed / ativos.length) * 100).toFixed(0) + '%)' } },
+      }
+    }
+  });
+
+  // Piramide etaria (horizontal bar)
+  destroyChart('piramide');
+  const ctxP = document.getElementById('chart-piramide').getContext('2d');
+  const faixaLabels = Object.keys(faixasIdade);
+  const faixaValues = Object.values(faixasIdade);
+
+  charts.piramide = new Chart(ctxP, {
+    type: 'bar',
+    data: {
+      labels: faixaLabels,
+      datasets: [{
+        label: 'Colaboradores',
+        data: faixaValues,
+        backgroundColor: ['#3498db', '#2E6B8A', '#27ae60', '#c8a96e', '#f39c12'],
+        borderRadius: 6,
+        maxBarThickness: 32,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: ctx => ctx.parsed.x + ' colaboradores' } },
+      },
+      scales: {
+        x: { grid: { color: 'rgba(30,58,82,.3)' }, beginAtZero: true, ticks: { stepSize: 1 } },
+        y: { grid: { display: false } },
+      }
+    }
+  });
+}
+
+// ================================================================
+// 5. ASOs e SEGURANCA
+// ================================================================
+function renderASOs() {
+  const todayStr = toISO(today());
+  const d30 = new Date(today()); d30.setDate(d30.getDate() + 30);
+  const d60 = new Date(today()); d60.setDate(d60.getDate() + 60);
+  const d90 = new Date(today()); d90.setDate(d90.getDate() + 90);
+
+  // Get latest ASO per colaborador
+  const latestASO = {};
+  DATA.asos.forEach(a => {
+    const key = a.colaborador_id || a.colaborador_nome;
+    if (!latestASO[key] || a.data_validade > latestASO[key].data_validade) {
+      latestASO[key] = a;
+    }
+  });
+
+  const asoList = Object.values(latestASO);
+  const vencer30 = asoList.filter(a => a.data_validade && a.data_validade >= todayStr && a.data_validade <= toISO(d30)).length;
+  const vencer60 = asoList.filter(a => a.data_validade && a.data_validade >= todayStr && a.data_validade <= toISO(d60)).length;
+  const vencer90 = asoList.filter(a => a.data_validade && a.data_validade >= todayStr && a.data_validade <= toISO(d90)).length;
+
+  document.getElementById('k-aso-30').textContent = vencer30;
+  document.getElementById('k-aso-60').textContent = vencer60;
+  document.getElementById('k-aso-90').textContent = vencer90;
+}
+
+function renderEPIs() {
+  const now = today();
+  const mesAtual = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+
+  const episMes = DATA.epis.filter(e => e.data_entrega && e.data_entrega.startsWith(mesAtual)).length;
+  document.getElementById('k-epi-mes').textContent = episMes;
+}
+
+// ================================================================
+// 6. ALERTAS
+// ================================================================
+function renderAlertaContratos(ativos) {
+  const container = document.getElementById('alertas-contratos');
+  const todayDate = today();
+  const alertas = [];
+
+  ativos.forEach(c => {
+    if (!c.data_admissao) return;
+    const adm = parseDate(c.data_admissao);
+    const dias45 = new Date(adm); dias45.setDate(dias45.getDate() + 45);
+    const dias90 = new Date(adm); dias90.setDate(dias90.getDate() + 90);
+
+    const diff45 = Math.round((dias45 - todayDate) / 86400000);
+    const diff90 = Math.round((dias90 - todayDate) / 86400000);
+
+    if (diff45 >= 0 && diff45 <= 15) {
+      alertas.push({
+        nome: c.nome,
+        cargo: c.cargo || '',
+        tipo: '45 dias',
+        diasRestantes: diff45,
+        severity: diff45 <= 5 ? 'err' : 'warn',
+      });
+    }
+    if (diff90 >= 0 && diff90 <= 15) {
+      alertas.push({
+        nome: c.nome,
+        cargo: c.cargo || '',
+        tipo: '90 dias',
+        diasRestantes: diff90,
+        severity: diff90 <= 5 ? 'err' : 'warn',
+      });
+    }
+  });
+
+  alertas.sort((a, b) => a.diasRestantes - b.diasRestantes);
+
+  if (alertas.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:12px;">Nenhum contrato de experiencia vencendo nos proximos 15 dias</div>';
+    return;
+  }
+
+  container.innerHTML = alertas.map(a => `
+    <div class="alert-item">
+      <div class="alert-icon ${a.severity}">&#9202;</div>
+      <div class="alert-text">
+        <strong>${a.nome}</strong> <span style="color:var(--muted);">— ${a.cargo}</span><br>
+        <span style="font-size:11px;color:var(--muted);">Contrato ${a.tipo} vence em <strong style="color:${a.severity === 'err' ? 'var(--err)' : 'var(--warn)'}">${a.diasRestantes} dias</strong></span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAlertaASOs() {
+  const container = document.getElementById('alertas-asos');
+  const todayStr = toISO(today());
+
+  // Latest ASO per person
+  const latestASO = {};
+  DATA.asos.forEach(a => {
+    const key = a.colaborador_id || a.colaborador_nome;
+    if (!latestASO[key] || a.data_validade > latestASO[key].data_validade) {
+      latestASO[key] = a;
+    }
+  });
+
+  // Only active collaborators
+  const ativosIds = new Set(DATA.colabs.filter(c => c.status === 'ativo').map(c => c.id));
+  const ativosNomes = new Set(DATA.colabs.filter(c => c.status === 'ativo').map(c => c.nome));
+
+  const vencidos = Object.values(latestASO).filter(a => {
+    if (!a.data_validade || a.data_validade >= todayStr) return false;
+    // Only alert for active colabs
+    if (a.colaborador_id && ativosIds.has(a.colaborador_id)) return true;
+    if (a.colaborador_nome && ativosNomes.has(a.colaborador_nome)) return true;
+    return false;
+  });
+
+  vencidos.sort((a, b) => (a.data_validade || '').localeCompare(b.data_validade || ''));
+
+  if (vencidos.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:var(--muted);padding:20px;font-size:12px;">Nenhum ASO vencido para colaboradores ativos</div>';
+    return;
+  }
+
+  container.innerHTML = vencidos.slice(0, 15).map(a => {
+    const diasVencido = diffDays(a.data_validade, todayStr);
+    const nome = a.colaborador_nome || 'ID ' + a.colaborador_id;
+    return `
+    <div class="alert-item">
+      <div class="alert-icon err">&#9888;</div>
+      <div class="alert-text">
+        <strong>${nome}</strong> <span style="color:var(--muted);">— ${a.tipo || 'Periodico'}</span><br>
+        <span style="font-size:11px;color:var(--err);">Vencido ha ${diasVencido} dias</span>
+        <span style="font-size:11px;color:var(--muted);margin-left:8px;">Validade: ${a.data_validade}</span>
+      </div>
+    </div>`;
+  }).join('') + (vencidos.length > 15
+    ? `<div style="text-align:center;color:var(--muted);padding:8px;font-size:11px;">+ ${vencidos.length - 15} outros ASOs vencidos</div>`
+    : '');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,720 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel do Gestor - Classic RH &amp; SST</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px; height: 18px;
+    stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+
+  /* Gestor banner */
+  .gestor-banner {
+    background: var(--info-light);
+    border: 1px solid #B2E0F0;
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-5);
+    font-size: var(--text-sm);
+    color: var(--info-dark);
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-6);
+  }
+  .gestor-banner-icon {
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+
+  /* Welcome header */
+  .welcome-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+  .welcome-bar h1 {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+  }
+  .welcome-bar .date-display {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  /* Section heading */
+  .section-heading {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+    margin-bottom: var(--space-4);
+    margin-top: var(--space-8);
+    padding-bottom: var(--space-2);
+    border-bottom: 1px solid var(--border);
+  }
+
+  /* Indicator cards */
+  .indicator-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: var(--space-4);
+  }
+  .indicator-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    box-shadow: var(--shadow-sm);
+  }
+  .indicator-card h4 {
+    font-size: var(--text-xs);
+    font-weight: var(--weight-semibold);
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: var(--space-3);
+  }
+  .indicator-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-1) 0;
+  }
+  .indicator-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+  .indicator-value {
+    font-size: var(--text-sm);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+  }
+
+  /* Score bar mini */
+  .score-bar-track {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-alt);
+    border-radius: var(--radius-full);
+    margin-top: var(--space-2);
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    transition: width 0.6s ease;
+  }
+
+  /* Action list */
+  .action-list {
+    list-style: none;
+  }
+  .action-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border-light);
+    gap: var(--space-3);
+  }
+  .action-item:last-child { border-bottom: none; }
+  .action-item-left {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex: 1;
+    min-width: 0;
+  }
+  .action-priority {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .action-priority.alta { background: var(--danger); }
+  .action-priority.media { background: var(--warning); }
+  .action-priority.baixa { background: var(--success); }
+  .action-text {
+    font-size: var(--text-sm);
+    color: var(--text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Name link in table */
+  .nome-link {
+    color: var(--primary);
+    font-weight: var(--weight-medium);
+    text-decoration: none;
+  }
+  .nome-link:hover {
+    color: var(--primary-dark);
+    text-decoration: underline;
+  }
+
+  /* Loading state */
+  .loading-state {
+    text-align: center;
+    padding: var(--space-10);
+    color: var(--text-muted);
+    font-size: var(--text-sm);
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .kpi-row { grid-template-columns: repeat(2, 1fr); }
+    .indicator-grid { grid-template-columns: 1fr; }
+  }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="page-bg">
+
+<!-- Mobile overlay -->
+<div class="sidebar-mobile-overlay" id="sidebarOverlay"></div>
+
+<!-- SIDEBAR (gestor-only) -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros">
+    <span class="sidebar-brand-text">Classic RH</span>
+  </div>
+
+  <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
+  <nav class="sidebar-nav">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Meu Setor</div>
+
+      <a href="gestor.html" class="sidebar-item active" data-page="gestor">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+        <span class="sidebar-item-label">Dashboard</span>
+      </a>
+
+      <a href="#equipe" class="sidebar-item" onclick="document.getElementById('sec-equipe').scrollIntoView({behavior:'smooth'})">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="sidebar-item-label">Minha Equipe</span>
+      </a>
+
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+        <span class="sidebar-item-label">Pendencias</span>
+        <span class="sidebar-badge" id="sb-pendencias" style="display:none"></span>
+      </a>
+
+      <a href="alertas_rh.html" class="sidebar-item">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></span>
+        <span class="sidebar-item-label">Plano de Acao</span>
+      </a>
+    </div>
+
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">SST</div>
+
+      <a href="sst_dashboard.html" class="sidebar-item" data-page="sst_dashboard">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">SST do Setor</span>
+      </a>
+
+      <a href="epis.html" class="sidebar-item" data-page="epis">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg></span>
+        <span class="sidebar-item-label">EPIs</span>
+      </a>
+
+      <a href="treinamentos.html" class="sidebar-item" data-page="treinamentos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></span>
+        <span class="sidebar-item-label">Treinamentos</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div id="rh-user-chip"></div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<div class="main-content">
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="topbar-left">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" title="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="topbar-right">
+      <div class="topbar-user" id="topbar-user"></div>
+    </div>
+  </div>
+
+  <div class="content-area" id="content-area">
+    <div class="loading-state" id="loading">Carregando dados do setor...</div>
+  </div>
+</div>
+
+<script>
+(async function() {
+  // ---- Auth ----
+  const user = await RHAuth.init({ perfisPermitidos: ['gestor','admin','rh'] });
+  if (!user) return;
+
+  renderUserChip(user);
+
+  // ---- Load data ----
+  let dashData = null;
+  let equipeData = [];
+
+  try {
+    // RPC gestor_dashboard
+    const rpcRes = await API.rpc('gestor_dashboard', {});
+    if (rpcRes.ok) {
+      dashData = rpcRes.data;
+    }
+  } catch(e) { console.error('Erro ao carregar dashboard gestor:', e); }
+
+  try {
+    const eqRes = await API.get('vw_gestor_minha_equipe');
+    equipeData = eqRes.ok ? eqRes.data : [];
+  } catch(e) { console.error('Erro ao carregar equipe:', e); }
+
+  // Filter equipe by setor
+  const setor = dashData?.setor || 'Setor';
+  if (equipeData.length && setor) {
+    equipeData = equipeData.filter(f =>
+      (f.setor || '').toLowerCase().trim() === setor.toLowerCase().trim()
+    );
+  }
+
+  // ---- Render ----
+  const area = document.getElementById('content-area');
+  area.innerHTML = buildPage(dashData, equipeData, setor, user);
+
+  // Sidebar badge
+  if (dashData?.pendencias > 0) {
+    const sb = document.getElementById('sb-pendencias');
+    sb.textContent = dashData.pendencias;
+    sb.style.display = '';
+  }
+
+  setupSidebar();
+
+  // ---- BUILD FUNCTIONS ----
+  function buildPage(d, equipe, setor, user) {
+    if (!d) return `<div class="loading-state">Nao foi possivel carregar os dados do setor. Verifique suas permissoes.</div>`;
+
+    const today = new Date();
+    const dateStr = today.toLocaleDateString('pt-BR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    const eq = d.equipe || {};
+    const sc = d.score || {};
+    const pt = d.ponto || {};
+    const sst = d.sst || {};
+    const experiencias = d.experiencias || [];
+
+    return `
+      <!-- Welcome -->
+      <div class="welcome-bar">
+        <h1>Gestao do Setor: ${esc(setor)}</h1>
+        <span class="date-display">${dateStr}</span>
+      </div>
+
+      <!-- Restriction banner -->
+      <div class="gestor-banner">
+        <span class="gestor-banner-icon">&#9432;</span>
+        <span>Visao do Gestor &mdash; Dados do setor <strong>${esc(setor)}</strong>. Detalhes individuais de saude restritos ao RH.</span>
+      </div>
+
+      <!-- KPIs -->
+      <div class="kpi-row">
+        ${kpiCard('&#128101;', 'blue', eq.ativos ?? '--', 'Equipe Ativa', eq.afastados ? eq.afastados + ' afastados' : '')}
+        ${kpiCard('&#9733;', scoreColor(sc.medio), formatScore(sc.medio), 'Score Operacional', scoreLabel(sc.medio))}
+        ${kpiCard('&#9888;', (d.pendencias||0) > 0 ? 'red' : 'green', d.pendencias ?? 0, 'Pendencias', (d.pendencias||0) > 0 ? 'Requerem acao' : 'Nenhuma')}
+        ${kpiCard('&#128203;', (d.atestados_30d||0) > 3 ? 'amber' : 'green', d.atestados_30d ?? 0, 'Atestados 30d', 'Total agregado do setor')}
+        ${kpiCard('&#128214;', (sst.trein_vencidos||0) > 0 ? 'red' : 'green', sst.trein_vencidos ?? 0, 'Trein. Vencidos', sst.trein_validos ? sst.trein_validos + ' validos' : '')}
+        ${kpiCard('&#9998;', 'blue', d.planos_acao ?? 0, 'Planos de Acao', 'Em andamento')}
+      </div>
+
+      <!-- Minha Equipe -->
+      <h2 class="section-heading" id="sec-equipe">Minha Equipe</h2>
+      ${buildEquipeTable(equipe)}
+
+      <!-- Contratos de Experiencia -->
+      ${experiencias.length ? `
+      <h2 class="section-heading">Contratos de Experiencia</h2>
+      ${buildExperienciaTable(experiencias)}
+      ` : ''}
+
+      <!-- Indicadores do Setor -->
+      <h2 class="section-heading">Indicadores do Setor</h2>
+      <div class="indicator-grid">
+        <!-- SST Compliance -->
+        <div class="indicator-card">
+          <h4>SST - Conformidade</h4>
+          <div class="indicator-row">
+            <span class="indicator-label">Colaboradores com EPI</span>
+            <span class="indicator-value">${sst.com_epi ?? '--'}</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Treinamentos validos</span>
+            <span class="indicator-value" style="color:var(--success)">${sst.trein_validos ?? '--'}</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Treinamentos vencidos</span>
+            <span class="indicator-value" style="color:${(sst.trein_vencidos||0)>0?'var(--danger)':'var(--text)'}">${sst.trein_vencidos ?? '--'}</span>
+          </div>
+        </div>
+
+        <!-- Ponto -->
+        <div class="indicator-card">
+          <h4>Frequencia (30 dias)</h4>
+          <div class="indicator-row">
+            <span class="indicator-label">Dias trabalhados</span>
+            <span class="indicator-value">${pt.dias_trabalhados ?? '--'}</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Faltas</span>
+            <span class="indicator-value" style="color:${(pt.faltas||0)>0?'var(--danger)':'var(--text)'}">${pt.faltas ?? 0}</span>
+          </div>
+          ${pt.dias_trabalhados ? `
+          <div class="score-bar-track mt-2">
+            <div class="score-bar-fill" style="width:${Math.round((pt.dias_trabalhados/(pt.dias_trabalhados+(pt.faltas||0)))*100)}%;background:var(--success)"></div>
+          </div>
+          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-1);text-align:right">
+            ${Math.round((pt.dias_trabalhados/(pt.dias_trabalhados+(pt.faltas||0)))*100)}% presenca
+          </div>` : ''}
+        </div>
+
+        <!-- Score breakdown -->
+        <div class="indicator-card">
+          <h4>Score Operacional - Distribuicao</h4>
+          <div class="indicator-row">
+            <span class="indicator-label">Consistentes</span>
+            <span class="indicator-value" style="color:var(--success)">${sc.consistentes ?? '--'}</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Monitorar</span>
+            <span class="indicator-value" style="color:var(--warning)">${sc.monitorar ?? '--'}</span>
+          </div>
+          <div class="indicator-row">
+            <span class="indicator-label">Atencao</span>
+            <span class="indicator-value" style="color:var(--danger)">${sc.atencao ?? '--'}</span>
+          </div>
+          ${sc.medio != null ? `
+          <div class="score-bar-track mt-2">
+            <div class="score-bar-fill" style="width:${Math.min(sc.medio,100)}%;background:${getScoreBarColor(sc.medio)}"></div>
+          </div>
+          <div style="font-size:var(--text-xs);color:var(--text-muted);margin-top:var(--space-1);text-align:right">
+            Media: ${formatScore(sc.medio)}
+          </div>` : ''}
+        </div>
+      </div>
+
+      <!-- O que preciso fazer -->
+      <h2 class="section-heading">O que preciso fazer</h2>
+      <div class="card card-flat">
+        <div class="card-body" style="padding:0">
+          <ul class="action-list" id="action-list">
+            ${buildActionList(d)}
+          </ul>
+        </div>
+      </div>
+
+      <!-- Footer -->
+      <div style="text-align:center;padding:var(--space-8) 0 var(--space-4);font-size:var(--text-xs);color:var(--text-muted)">
+        Classic RH &amp; SST &mdash; Painel do Gestor &mdash; ${RH_CONFIG.VERSION}
+      </div>
+    `;
+  }
+
+  function kpiCard(icon, color, value, label, sub) {
+    const colorMap = {
+      blue: 'var(--primary)',
+      green: 'var(--success)',
+      amber: 'var(--warning)',
+      red: 'var(--danger)',
+    };
+    const bgMap = {
+      blue: 'var(--primary-50)',
+      green: 'var(--success-light)',
+      amber: 'var(--warning-light)',
+      red: 'var(--danger-light)',
+    };
+    return `
+      <div class="kpi-card" style="cursor:default">
+        <div class="kpi-icon" style="background:${bgMap[color]||bgMap.blue};color:${colorMap[color]||colorMap.blue}">${icon}</div>
+        <div class="kpi-value" style="color:${colorMap[color]||'var(--text)'}">${value}</div>
+        <div class="kpi-label">${label}</div>
+        ${sub ? `<div class="kpi-trend neutral">${sub}</div>` : ''}
+      </div>`;
+  }
+
+  function buildEquipeTable(equipe) {
+    if (!equipe.length) return '<div class="loading-state">Nenhum colaborador encontrado no setor.</div>';
+    let rows = equipe.map(f => {
+      const dias = calcDiasEmpresa(f.data_admissao);
+      const emExp = dias !== null && dias < 90;
+      const statusBadge = getStatusBadge(f.status);
+      const tempoStr = dias !== null ? formatTempo(dias) : '--';
+      const epiBadge = f.epi_ok
+        ? '<span class="badge badge-success">OK</span>'
+        : '<span class="badge badge-danger">Pendente</span>';
+      const treinBadge = f.treinamento_ok
+        ? '<span class="badge badge-success">OK</span>'
+        : f.treinamento_vencido
+          ? '<span class="badge badge-danger">Vencido</span>'
+          : '<span class="badge badge-gray">--</span>';
+      return `
+        <tr>
+          <td><a href="ficha.html?id=${esc(f.id||f.funcionario_id||'')}" class="nome-link">${esc(f.nome||'--')}</a></td>
+          <td>${esc(f.cargo||'--')}</td>
+          <td>${statusBadge}</td>
+          <td>${tempoStr}</td>
+          <td>${emExp ? '<span class="badge badge-warning badge-dot">Experiencia</span>' : '--'}</td>
+          <td>${epiBadge}</td>
+          <td>${treinBadge}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Cargo</th>
+              <th>Status</th>
+              <th>Tempo Empresa</th>
+              <th>Experiencia?</th>
+              <th>EPI</th>
+              <th>Treinamento</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function buildExperienciaTable(experiencias) {
+    let rows = experiencias.map(e => {
+      const diasRestantes = e.dias ?? '--';
+      const statusBadge = diasRestantes <= 15
+        ? '<span class="badge badge-danger badge-dot">Urgente</span>'
+        : diasRestantes <= 45
+          ? '<span class="badge badge-warning badge-dot">Proximo</span>'
+          : '<span class="badge badge-success badge-dot">No prazo</span>';
+      const dtAdm = e.data_admissao
+        ? new Date(e.data_admissao).toLocaleDateString('pt-BR')
+        : '--';
+      return `
+        <tr>
+          <td>${esc(e.nome||'--')}</td>
+          <td>${dtAdm}</td>
+          <td class="cell-center">${diasRestantes} dias</td>
+          <td>${statusBadge}</td>
+        </tr>`;
+    }).join('');
+
+    return `
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>Admissao</th>
+              <th class="cell-center">Dias Restantes</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  }
+
+  function buildActionList(d) {
+    const items = [];
+
+    if ((d.pendencias || 0) > 0) {
+      items.push({ text: `${d.pendencias} pendencia(s) requerem sua atencao`, pri: 'alta', link: 'alertas_rh.html' });
+    }
+    if ((d.sst?.trein_vencidos || 0) > 0) {
+      items.push({ text: `${d.sst.trein_vencidos} treinamento(s) vencido(s) no setor`, pri: 'alta', link: 'treinamentos.html' });
+    }
+    if ((d.planos_acao || 0) > 0) {
+      items.push({ text: `${d.planos_acao} plano(s) de acao em andamento`, pri: 'media', link: 'alertas_rh.html' });
+    }
+    if ((d.experiencias || []).length > 0) {
+      const urgentes = (d.experiencias || []).filter(e => (e.dias||999) <= 15).length;
+      if (urgentes > 0) {
+        items.push({ text: `${urgentes} contrato(s) de experiencia vencendo em ate 15 dias`, pri: 'alta', link: '#' });
+      }
+    }
+    if ((d.atestados_30d || 0) > 3) {
+      items.push({ text: `Setor com ${d.atestados_30d} atestados nos ultimos 30 dias - avaliar`, pri: 'media', link: '#' });
+    }
+    if ((d.ponto?.faltas || 0) > 0) {
+      items.push({ text: `${d.ponto.faltas} falta(s) registrada(s) no periodo`, pri: 'media', link: '#' });
+    }
+    if ((d.score?.atencao || 0) > 0) {
+      items.push({ text: `${d.score.atencao} colaborador(es) em faixa de atencao no score`, pri: 'media', link: '#' });
+    }
+
+    if (!items.length) {
+      return '<li class="action-item"><div class="action-item-left"><span class="action-text" style="color:var(--success)">Nenhuma acao pendente. Setor em dia!</span></div></li>';
+    }
+
+    // Sort: alta first
+    const priOrder = { alta: 0, media: 1, baixa: 2 };
+    items.sort((a, b) => (priOrder[a.pri]||2) - (priOrder[b.pri]||2));
+
+    return items.map(it => `
+      <li class="action-item">
+        <div class="action-item-left">
+          <div class="action-priority ${it.pri}"></div>
+          <span class="action-text">${it.text}</span>
+        </div>
+        ${it.link && it.link !== '#'
+          ? `<a href="${it.link}" class="btn btn-sm btn-secondary">Resolver</a>`
+          : ''}
+      </li>`).join('');
+  }
+
+  // ---- HELPERS ----
+  const esc = s => API.esc(s);
+
+  function calcDiasEmpresa(dtAdm) {
+    if (!dtAdm) return null;
+    const d = new Date(dtAdm);
+    if (isNaN(d)) return null;
+    return Math.floor((Date.now() - d.getTime()) / 86400000);
+  }
+
+  function formatTempo(dias) {
+    if (dias < 30) return dias + ' dias';
+    if (dias < 365) return Math.floor(dias/30) + ' meses';
+    const anos = Math.floor(dias/365);
+    const meses = Math.floor((dias%365)/30);
+    return anos + (anos===1?' ano':' anos') + (meses > 0 ? ' e ' + meses + (meses===1?' mes':' meses') : '');
+  }
+
+  function formatScore(v) {
+    if (v == null) return '--';
+    return Number(v).toFixed(1);
+  }
+
+  function scoreColor(v) {
+    if (v == null) return 'blue';
+    if (v >= 70) return 'green';
+    if (v >= 50) return 'amber';
+    return 'red';
+  }
+
+  function scoreLabel(v) {
+    if (v == null) return '';
+    if (v >= 70) return 'Bom';
+    if (v >= 50) return 'Monitorar';
+    return 'Atencao';
+  }
+
+  function getScoreBarColor(v) {
+    if (v >= 70) return 'var(--success)';
+    if (v >= 50) return 'var(--warning)';
+    return 'var(--danger)';
+  }
+
+  function getStatusBadge(status) {
+    const s = (status || '').toLowerCase();
+    if (s === 'ativo' || s === 'ativa')
+      return '<span class="badge badge-success badge-dot">Ativo</span>';
+    if (s === 'afastado' || s === 'afastada')
+      return '<span class="badge badge-warning badge-dot">Afastado</span>';
+    if (s === 'ferias' || s === 'f\u00e9rias')
+      return '<span class="badge badge-info badge-dot">Ferias</span>';
+    if (s === 'experiencia' || s === 'experi\u00eancia')
+      return '<span class="badge badge-warning badge-dot">Experiencia</span>';
+    if (s === 'desligado' || s === 'desligada')
+      return '<span class="badge badge-danger badge-dot">Desligado</span>';
+    return `<span class="badge badge-gray">${esc(status||'--')}</span>`;
+  }
+
+  function renderUserChip(u) {
+    // Topbar user
+    const tb = document.getElementById('topbar-user');
+    if (tb && u) {
+      const ini = (u.nome || u.email || '?')[0].toUpperCase();
+      tb.innerHTML = `
+        <div style="width:32px;height:32px;border-radius:var(--radius-full);background:var(--primary);
+          display:flex;align-items:center;justify-content:center;color:white;font-weight:var(--weight-bold);
+          font-size:var(--text-sm);flex-shrink:0">${ini}</div>
+        <div class="topbar-user-info">
+          <div class="topbar-user-name">${esc(u.nome||u.email)}</div>
+          <div class="topbar-user-role">${esc(u.perfil||'')}</div>
+        </div>`;
+    }
+    // Sidebar chip
+    const sc = document.getElementById('rh-user-chip');
+    if (sc && u) {
+      const ini = (u.nome || u.email || '?')[0].toUpperCase();
+      sc.innerHTML = `
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:28px;height:28px;border-radius:var(--radius-full);background:var(--primary);
+            display:flex;align-items:center;justify-content:center;color:white;font-weight:var(--weight-bold);
+            font-size:12px;flex-shrink:0">${ini}</div>
+          <div style="flex:1;min-width:0">
+            <div style="font-size:var(--text-xs);font-weight:var(--weight-semibold);color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.nome||u.email)}</div>
+            <div style="font-size:10px;color:var(--text-muted);text-transform:uppercase">${esc(u.perfil||'')}</div>
+          </div>
+          <button onclick="RHAuth.logout()" title="Sair" class="btn btn-ghost btn-sm" style="padding:2px 6px;font-size:10px">Sair</button>
+        </div>`;
+    }
+  }
+
+  // ---- SIDEBAR LOGIC ----
+  function setupSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const toggle = document.getElementById('sidebarToggle');
+    const overlay = document.getElementById('sidebarOverlay');
+    const mobileBtn = document.getElementById('mobileMenuBtn');
+
+    if (toggle) {
+      toggle.addEventListener('click', () => {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('rh_sidebar_collapsed', sidebar.classList.contains('collapsed'));
+      });
+      if (localStorage.getItem('rh_sidebar_collapsed') === 'true') {
+        sidebar.classList.add('collapsed');
+      }
+    }
+
+    if (mobileBtn) {
+      mobileBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
+      });
+    }
+    if (overlay) {
+      overlay.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+      });
+    }
+  }
+})();
+</script>
+</body>
+</html>

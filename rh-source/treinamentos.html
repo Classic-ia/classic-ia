@@ -1,0 +1,1371 @@
+<!--
+  Classic RH - Treinamentos e NRs
+
+  IMPORTANTE: Criar as tabelas no Supabase:
+
+  CREATE TABLE rh_treinamentos_tipos (
+    id             UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    nome           TEXT NOT NULL,
+    nr             TEXT,
+    validade_meses INTEGER NOT NULL DEFAULT 24,
+    obrigatorio    BOOLEAN DEFAULT true,
+    descricao      TEXT,
+    ativo          BOOLEAN DEFAULT true,
+    criado_em      TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE TABLE rh_treinamentos (
+    id                UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    colaborador_id    UUID REFERENCES rh_colaboradores(id),
+    tipo_id           UUID REFERENCES rh_treinamentos_tipos(id),
+    data_realizacao   DATE NOT NULL,
+    carga_horaria     NUMERIC(5,1),
+    instituicao       TEXT,
+    numero_certificado TEXT,
+    data_vencimento   DATE,
+    observacoes       TEXT,
+    criado_em         TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_treinamentos_colaborador ON rh_treinamentos(colaborador_id);
+  CREATE INDEX idx_treinamentos_tipo ON rh_treinamentos(tipo_id);
+  CREATE INDEX idx_treinamentos_vencimento ON rh_treinamentos(data_vencimento);
+
+  -- RLS
+  ALTER TABLE rh_treinamentos_tipos ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_treinamentos_tipos_all" ON rh_treinamentos_tipos FOR ALL USING (true) WITH CHECK (true);
+
+  ALTER TABLE rh_treinamentos ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_treinamentos_all" ON rh_treinamentos FOR ALL USING (true) WITH CHECK (true);
+
+  -- Inserir tipos padrao
+  INSERT INTO rh_treinamentos_tipos (nome, nr, validade_meses, obrigatorio, descricao) VALUES
+    ('NR-06 (EPI)', 'NR-06', 24, true, 'Equipamento de Protecao Individual'),
+    ('NR-10 (Seguranca Eletrica)', 'NR-10', 24, true, 'Seguranca em Instalacoes e Servicos em Eletricidade'),
+    ('NR-11 (Transporte e Movimentacao)', 'NR-11', 24, true, 'Transporte, Movimentacao, Armazenagem e Manuseio de Materiais'),
+    ('NR-12 (Maquinas e Equipamentos)', 'NR-12', 24, true, 'Seguranca no Trabalho em Maquinas e Equipamentos'),
+    ('NR-33 (Espacos Confinados)', 'NR-33', 12, true, 'Seguranca e Saude nos Trabalhos em Espacos Confinados'),
+    ('NR-35 (Trabalho em Altura)', 'NR-35', 24, true, 'Trabalho em Altura'),
+    ('Integracao de Seguranca', NULL, 0, true, 'Integracao inicial de seguranca do trabalho'),
+    ('Brigada de Incendio', NULL, 12, true, 'Formacao de Brigada de Incendio'),
+    ('CIPA', NULL, 12, true, 'Comissao Interna de Prevencao de Acidentes'),
+    ('Direcao Defensiva', NULL, 60, false, 'Curso de Direcao Defensiva');
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - Treinamentos e NRs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+/* Main */
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+/* KPI row */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px; margin-bottom: 20px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 14px 12px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 22px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 9px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 3px;
+}
+.kpi-card.err .kpi-value { color: var(--err); }
+.kpi-card.warn .kpi-value { color: var(--warn); }
+.kpi-card.attn .kpi-value { color: #e8c98e; }
+
+/* Tabs */
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active { background: var(--info); color: white; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* Section */
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+/* Form Controls */
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.form-group.full { flex: 100%; min-width: 100%; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group textarea { min-height: 80px; resize: vertical; width: 100%; }
+
+/* Buttons */
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-warn { background: var(--warn); color: #111; }
+.btn-warn:hover:not(:disabled) { background: #f5b041; }
+.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+/* Table */
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  font-weight: 600; padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0;
+  cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--text); }
+thead th.sorted-asc::after { content: ' \25B2'; font-size: 8px; }
+thead th.sorted-desc::after { content: ' \25BC'; font-size: 8px; }
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.num { text-align: right; font-family: 'DM Mono', monospace; font-size: 11px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+/* Badges */
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-err { background: rgba(231,76,60,.12); color: var(--err); }
+.badge-warn { background: rgba(243,156,18,.12); color: var(--warn); }
+.badge-info { background: rgba(46,107,138,.15); color: var(--info); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+.badge-muted { background: rgba(93,127,149,.1); color: var(--muted); }
+
+/* Alert cards */
+.alert-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px; margin-bottom: 16px;
+}
+.alert-card {
+  border-radius: 10px; padding: 12px 14px;
+  font-size: 12px; display: flex; align-items: center; gap: 10px;
+}
+.alert-card.vencido {
+  background: rgba(231,76,60,.08); border: 1px solid rgba(231,76,60,.3);
+}
+.alert-card.vencendo {
+  background: rgba(243,156,18,.08); border: 1px solid rgba(243,156,18,.3);
+}
+.alert-card-info { flex: 1; }
+.alert-card-nome { font-weight: 600; color: var(--text); font-size: 13px; }
+.alert-card-detail { color: var(--muted); font-size: 11px; margin-top: 2px; }
+.alert-card-badge { flex-shrink: 0; }
+
+/* Search */
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.search-result-item:hover { background: rgba(46,107,138,.12); }
+.search-result-item:last-child { border-bottom: none; }
+
+/* Chip multi-select */
+.chip-container {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; min-height: 28px;
+}
+.chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 600;
+  background: rgba(46,107,138,.15); color: var(--text); border: 1px solid var(--border);
+}
+.chip-remove {
+  cursor: pointer; color: var(--muted); font-size: 13px;
+  line-height: 1; transition: color .15s;
+}
+.chip-remove:hover { color: var(--err); }
+
+/* Matrix */
+.matrix-wrap { overflow-x: auto; }
+.matrix-table { border-collapse: collapse; font-size: 11px; }
+.matrix-table th, .matrix-table td {
+  padding: 6px 8px; border: 1px solid var(--border); text-align: center;
+}
+.matrix-table th {
+  background: var(--surface2); color: var(--muted); font-size: 9px;
+  text-transform: uppercase; letter-spacing: .04em; font-weight: 600;
+  white-space: nowrap;
+}
+.matrix-table th:first-child { text-align: left; min-width: 180px; }
+.matrix-cell {
+  width: 28px; height: 28px; border-radius: 4px; margin: auto;
+}
+.matrix-vigente { background: var(--ok); }
+.matrix-vencendo { background: var(--warn); }
+.matrix-vencido { background: var(--err); }
+.matrix-nao-realizado { background: rgba(93,127,149,.15); }
+.matrix-sem-vencimento { background: var(--info); }
+
+/* Toast */
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+/* Spinner */
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6);
+  display: none; align-items: center; justify-content: center;
+  z-index: 200; padding: 20px;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; max-width: 600px; width: 100%;
+  max-height: 80vh; overflow-y: auto;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 16px; color: var(--accent); margin-bottom: 16px;
+}
+.modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+
+/* Checkbox styling */
+.cb-group { display: flex; align-items: center; gap: 8px; }
+.cb-group input[type="checkbox"] {
+  width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .form-group { min-width: 100%; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+  .alert-grid { grid-template-columns: 1fr; }
+}
+
+/* Footer */
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#128218;</div>
+    <div>
+      <div class="header-title">Treinamentos e NRs</div>
+      <div class="header-sub">Controle de certificacoes e validades</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-ativos">--</div>
+      <div class="kpi-label">Treinamentos Ativos</div>
+    </div>
+    <div class="kpi-card err">
+      <div class="kpi-value" id="kpi-vencidos">--</div>
+      <div class="kpi-label">Vencidos</div>
+    </div>
+    <div class="kpi-card warn">
+      <div class="kpi-value" id="kpi-vencendo30">--</div>
+      <div class="kpi-label">Vencendo em 30 dias</div>
+    </div>
+    <div class="kpi-card attn">
+      <div class="kpi-value" id="kpi-vencendo60">--</div>
+      <div class="kpi-label">Vencendo em 60 dias</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="painel">Painel de Vencimentos</button>
+    <button class="tab-btn" data-tab="cadastrar">Cadastrar Treinamento</button>
+    <button class="tab-btn" data-tab="tipos">Tipos de Treinamento</button>
+    <button class="tab-btn" data-tab="colaborador">Por Colaborador</button>
+  </div>
+
+  <!-- ============ TAB: PAINEL DE VENCIMENTOS ============ -->
+  <div id="tab-painel" class="tab-pane active">
+
+    <!-- Alertas -->
+    <div class="section" id="section-alertas">
+      <div class="section-title">Alertas</div>
+      <div id="alertas-container">
+        <div class="empty-state"><span class="spinner"></span> Carregando alertas...</div>
+      </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="section">
+      <div class="section-title">Filtros</div>
+      <div class="form-row">
+        <div class="form-group" style="min-width:160px;">
+          <label>Status</label>
+          <select id="filtro-status">
+            <option value="">Todos</option>
+            <option value="vencido">Vencido</option>
+            <option value="vencendo">Vencendo (30 dias)</option>
+            <option value="atencao">Atencao (60 dias)</option>
+            <option value="vigente">Vigente</option>
+            <option value="sem_vencimento">Sem vencimento</option>
+          </select>
+        </div>
+        <div class="form-group" style="min-width:200px;">
+          <label>Tipo de Treinamento</label>
+          <select id="filtro-tipo">
+            <option value="">Todos</option>
+          </select>
+        </div>
+        <div class="form-group" style="min-width:auto;flex:0;">
+          <label>&nbsp;</label>
+          <button class="btn btn-outline btn-sm" onclick="aplicarFiltros()">Filtrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela geral -->
+    <div class="section">
+      <div class="section-title">Todos os Treinamentos</div>
+      <div class="table-wrap">
+        <table id="tabela-painel">
+          <thead>
+            <tr>
+              <th data-sort="nome">Nome</th>
+              <th data-sort="treinamento">Treinamento</th>
+              <th data-sort="data_realizacao">Data Realizacao</th>
+              <th data-sort="validade_meses">Validade (meses)</th>
+              <th data-sort="data_vencimento">Data Vencimento</th>
+              <th data-sort="status">Status</th>
+              <th data-sort="dias_restantes">Dias Restantes</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-painel">
+            <tr><td colspan="7" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: CADASTRAR TREINAMENTO ============ -->
+  <div id="tab-cadastrar" class="tab-pane">
+
+    <div class="section">
+      <div class="section-title">Novo Treinamento</div>
+
+      <!-- Toggle modo -->
+      <div style="margin-bottom:16px;">
+        <label class="cb-group">
+          <input type="checkbox" id="modo-bulk" onchange="toggleModoBulk()">
+          <span style="font-size:12px;color:var(--muted);">Cadastro em lote (varios colaboradores, mesmo treinamento)</span>
+        </label>
+      </div>
+
+      <!-- Selecao individual -->
+      <div id="cadastro-individual">
+        <div class="form-row" style="margin-bottom:14px;">
+          <div class="form-group" style="min-width:300px;">
+            <label>Colaborador</label>
+            <div class="search-wrap">
+              <input type="text" class="search-input" id="busca-colab" placeholder="Digite o nome do colaborador..." autocomplete="off">
+              <div class="search-results" id="busca-colab-results"></div>
+            </div>
+            <input type="hidden" id="colab-id">
+          </div>
+        </div>
+      </div>
+
+      <!-- Selecao em lote -->
+      <div id="cadastro-bulk" style="display:none;">
+        <div class="form-row" style="margin-bottom:14px;">
+          <div class="form-group" style="min-width:300px;">
+            <label>Buscar e adicionar colaboradores</label>
+            <div class="search-wrap">
+              <input type="text" class="search-input" id="busca-colab-bulk" placeholder="Digite o nome e clique para adicionar..." autocomplete="off">
+              <div class="search-results" id="busca-colab-bulk-results"></div>
+            </div>
+          </div>
+        </div>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label>Colaboradores selecionados</label>
+          <div class="chip-container" id="chip-colabs"></div>
+        </div>
+      </div>
+
+      <!-- Campos comuns -->
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group" style="min-width:250px;">
+          <label>Tipo de Treinamento</label>
+          <select id="cad-tipo" onchange="onTipoChange()">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group" style="min-width:150px;">
+          <label>Data de Realizacao</label>
+          <input type="date" id="cad-data">
+        </div>
+        <div class="form-group" style="min-width:120px;">
+          <label>Carga Horaria (h)</label>
+          <input type="number" id="cad-carga" step="0.5" min="0" placeholder="Ex: 8">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group" style="min-width:200px;">
+          <label>Instituicao / Instrutor</label>
+          <input type="text" id="cad-instituicao" placeholder="Nome da instituicao ou instrutor">
+        </div>
+        <div class="form-group" style="min-width:160px;">
+          <label>Numero do Certificado</label>
+          <input type="text" id="cad-certificado" placeholder="Numero (opcional)">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group" style="min-width:120px;">
+          <label>Validade (meses)</label>
+          <input type="number" id="cad-validade" min="0" placeholder="0 = nao vence">
+        </div>
+        <div class="form-group" style="min-width:150px;">
+          <label>Data de Vencimento</label>
+          <input type="date" id="cad-vencimento" readonly style="opacity:.7;">
+        </div>
+      </div>
+
+      <div class="form-row" style="margin-bottom:14px;">
+        <div class="form-group full">
+          <label>Observacoes</label>
+          <textarea id="cad-obs" placeholder="Observacoes adicionais (opcional)"></textarea>
+        </div>
+      </div>
+
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-accent" id="btn-salvar" onclick="salvarTreinamento()">Salvar Treinamento</button>
+        <button class="btn btn-outline" onclick="limparFormCadastro()">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: TIPOS DE TREINAMENTO ============ -->
+  <div id="tab-tipos" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Tipos Cadastrados</div>
+        <button class="btn btn-accent btn-sm" onclick="abrirModalTipo()">+ Novo Tipo</button>
+      </div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Nome</th>
+              <th>NR</th>
+              <th>Validade (meses)</th>
+              <th>Obrigatorio</th>
+              <th>Descricao</th>
+              <th>Ativo</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-tipos">
+            <tr><td colspan="7" class="empty-state"><span class="spinner"></span> Carregando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: POR COLABORADOR ============ -->
+  <div id="tab-colaborador" class="tab-pane">
+
+    <div class="section">
+      <div class="section-title">Buscar Colaborador</div>
+      <div class="form-row">
+        <div class="form-group" style="min-width:300px;">
+          <div class="search-wrap">
+            <input type="text" class="search-input" id="busca-colab-view" placeholder="Digite o nome do colaborador..." autocomplete="off">
+            <div class="search-results" id="busca-colab-view-results"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Historico do colaborador -->
+    <div id="colab-historico" style="display:none;">
+      <div class="section">
+        <div class="section-title" id="colab-view-nome">Treinamentos do Colaborador</div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Treinamento</th>
+                <th>Data Realizacao</th>
+                <th>Carga Horaria</th>
+                <th>Instituicao</th>
+                <th>Certificado</th>
+                <th>Vencimento</th>
+                <th>Status</th>
+                <th>Dias</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-colab-historico"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Matriz -->
+      <div class="section">
+        <div class="section-title">Matriz de Treinamentos</div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:12px;">
+          Verde = Vigente &nbsp;|&nbsp; Amarelo = Vencendo &nbsp;|&nbsp; Vermelho = Vencido &nbsp;|&nbsp; Azul = Sem vencimento &nbsp;|&nbsp; Cinza = Nao realizado
+        </p>
+        <div class="matrix-wrap" id="matrix-container"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Tipo Treinamento -->
+<div class="modal-overlay" id="modal-tipo">
+  <div class="modal">
+    <div class="modal-title" id="modal-tipo-title">Novo Tipo de Treinamento</div>
+    <input type="hidden" id="tipo-edit-id">
+    <div class="form-row" style="margin-bottom:14px;">
+      <div class="form-group" style="min-width:250px;">
+        <label>Nome</label>
+        <input type="text" id="tipo-nome" placeholder="Ex: NR-35 (Trabalho em Altura)">
+      </div>
+      <div class="form-group" style="min-width:100px;">
+        <label>NR (opcional)</label>
+        <input type="text" id="tipo-nr" placeholder="Ex: NR-35">
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:14px;">
+      <div class="form-group" style="min-width:150px;">
+        <label>Validade (meses)</label>
+        <input type="number" id="tipo-validade" min="0" value="24" placeholder="0 = nao vence">
+      </div>
+      <div class="form-group" style="min-width:100px;flex:0;">
+        <label>Obrigatorio</label>
+        <select id="tipo-obrigatorio">
+          <option value="true">Sim</option>
+          <option value="false">Nao</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row" style="margin-bottom:14px;">
+      <div class="form-group full">
+        <label>Descricao</label>
+        <textarea id="tipo-descricao" placeholder="Descricao do treinamento (opcional)" style="min-height:60px;"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="fecharModalTipo()">Cancelar</button>
+      <button class="btn btn-accent" onclick="salvarTipo()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &mdash; Treinamentos e NRs</div>
+
+<script>
+// =============== STATE ===============
+let allTipos = [];
+let allTreinamentos = [];
+let allColaboradores = [];
+let bulkColabs = []; // ids for bulk registration
+let painelSortCol = 'data_vencimento';
+let painelSortDir = 'asc';
+
+// =============== INIT ===============
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  initTabs();
+  await carregarDados();
+  renderPainel();
+  renderTipos();
+  populaTipoDropdowns();
+});
+
+// =============== TABS ===============
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// =============== DATA LOADING ===============
+async function carregarDados() {
+  try {
+    const [_resTipos, _resTrein, _resColab] = await Promise.all([
+      API.get('rh_treinamentos_tipos?ativo=eq.true&order=nome.asc'),
+      API.get('rh_treinamentos?select=*,rh_treinamentos_tipos(nome,nr,validade_meses),rh_colaboradores(nome)&order=data_vencimento.asc'),
+      API.get('rh_colaboradores?status=eq.ativo&select=id,nome,cargo,setor&order=nome.asc'),
+    ]);
+    const tipos = _resTipos.ok ? _resTipos.data : [];
+    const treinamentos = _resTrein.ok ? _resTrein.data : [];
+    const colaboradores = _resColab.ok ? _resColab.data : [];
+    allTipos = tipos || [];
+    allTreinamentos = (treinamentos || []).map(t => ({
+      ...t,
+      _nome_colab: t.rh_colaboradores?.nome || '(sem nome)',
+      _nome_tipo: t.rh_treinamentos_tipos?.nome || '(sem tipo)',
+      _nr: t.rh_treinamentos_tipos?.nr || '',
+      _validade_meses: t.rh_treinamentos_tipos?.validade_meses ?? 0,
+    }));
+    allColaboradores = colaboradores || [];
+  } catch (e) {
+    console.error('Erro ao carregar dados:', e);
+    toast('Erro ao carregar dados. Verifique a conexao.', 'err');
+  }
+}
+
+// =============== STATUS CALCULATION ===============
+function calcStatus(dataVencimento, validadeMeses) {
+  if (!validadeMeses || validadeMeses === 0) return { label: 'Sem vencimento', badge: 'badge-info', dias: null };
+  if (!dataVencimento) return { label: 'Sem data', badge: 'badge-muted', dias: null };
+  const hoje = new Date(); hoje.setHours(0,0,0,0);
+  const venc = new Date(dataVencimento + 'T00:00:00');
+  const diff = Math.ceil((venc - hoje) / (1000*60*60*24));
+  if (diff < 0) return { label: 'Vencido', badge: 'badge-err', dias: diff };
+  if (diff <= 30) return { label: 'Vencendo', badge: 'badge-warn', dias: diff };
+  if (diff <= 60) return { label: 'Atencao', badge: 'badge-accent', dias: diff };
+  return { label: 'Vigente', badge: 'badge-ok', dias: diff };
+}
+
+function calcDataVencimento(dataRealizacao, validadeMeses) {
+  if (!dataRealizacao || !validadeMeses || validadeMeses === 0) return null;
+  const d = new Date(dataRealizacao + 'T00:00:00');
+  d.setMonth(d.getMonth() + parseInt(validadeMeses));
+  return d.toISOString().split('T')[0];
+}
+
+// =============== KPIs ===============
+function atualizarKPIs(lista) {
+  let ativos = 0, vencidos = 0, vencendo30 = 0, vencendo60 = 0;
+  lista.forEach(t => {
+    ativos++;
+    const st = calcStatus(t.data_vencimento, t._validade_meses);
+    if (st.label === 'Vencido') vencidos++;
+    else if (st.label === 'Vencendo') vencendo30++;
+    else if (st.label === 'Atencao') vencendo60++;
+  });
+  document.getElementById('kpi-ativos').textContent = ativos;
+  document.getElementById('kpi-vencidos').textContent = vencidos;
+  document.getElementById('kpi-vencendo30').textContent = vencendo30;
+  document.getElementById('kpi-vencendo60').textContent = vencendo60;
+}
+
+// =============== PAINEL DE VENCIMENTOS ===============
+function renderPainel() {
+  const statusFiltro = document.getElementById('filtro-status').value;
+  const tipoFiltro = document.getElementById('filtro-tipo').value;
+
+  let lista = [...allTreinamentos];
+
+  // Filter
+  if (statusFiltro) {
+    lista = lista.filter(t => {
+      const st = calcStatus(t.data_vencimento, t._validade_meses);
+      if (statusFiltro === 'vencido') return st.label === 'Vencido';
+      if (statusFiltro === 'vencendo') return st.label === 'Vencendo';
+      if (statusFiltro === 'atencao') return st.label === 'Atencao';
+      if (statusFiltro === 'vigente') return st.label === 'Vigente';
+      if (statusFiltro === 'sem_vencimento') return st.label === 'Sem vencimento';
+      return true;
+    });
+  }
+  if (tipoFiltro) {
+    lista = lista.filter(t => t.tipo_id === tipoFiltro);
+  }
+
+  // Sort
+  lista.sort((a, b) => {
+    let va, vb;
+    switch (painelSortCol) {
+      case 'nome': va = a._nome_colab; vb = b._nome_colab; break;
+      case 'treinamento': va = a._nome_tipo; vb = b._nome_tipo; break;
+      case 'data_realizacao': va = a.data_realizacao || ''; vb = b.data_realizacao || ''; break;
+      case 'validade_meses': va = a._validade_meses; vb = b._validade_meses; break;
+      case 'data_vencimento': va = a.data_vencimento || '9999'; vb = b.data_vencimento || '9999'; break;
+      case 'status':
+        const sa = calcStatus(a.data_vencimento, a._validade_meses);
+        const sb = calcStatus(b.data_vencimento, b._validade_meses);
+        const order = { 'Vencido': 0, 'Vencendo': 1, 'Atencao': 2, 'Vigente': 3, 'Sem vencimento': 4 };
+        va = order[sa.label] ?? 5; vb = order[sb.label] ?? 5; break;
+      case 'dias_restantes':
+        const da = calcStatus(a.data_vencimento, a._validade_meses);
+        const db = calcStatus(b.data_vencimento, b._validade_meses);
+        va = da.dias ?? 99999; vb = db.dias ?? 99999; break;
+      default: va = a.data_vencimento || '9999'; vb = b.data_vencimento || '9999';
+    }
+    if (typeof va === 'string') {
+      const cmp = va.localeCompare(vb, 'pt-BR');
+      return painelSortDir === 'asc' ? cmp : -cmp;
+    }
+    return painelSortDir === 'asc' ? va - vb : vb - va;
+  });
+
+  atualizarKPIs(allTreinamentos);
+  renderAlertas();
+
+  // Sort indicators
+  document.querySelectorAll('#tabela-painel thead th').forEach(th => {
+    th.classList.remove('sorted-asc', 'sorted-desc');
+    if (th.dataset.sort === painelSortCol) {
+      th.classList.add(painelSortDir === 'asc' ? 'sorted-asc' : 'sorted-desc');
+    }
+    th.onclick = () => {
+      if (painelSortCol === th.dataset.sort) {
+        painelSortDir = painelSortDir === 'asc' ? 'desc' : 'asc';
+      } else {
+        painelSortCol = th.dataset.sort;
+        painelSortDir = 'asc';
+      }
+      renderPainel();
+    };
+  });
+
+  const tbody = document.getElementById('tbody-painel');
+  if (!lista.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum treinamento encontrado.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = lista.map(t => {
+    const st = calcStatus(t.data_vencimento, t._validade_meses);
+    const diasTxt = st.dias !== null ? st.dias : '--';
+    return `<tr>
+      <td>${esc(t._nome_colab)}</td>
+      <td>${esc(t._nome_tipo)}</td>
+      <td class="mono">${fmtDate(t.data_realizacao)}</td>
+      <td class="num">${t._validade_meses || 0}</td>
+      <td class="mono">${t.data_vencimento ? fmtDate(t.data_vencimento) : '--'}</td>
+      <td><span class="badge ${st.badge}">${st.label}</span></td>
+      <td class="num" style="color:${st.label==='Vencido'?'var(--err)':st.label==='Vencendo'?'var(--warn)':'inherit'}">${diasTxt}</td>
+    </tr>`;
+  }).join('');
+}
+
+function renderAlertas() {
+  const container = document.getElementById('alertas-container');
+  const vencidos = allTreinamentos.filter(t => calcStatus(t.data_vencimento, t._validade_meses).label === 'Vencido');
+  const vencendo = allTreinamentos.filter(t => calcStatus(t.data_vencimento, t._validade_meses).label === 'Vencendo');
+
+  if (!vencidos.length && !vencendo.length) {
+    container.innerHTML = '<div class="empty-state">Nenhum alerta no momento. Todos os treinamentos estao em dia.</div>';
+    return;
+  }
+
+  let html = '';
+  if (vencidos.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:var(--err);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Vencidos (${vencidos.length})</div>`;
+    html += '<div class="alert-grid">';
+    vencidos.forEach(t => {
+      const st = calcStatus(t.data_vencimento, t._validade_meses);
+      html += `<div class="alert-card vencido">
+        <div class="alert-card-info">
+          <div class="alert-card-nome">${esc(t._nome_colab)}</div>
+          <div class="alert-card-detail">${esc(t._nome_tipo)} &mdash; Venceu em ${fmtDate(t.data_vencimento)}</div>
+        </div>
+        <div class="alert-card-badge"><span class="badge badge-err">${Math.abs(st.dias)} dias</span></div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  if (vencendo.length) {
+    html += `<div style="font-size:12px;font-weight:700;color:var(--warn);margin-bottom:8px;margin-top:16px;text-transform:uppercase;letter-spacing:.05em;">Vencendo em 30 dias (${vencendo.length})</div>`;
+    html += '<div class="alert-grid">';
+    vencendo.forEach(t => {
+      const st = calcStatus(t.data_vencimento, t._validade_meses);
+      html += `<div class="alert-card vencendo">
+        <div class="alert-card-info">
+          <div class="alert-card-nome">${esc(t._nome_colab)}</div>
+          <div class="alert-card-detail">${esc(t._nome_tipo)} &mdash; Vence em ${fmtDate(t.data_vencimento)}</div>
+        </div>
+        <div class="alert-card-badge"><span class="badge badge-warn">${st.dias} dias</span></div>
+      </div>`;
+    });
+    html += '</div>';
+  }
+
+  container.innerHTML = html;
+}
+
+function aplicarFiltros() {
+  renderPainel();
+}
+
+// =============== CADASTRAR TREINAMENTO ===============
+function toggleModoBulk() {
+  const bulk = document.getElementById('modo-bulk').checked;
+  document.getElementById('cadastro-individual').style.display = bulk ? 'none' : 'block';
+  document.getElementById('cadastro-bulk').style.display = bulk ? 'block' : 'none';
+  if (!bulk) { bulkColabs = []; renderChips(); }
+}
+
+function onTipoChange() {
+  const tipoId = document.getElementById('cad-tipo').value;
+  const tipo = allTipos.find(t => t.id === tipoId);
+  if (tipo) {
+    document.getElementById('cad-validade').value = tipo.validade_meses;
+    recalcVencimento();
+  }
+}
+
+function recalcVencimento() {
+  const data = document.getElementById('cad-data').value;
+  const meses = parseInt(document.getElementById('cad-validade').value) || 0;
+  const venc = calcDataVencimento(data, meses);
+  document.getElementById('cad-vencimento').value = venc || '';
+}
+
+// Wire up auto-calc
+document.addEventListener('DOMContentLoaded', () => {
+  const cadData = document.getElementById('cad-data');
+  const cadVal = document.getElementById('cad-validade');
+  if (cadData) cadData.addEventListener('change', recalcVencimento);
+  if (cadVal) cadVal.addEventListener('input', recalcVencimento);
+});
+
+async function salvarTreinamento() {
+  const isBulk = document.getElementById('modo-bulk').checked;
+  const tipoId = document.getElementById('cad-tipo').value;
+  const data = document.getElementById('cad-data').value;
+  const carga = document.getElementById('cad-carga').value;
+  const inst = document.getElementById('cad-instituicao').value.trim();
+  const cert = document.getElementById('cad-certificado').value.trim();
+  const validade = parseInt(document.getElementById('cad-validade').value) || 0;
+  const obs = document.getElementById('cad-obs').value.trim();
+
+  if (!tipoId) { toast('Selecione o tipo de treinamento.', 'warn'); return; }
+  if (!data) { toast('Informe a data de realizacao.', 'warn'); return; }
+
+  const vencimento = calcDataVencimento(data, validade);
+
+  let colabIds = [];
+  if (isBulk) {
+    colabIds = [...bulkColabs];
+    if (!colabIds.length) { toast('Adicione ao menos um colaborador.', 'warn'); return; }
+  } else {
+    const cid = document.getElementById('colab-id').value;
+    if (!cid) { toast('Selecione um colaborador.', 'warn'); return; }
+    colabIds = [cid];
+  }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const registros = colabIds.map(cid => ({
+      funcionario_id: cid,
+      tipo_treinamento_id: tipoId,
+      data_realizacao: data,
+      carga_horaria: carga ? parseFloat(carga) : null,
+      instrutor: inst || null,
+      numero_certificado: cert || null,
+      data_validade: vencimento || null,
+      observacoes: obs || null,
+    }));
+
+    const res = await API.post('sst_treinamento', registros, 'return=minimal');
+    if (res.ok) {
+      toast(`${registros.length} treinamento(s) registrado(s) com sucesso!`, 'ok');
+      limparFormCadastro();
+      await carregarDados();
+      renderPainel();
+      populaTipoDropdowns();
+    } else {
+      toast('Erro ao salvar: ' + (res.error || 'Erro desconhecido'), 'err');
+    }
+  } catch (e) {
+    toast('Erro ao salvar: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar Treinamento';
+  }
+}
+
+function limparFormCadastro() {
+  document.getElementById('colab-id').value = '';
+  document.getElementById('busca-colab').value = '';
+  document.getElementById('cad-tipo').value = '';
+  document.getElementById('cad-data').value = '';
+  document.getElementById('cad-carga').value = '';
+  document.getElementById('cad-instituicao').value = '';
+  document.getElementById('cad-certificado').value = '';
+  document.getElementById('cad-validade').value = '';
+  document.getElementById('cad-vencimento').value = '';
+  document.getElementById('cad-obs').value = '';
+  bulkColabs = [];
+  renderChips();
+  document.getElementById('busca-colab-bulk').value = '';
+}
+
+// =============== SEARCH COLABORADOR ===============
+function initSearch(inputId, resultsId, onSelect) {
+  const input = document.getElementById(inputId);
+  const results = document.getElementById(resultsId);
+  if (!input || !results) return;
+
+  input.addEventListener('input', () => {
+    const q = input.value.toLowerCase().trim();
+    if (q.length < 2) { results.classList.remove('open'); return; }
+    const matches = allColaboradores.filter(c => c.nome.toLowerCase().includes(q)).slice(0, 15);
+    if (!matches.length) { results.innerHTML = '<div class="search-result-item" style="color:var(--muted)">Nenhum encontrado</div>'; results.classList.add('open'); return; }
+    results.innerHTML = matches.map(c =>
+      `<div class="search-result-item" data-id="${c.id}" data-nome="${esc(c.nome)}">${esc(c.nome)}<span style="color:var(--muted);font-size:10px;margin-left:8px;">${esc(c.cargo||'')} - ${esc(c.setor||'')}</span></div>`
+    ).join('');
+    results.classList.add('open');
+    results.querySelectorAll('.search-result-item[data-id]').forEach(item => {
+      item.addEventListener('click', () => {
+        onSelect(item.dataset.id, item.dataset.nome);
+        results.classList.remove('open');
+      });
+    });
+  });
+
+  input.addEventListener('blur', () => { setTimeout(() => results.classList.remove('open'), 200); });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // Individual search
+  initSearch('busca-colab', 'busca-colab-results', (id, nome) => {
+    document.getElementById('colab-id').value = id;
+    document.getElementById('busca-colab').value = nome;
+  });
+
+  // Bulk search
+  initSearch('busca-colab-bulk', 'busca-colab-bulk-results', (id, nome) => {
+    if (!bulkColabs.includes(id)) {
+      bulkColabs.push(id);
+      renderChips();
+    }
+    document.getElementById('busca-colab-bulk').value = '';
+  });
+
+  // View search
+  initSearch('busca-colab-view', 'busca-colab-view-results', (id, nome) => {
+    document.getElementById('busca-colab-view').value = nome;
+    renderColabHistorico(id, nome);
+  });
+});
+
+function renderChips() {
+  const container = document.getElementById('chip-colabs');
+  if (!container) return;
+  container.innerHTML = bulkColabs.map(id => {
+    const c = allColaboradores.find(x => x.id === id);
+    const nome = c ? c.nome : id;
+    return `<div class="chip">${esc(nome)}<span class="chip-remove" onclick="removeBulkColab('${id}')">&times;</span></div>`;
+  }).join('');
+}
+
+function removeBulkColab(id) {
+  bulkColabs = bulkColabs.filter(x => x !== id);
+  renderChips();
+}
+
+// =============== TIPOS DE TREINAMENTO ===============
+function renderTipos() {
+  const tbody = document.getElementById('tbody-tipos');
+  if (!allTipos.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="empty-state">Nenhum tipo cadastrado.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = allTipos.map(t => `<tr>
+    <td style="font-weight:600;">${esc(t.nome)}</td>
+    <td class="mono">${t.nr || '--'}</td>
+    <td class="num">${t.validade_meses === 0 ? 'Nao vence' : t.validade_meses}</td>
+    <td>${t.obrigatorio ? '<span class="badge badge-warn">Sim</span>' : '<span class="badge badge-muted">Nao</span>'}</td>
+    <td style="white-space:normal;max-width:200px;font-size:11px;color:var(--muted);">${esc(t.descricao || '')}</td>
+    <td>${t.ativo ? '<span class="badge badge-ok">Ativo</span>' : '<span class="badge badge-err">Inativo</span>'}</td>
+    <td>
+      <button class="btn btn-outline btn-sm" onclick="editarTipo('${t.id}')">Editar</button>
+      <button class="btn btn-err btn-sm" onclick="desativarTipo('${t.id}', ${t.ativo})" style="margin-left:4px;">${t.ativo ? 'Desativar' : 'Ativar'}</button>
+    </td>
+  </tr>`).join('');
+}
+
+function populaTipoDropdowns() {
+  const opts = allTipos.filter(t => t.ativo).map(t => `<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+  document.getElementById('cad-tipo').innerHTML = '<option value="">Selecione...</option>' + opts;
+  document.getElementById('filtro-tipo').innerHTML = '<option value="">Todos</option>' + opts;
+}
+
+function abrirModalTipo(id) {
+  document.getElementById('modal-tipo').classList.add('open');
+  document.getElementById('tipo-edit-id').value = '';
+  document.getElementById('tipo-nome').value = '';
+  document.getElementById('tipo-nr').value = '';
+  document.getElementById('tipo-validade').value = '24';
+  document.getElementById('tipo-obrigatorio').value = 'true';
+  document.getElementById('tipo-descricao').value = '';
+  document.getElementById('modal-tipo-title').textContent = 'Novo Tipo de Treinamento';
+}
+
+function fecharModalTipo() {
+  document.getElementById('modal-tipo').classList.remove('open');
+}
+
+function editarTipo(id) {
+  const t = allTipos.find(x => x.id === id);
+  if (!t) return;
+  document.getElementById('modal-tipo').classList.add('open');
+  document.getElementById('modal-tipo-title').textContent = 'Editar Tipo de Treinamento';
+  document.getElementById('tipo-edit-id').value = t.id;
+  document.getElementById('tipo-nome').value = t.nome;
+  document.getElementById('tipo-nr').value = t.nr || '';
+  document.getElementById('tipo-validade').value = t.validade_meses;
+  document.getElementById('tipo-obrigatorio').value = t.obrigatorio ? 'true' : 'false';
+  document.getElementById('tipo-descricao').value = t.descricao || '';
+}
+
+async function salvarTipo() {
+  const id = document.getElementById('tipo-edit-id').value;
+  const nome = document.getElementById('tipo-nome').value.trim();
+  const nr = document.getElementById('tipo-nr').value.trim();
+  const validade = parseInt(document.getElementById('tipo-validade').value) || 0;
+  const obrigatorio = document.getElementById('tipo-obrigatorio').value === 'true';
+  const descricao = document.getElementById('tipo-descricao').value.trim();
+
+  if (!nome) { toast('Informe o nome do tipo.', 'warn'); return; }
+
+  const payload = { nome, nr: nr || null, validade_meses: validade, obrigatorio, descricao: descricao || null };
+
+  try {
+    let res;
+    if (id) {
+      res = await API.patch(`rh_treinamentos_tipos?id=eq.${id}`, payload);
+    } else {
+      payload.ativo = true;
+      res = await API.post('rh_treinamentos_tipos', payload, 'return=minimal');
+    }
+    if (res.ok) {
+      toast(id ? 'Tipo atualizado!' : 'Tipo criado!', 'ok');
+      fecharModalTipo();
+      await carregarDados();
+      renderTipos();
+      populaTipoDropdowns();
+    } else {
+      toast('Erro ao salvar tipo.', 'err');
+    }
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+async function desativarTipo(id, ativoAtual) {
+  try {
+    const res = await API.patch(`rh_treinamentos_tipos?id=eq.${id}`, { ativo: !ativoAtual });
+    if (res.ok) {
+      toast(ativoAtual ? 'Tipo desativado.' : 'Tipo reativado.', 'ok');
+      await carregarDados();
+      renderTipos();
+      populaTipoDropdowns();
+    }
+  } catch (e) {
+    toast('Erro: ' + e.message, 'err');
+  }
+}
+
+// =============== POR COLABORADOR ===============
+function renderColabHistorico(colabId, colabNome) {
+  const container = document.getElementById('colab-historico');
+  container.style.display = 'block';
+  document.getElementById('colab-view-nome').textContent = 'Treinamentos de ' + colabNome;
+
+  const treinos = allTreinamentos.filter(t => t.colaborador_id === colabId);
+  const tbody = document.getElementById('tbody-colab-historico');
+
+  if (!treinos.length) {
+    tbody.innerHTML = '<tr><td colspan="8" class="empty-state">Nenhum treinamento registrado para este colaborador.</td></tr>';
+  } else {
+    tbody.innerHTML = treinos.map(t => {
+      const st = calcStatus(t.data_vencimento, t._validade_meses);
+      return `<tr>
+        <td style="font-weight:600;">${esc(t._nome_tipo)}</td>
+        <td class="mono">${fmtDate(t.data_realizacao)}</td>
+        <td class="num">${t.carga_horaria || '--'}</td>
+        <td>${esc(t.instituicao || '--')}</td>
+        <td class="mono">${esc(t.numero_certificado || '--')}</td>
+        <td class="mono">${t.data_vencimento ? fmtDate(t.data_vencimento) : '--'}</td>
+        <td><span class="badge ${st.badge}">${st.label}</span></td>
+        <td class="num">${st.dias !== null ? st.dias : '--'}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // Matrix
+  renderMatrix(colabId, treinos);
+}
+
+function renderMatrix(colabId, treinos) {
+  const container = document.getElementById('matrix-container');
+  const tiposAtivos = allTipos.filter(t => t.ativo);
+
+  if (!tiposAtivos.length) {
+    container.innerHTML = '<div class="empty-state">Nenhum tipo de treinamento cadastrado.</div>';
+    return;
+  }
+
+  // For each tipo, find the most recent training for this colab
+  let html = '<table class="matrix-table"><thead><tr><th>Colaborador</th>';
+  tiposAtivos.forEach(tipo => {
+    const label = tipo.nr || tipo.nome.substring(0, 15);
+    html += `<th title="${esc(tipo.nome)}">${esc(label)}</th>`;
+  });
+  html += '</tr></thead><tbody><tr>';
+
+  const colab = allColaboradores.find(c => c.id === colabId);
+  html += `<th style="text-align:left;font-weight:600;color:var(--text);">${esc(colab?.nome || '?')}</th>`;
+
+  tiposAtivos.forEach(tipo => {
+    // Find most recent training for this type
+    const match = treinos
+      .filter(t => t.tipo_id === tipo.id)
+      .sort((a,b) => (b.data_realizacao || '').localeCompare(a.data_realizacao || ''))[0];
+
+    if (!match) {
+      html += `<td><div class="matrix-cell matrix-nao-realizado" title="Nao realizado"></div></td>`;
+    } else {
+      const st = calcStatus(match.data_vencimento, tipo.validade_meses);
+      let cls = 'matrix-nao-realizado';
+      if (st.label === 'Vigente') cls = 'matrix-vigente';
+      else if (st.label === 'Vencendo' || st.label === 'Atencao') cls = 'matrix-vencendo';
+      else if (st.label === 'Vencido') cls = 'matrix-vencido';
+      else if (st.label === 'Sem vencimento') cls = 'matrix-sem-vencimento';
+      html += `<td><div class="matrix-cell ${cls}" title="${st.label}${st.dias !== null ? ' (' + st.dias + ' dias)' : ''}"></div></td>`;
+    }
+  });
+
+  html += '</tr></tbody></table>';
+  container.innerHTML = html;
+}
+
+// =============== HELPERS ===============
+function esc(s) {
+  return API.esc(s);
+}
+
+function fmtDate(d) {
+  return API.fmtData(d);
+}
+
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 4000);
+}
+</script>
+
+</body>
+</html>

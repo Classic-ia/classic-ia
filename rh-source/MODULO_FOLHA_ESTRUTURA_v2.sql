@@ -1,0 +1,74 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO FOLHA DE PAGAMENTO — ESTRUTURA BASE
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- NÃO IMPLEMENTA cálculo de INSS/FGTS/IRRF.
+-- Apenas prepara a ESTRUTURA para futura internalização da folha.
+--
+-- MODELO DE DADOS:
+--
+--   fp_rubrica (catálogo de 26 eventos padrão)
+--     ↓
+--   fp_lote (agrupador: competência + tipo + empresa)
+--     ↓
+--   fp_folha (envelope individual do funcionário — com snapshot)
+--     ↓
+--   fp_lancamento (cada linha: rubrica + referência + valor)
+--
+--   fp_variavel_mensal (input: horas extras, faltas, etc.)
+--
+--   fp_lote_pagamento → fp_pagamento_funcionario (integração financeira)
+--
+--
+-- TABELAS (7):
+--   fp_rubrica              — catálogo com incidências (INSS/FGTS/IRRF/férias/13º)
+--   fp_lote                 — agrupador por competência (mensal, 13º, férias, rescisão, PLR)
+--   fp_folha                — envelope individual com snapshot + totais + bases
+--   fp_lancamento           — linhas da folha (provento/desconto/informativo)
+--   fp_variavel_mensal      — input de ponto (HE, faltas, atrasos, DSR, etc.)
+--   fp_lote_pagamento       — lote de pagamento (preparado para CNAB)
+--   fp_pagamento_funcionario— detalhe de pagamento por funcionário
+--
+-- TRIGGERS (4 de negócio + 7 updated_at + 7 audit):
+--   fn_fp_bloquear_folha_fechada — impede edição em lote fechado
+--   fn_fp_snapshot_folha         — snapshot cargo/setor/salário ao calcular
+--   fn_fp_consolidar_lote        — totaliza ao fechar lote
+--
+-- RPCs (2):
+--   fp_holerite(uuid, competencia) — retorna JSONB completo
+--   fp_resumo_lote(uuid)           — lista folhas de um lote para conferência
+--
+-- VIEWS (1):
+--   vw_fp_lotes — lotes com status
+--
+-- SEED: 26 rubricas padrão (12 proventos + 10 descontos + 4 informativos)
+--
+-- RLS: 21 policies. Toda a folha restrita a admin/rh (dado sensível).
+--
+--
+-- EXEMPLOS DE USO:
+--
+--   -- Ver holerite
+--   SELECT fp_holerite('func-uuid', '2026-03');
+--
+--   -- Resumo do lote para conferência
+--   SELECT * FROM fp_resumo_lote('lote-uuid');
+--
+--   -- Ver lotes
+--   SELECT * FROM vw_fp_lotes;
+--
+--   -- Via Supabase JS
+--   const { data } = await supabase.rpc('fp_holerite', { p_funcionario_id: '...', p_competencia: '2026-03' });
+--   const { data } = await supabase.rpc('fp_resumo_lote', { p_lote_id: '...' });
+--
+--
+-- PREPARADO PARA FUTURA INTERNALIZAÇÃO:
+--   - Rubricas com flags de incidência (incide_inss, incide_fgts, etc.)
+--   - Bases de cálculo na folha (base_inss, base_fgts, base_irrf)
+--   - Variáveis mensais separadas (input → cálculo → lançamento)
+--   - Integração contábil (conta_debito, conta_credito na rubrica)
+--   - Integração bancária (fp_lote_pagamento preparado para CNAB)
+--
+-- ════════════════════════════════════════════════════════════════════════════

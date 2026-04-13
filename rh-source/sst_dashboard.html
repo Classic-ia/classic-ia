@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - SST Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Hero KPIs */
+  .hero-kpis {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-4);
+    margin-bottom: var(--space-6);
+  }
+  @media (max-width: 1100px) {
+    .hero-kpis { grid-template-columns: repeat(3, 1fr); }
+  }
+  @media (max-width: 700px) {
+    .hero-kpis { grid-template-columns: repeat(2, 1fr); }
+  }
+
+  .hero-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    text-align: center;
+    box-shadow: var(--shadow-sm);
+    transition: box-shadow 0.2s, transform 0.2s;
+  }
+  .hero-card:hover {
+    box-shadow: var(--shadow-md);
+    transform: translateY(-2px);
+  }
+  .hero-card-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-full);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: var(--space-3);
+  }
+  .hero-card-icon svg {
+    width: 20px;
+    height: 20px;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    fill: none;
+  }
+  .hero-card-icon.green  { background: var(--success-light); color: var(--success); }
+  .hero-card-icon.blue   { background: var(--primary-100); color: var(--primary); }
+  .hero-card-icon.red    { background: var(--danger-light); color: var(--danger); }
+  .hero-card-icon.yellow { background: var(--warning-light); color: var(--warning); }
+
+  .hero-card-value {
+    font-size: var(--text-2xl);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+    line-height: 1.1;
+    margin-bottom: var(--space-1);
+  }
+  .hero-card-value.green  { color: var(--success); }
+  .hero-card-value.red    { color: var(--danger); }
+  .hero-card-value.yellow { color: var(--warning); }
+
+  .hero-card-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    font-weight: var(--weight-medium);
+  }
+
+  /* Section cards */
+  .sst-sections {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: var(--space-5);
+    margin-bottom: var(--space-6);
+  }
+  @media (max-width: 900px) {
+    .sst-sections { grid-template-columns: 1fr; }
+  }
+
+  .sst-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+    box-shadow: var(--shadow-sm);
+  }
+  .sst-card-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+  }
+  .sst-card-header-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+  .sst-card-header-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+  .sst-card-header-icon.blue   { background: var(--primary-100); color: var(--primary); }
+  .sst-card-header-icon.green  { background: var(--success-light); color: var(--success); }
+  .sst-card-header-icon.yellow { background: var(--warning-light); color: var(--warning); }
+  .sst-card-header-icon.red    { background: var(--danger-light); color: var(--danger); }
+  .sst-card-header-icon.info   { background: var(--info-light); color: var(--info); }
+
+  .sst-card-title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+  }
+
+  .sst-stats-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin-bottom: var(--space-5);
+  }
+  .sst-stat {
+    flex: 1;
+    min-width: 80px;
+    text-align: center;
+    padding: var(--space-3);
+    background: var(--bg);
+    border-radius: var(--radius-md);
+  }
+  .sst-stat-value {
+    font-size: var(--text-lg);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+    line-height: 1.2;
+  }
+  .sst-stat-value.red    { color: var(--danger); }
+  .sst-stat-value.yellow { color: var(--warning); }
+  .sst-stat-value.green  { color: var(--success); }
+  .sst-stat-label {
+    font-size: var(--text-xs);
+    color: var(--text-secondary);
+    margin-top: 2px;
+  }
+
+  /* Progress bar */
+  .sst-progress-wrap {
+    margin-bottom: var(--space-4);
+  }
+  .sst-progress-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    margin-bottom: var(--space-1);
+  }
+  .sst-progress-bar {
+    width: 100%;
+    height: 8px;
+    background: var(--bg-alt);
+    border-radius: var(--radius-full);
+    overflow: hidden;
+  }
+  .sst-progress-fill {
+    height: 100%;
+    border-radius: var(--radius-full);
+    background: var(--primary);
+    transition: width 0.6s ease;
+  }
+  .sst-progress-fill.green  { background: var(--success); }
+  .sst-progress-fill.yellow { background: var(--warning); }
+  .sst-progress-fill.red    { background: var(--danger); }
+
+  /* Alert */
+  .sst-alert {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    margin-bottom: var(--space-4);
+  }
+  .sst-alert.danger {
+    background: var(--danger-light);
+    color: var(--danger-dark);
+  }
+  .sst-alert.warning {
+    background: var(--warning-light);
+    color: var(--warning-dark);
+  }
+  .sst-alert.success {
+    background: var(--success-light);
+    color: var(--success-dark);
+  }
+  .sst-alert svg {
+    width: 16px;
+    height: 16px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    flex-shrink: 0;
+  }
+
+  /* Link buttons */
+  .sst-card-actions {
+    display: flex;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+  .sst-link-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-4);
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-md);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--primary);
+    background: var(--surface);
+    text-decoration: none;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .sst-link-btn:hover {
+    background: var(--primary-50);
+    border-color: var(--primary-200);
+  }
+  .sst-link-btn svg {
+    width: 14px;
+    height: 14px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+  }
+
+  /* Big counter */
+  .big-counter {
+    text-align: center;
+    padding: var(--space-6) 0;
+  }
+  .big-counter-value {
+    font-size: 56px;
+    font-weight: var(--weight-bold);
+    color: var(--success);
+    line-height: 1;
+    margin-bottom: var(--space-2);
+  }
+  .big-counter-label {
+    font-size: var(--text-md);
+    color: var(--text-secondary);
+    font-weight: var(--weight-medium);
+  }
+  .big-counter-sub {
+    font-size: var(--text-sm);
+    color: var(--text-muted);
+    margin-top: var(--space-2);
+  }
+
+  /* Quick links */
+  .quick-links-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-4);
+  }
+  @media (max-width: 700px) {
+    .quick-links-grid { grid-template-columns: repeat(2, 1fr); }
+  }
+  .quick-link {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4);
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    text-decoration: none;
+    color: var(--text);
+    font-weight: var(--weight-medium);
+    font-size: var(--text-base);
+    transition: background 0.15s, box-shadow 0.15s, transform 0.15s;
+    box-shadow: var(--shadow-xs);
+  }
+  .quick-link:hover {
+    background: var(--primary-50);
+    box-shadow: var(--shadow-sm);
+    transform: translateY(-1px);
+  }
+  .quick-link-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--primary-100);
+    color: var(--primary);
+    flex-shrink: 0;
+  }
+  .quick-link-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Page title area */
+  .page-title-section {
+    margin-bottom: var(--space-6);
+  }
+  .page-title-section h1 {
+    font-size: var(--text-xl);
+    font-weight: var(--weight-bold);
+    color: var(--text);
+    margin: 0 0 var(--space-1) 0;
+  }
+  .page-title-section p {
+    font-size: var(--text-base);
+    color: var(--text-secondary);
+    margin: 0;
+  }
+
+  /* Loading skeleton */
+  .sst-loading {
+    text-align: center;
+    padding: var(--space-10);
+    color: var(--text-muted);
+    font-size: var(--text-base);
+  }
+  .sst-loading .spinner {
+    width: 32px;
+    height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto var(--space-4);
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Section title for bottom */
+  .section-title {
+    font-size: var(--text-md);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+    margin-bottom: var(--space-4);
+  }
+
+  /* Full-width card for acidentes */
+  .sst-sections-full {
+    margin-bottom: var(--space-6);
+  }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-mobile-overlay" id="sidebarOverlay"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros">
+    <span class="sidebar-brand-text">Classic RH</span>
+  </div>
+
+  <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
+  <nav class="sidebar-nav" id="sidebarNav">
+    <!-- INICIO -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inicio</div>
+      <a href="app.html" class="sidebar-item" data-page="app">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+        <span class="sidebar-item-label">Dashboard</span>
+      </a>
+    </div>
+
+    <!-- PESSOAS -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Pessoas</div>
+      <a href="colaboradores.html" class="sidebar-item" data-page="colaboradores">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="sidebar-item-label">Colaboradores</span>
+      </a>
+      <a href="recrutamento_selecao.html" class="sidebar-item" data-page="recrutamento_selecao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+        <span class="sidebar-item-label">Admissoes</span>
+      </a>
+      <a href="desligamentos_turnover.html" class="sidebar-item" data-page="desligamentos_turnover">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></span>
+        <span class="sidebar-item-label">Desligamentos</span>
+      </a>
+    </div>
+
+    <!-- PROCESSOS -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Processos</div>
+      <a href="ocorrencias.html" class="sidebar-item" data-page="ocorrencias">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Processos RH</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Contratos Experiencia</span>
+      </a>
+    </div>
+
+    <!-- SST -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">SST</div>
+      <a href="sst_dashboard.html" class="sidebar-item active" data-page="sst_dashboard">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">Painel SST</span>
+      </a>
+      <a href="asos.html" class="sidebar-item" data-page="asos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        <span class="sidebar-item-label">ASOs</span>
+      </a>
+      <a href="treinamentos.html" class="sidebar-item" data-page="treinamentos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></span>
+        <span class="sidebar-item-label">Treinamentos</span>
+      </a>
+      <a href="epis.html" class="sidebar-item" data-page="epis">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">EPIs</span>
+      </a>
+      <a href="acidentes.html" class="sidebar-item" data-page="acidentes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Acidentes</span>
+      </a>
+    </div>
+
+    <!-- OPERACIONAL -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Operacional</div>
+      <a href="importar_secullum.html" class="sidebar-item" data-page="importar_secullum">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        <span class="sidebar-item-label">Ponto</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao_mensal">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Apuracao</span>
+      </a>
+      <a href="beneficios.html" class="sidebar-item" data-page="beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></span>
+        <span class="sidebar-item-label">Beneficios</span>
+      </a>
+    </div>
+
+    <!-- GESTAO -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Gestao</div>
+      <a href="motor_decisoes.html" class="sidebar-item" data-page="motor_decisoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+        <span class="sidebar-item-label">Motor de Decisao</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+        <span class="sidebar-item-label">Pendencias</span>
+        <span class="sidebar-badge" id="badge-pendencias" style="display:none;">0</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh_plano">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="sidebar-item-label">Plano de Acao</span>
+      </a>
+      <a href="lideranca.html" class="sidebar-item" data-page="lideranca">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span>
+        <span class="sidebar-item-label">Lideranca</span>
+      </a>
+    </div>
+
+    <!-- INTELIGENCIA -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inteligencia</div>
+      <a href="dashboard_gerencial.html" class="sidebar-item" data-page="dashboard_gerencial">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        <span class="sidebar-item-label">Dashboard Executivo</span>
+      </a>
+      <a href="motor_v2_auditoria.html" class="sidebar-item" data-page="motor_v2_auditoria">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <span class="sidebar-item-label">Auditoria de Score</span>
+      </a>
+    </div>
+
+    <!-- SISTEMA -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Sistema</div>
+      <a href="integracoes.html" class="sidebar-item" data-page="integracoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+        <span class="sidebar-item-label">Integracoes</span>
+      </a>
+      <a href="relatorio_beneficios.html" class="sidebar-item" data-page="relatorio_beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <span class="sidebar-item-label">Relatorios</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    Classic RH v2026.03
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" title="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <nav class="breadcrumb">
+        <a href="app.html">Inicio</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">SST Dashboard</span>
+      </nav>
+      <div class="topbar-search">
+        <span class="topbar-search-icon">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </span>
+        <input type="text" placeholder="Buscar colaborador, processo..." id="globalSearch">
+      </div>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-notification" id="notifBtn" title="Notificacoes">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="topbar-notification-count" id="notifCount" style="display:none;">0</span>
+      </button>
+      <div class="topbar-user" id="topbarUser">
+        <div class="topbar-user-info">
+          <div class="topbar-user-name" id="userName">Carregando...</div>
+          <div class="topbar-user-role" id="userRole"></div>
+        </div>
+        <div class="avatar" id="userAvatar">--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT AREA -->
+  <div class="content-area" id="contentArea">
+
+    <!-- Page Title -->
+    <div class="page-title-section">
+      <h1>SST - Seguranca e Saude do Trabalho</h1>
+      <p>Gestao integrada de EPI, ASO, Treinamentos, OS e Acidentes</p>
+    </div>
+
+    <!-- Loading state -->
+    <div id="loadingState" class="sst-loading">
+      <div class="spinner"></div>
+      Carregando dados de SST...
+    </div>
+
+    <!-- Dashboard content (hidden until loaded) -->
+    <div id="dashboardContent" style="display:none;">
+
+      <!-- HERO KPIs -->
+      <div class="hero-kpis">
+        <div class="hero-card">
+          <div class="hero-card-icon green">
+            <svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+          </div>
+          <div class="hero-card-value green" id="kpiDiasSemAcidente">--</div>
+          <div class="hero-card-label">Dias sem Acidente</div>
+        </div>
+
+        <div class="hero-card">
+          <div class="hero-card-icon blue">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+          </div>
+          <div class="hero-card-value" id="kpiEpisAtivos">--</div>
+          <div class="hero-card-label">EPIs no Catalogo</div>
+        </div>
+
+        <div class="hero-card">
+          <div class="hero-card-icon red">
+            <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+          </div>
+          <div class="hero-card-value" id="kpiAsosVencidos">--</div>
+          <div class="hero-card-label">ASOs Vencidos</div>
+        </div>
+
+        <div class="hero-card">
+          <div class="hero-card-icon yellow">
+            <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z" stroke="currentColor" fill="none" stroke-width="2"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+          </div>
+          <div class="hero-card-value" id="kpiTreinVencidos">--</div>
+          <div class="hero-card-label">Treinamentos Vencidos</div>
+        </div>
+
+        <div class="hero-card">
+          <div class="hero-card-icon red">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="currentColor" fill="none" stroke-width="2"/><polyline points="14 2 14 8 20 8" stroke="currentColor" fill="none" stroke-width="2"/></svg>
+          </div>
+          <div class="hero-card-value" id="kpiSemOS">--</div>
+          <div class="hero-card-label">Funcionarios sem OS</div>
+        </div>
+      </div>
+
+      <!-- SECTION CARDS -->
+      <div class="sst-sections">
+
+        <!-- EPI -->
+        <div class="sst-card">
+          <div class="sst-card-header">
+            <div class="sst-card-header-icon blue">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+            </div>
+            <div class="sst-card-title">Equipamentos de Protecao (EPI)</div>
+          </div>
+          <div class="sst-stats-row">
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="epiCatalogo">--</div>
+              <div class="sst-stat-label">Catalogo</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="epiEntregas12m">--</div>
+              <div class="sst-stat-label">Entregas 12m</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value green" id="epiComEpi">--</div>
+              <div class="sst-stat-label">Com EPI</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value red" id="epiSemEpi">--</div>
+              <div class="sst-stat-label">Sem EPI</div>
+            </div>
+          </div>
+          <div class="sst-progress-wrap" id="epiProgressWrap">
+            <div class="sst-progress-label">
+              <span>Funcionarios com EPI</span>
+              <span id="epiProgressPct">0%</span>
+            </div>
+            <div class="sst-progress-bar">
+              <div class="sst-progress-fill green" id="epiProgressFill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="sst-card-actions">
+            <a href="epis.html" class="sst-link-btn">
+              <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+              Ver Catalogo
+            </a>
+            <a href="epis.html" class="sst-link-btn">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Ver Entregas
+            </a>
+          </div>
+        </div>
+
+        <!-- ASO -->
+        <div class="sst-card">
+          <div class="sst-card-header">
+            <div class="sst-card-header-icon green">
+              <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+            </div>
+            <div class="sst-card-title">Exames Ocupacionais (ASO)</div>
+          </div>
+          <div class="sst-stats-row">
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="asoTotal">--</div>
+              <div class="sst-stat-label">Total ASOs</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value red" id="asoVencidos">--</div>
+              <div class="sst-stat-label">Vencidos</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value yellow" id="asoVencendo">--</div>
+              <div class="sst-stat-label">Vencendo 30d</div>
+            </div>
+          </div>
+          <div id="asoAlert" style="display:none;"></div>
+          <div class="sst-card-actions">
+            <a href="asos.html" class="sst-link-btn">
+              <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+              Ver ASOs
+            </a>
+          </div>
+        </div>
+
+        <!-- Treinamentos -->
+        <div class="sst-card">
+          <div class="sst-card-header">
+            <div class="sst-card-header-icon yellow">
+              <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+            </div>
+            <div class="sst-card-title">Treinamentos e NRs</div>
+          </div>
+          <div class="sst-stats-row">
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="treinTotal">--</div>
+              <div class="sst-stat-label">Total</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value green" id="treinValidos">--</div>
+              <div class="sst-stat-label">Validos</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value red" id="treinVencidos">--</div>
+              <div class="sst-stat-label">Vencidos</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="treinTipos">--</div>
+              <div class="sst-stat-label">Tipos</div>
+            </div>
+          </div>
+          <div class="sst-progress-wrap" id="treinProgressWrap">
+            <div class="sst-progress-label">
+              <span>Treinamentos validos</span>
+              <span id="treinProgressPct">0%</span>
+            </div>
+            <div class="sst-progress-bar">
+              <div class="sst-progress-fill green" id="treinProgressFill" style="width:0%"></div>
+            </div>
+          </div>
+          <div class="sst-card-actions">
+            <a href="treinamentos.html" class="sst-link-btn">
+              <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+              Ver Treinamentos
+            </a>
+          </div>
+        </div>
+
+        <!-- Ordem de Servico -->
+        <div class="sst-card">
+          <div class="sst-card-header">
+            <div class="sst-card-header-icon info">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            </div>
+            <div class="sst-card-title">Ordem de Servico</div>
+          </div>
+          <div class="sst-stats-row">
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="osTotal">--</div>
+              <div class="sst-stat-label">Total OS</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value green" id="osVigentes">--</div>
+              <div class="sst-stat-label">Vigentes</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value" id="osCiencias">--</div>
+              <div class="sst-stat-label">Ciencias</div>
+            </div>
+            <div class="sst-stat">
+              <div class="sst-stat-value red" id="osSemCiencia">--</div>
+              <div class="sst-stat-label">Sem Ciencia</div>
+            </div>
+          </div>
+          <div id="osAlert" style="display:none;"></div>
+          <div class="sst-card-actions">
+            <a href="#" class="sst-link-btn" onclick="alert('Modulo em desenvolvimento'); return false;">
+              <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Gerenciar OS
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- ACIDENTES - full width -->
+      <div class="sst-sections-full">
+        <div class="sst-card">
+          <div class="sst-card-header">
+            <div class="sst-card-header-icon red">
+              <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            </div>
+            <div class="sst-card-title">Acidentes de Trabalho</div>
+          </div>
+          <div class="big-counter">
+            <div class="big-counter-value" id="acidentesDias">--</div>
+            <div class="big-counter-label">Dias sem acidente</div>
+            <div class="big-counter-sub">Total historico: <strong id="acidentesTotal">--</strong> acidentes registrados</div>
+          </div>
+          <div class="sst-card-actions" style="justify-content:center;">
+            <a href="acidentes.html" class="sst-link-btn">
+              <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              Ver Acidentes
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <!-- QUICK LINKS -->
+      <div class="section-title">Acesso Rapido</div>
+      <div class="quick-links-grid">
+        <a href="epis.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          EPIs
+        </a>
+        <a href="asos.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+          </div>
+          ASOs
+        </a>
+        <a href="treinamentos.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg>
+          </div>
+          Treinamentos
+        </a>
+        <a href="acidentes.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          Acidentes
+        </a>
+        <a href="ocorrencias.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          </div>
+          Ocorrencias
+        </a>
+        <a href="relatorio_atestados.html" class="quick-link">
+          <div class="quick-link-icon">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </div>
+          Relatorio Atestados
+        </a>
+      </div>
+
+    </div><!-- /dashboardContent -->
+
+  </div><!-- /content-area -->
+</div><!-- /main-content -->
+
+<script>
+document.addEventListener('DOMContentLoaded', async () => {
+
+  /* ── Sidebar toggle ──────────────────────────────── */
+  const sidebar      = document.getElementById('sidebar');
+  const sidebarToggle= document.getElementById('sidebarToggle');
+  const mobileMenuBtn= document.getElementById('mobileMenuBtn');
+  const sidebarOverlay=document.getElementById('sidebarOverlay');
+
+  if (sidebarToggle) sidebarToggle.addEventListener('click', () => sidebar.classList.toggle('collapsed'));
+  if (mobileMenuBtn) mobileMenuBtn.addEventListener('click', () => sidebar.classList.toggle('mobile-open'));
+  if (sidebarOverlay) sidebarOverlay.addEventListener('click', () => sidebar.classList.remove('mobile-open'));
+
+  /* ── Auth check ──────────────────────────────────── */
+  if (typeof RHAuth !== 'undefined') {
+    const ok = await RHAuth.init();
+    if (!ok) { window.location.href = 'login.html'; return; }
+    const u = RHAuth.getUser();
+    if (u) {
+      const el = document.getElementById('userName');
+      if (el) el.textContent = u.nome || u.email || '';
+      const rl = document.getElementById('userRole');
+      if (rl) rl.textContent = u.papel || '';
+      const av = document.getElementById('userAvatar');
+      if (av && u.nome) av.textContent = u.nome.split(' ').map(w=>w[0]).join('').substring(0,2).toUpperCase();
+    }
+  }
+
+  /* ── Load dashboard data ─────────────────────────── */
+  try {
+    const _res = await API.rpc('sst_dashboard_completo', {});
+
+    if (!_res.ok) throw new Error(_res.error || 'Falha ao carregar dados SST');
+
+    // API.rpc already unwraps array[0]
+    const d = _res.data || {};
+
+    const epis = d.epis || {};
+    const asos = d.asos || {};
+    const treinamentos = d.treinamentos || {};
+    const os = d.os || {};
+    const acidentes = d.acidentes || {};
+
+    /* Hero KPIs */
+    setText('kpiDiasSemAcidente', acidentes.dias_sem_acidente ?? 0);
+    setText('kpiEpisAtivos', epis.catalogo_ativo ?? 0);
+
+    const asosVenc = asos.vencidos ?? 0;
+    setTextWithColor('kpiAsosVencidos', asosVenc, asosVenc > 0 ? 'red' : '');
+
+    const treinVenc = treinamentos.vencidos ?? 0;
+    setTextWithColor('kpiTreinVencidos', treinVenc, treinVenc > 0 ? 'red' : '');
+
+    const semOS = os.sem_ciencia ?? 0;
+    setTextWithColor('kpiSemOS', semOS, semOS > 0 ? 'red' : '');
+
+    /* EPI Section */
+    setText('epiCatalogo', epis.catalogo_ativo ?? 0);
+    setText('epiEntregas12m', epis.entregas_12m ?? 0);
+    setText('epiComEpi', epis.funcionarios_com_epi ?? 0);
+    setText('epiSemEpi', epis.funcionarios_sem_epi ?? 0);
+
+    const comEpi = epis.funcionarios_com_epi ?? 0;
+    const semEpi = epis.funcionarios_sem_epi ?? 0;
+    const totalFunc = comEpi + semEpi;
+    const epiPct = totalFunc > 0 ? Math.round((comEpi / totalFunc) * 100) : 0;
+    setText('epiProgressPct', epiPct + '%');
+    const epiFill = document.getElementById('epiProgressFill');
+    if (epiFill) {
+      epiFill.style.width = epiPct + '%';
+      epiFill.className = 'sst-progress-fill ' + (epiPct >= 80 ? 'green' : epiPct >= 50 ? 'yellow' : 'red');
+    }
+
+    /* ASO Section */
+    setText('asoTotal', asos.total ?? 0);
+    setText('asoVencidos', asos.vencidos ?? 0);
+    setText('asoVencendo', asos.vencendo_30d ?? 0);
+
+    if (asosVenc > 0) {
+      const asoAlert = document.getElementById('asoAlert');
+      if (asoAlert) {
+        asoAlert.style.display = 'flex';
+        asoAlert.className = 'sst-alert danger';
+        asoAlert.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          ${asosVenc} ASO(s) vencido(s) - acao imediata necessaria!
+        `;
+      }
+    }
+
+    /* Treinamentos Section */
+    setText('treinTotal', treinamentos.total ?? 0);
+    setText('treinValidos', treinamentos.validos ?? 0);
+    setText('treinVencidos', treinamentos.vencidos ?? 0);
+    setText('treinTipos', treinamentos.tipos ?? 0);
+
+    const treinTotal = treinamentos.total ?? 0;
+    const treinValidos = treinamentos.validos ?? 0;
+    const treinPct = treinTotal > 0 ? Math.round((treinValidos / treinTotal) * 100) : 0;
+    setText('treinProgressPct', treinPct + '%');
+    const treinFill = document.getElementById('treinProgressFill');
+    if (treinFill) {
+      treinFill.style.width = treinPct + '%';
+      treinFill.className = 'sst-progress-fill ' + (treinPct >= 80 ? 'green' : treinPct >= 50 ? 'yellow' : 'red');
+    }
+
+    /* OS Section */
+    setText('osTotal', os.total ?? 0);
+    setText('osVigentes', os.vigentes ?? 0);
+    setText('osCiencias', os.ciencias_total ?? 0);
+    setText('osSemCiencia', os.sem_ciencia ?? 0);
+
+    if ((os.sem_ciencia ?? 0) > 0) {
+      const osAlert = document.getElementById('osAlert');
+      if (osAlert) {
+        osAlert.style.display = 'flex';
+        osAlert.className = 'sst-alert warning';
+        osAlert.innerHTML = `
+          <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          ${os.sem_ciencia} funcionario(s) sem ciencia da OS
+        `;
+      }
+    }
+
+    /* Acidentes Section */
+    setText('acidentesDias', acidentes.dias_sem_acidente ?? 0);
+    setText('acidentesTotal', acidentes.total ?? 0);
+
+    /* Show content */
+    document.getElementById('loadingState').style.display = 'none';
+    document.getElementById('dashboardContent').style.display = 'block';
+
+  } catch (err) {
+    console.error('Erro SST Dashboard:', err);
+    document.getElementById('loadingState').innerHTML = `
+      <div style="color:var(--danger); font-weight:var(--weight-semibold);">
+        Erro ao carregar dados de SST
+      </div>
+      <div style="color:var(--text-muted); margin-top:var(--space-2); font-size:var(--text-sm);">
+        ${err.message || 'Erro desconhecido'}
+      </div>
+      <button onclick="location.reload()" style="margin-top:var(--space-4); padding:var(--space-2) var(--space-6); border:1px solid var(--border-strong); border-radius:var(--radius-md); background:var(--surface); color:var(--primary); font-weight:var(--weight-medium); cursor:pointer;">
+        Tentar novamente
+      </button>
+    `;
+  }
+
+  /* ── Helpers ──────────────────────────────────────── */
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+
+  function setTextWithColor(id, value, colorClass) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = value;
+      el.className = 'hero-card-value' + (colorClass ? ' ' + colorClass : '');
+    }
+  }
+
+});
+</script>
+
+</body>
+</html>

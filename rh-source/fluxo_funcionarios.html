@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Fluxo de Movimentacao</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.fluxo-toolbar {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px;
+}
+.fluxo-toolbar .btn-group { display: flex; gap: 0; }
+.fluxo-toolbar .btn-tab {
+  padding: 8px 16px; border: 1px solid var(--border); background: var(--surface);
+  font-size: 13px; font-weight: 500; cursor: pointer; color: var(--text-secondary);
+  font-family: inherit; transition: all .15s;
+}
+.fluxo-toolbar .btn-tab:first-child { border-radius: 8px 0 0 8px; }
+.fluxo-toolbar .btn-tab:last-child { border-radius: 0 8px 8px 0; }
+.fluxo-toolbar .btn-tab.active {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+.fluxo-toolbar .btn-tab:not(.active):hover { background: var(--surface-hover); }
+
+.fluxo-search {
+  flex: 1; min-width: 200px; max-width: 320px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-family: inherit; background: var(--surface);
+  color: var(--text);
+}
+.fluxo-search:focus { outline: none; border-color: var(--primary); }
+
+/* KANBAN */
+.kanban {
+  display: flex; gap: 14px; overflow-x: auto; padding-bottom: 16px;
+  min-height: 500px; align-items: flex-start;
+}
+.kanban-col {
+  min-width: 230px; max-width: 280px; flex: 1;
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 12px; display: flex; flex-direction: column;
+}
+.kanban-header {
+  padding: 12px 14px; border-bottom: 1px solid var(--border);
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; display: flex; align-items: center;
+  justify-content: space-between; color: var(--text-secondary);
+  position: sticky; top: 0; background: var(--bg); border-radius: 12px 12px 0 0;
+}
+.kanban-header .col-dot {
+  width: 10px; height: 10px; border-radius: 50%; margin-right: 8px; flex-shrink: 0;
+}
+.kanban-header-left { display: flex; align-items: center; }
+.kanban-count {
+  background: var(--surface-hover); border-radius: 10px; padding: 2px 8px;
+  font-size: 10px; font-weight: 600;
+}
+.kanban-body {
+  padding: 8px; flex: 1; overflow-y: auto; max-height: 600px;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.kanban-body.drag-over { background: rgba(37,99,235,.06); }
+
+/* CARDS */
+.k-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 12px; cursor: grab;
+  transition: all .15s; font-size: 12px; position: relative;
+}
+.k-card:hover { border-color: var(--primary); box-shadow: 0 2px 8px rgba(0,0,0,.06); }
+.k-card.dragging { opacity: .4; transform: scale(.96); }
+.k-card-name { font-weight: 600; font-size: 13px; color: var(--text); margin-bottom: 3px; }
+.k-card-info { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.k-card-badge {
+  position: absolute; top: 8px; right: 8px; font-size: 9px;
+  padding: 2px 6px; border-radius: 4px; font-weight: 600;
+}
+.k-card-link {
+  display: inline-block; margin-top: 6px; font-size: 11px;
+  color: var(--primary); text-decoration: none;
+}
+.k-card-link:hover { text-decoration: underline; }
+
+/* Status colors */
+.col-experiencia .col-dot { background: #8b5cf6; }
+.col-ativo .col-dot { background: #22c55e; }
+.col-ferias .col-dot { background: #f59e0b; }
+.col-afastado .col-dot { background: #ef4444; }
+.col-desligado .col-dot { background: #94a3b8; }
+
+/* Confirm modal */
+.modal-overlay {
+  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  z-index: 200; align-items: center; justify-content: center;
+}
+.modal-overlay.active { display: flex; }
+.modal-box {
+  background: var(--surface); border-radius: 12px; padding: 24px;
+  max-width: 420px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,.2);
+}
+.modal-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
+.modal-desc { font-size: 13px; color: var(--text-secondary); margin-bottom: 20px; line-height: 1.6; }
+.modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+/* Toast */
+.fluxo-toast {
+  position: fixed; bottom: 24px; right: 24px; padding: 12px 20px;
+  border-radius: 8px; font-size: 13px; font-weight: 500; z-index: 300;
+  color: #fff; opacity: 0; transition: opacity .3s;
+}
+.fluxo-toast.show { opacity: 1; }
+.fluxo-toast.ok { background: #16a34a; }
+.fluxo-toast.err { background: #dc2626; }
+
+@media (max-width: 768px) {
+  .kanban { flex-direction: column; }
+  .kanban-col { max-width: none; min-width: 0; }
+}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- Toolbar -->
+  <div class="fluxo-toolbar">
+    <div class="btn-group">
+      <button class="btn-tab active" id="tabStatus" onclick="switchView('status')">Por Status</button>
+      <button class="btn-tab" id="tabSetor" onclick="switchView('setor')">Por Setor</button>
+    </div>
+    <input type="text" class="fluxo-search" id="searchInput" placeholder="Buscar colaborador...">
+    <div style="margin-left:auto;font-size:12px;color:var(--text-secondary);" id="totalCount"></div>
+  </div>
+
+  <!-- Kanban -->
+  <div class="kanban" id="kanban"></div>
+
+  <!-- Confirm Modal -->
+  <div class="modal-overlay" id="modal">
+    <div class="modal-box">
+      <div class="modal-title" id="modalTitle">Confirmar movimentacao</div>
+      <div class="modal-desc" id="modalDesc"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Cancelar</button>
+        <button class="btn btn-primary" id="modalConfirm">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="fluxo-toast" id="toast"></div>
+
+</div>
+
+<script>
+let allData = [];
+let currentView = 'status';
+let pendingMove = null;
+
+const STATUS_COLS = [
+  { id: 'experiencia', label: 'Experiencia', filter: f => f.em_experiencia || f.status === 'experiencia' },
+  { id: 'ativo', label: 'Ativo', filter: f => f.status === 'ativo' && !f.em_experiencia },
+  { id: 'ferias', label: 'Ferias', filter: f => f.status === 'ferias' },
+  { id: 'afastado', label: 'Afastado', filter: f => f.status === 'afastado' },
+  { id: 'desligado', label: 'Desligado', filter: f => f.status === 'desligado' },
+];
+
+(async () => {
+  const user = await Shell.init({ page: 'fluxo_funcionarios', title: 'Fluxo de Movimentacao' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  await loadData();
+  render();
+
+  document.getElementById('searchInput').addEventListener('input', render);
+})();
+
+async function loadData() {
+  const res = await API.get('vw_funcionario_base?select=id,nome,status,setor,setor_id,cargo,data_admissao,dias_empresa,em_experiencia&order=nome');
+  allData = res.ok ? res.data : [];
+  document.getElementById('totalCount').textContent = allData.length + ' colaboradores';
+}
+
+function switchView(view) {
+  currentView = view;
+  document.getElementById('tabStatus').classList.toggle('active', view === 'status');
+  document.getElementById('tabSetor').classList.toggle('active', view === 'setor');
+  render();
+}
+
+function render() {
+  const q = document.getElementById('searchInput').value.trim().toLowerCase();
+  const filtered = q ? allData.filter(f => f.nome && f.nome.toLowerCase().includes(q)) : allData;
+  const kanban = document.getElementById('kanban');
+
+  if (currentView === 'status') {
+    renderStatusView(filtered, kanban);
+  } else {
+    renderSetorView(filtered, kanban);
+  }
+
+  bindDragDrop();
+}
+
+function renderStatusView(data, container) {
+  container.innerHTML = STATUS_COLS.map(col => {
+    const items = data.filter(col.filter);
+    return `<div class="kanban-col col-${col.id}" data-col="${col.id}">
+      <div class="kanban-header">
+        <div class="kanban-header-left"><span class="col-dot"></span>${col.label}</div>
+        <span class="kanban-count">${items.length}</span>
+      </div>
+      <div class="kanban-body" data-drop="${col.id}">
+        ${items.map(f => renderCard(f)).join('')}
+        ${items.length === 0 ? '<div style="padding:20px;text-align:center;color:var(--text-muted);font-size:11px;">Nenhum</div>' : ''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderSetorView(data, container) {
+  const ativos = data.filter(f => f.status !== 'desligado');
+  const setores = {};
+  ativos.forEach(f => {
+    const s = f.setor || 'Sem Setor';
+    if (!setores[s]) setores[s] = [];
+    setores[s].push(f);
+  });
+  const sorted = Object.entries(setores).sort((a, b) => b[1].length - a[1].length);
+
+  container.innerHTML = sorted.map(([setor, items]) => {
+    const id = setor.replace(/\s+/g, '_').toLowerCase();
+    return `<div class="kanban-col" data-col="${id}" data-setor="${setor}">
+      <div class="kanban-header">
+        <div class="kanban-header-left">${API.esc(setor)}</div>
+        <span class="kanban-count">${items.length}</span>
+      </div>
+      <div class="kanban-body" data-drop="${id}" data-setor="${setor}">
+        ${items.map(f => renderCard(f)).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderCard(f) {
+  const dias = f.dias_empresa || 0;
+  const tempo = dias < 30 ? dias + 'd' : dias < 365 ? Math.floor(dias/30) + 'm' : Math.floor(dias/365) + 'a';
+  const badge = f.em_experiencia
+    ? '<span class="k-card-badge" style="background:rgba(139,92,246,.12);color:#8b5cf6;">EXP</span>'
+    : '';
+
+  return `<div class="k-card" draggable="true" data-id="${f.id}" data-status="${f.status}" data-setor="${API.esc(f.setor || '')}">
+    ${badge}
+    <div class="k-card-name">${API.esc(f.nome)}</div>
+    <div class="k-card-info">${API.esc(f.cargo || '--')} · ${API.esc(f.setor || '--')}<br>${tempo} · Adm: ${API.fmtData(f.data_admissao)}</div>
+    <a class="k-card-link" href="ficha.html?id=${f.id}">Ver ficha</a>
+  </div>`;
+}
+
+// ── DRAG & DROP ──
+function bindDragDrop() {
+  document.querySelectorAll('.k-card').forEach(card => {
+    card.addEventListener('dragstart', e => {
+      card.classList.add('dragging');
+      e.dataTransfer.setData('text/plain', card.dataset.id);
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    card.addEventListener('dragend', () => card.classList.remove('dragging'));
+  });
+
+  document.querySelectorAll('.kanban-body').forEach(zone => {
+    zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('drag-over'); });
+    zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
+    zone.addEventListener('drop', e => {
+      e.preventDefault();
+      zone.classList.remove('drag-over');
+      const id = e.dataTransfer.getData('text/plain');
+      const func = allData.find(f => f.id === id);
+      if (!func) return;
+
+      if (currentView === 'status') {
+        const newStatus = zone.dataset.drop;
+        if (newStatus === func.status || (newStatus === 'experiencia' && func.em_experiencia)) return;
+        confirmMove(func, 'status', newStatus);
+      } else {
+        const newSetor = zone.dataset.setor;
+        if (!newSetor || newSetor === func.setor) return;
+        confirmMove(func, 'setor', newSetor);
+      }
+    });
+  });
+}
+
+// ── CONFIRM MODAL ──
+function confirmMove(func, tipo, valor) {
+  pendingMove = { func, tipo, valor };
+  const modal = document.getElementById('modal');
+  const desc = document.getElementById('modalDesc');
+
+  if (tipo === 'status') {
+    document.getElementById('modalTitle').textContent = 'Alterar Status';
+    desc.innerHTML = `Mover <strong>${API.esc(func.nome)}</strong> de <strong>${API.esc(func.status)}</strong> para <strong>${API.esc(valor)}</strong>?`;
+  } else {
+    document.getElementById('modalTitle').textContent = 'Transferir Setor';
+    desc.innerHTML = `Transferir <strong>${API.esc(func.nome)}</strong> de <strong>${API.esc(func.setor || 'Sem Setor')}</strong> para <strong>${API.esc(valor)}</strong>?`;
+  }
+
+  modal.classList.add('active');
+  document.getElementById('modalConfirm').onclick = executeMove;
+}
+
+function closeModal() {
+  document.getElementById('modal').classList.remove('active');
+  pendingMove = null;
+}
+
+async function executeMove() {
+  if (!pendingMove) return;
+  const { func, tipo, valor } = pendingMove;
+  closeModal();
+
+  try {
+    if (tipo === 'status') {
+      const res = await API.patch(`rh_funcionarios?id=eq.${func.id}`, { status: valor });
+      if (!res.ok) { toast('Erro: ' + (res.error || 'Falha ao atualizar'), 'err'); return; }
+      func.status = valor;
+      if (valor !== 'experiencia') func.em_experiencia = false;
+    } else {
+      // Find setor_id
+      const setorRes = await API.get(`rh_setores?nome=eq.${encodeURIComponent(valor)}&select=id&limit=1`);
+      const setorId = setorRes.ok && setorRes.data[0] ? setorRes.data[0].id : null;
+      const payload = setorId ? { setor_id: setorId } : {};
+      const res = await API.patch(`rh_funcionarios?id=eq.${func.id}`, payload);
+      if (!res.ok) { toast('Erro: ' + (res.error || 'Falha ao transferir'), 'err'); return; }
+      func.setor = valor;
+    }
+    toast(`${func.nome} movido com sucesso`, 'ok');
+    await loadData();
+    render();
+  } catch (err) {
+    toast('Erro: ' + err.message, 'err');
+  }
+}
+
+function toast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'fluxo-toast show ' + type;
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>

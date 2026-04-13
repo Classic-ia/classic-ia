@@ -1,0 +1,127 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO PROCESSOS RH — GOVERNANÇA E FLUXOS
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql + MODULO_SST_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- DECISÕES ARQUITETURAIS:
+--
+-- 1. TABELA MÃE rh_processo: entidade genérica com tipo + status.
+--    Tabelas filhas (rh_proc_admissao, etc.) detalham cada tipo.
+--    Motivo: permite queries unificadas (ex: "todos os processos abertos")
+--    e máquina de estados compartilhada.
+--
+-- 2. MÁQUINA DE ESTADOS com transições validadas por trigger:
+--    rascunho → pendente_documentos → pendente_aprovacao → aprovado → em_execucao → concluido
+--    Qualquer status (exceto terminais) → cancelado (exige motivo)
+--
+-- 3. RASTREABILIDADE: quem solicitou, quem aprovou, quem executou, quem
+--    cancelou — tudo preenchido automaticamente pelo trigger de transição.
+--
+-- 4. CHECKLIST DOCUMENTAL: rh_tipo_documento define o catálogo;
+--    rh_processo_documento vincula ao processo. Trigger bloqueia aprovação
+--    se há documentos obrigatórios pendentes.
+--
+-- 5. EXECUÇÃO via RPC: cada tipo de processo tem uma função SQL que:
+--    - Valida pré-condições
+--    - Aplica mudanças em rh_funcionarios (triggers de histórico disparam)
+--    - Conclui o processo automaticamente
+--
+-- 6. MOTOR DE PENDÊNCIAS: rh_pendencias_funcionario() consolida TUDO que
+--    falta para 1 pessoa (documentos + ASO + treinamentos + EPIs + processos).
+--
+-- FLUXO DE ESTADOS:
+--
+--   ┌─────────────┐
+--   │  rascunho   │
+--   └──────┬──────┘
+--          │
+--   ┌──────▼──────────────┐
+--   │ pendente_documentos  │──────────────────┐
+--   └──────┬──────────────┘                   │
+--          │                                  │
+--   ┌──────▼──────────────┐                   │
+--   │ pendente_aprovacao   │──────────────────┤
+--   └──────┬──────────────┘                   │
+--          │                                  │
+--   ┌──────▼──────┐                    ┌──────▼──────┐
+--   │  aprovado   │                    │  cancelado  │
+--   └──────┬──────┘                    └─────────────┘
+--          │                            (terminal)
+--   ┌──────▼──────────┐
+--   │  em_execucao    │
+--   └──────┬──────────┘
+--          │
+--   ┌──────▼──────┐
+--   │  concluido  │
+--   └─────────────┘
+--    (terminal)
+--
+-- ════════════════════════════════════════════════════════════════════════════
+
+
+-- ════════════════════════════════════════════════════════════════
+-- TABELAS (8)
+-- ════════════════════════════════════════════════════════════════
+-- rh_tipo_documento          — catálogo de documentos obrigatórios
+-- rh_processo                — tabela mãe de processos
+-- rh_processo_documento      — checklist documental por processo
+-- rh_proc_admissao           — detalhes admissão
+-- rh_proc_movimentacao       — detalhes movimentação (DE→PARA)
+-- rh_proc_afastamento        — detalhes afastamento
+-- rh_proc_desligamento       — detalhes desligamento + entrevista saída
+-- rh_processo_transicao      — log de transições de status
+
+
+-- ════════════════════════════════════════════════════════════════
+-- FUNCTIONS (7 RPCs)
+-- ════════════════════════════════════════════════════════════════
+-- fn_proc_validar_transicao  — máquina de estados (trigger)
+-- fn_proc_validar_documentos — bloqueia aprovação sem docs (trigger)
+-- rh_executar_admissao       — cria funcionário
+-- rh_executar_movimentacao   — aplica DE→PARA
+-- rh_executar_afastamento    — muda status para afastado/ferias
+-- rh_executar_retorno        — retorna a ativo
+-- rh_executar_desligamento   — valida checklist, desliga
+-- rh_pendencias_funcionario  — motor de pendências individual
+-- rh_pendencias_geral        — motor de pendências em massa
+
+
+-- ════════════════════════════════════════════════════════════════
+-- EXEMPLOS DE USO
+-- ════════════════════════════════════════════════════════════════
+--
+-- 1. Criar processo de admissão:
+--    INSERT INTO rh_processo (funcionario_id, tipo) VALUES ('uuid', 'admissao');
+--    INSERT INTO rh_proc_admissao (processo_id, nome_completo, cpf, cargo_id, ...)
+--    VALUES ('proc_uuid', 'João Silva', '12345678901', 'cargo_uuid', ...);
+--
+-- 2. Avançar status (trigger valida transição):
+--    UPDATE rh_processo SET status = 'pendente_documentos' WHERE id = 'proc_uuid';
+--    UPDATE rh_processo SET status = 'pendente_aprovacao' WHERE id = 'proc_uuid';
+--    UPDATE rh_processo SET status = 'aprovado' WHERE id = 'proc_uuid';
+--    UPDATE rh_processo SET status = 'em_execucao' WHERE id = 'proc_uuid';
+--
+-- 3. Executar admissão (cria funcionário):
+--    SELECT rh_executar_admissao('proc_uuid');
+--
+-- 4. Cancelar processo:
+--    UPDATE rh_processo SET status = 'cancelado', motivo_cancelamento = 'Desistência do candidato'
+--    WHERE id = 'proc_uuid';
+--
+-- 5. Ver pendências de um funcionário:
+--    SELECT * FROM rh_pendencias_funcionario('func_uuid');
+--
+-- 6. Ver todos com pendências:
+--    SELECT * FROM rh_pendencias_geral();
+--
+-- 7. Ver processos ativos:
+--    SELECT * FROM vw_processos_ativos;
+--
+-- 8. Ver histórico de transições:
+--    SELECT * FROM rh_processo_transicao WHERE processo_id = 'proc_uuid' ORDER BY created_at;
+--
+-- 9. Via Supabase JS:
+--    const { data } = await supabase.rpc('rh_executar_admissao', { p_processo_id: '...' });
+--    const { data } = await supabase.rpc('rh_pendencias_funcionario', { p_funcionario_id: '...' });
+--    const { data } = await supabase.rpc('rh_pendencias_geral');

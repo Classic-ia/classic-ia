@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Auditoria de Score — Motor v2 — Classic RH & SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+/* grid bg removed */
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-btn {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--muted);
+  padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+  text-decoration: none; font-family: 'DM Sans';
+}
+.back-btn:hover { color: var(--text); border-color: var(--accent); }
+.page-title { font-family: 'Syne'; font-weight: 800; font-size: 18px; color: var(--accent); }
+.page-sub { font-size: 11px; color: var(--muted); }
+.header-right { display: flex; align-items: center; gap: 10px; }
+.btn-refresh {
+  background: var(--primary-light); color: #fff; border: none;
+  padding: 8px 18px; border-radius: 8px; font-family: 'DM Sans'; font-size: 13px;
+  font-weight: 600; cursor: pointer; transition: .2s;
+}
+.btn-refresh:hover { background: var(--primary); }
+.btn-refresh:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Main */
+.main { max-width: 1280px; margin: 0 auto; padding: 24px 20px; }
+
+/* KPIs */
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 18px 16px; text-align: center;
+  transition: .25s;
+}
+.kpi:hover {
+  border-color: var(--accent); transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.kpi-val {
+  font-family: 'Syne'; font-weight: 800; font-size: 28px;
+}
+.kpi-lbl {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+
+/* Donut / Consistency Overview */
+.overview-block {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 28px; margin-bottom: 24px;
+  display: flex; align-items: center; gap: 40px; flex-wrap: wrap;
+  justify-content: center;
+}
+.donut-container {
+  position: relative; width: 180px; height: 180px; flex-shrink: 0;
+}
+.donut-svg { width: 180px; height: 180px; transform: rotate(-90deg); }
+.donut-circle {
+  fill: none; stroke-width: 20; stroke-linecap: round;
+  transition: stroke-dasharray .6s ease;
+}
+.donut-center {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%);
+  text-align: center;
+}
+.donut-pct { font-family: 'Syne'; font-weight: 800; font-size: 32px; color: var(--accent); }
+.donut-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; }
+.overview-legend { display: flex; flex-direction: column; gap: 10px; }
+.legend-item { display: flex; align-items: center; gap: 10px; }
+.legend-dot { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.legend-text { font-size: 13px; color: var(--text); }
+.legend-count { font-family: 'DM Mono'; font-weight: 500; font-size: 14px; margin-left: auto; padding-left: 16px; }
+
+/* Sections */
+.section { margin-bottom: 28px; }
+.section-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em; margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title .icon { font-size: 16px; }
+
+/* Causa cards */
+.causas-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+.causa-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 18px; transition: .25s;
+}
+.causa-card:hover { border-color: var(--accent); }
+.causa-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.causa-nome { font-family: 'Syne'; font-weight: 700; font-size: 14px; color: var(--text); }
+.causa-tipo {
+  font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
+  padding: 3px 8px; border-radius: 4px;
+}
+.tipo-qualidade_dado { background: rgba(23,162,184,.15); color: var(--tipo-qualidade); }
+.tipo-operacional { background: rgba(220,53,69,.15); color: var(--tipo-operacional); }
+.tipo-misto { background: rgba(255,193,7,.15); color: var(--tipo-misto); }
+.causa-bar-track {
+  height: 8px; background: var(--surface3); border-radius: 4px;
+  overflow: hidden; margin-bottom: 8px;
+}
+.causa-bar-fill { height: 100%; border-radius: 4px; transition: width .4s ease; }
+.causa-meta { display: flex; justify-content: space-between; font-size: 11px; color: var(--muted); }
+.causa-count { font-family: 'DM Mono'; font-weight: 500; color: var(--text); }
+
+/* Tables */
+.table-wrap {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; overflow: hidden;
+}
+.table-scroll { overflow-x: auto; }
+.data-table {
+  width: 100%; border-collapse: collapse; font-size: 13px;
+}
+.data-table th {
+  background: var(--surface2); color: var(--muted); font-weight: 500;
+  text-transform: uppercase; font-size: 10px; letter-spacing: .06em;
+  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
+  white-space: nowrap; position: sticky; top: 0; z-index: 2;
+}
+.data-table th.num { text-align: right; }
+.data-table td {
+  padding: 10px 12px; border-bottom: 1px solid rgba(30,58,82,.3);
+  vertical-align: middle;
+}
+.data-table td.num { text-align: right; font-family: 'DM Mono'; font-size: 12px; }
+.data-table tbody tr:hover { background: rgba(200,169,110,.04); }
+.data-table tbody tr.expandable { cursor: pointer; }
+.data-table tbody tr.expandable:hover { background: rgba(200,169,110,.08); }
+
+/* Score cell */
+.score-cell {
+  font-family: 'DM Mono'; font-weight: 500; font-size: 12px;
+  padding: 2px 6px; border-radius: 4px; display: inline-block; min-width: 36px; text-align: center;
+}
+
+/* Inline bar for setor table */
+.bar-inline {
+  display: flex; align-items: center; gap: 6px;
+}
+.bar-track {
+  flex: 1; height: 6px; background: var(--surface3); border-radius: 3px; overflow: hidden; min-width: 40px;
+}
+.bar-fill { height: 100%; border-radius: 3px; transition: width .4s ease; }
+.bar-val { font-family: 'DM Mono'; font-size: 11px; min-width: 28px; text-align: right; }
+
+/* Filters */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; padding: 0 4px;
+}
+.filter-group { display: flex; align-items: center; gap: 6px; }
+.filter-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.filter-select {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; font-family: 'DM Sans'; font-size: 12px;
+  cursor: pointer; outline: none;
+}
+.filter-select:focus { border-color: var(--accent); }
+.filter-search {
+  background: var(--surface2); border: 1px solid var(--border); color: var(--text);
+  padding: 6px 10px; border-radius: 6px; font-family: 'DM Sans'; font-size: 12px;
+  outline: none; width: 180px;
+}
+.filter-search:focus { border-color: var(--accent); }
+.filter-count { font-size: 11px; color: var(--muted); margin-left: auto; }
+
+/* Fatores detail row */
+.detail-row { display: none; }
+.detail-row.open { display: table-row; }
+.detail-content {
+  background: var(--surface2); padding: 12px 16px; font-size: 12px;
+  border-left: 3px solid var(--accent);
+}
+.fatores-list { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.fator-tag {
+  background: var(--surface3); border: 1px solid var(--border);
+  padding: 3px 8px; border-radius: 4px; font-size: 11px; color: var(--text);
+}
+
+/* Explicabilidade */
+.explica-block {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; margin-top: 8px;
+}
+.explica-title {
+  font-family: 'Syne'; font-weight: 700; font-size: 14px; color: var(--accent);
+  margin-bottom: 14px;
+}
+.explica-item {
+  display: flex; gap: 12px; margin-bottom: 10px; font-size: 13px; line-height: 1.5;
+}
+.explica-tag {
+  font-family: 'DM Mono'; font-size: 11px; font-weight: 500;
+  padding: 2px 8px; border-radius: 4px; white-space: nowrap; flex-shrink: 0;
+  height: fit-content; margin-top: 2px;
+}
+.explica-text { color: var(--text); }
+
+/* LGPD */
+.lgpd-footer {
+  background: rgba(30,58,82,.15); border: 1px solid var(--border);
+  border-radius: 10px; padding: 16px; margin-top: 28px;
+}
+.lgpd-title { font-family: 'Syne'; font-weight: 700; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.lgpd-text { font-size: 11px; color: var(--muted); line-height: 1.6; }
+
+/* Loading */
+.loading-center { text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px; }
+.spinner {
+  display: inline-block; width: 24px; height: 24px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Hidden */
+.hidden { display: none !important; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .header { flex-direction: column; align-items: flex-start; gap: 8px; }
+  .overview-block { flex-direction: column; align-items: center; }
+  .causas-grid { grid-template-columns: 1fr; }
+  .kpi-row { grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
+  .filters { flex-direction: column; }
+  .filter-search { width: 100%; }
+}
+/* DS Override - Light Theme */
+:root {
+  --bg: #F1F5F9 !important; --surface: #FFFFFF !important; --surface2: #F8FAFC !important;
+  --border: #E2E8F0 !important; --text: #1E293B !important; --muted: #64748B !important;
+  --accent: #2563EB !important; --accent2: #3B82F6 !important;
+  --ok: #059669 !important; --warn: #D97706 !important; --err: #DC2626 !important; --info: #0891B2 !important;
+}
+body { font-family: 'Inter', system-ui, sans-serif !important; background: var(--bg) !important; color: var(--text) !important; }
+body::before { display: none !important; } /* Remove grid background */
+.header, .topbar { background: #FFFFFF !important; border-bottom: 1px solid #E2E8F0 !important; backdrop-filter: none !important; }
+.header-title, .page-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.header-sub, .page-sub { color: #64748B !important; }
+.kpi-card, .kpi, .card, .stat, .problem-card, .menu-card { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 1px 3px rgba(0,0,0,0.08) !important; }
+.kpi-value, .kpi-val, .stat-val { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.kpi-label, .kpi-lbl, .stat-lbl { color: #64748B !important; }
+.section-title { color: #1E293B !important; font-family: 'Inter', sans-serif !important; }
+.menu-title { color: #1E293B !important; }
+.menu-desc { color: #64748B !important; }
+table th { color: #64748B !important; border-bottom: 2px solid #E2E8F0 !important; background: #F8FAFC !important; }
+table td { border-bottom: 1px solid #F1F5F9 !important; color: #1E293B !important; }
+tr:hover td { background: #F8FAFC !important; }
+.btn-primary, .btn-ok, .btn-info { background: #2563EB !important; color: #fff !important; border: none !important; }
+.btn-secondary, .btn-outline { background: #fff !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; }
+.back-btn, .nav-back { background: #F8FAFC !important; color: #64748B !important; border: 1px solid #E2E8F0 !important; }
+.modal, .modal-overlay .modal { background: #FFFFFF !important; color: #1E293B !important; }
+input, select, textarea { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #D1D5DB !important; font-family: 'Inter', sans-serif !important; }
+.sidebar { background: #FFFFFF !important; border-right: 1px solid #E2E8F0 !important; }
+.sidebar .nav-item { color: #64748B !important; }
+.sidebar .nav-item:hover, .sidebar .nav-item.active { color: #2563EB !important; background: #EFF6FF !important; }
+.footer { color: #94A3B8 !important; }
+.impacto { color: #DC2626 !important; }
+.problem-header { border-bottom: 1px solid #F1F5F9 !important; }
+.problem-title { color: #1E293B !important; }
+.problem-diag { color: #64748B !important; }
+.problem-causa { color: #D97706 !important; }
+.tag-red, .tag.tr { background: rgba(220,38,38,.1) !important; color: #DC2626 !important; }
+.tag-yellow, .tag.ty { background: rgba(217,119,6,.1) !important; color: #D97706 !important; }
+.tag-green, .tag.tg { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.tag-blue { background: rgba(37,99,235,.1) !important; color: #2563EB !important; }
+.badge-new { background: rgba(5,150,105,.1) !important; color: #059669 !important; }
+.alert.al-warn { background: #FEF3C7 !important; border-left: 3px solid #D97706 !important; color: #92400E !important; }
+.alert.al-info { background: #EFF6FF !important; border-left: 3px solid #2563EB !important; color: #1E40AF !important; }
+.rank-item { background: #F8FAFC !important; border: 1px solid #E2E8F0 !important; }
+.av { border: 2px solid #E2E8F0 !important; }
+.prog-bar { background: #E2E8F0 !important; }
+.tabs .tab { color: #64748B !important; border-bottom: 2px solid transparent !important; }
+.tabs .tab.active { color: #2563EB !important; border-bottom: 2px solid #2563EB !important; }
+.toast { background: #FFFFFF !important; color: #1E293B !important; border: 1px solid #E2E8F0 !important; box-shadow: 0 4px 12px rgba(0,0,0,.15) !important; }
+a { color: #2563EB; }
+::placeholder { color: #94A3B8 !important; }
+.quality-block, .dist-block, .conf-table-wrap, .lgpd-footer { background: #FFFFFF !important; border: 1px solid #E2E8F0 !important; }
+.quality-warning { background: #FEF3C7 !important; border-color: #FCD34D !important; color: #92400E !important; }
+</style>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-btn">&#8592; Voltar</a>
+    <div>
+      <div class="page-title">Auditoria de Score — Motor v2</div>
+      <div class="page-sub">Analise de scores nao-consistentes e diagnostico de causas</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <button class="btn-refresh" id="btn-refresh" onclick="loadAuditoria()">&#8635; Atualizar</button>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row" id="kpi-row">
+    <div class="kpi"><div class="loading-center"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- Consistency Overview (donut) -->
+  <div class="overview-block" id="overview-block">
+    <div class="loading-center"><div class="spinner"></div> Carregando auditoria...</div>
+  </div>
+
+  <!-- Ranking de Causas -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128269;</span> Ranking de Causas</div>
+    <div class="causas-grid" id="causas-grid">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+
+  <!-- Analise por Setor -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#127981;</span> Analise por Setor</div>
+    <div class="table-wrap">
+      <div class="table-scroll">
+        <table class="data-table" id="tbl-setores">
+          <thead><tr>
+            <th>Setor</th>
+            <th class="num">Nao Consist.</th>
+            <th class="num">Atencao Op.</th>
+            <th class="num">Monitorar</th>
+            <th class="num">Dado Insuf.</th>
+            <th class="num">Sem Ponto</th>
+            <th class="num">Sem Trein.</th>
+            <th class="num">Sem EPI</th>
+            <th class="num">Score Medio</th>
+            <th class="num">Fontes Media</th>
+          </tr></thead>
+          <tbody id="tbody-setores">
+            <tr><td colspan="10" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Diagnostico Individual -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128100;</span> Diagnostico Individual</div>
+    <div class="filters" id="filters">
+      <div class="filter-group">
+        <span class="filter-label">Classificacao:</span>
+        <select class="filter-select" id="f-classif" onchange="applyFilters()">
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Setor:</span>
+        <select class="filter-select" id="f-setor" onchange="applyFilters()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Tipo Problema:</span>
+        <select class="filter-select" id="f-tipo" onchange="applyFilters()">
+          <option value="">Todos</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Buscar:</span>
+        <input class="filter-search" id="f-search" type="text" placeholder="Nome do funcionario..." oninput="applyFilters()">
+      </div>
+      <span class="filter-count" id="filter-count"></span>
+    </div>
+    <div class="table-wrap">
+      <div class="table-scroll" style="max-height:600px;overflow-y:auto;">
+        <table class="data-table" id="tbl-detalhes">
+          <thead><tr>
+            <th>Funcionario</th>
+            <th>Setor</th>
+            <th>Cargo</th>
+            <th class="num">Score</th>
+            <th class="num">Presenca</th>
+            <th class="num">Producao</th>
+            <th class="num">Treinamento</th>
+            <th class="num">Estabilidade</th>
+            <th class="num">EPI</th>
+            <th class="num">Qualidade</th>
+            <th>Classificacao</th>
+            <th>Tipo</th>
+            <th>Causa</th>
+          </tr></thead>
+          <tbody id="tbody-detalhes">
+            <tr><td colspan="13" class="loading-center"><div class="spinner"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Explicabilidade -->
+  <div class="section">
+    <div class="section-title"><span class="icon">&#128218;</span> Explicabilidade</div>
+    <div class="explica-block">
+      <div class="explica-title">Guia de Interpretacao dos Tipos de Problema</div>
+
+      <div class="explica-item">
+        <span class="explica-tag" style="background:rgba(108,117,125,.15);color:#6c757d;">dado_ausente</span>
+        <span class="explica-text">Funcionario sem registros suficientes no periodo. <strong>NAO indica problema de desempenho.</strong> Verificar se ha falha no registro de ponto, producao ou treinamento.</span>
+      </div>
+
+      <div class="explica-item">
+        <span class="explica-tag" style="background:rgba(23,162,184,.15);color:#17a2b8;">dado_parcial</span>
+        <span class="explica-text">Funcionario possui registro de ponto/producao, mas falta EPI ou treinamento no sistema. Pode indicar falha no cadastro de entregas ou pendencia de integracao.</span>
+      </div>
+
+      <div class="explica-item">
+        <span class="explica-tag" style="background:rgba(220,53,69,.15);color:#dc3545;">operacional</span>
+        <span class="explica-text">Score baixo COM dados confiaveis. <strong>Requer verificacao operacional.</strong> Pode indicar problema real de desempenho, absenteismo ou pendencias de EPI/treinamento.</span>
+      </div>
+
+      <div class="explica-item">
+        <span class="explica-tag" style="background:rgba(255,193,7,.15);color:#ffc107;">misto</span>
+        <span class="explica-text">Combina falta de dados com indicadores baixos. Necessita analise caso a caso: primeiro verificar se os dados estao completos, depois avaliar desempenho.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- LGPD -->
+  <div class="lgpd-footer">
+    <div class="lgpd-title">&#128274; Aviso LGPD</div>
+    <div class="lgpd-text">
+      Esta auditoria utiliza exclusivamente dados operacionais agregados pelo Motor v2. Nenhum dado de saude
+      (CID, ASO, restricoes medicas) e utilizado. Classificacoes como "dado_insuficiente" indicam FALTA DE REGISTRO
+      no sistema, nao baixa performance. Nenhuma decisao de gestao deve ser tomada exclusivamente com base
+      nestes scores sem validacao humana e verificacao dos registros fonte.
+    </div>
+  </div>
+
+</div><!-- /main -->
+
+<script>
+/* ================================================================
+   Auditoria de Score — Motor v2
+   ================================================================ */
+
+let _perfil = null;
+let _dadosAuditoria = null;
+let _detalhes = [];
+
+/* ---- Formatting ---- */
+function fmtNum(v, dec) {
+  if (v == null || v === '') return '\u2014';
+  const n = Number(v);
+  if (isNaN(n)) return String(v);
+  if (dec !== undefined) return n.toLocaleString('pt-BR', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+  if (Number.isInteger(n)) return n.toLocaleString('pt-BR');
+  return n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+}
+
+function fmtPct(v) {
+  if (v == null) return '\u2014';
+  return fmtNum(Number(v), 1) + '%';
+}
+
+function scoreColor(s) {
+  if (s == null || s === 0) return '#6c757d';
+  const n = Number(s);
+  if (n >= 80) return '#28a745';
+  if (n >= 50) return '#ffc107';
+  return '#dc3545';
+}
+
+function scoreBg(s) {
+  if (s == null || s === 0) return 'rgba(108,117,125,.12)';
+  const n = Number(s);
+  if (n >= 80) return 'rgba(40,167,69,.12)';
+  if (n >= 50) return 'rgba(255,193,7,.12)';
+  return 'rgba(220,53,69,.12)';
+}
+
+function tipoColor(t) {
+  const m = {
+    'qualidade_dado': 'var(--tipo-qualidade)',
+    'operacional': 'var(--tipo-operacional)',
+    'misto': 'var(--tipo-misto)',
+    'dado_ausente': '#6c757d',
+    'dado_parcial': 'var(--tipo-qualidade)',
+  };
+  return m[t] || 'var(--muted)';
+}
+
+function tipoBg(t) {
+  const m = {
+    'qualidade_dado': 'rgba(23,162,184,.12)',
+    'operacional': 'rgba(220,53,69,.12)',
+    'misto': 'rgba(255,193,7,.12)',
+    'dado_ausente': 'rgba(108,117,125,.12)',
+    'dado_parcial': 'rgba(23,162,184,.12)',
+  };
+  return m[t] || 'rgba(93,127,149,.12)';
+}
+
+function clsColor(c) {
+  const m = {
+    'consistente': '#28a745', 'monitorar': '#ffc107',
+    'atencao_operacional': '#dc3545', 'dado_insuficiente': '#6c757d',
+    'regular': '#17a2b8',
+  };
+  return m[(c||'').toLowerCase()] || 'var(--muted)';
+}
+
+/* ---- RPC ---- */
+async function rpc(fnName, params) {
+  const raw = localStorage.getItem('rh_sess_v2');
+  if (!raw) throw new Error('Sessao nao encontrada');
+  const sess = JSON.parse(raw);
+  const r = await fetch(SB_URL + '/rest/v1/rpc/' + fnName, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + sess.access_token
+    },
+    body: JSON.stringify(params || {})
+  });
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({}));
+    throw new Error(e.message || e.error || 'Erro ' + r.status);
+  }
+  return r.json();
+}
+
+/* ---- Render KPIs ---- */
+function renderKPIs(resumo) {
+  const row = document.getElementById('kpi-row');
+  if (!resumo) { row.innerHTML = '<div style="color:var(--muted)">Sem dados.</div>'; return; }
+
+  const items = [
+    { val: resumo.total_funcionarios, label: 'Total Avaliados', color: 'var(--accent)', icon: '&#128101;' },
+    { val: resumo.consistentes, label: 'Consistentes', color: 'var(--ok)', icon: '&#9989;' },
+    { val: resumo.monitorar, label: 'Monitorar', color: 'var(--warn)', icon: '&#9888;' },
+    { val: resumo.atencao_operacional, label: 'Atencao Operacional', color: 'var(--err)', icon: '&#128680;' },
+    { val: resumo.dado_insuficiente, label: 'Dado Insuficiente', color: '#6c757d', icon: '&#128202;' },
+  ];
+
+  row.innerHTML = items.map(k =>
+    '<div class="kpi">'
+    + '<div class="kpi-val" style="color:' + k.color + '">' + k.icon + ' ' + fmtNum(k.val) + '</div>'
+    + '<div class="kpi-lbl">' + k.label + '</div>'
+    + '</div>'
+  ).join('');
+}
+
+/* ---- Render Donut Overview ---- */
+function renderOverview(resumo) {
+  const block = document.getElementById('overview-block');
+  if (!resumo || !resumo.total_funcionarios) {
+    block.innerHTML = '<div style="color:var(--muted)">Sem dados de resumo.</div>';
+    return;
+  }
+
+  const total = Number(resumo.total_funcionarios) || 1;
+  const consist = Number(resumo.consistentes) || 0;
+  const naoConsist = total - consist;
+  const pctConsist = (consist / total * 100);
+  const pctNao = (naoConsist / total * 100);
+
+  const R = 70;
+  const C = 2 * Math.PI * R;
+  const dashConsist = (pctConsist / 100) * C;
+  const dashNao = (pctNao / 100) * C;
+
+  const segments = [
+    { pct: pctConsist, color: '#28a745', label: 'Consistentes', count: consist },
+    { pct: resumo.monitorar ? (Number(resumo.monitorar)/total*100) : 0, color: '#ffc107', label: 'Monitorar', count: Number(resumo.monitorar)||0 },
+    { pct: resumo.atencao_operacional ? (Number(resumo.atencao_operacional)/total*100) : 0, color: '#dc3545', label: 'Atencao Operacional', count: Number(resumo.atencao_operacional)||0 },
+    { pct: resumo.dado_insuficiente ? (Number(resumo.dado_insuficiente)/total*100) : 0, color: '#6c757d', label: 'Dado Insuficiente', count: Number(resumo.dado_insuficiente)||0 },
+  ];
+
+  // Build SVG donut
+  let svgArcs = '';
+  let offset = 0;
+  segments.forEach(s => {
+    if (s.pct > 0) {
+      const dash = (s.pct / 100) * C;
+      svgArcs += '<circle class="donut-circle" cx="90" cy="90" r="' + R + '" '
+        + 'stroke="' + s.color + '" '
+        + 'stroke-dasharray="' + dash + ' ' + (C - dash) + '" '
+        + 'stroke-dashoffset="' + (-offset) + '"/>';
+      offset += dash;
+    }
+  });
+
+  let html = '<div class="donut-container">'
+    + '<svg class="donut-svg" viewBox="0 0 180 180">' + svgArcs + '</svg>'
+    + '<div class="donut-center">'
+    + '<div class="donut-pct">' + fmtNum(pctConsist, 0) + '%</div>'
+    + '<div class="donut-label">Consistentes</div>'
+    + '</div></div>';
+
+  html += '<div class="overview-legend">';
+  segments.forEach(s => {
+    html += '<div class="legend-item">'
+      + '<div class="legend-dot" style="background:' + s.color + '"></div>'
+      + '<span class="legend-text">' + s.label + '</span>'
+      + '<span class="legend-count" style="color:' + s.color + '">' + fmtNum(s.count) + ' (' + fmtNum(s.pct, 1) + '%)</span>'
+      + '</div>';
+  });
+  html += '<div style="margin-top:6px;padding-top:8px;border-top:1px solid var(--border);font-size:12px;color:var(--muted)">'
+    + 'Total avaliados: <strong style="color:var(--text)">' + fmtNum(total) + '</strong> | '
+    + 'Nao consistentes: <strong style="color:var(--err)">' + fmtNum(naoConsist) + '</strong>'
+    + '</div>';
+  html += '</div>';
+
+  block.innerHTML = html;
+}
+
+/* ---- Render Causas ---- */
+function renderCausas(causas) {
+  const grid = document.getElementById('causas-grid');
+  if (!causas || causas.length === 0) {
+    grid.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px">Nenhuma causa identificada.</div>';
+    return;
+  }
+
+  const maxCount = Math.max(...causas.map(c => Number(c.funcionarios) || 0), 1);
+
+  grid.innerHTML = causas.map(c => {
+    const count = Number(c.funcionarios) || 0;
+    const pct = (count / maxCount) * 100;
+    const tipo = (c.tipo || '').toLowerCase();
+    const barColor = tipo === 'qualidade_dado' ? 'var(--tipo-qualidade)'
+      : tipo === 'operacional' ? 'var(--tipo-operacional)'
+      : 'var(--tipo-misto)';
+
+    return '<div class="causa-card">'
+      + '<div class="causa-header">'
+      + '<span class="causa-nome">' + (c.causa || '\u2014') + '</span>'
+      + '<span class="causa-tipo tipo-' + tipo + '">' + (c.tipo || '\u2014') + '</span>'
+      + '</div>'
+      + '<div class="causa-bar-track"><div class="causa-bar-fill" style="width:' + pct + '%;background:' + barColor + '"></div></div>'
+      + '<div class="causa-meta">'
+      + '<span class="causa-count">' + fmtNum(count) + ' funcionario' + (count !== 1 ? 's' : '') + '</span>'
+      + '<span>' + fmtNum(c.setores_afetados) + ' setor' + (Number(c.setores_afetados) !== 1 ? 'es' : '') + '</span>'
+      + '</div></div>';
+  }).join('');
+}
+
+/* ---- Render Setores ---- */
+function renderSetores(setores) {
+  const tbody = document.getElementById('tbody-setores');
+  if (!setores || setores.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" style="color:var(--muted);text-align:center;padding:20px">Sem dados por setor.</td></tr>';
+    return;
+  }
+
+  const maxNao = Math.max(...setores.map(s => Number(s.total_nao_consistente) || 0), 1);
+
+  tbody.innerHTML = setores.map(s => {
+    const nao = Number(s.total_nao_consistente) || 0;
+    const barW = (nao / maxNao) * 100;
+    const sm = Number(s.score_medio) || 0;
+    const smColor = scoreColor(sm);
+
+    return '<tr>'
+      + '<td><strong>' + (s.setor_nome || '\u2014') + '</strong></td>'
+      + '<td class="num"><div class="bar-inline">'
+      + '<div class="bar-track"><div class="bar-fill" style="width:' + barW + '%;background:var(--err)"></div></div>'
+      + '<span class="bar-val" style="color:var(--err)">' + fmtNum(nao) + '</span>'
+      + '</div></td>'
+      + '<td class="num" style="color:var(--err)">' + fmtNum(s.atencao_op) + '</td>'
+      + '<td class="num" style="color:var(--warn)">' + fmtNum(s.monitorar) + '</td>'
+      + '<td class="num" style="color:#6c757d">' + fmtNum(s.dado_insuf) + '</td>'
+      + '<td class="num">' + fmtNum(s.sem_ponto) + '</td>'
+      + '<td class="num">' + fmtNum(s.sem_treinamento) + '</td>'
+      + '<td class="num">' + fmtNum(s.sem_epi) + '</td>'
+      + '<td class="num"><span class="score-cell" style="color:' + smColor + ';background:' + scoreBg(sm) + '">' + fmtNum(sm, 1) + '</span></td>'
+      + '<td class="num">' + fmtNum(s.fontes_media, 1) + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+/* ---- Render Detalhes (Individual) ---- */
+function populateFilters(detalhes) {
+  if (!detalhes || detalhes.length === 0) return;
+
+  const classifs = [...new Set(detalhes.map(d => d.classificacao).filter(Boolean))].sort();
+  const setores = [...new Set(detalhes.map(d => d.setor_nome).filter(Boolean))].sort();
+  const tipos = [...new Set(detalhes.map(d => d.tipo_problema).filter(Boolean))].sort();
+
+  const fC = document.getElementById('f-classif');
+  classifs.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; fC.appendChild(o); });
+
+  const fS = document.getElementById('f-setor');
+  setores.forEach(s => { const o = document.createElement('option'); o.value = s; o.textContent = s; fS.appendChild(o); });
+
+  const fT = document.getElementById('f-tipo');
+  tipos.forEach(t => { const o = document.createElement('option'); o.value = t; o.textContent = t; fT.appendChild(o); });
+}
+
+function applyFilters() {
+  const classif = document.getElementById('f-classif').value;
+  const setor = document.getElementById('f-setor').value;
+  const tipo = document.getElementById('f-tipo').value;
+  const search = document.getElementById('f-search').value.toLowerCase().trim();
+
+  let filtered = _detalhes;
+  if (classif) filtered = filtered.filter(d => d.classificacao === classif);
+  if (setor) filtered = filtered.filter(d => d.setor_nome === setor);
+  if (tipo) filtered = filtered.filter(d => d.tipo_problema === tipo);
+  if (search) filtered = filtered.filter(d => (d.funcionario_nome || '').toLowerCase().includes(search));
+
+  document.getElementById('filter-count').textContent = filtered.length + ' de ' + _detalhes.length + ' registros';
+  renderDetalhes(filtered);
+}
+
+function renderDetalhes(detalhes) {
+  const tbody = document.getElementById('tbody-detalhes');
+  if (!detalhes || detalhes.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" style="color:var(--muted);text-align:center;padding:20px">Nenhum registro encontrado.</td></tr>';
+    return;
+  }
+
+  let html = '';
+  detalhes.forEach((d, idx) => {
+    const sc = (v) => {
+      const n = Number(v);
+      const c = scoreColor(v);
+      const bg = scoreBg(v);
+      return '<span class="score-cell" style="color:' + c + ';background:' + bg + '">' + (v != null && v !== 0 ? fmtNum(n, 0) : '\u2014') + '</span>';
+    };
+
+    const clsC = clsColor(d.classificacao);
+    const tipoC = tipoColor(d.tipo_problema);
+
+    html += '<tr class="expandable" data-idx="' + idx + '" onclick="toggleDetail(' + idx + ')">'
+      + '<td><strong>' + (d.funcionario_nome || '\u2014') + '</strong>'
+      + '<div style="font-size:10px;color:var(--muted)">' + (d.periodo_referencia || '') + ' | Fontes: ' + fmtNum(d.fontes_ativas) + ' | Conf: ' + (d.confiabilidade || '\u2014') + '</div></td>'
+      + '<td>' + (d.setor_nome || '\u2014') + '</td>'
+      + '<td style="font-size:11px">' + (d.cargo_nome || '\u2014') + '</td>'
+      + '<td class="num">' + sc(d.score_final) + '</td>'
+      + '<td class="num">' + sc(d.score_presenca) + '</td>'
+      + '<td class="num">' + sc(d.score_producao) + '</td>'
+      + '<td class="num">' + sc(d.score_treinamento) + '</td>'
+      + '<td class="num">' + sc(d.score_estabilidade) + '</td>'
+      + '<td class="num">' + sc(d.score_epi) + '</td>'
+      + '<td class="num">' + sc(d.score_qualidade) + '</td>'
+      + '<td><span style="color:' + clsC + ';font-size:11px;font-weight:600">' + (d.classificacao || '\u2014') + '</span></td>'
+      + '<td><span style="color:' + tipoC + ';font-size:11px;font-weight:600;background:' + tipoBg(d.tipo_problema) + ';padding:2px 6px;border-radius:3px">' + (d.tipo_problema || '\u2014') + '</span></td>'
+      + '<td style="font-size:11px">' + (d.causa_principal || '\u2014') + '</td>'
+      + '</tr>';
+
+    // Detail row (fatores)
+    const fatores = d.fatores;
+    let fatoresHtml = '';
+    if (fatores && typeof fatores === 'object') {
+      if (Array.isArray(fatores)) {
+        fatoresHtml = fatores.map(f => '<span class="fator-tag">' + f + '</span>').join('');
+      } else {
+        fatoresHtml = Object.entries(fatores).map(([k, v]) =>
+          '<span class="fator-tag">' + k + ': ' + v + '</span>'
+        ).join('');
+      }
+    } else if (fatores) {
+      fatoresHtml = '<span class="fator-tag">' + String(fatores) + '</span>';
+    }
+
+    html += '<tr class="detail-row" id="detail-' + idx + '">'
+      + '<td colspan="13"><div class="detail-content">'
+      + '<strong>Fatores detalhados:</strong>'
+      + '<div class="fatores-list">' + (fatoresHtml || '<span style="color:var(--muted)">Nenhum fator registrado</span>') + '</div>'
+      + '</div></td></tr>';
+  });
+
+  tbody.innerHTML = html;
+}
+
+function toggleDetail(idx) {
+  const row = document.getElementById('detail-' + idx);
+  if (row) row.classList.toggle('open');
+}
+
+/* ---- Load Auditoria ---- */
+async function loadAuditoria() {
+  const btn = document.getElementById('btn-refresh');
+  btn.disabled = true;
+  btn.textContent = 'Carregando...';
+
+  try {
+    const data = await rpc('motor_v2_auditoria');
+    _dadosAuditoria = data;
+
+    // Render sections
+    renderKPIs(data.resumo);
+    renderOverview(data.resumo);
+    renderCausas(data.causas);
+    renderSetores(data.por_setor);
+
+    // Detalhes
+    _detalhes = data.detalhes || [];
+    populateFilters(_detalhes);
+    document.getElementById('filter-count').textContent = _detalhes.length + ' registros';
+    renderDetalhes(_detalhes);
+
+  } catch (e) {
+    console.error('Erro ao carregar auditoria:', e);
+    document.getElementById('kpi-row').innerHTML =
+      '<div style="grid-column:1/-1;text-align:center;padding:40px;color:var(--err)">'
+      + '&#9888; Erro ao carregar dados: ' + e.message + '</div>';
+    document.getElementById('overview-block').innerHTML =
+      '<div style="color:var(--err)">Falha ao carregar. Verifique sua conexao e permissoes.</div>';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '\u21BB Atualizar';
+  }
+}
+
+/* ---- Init ---- */
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+  _perfil = user.perfil;
+
+  // Access control: only admin/rh
+  if (!['administrador', 'rh'].includes(_perfil)) {
+    document.querySelector('.main').innerHTML =
+      '<div style="text-align:center;padding:80px 20px;color:var(--err)">'
+      + '<div style="font-size:48px;margin-bottom:16px">&#128274;</div>'
+      + '<div style="font-family:Syne;font-weight:700;font-size:18px;margin-bottom:8px">Acesso Restrito</div>'
+      + '<div style="color:var(--muted);font-size:14px">Esta pagina e exclusiva para perfis Administrador e RH.</div>'
+      + '<a href="app.html" class="back-btn" style="display:inline-block;margin-top:20px">Voltar ao Painel</a>'
+      + '</div>';
+    return;
+  }
+
+  await loadAuditoria();
+});
+</script>
+</body>
+</html>

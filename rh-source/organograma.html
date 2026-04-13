@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Organograma</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+/* KPIs */
+.org-kpis { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 24px; }
+.org-kpi { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px 20px; text-align: center; min-width: 120px; }
+.org-kpi-val { font-size: 24px; font-weight: 700; }
+.org-kpi-val.blue { color: var(--primary); }
+.org-kpi-val.green { color: #16a34a; }
+.org-kpi-val.amber { color: #d97706; }
+.org-kpi-val.red { color: #dc2626; }
+.org-kpi-lbl { font-size: 11px; color: var(--text-secondary); text-transform: uppercase; margin-top: 2px; }
+
+/* Tree */
+.org-tree { overflow-x: auto; padding-bottom: 24px; }
+.org-node { display: flex; flex-direction: column; align-items: center; }
+.org-card {
+  background: var(--surface); border: 2px solid var(--border); border-radius: 10px;
+  padding: 12px 16px; text-align: center; min-width: 180px; max-width: 220px;
+  cursor: pointer; transition: all .2s; position: relative;
+}
+.org-card:hover { border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
+.org-card.gerente { border-color: #1e40af; background: #eff6ff; }
+.org-card.coordenador { border-color: #7c3aed; background: #f5f3ff; }
+.org-card.supervisor { border-color: #0891b2; background: #ecfeff; }
+.org-card.vaga { border: 2px dashed #d97706; background: #fffbeb; }
+.org-card-name { font-size: 13px; font-weight: 700; }
+.org-card-cargo { font-size: 11px; color: var(--text-secondary); margin-top: 2px; }
+.org-card-count { font-size: 10px; color: var(--text-muted); margin-top: 4px; }
+.org-card-badge {
+  position: absolute; top: -8px; right: -8px; width: 22px; height: 22px;
+  border-radius: 50%; font-size: 10px; font-weight: 700; display: flex;
+  align-items: center; justify-content: center; color: #fff;
+}
+.org-card-badge.afastado { background: #dc2626; }
+.org-card-badge.ferias { background: #d97706; }
+
+/* Connector lines */
+.org-connector { width: 2px; height: 20px; background: var(--border); margin: 0 auto; }
+.org-h-line { height: 2px; background: var(--border); }
+.org-children { display: flex; gap: 0; justify-content: center; position: relative; }
+.org-children::before {
+  content: ''; position: absolute; top: 0; left: 50%; right: 50%;
+  height: 2px; background: var(--border);
+}
+.org-child-wrapper { display: flex; flex-direction: column; align-items: center; padding: 0 8px; }
+.org-child-wrapper .org-connector-top { width: 2px; height: 20px; background: var(--border); }
+
+/* Sector blocks */
+.org-sectors { display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; margin-top: 20px; }
+.sector-block {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  min-width: 200px; max-width: 260px; flex: 1;
+}
+.sector-header {
+  padding: 10px 14px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  cursor: pointer; user-select: none;
+}
+.sector-header:hover { background: var(--surface-hover); }
+.sector-name { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; }
+.sector-count {
+  background: var(--bg); border-radius: 10px; padding: 2px 8px;
+  font-size: 10px; font-weight: 600; color: var(--text-secondary);
+}
+.sector-body { padding: 6px 8px; max-height: 400px; overflow-y: auto; }
+.sector-person {
+  display: flex; align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: 6px; font-size: 12px; transition: background .15s;
+  text-decoration: none; color: inherit;
+}
+.sector-person:hover { background: var(--surface-hover); }
+.sector-person-dot {
+  width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+}
+.sector-person-dot.ativo { background: #22c55e; }
+.sector-person-dot.afastado { background: #dc2626; }
+.sector-person-dot.ferias { background: #d97706; }
+.sector-person-name { font-weight: 500; flex: 1; }
+.sector-person-cargo { font-size: 10px; color: var(--text-muted); }
+.sector-vaga {
+  padding: 6px 8px; font-size: 11px; color: #d97706; font-style: italic;
+  border: 1px dashed #d97706; border-radius: 6px; margin: 4px 8px; text-align: center;
+}
+.sector-supervisor {
+  padding: 8px 10px; margin: 0 6px 6px; background: #ecfeff;
+  border: 1px solid #0891b2; border-radius: 8px; font-size: 11px;
+}
+.sector-supervisor-label { font-size: 9px; text-transform: uppercase; color: #0891b2; font-weight: 700; letter-spacing: .05em; }
+.sector-supervisor-name { font-weight: 600; font-size: 12px; margin-top: 2px; }
+
+/* Filters */
+.org-toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+.org-search {
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px;
+  font-size: 13px; font-family: inherit; background: var(--surface);
+  color: var(--text); flex: 1; max-width: 300px;
+}
+.org-search:focus { outline: none; border-color: var(--primary); }
+
+@media (max-width: 768px) {
+  .org-sectors { flex-direction: column; }
+  .sector-block { max-width: none; }
+}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- KPIs -->
+  <div class="org-kpis" id="kpis">
+    <div class="org-kpi"><div class="org-kpi-val blue" id="kpi-total">--</div><div class="org-kpi-lbl">Total</div></div>
+    <div class="org-kpi"><div class="org-kpi-val green" id="kpi-ativos">--</div><div class="org-kpi-lbl">Ativos</div></div>
+    <div class="org-kpi"><div class="org-kpi-val red" id="kpi-afastados">--</div><div class="org-kpi-lbl">Afastados</div></div>
+    <div class="org-kpi"><div class="org-kpi-val amber" id="kpi-ferias">--</div><div class="org-kpi-lbl">Ferias</div></div>
+    <div class="org-kpi"><div class="org-kpi-val blue" id="kpi-setores">--</div><div class="org-kpi-lbl">Setores</div></div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="org-toolbar">
+    <input type="text" class="org-search" id="searchInput" placeholder="Buscar colaborador...">
+  </div>
+
+  <!-- Hierarchy top: Gerencia + Coordenacao -->
+  <div id="hierarchy" style="text-align:center;margin-bottom:24px;"></div>
+
+  <!-- Sectors grid -->
+  <div class="org-sectors" id="sectors"></div>
+
+</div>
+
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'organograma', title: 'Organograma' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  const esc = s => API.esc(s);
+
+  // Load all active employees
+  const res = await API.get('vw_funcionario_base?status=in.(ativo,afastado,ferias)&select=id,nome,cargo,setor,status,data_admissao,dias_empresa&order=nome');
+  const all = res.ok ? res.data : [];
+
+  // KPIs
+  const ativos = all.filter(f => f.status === 'ativo').length;
+  const afastados = all.filter(f => f.status === 'afastado').length;
+  const ferias = all.filter(f => f.status === 'ferias').length;
+  const setores = [...new Set(all.map(f => f.setor).filter(Boolean))];
+
+  document.getElementById('kpi-total').textContent = all.length;
+  document.getElementById('kpi-ativos').textContent = ativos;
+  document.getElementById('kpi-afastados').textContent = afastados;
+  document.getElementById('kpi-ferias').textContent = ferias;
+  document.getElementById('kpi-setores').textContent = setores.length;
+
+  // Identify leadership
+  const gerentes = all.filter(f => f.cargo && f.cargo.match(/gerente/i));
+  const coordenadores = all.filter(f => f.cargo && f.cargo.match(/coordenador/i));
+  const supervisores = all.filter(f => f.cargo && f.cargo.match(/supervisor|encarregado/i));
+  const gestores = all.filter(f => f.cargo && f.cargo.match(/gestor/i));
+  const controladores = all.filter(f => f.cargo && f.cargo.match(/controlador|controle de produ/i));
+
+  // Render hierarchy
+  renderHierarchy(gerentes, coordenadores, supervisores, gestores, controladores);
+
+  // Group by sector
+  const sectorMap = {};
+  all.forEach(f => {
+    const s = f.setor || 'Sem Setor';
+    if (!sectorMap[s]) sectorMap[s] = [];
+    sectorMap[s].push(f);
+  });
+
+  // Sort sectors by count desc
+  const sortedSectors = Object.entries(sectorMap).sort((a, b) => b[1].length - a[1].length);
+  renderSectors(sortedSectors, supervisores);
+
+  // Search
+  document.getElementById('searchInput').addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    document.querySelectorAll('.sector-person').forEach(el => {
+      const name = el.dataset.name || '';
+      el.style.display = !q || name.includes(q) ? '' : 'none';
+    });
+    // Highlight found
+    if (q) {
+      document.querySelectorAll('.sector-person').forEach(el => {
+        if (el.style.display !== 'none') {
+          el.style.background = 'rgba(37,99,235,.08)';
+        } else {
+          el.style.background = '';
+        }
+      });
+    } else {
+      document.querySelectorAll('.sector-person').forEach(el => el.style.background = '');
+    }
+  });
+
+  function renderHierarchy(gerentes, coordenadores, supervisores, gestores, controladores) {
+    const el = document.getElementById('hierarchy');
+    let html = '';
+
+    // Top level: Gerentes
+    if (gerentes.length) {
+      html += '<div style="display:flex;justify-content:center;gap:24px;flex-wrap:wrap;margin-bottom:8px;">';
+      gerentes.forEach(g => {
+        html += `<div class="org-card gerente" onclick="location.href='ficha.html?id=${g.id}'">
+          <div class="org-card-name">${esc(g.nome)}</div>
+          <div class="org-card-cargo">${esc(g.cargo)}</div>
+          <div class="org-card-count">${esc(g.setor || '')}</div>
+        </div>`;
+      });
+      html += '</div>';
+      html += '<div class="org-connector"></div>';
+    }
+
+    // Coordenadores + Gestores
+    const mid = [...coordenadores, ...gestores, ...controladores];
+    if (mid.length) {
+      html += '<div style="display:flex;justify-content:center;gap:16px;flex-wrap:wrap;margin-bottom:8px;">';
+      mid.forEach(c => {
+        html += `<div class="org-card coordenador" onclick="location.href='ficha.html?id=${c.id}'">
+          <div class="org-card-name">${esc(c.nome)}</div>
+          <div class="org-card-cargo">${esc(c.cargo)}</div>
+          <div class="org-card-count">${esc(c.setor || '')}</div>
+        </div>`;
+      });
+      html += '</div>';
+      html += '<div class="org-connector"></div>';
+    }
+
+    // Supervisores
+    if (supervisores.length) {
+      html += '<div style="display:flex;justify-content:center;gap:12px;flex-wrap:wrap;">';
+      supervisores.forEach(s => {
+        html += `<div class="org-card supervisor" onclick="location.href='ficha.html?id=${s.id}'">
+          <div class="org-card-name">${esc(s.nome)}</div>
+          <div class="org-card-cargo">${esc(s.cargo)}</div>
+          <div class="org-card-count">${esc(s.setor || '')}</div>
+        </div>`;
+      });
+      html += '</div>';
+    }
+
+    el.innerHTML = html;
+  }
+
+  function renderSectors(sortedSectors, supervisores) {
+    const el = document.getElementById('sectors');
+    el.innerHTML = sortedSectors.map(([setor, people]) => {
+      // Find supervisor for this sector
+      const sup = supervisores.find(s => s.setor === setor);
+      const workers = people.filter(p => !p.cargo?.match(/gerente|coordenador|supervisor|encarregado|gestor|controlador|controle de produ/i));
+      const afast = people.filter(p => p.status === 'afastado').length;
+      const fer = people.filter(p => p.status === 'ferias').length;
+
+      const statusSuffix = (afast ? ` · ${afast} afast.` : '') + (fer ? ` · ${fer} ferias` : '');
+
+      let body = '';
+
+      // Supervisor card if exists
+      if (sup) {
+        body += `<div class="sector-supervisor">
+          <div class="sector-supervisor-label">Supervisor</div>
+          <div class="sector-supervisor-name">${esc(sup.nome)}</div>
+        </div>`;
+      }
+
+      // Workers
+      body += workers.map(p => {
+        const tempo = p.dias_empresa ? (p.dias_empresa < 365 ? Math.floor(p.dias_empresa/30) + 'm' : Math.floor(p.dias_empresa/365) + 'a') : '';
+        return `<a class="sector-person" href="ficha.html?id=${p.id}" data-name="${esc(p.nome.toLowerCase())}">
+          <span class="sector-person-dot ${p.status}"></span>
+          <span class="sector-person-name">${esc(p.nome)}</span>
+          <span class="sector-person-cargo">${tempo}</span>
+        </a>`;
+      }).join('');
+
+      if (!workers.length && !sup) {
+        body = '<div style="padding:16px;text-align:center;color:var(--text-muted);font-size:12px;">Nenhum colaborador</div>';
+      }
+
+      return `<div class="sector-block">
+        <div class="sector-header" onclick="this.nextElementSibling.style.display = this.nextElementSibling.style.display === 'none' ? '' : 'none'">
+          <span class="sector-name">${esc(setor)}</span>
+          <span class="sector-count">${people.length}${statusSuffix}</span>
+        </div>
+        <div class="sector-body">${body}</div>
+      </div>`;
+    }).join('');
+  }
+
+})();
+</script>
+</body>
+</html>

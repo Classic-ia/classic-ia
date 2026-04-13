@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST - Ordens de Servico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px; height: 18px; stroke: currentColor; fill: none;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .data-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .data-table thead th {
+    background: var(--surface-hover); padding: 10px 12px; text-align: left;
+    font-size: 11px; font-weight: 600; color: var(--text-secondary);
+    text-transform: uppercase; letter-spacing: .04em; border-bottom: 2px solid var(--border);
+  }
+  .data-table tbody td { padding: 10px 12px; border-bottom: 1px solid var(--border-light); color: var(--text); }
+  .data-table tbody tr { cursor: pointer; }
+  .data-table tbody tr:hover td { background: var(--surface-hover); }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-full); font-size: 11px; font-weight: 600; }
+  .badge-green { background: var(--success-light); color: var(--success); }
+  .badge-red { background: var(--danger-light); color: var(--danger); }
+  .badge-yellow { background: var(--warning-light); color: var(--warning); }
+  .badge-blue { background: var(--primary-50); color: var(--primary); }
+  .badge-gray { background: #F1F5F9; color: #64748B; }
+  .badge-orange { background: #FFF7ED; color: #C2410C; }
+  .table-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+  .table-scroll { overflow-x: auto; }
+  .table-footer { padding: 10px 14px; border-top: 1px solid var(--border); font-size: 12px; color: var(--text-secondary); }
+  .empty-msg { text-align: center; padding: 40px 20px; color: var(--text-muted); font-size: 14px; }
+  .search-box { display: flex; gap: 10px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .search-box input, .search-box select {
+    padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text);
+  }
+  .search-box input { flex: 1; min-width: 200px; }
+  .search-box input:focus, .search-box select:focus { outline: none; border-color: var(--primary); }
+
+  /* Modal / Drawer */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1000; display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+  .modal-overlay.active { display: flex; }
+  .modal-box { background: var(--surface); border-radius: var(--radius-lg); box-shadow: var(--shadow-xl); width: 100%; max-width: 720px; animation: fadeUp .2s; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+  .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 18px 24px; border-bottom: 1px solid var(--border); }
+  .modal-header h2 { font-size: 16px; font-weight: 600; margin: 0; color: var(--text); }
+  .modal-close { background: none; border: none; cursor: pointer; color: var(--text-secondary); font-size: 22px; line-height: 1; }
+  .modal-body { padding: 20px 24px; max-height: 70vh; overflow-y: auto; }
+  .modal-footer { padding: 14px 24px; border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end; }
+
+  .form-group { margin-bottom: 14px; }
+  .form-group label { display: block; font-size: 12px; font-weight: 600; color: var(--text-secondary); margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .form-group input, .form-group select, .form-group textarea {
+    width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    font-size: 13px; font-family: 'Inter', sans-serif; background: var(--surface); color: var(--text);
+    box-sizing: border-box;
+  }
+  .form-group textarea { min-height: 70px; resize: vertical; }
+  .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--primary); }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+
+  .btn { padding: 8px 18px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif; cursor: pointer; border: 1px solid transparent; transition: all .15s; }
+  .btn-primary { background: var(--primary); color: #fff; }
+  .btn-primary:hover { background: var(--primary-dark); }
+  .btn-secondary { background: var(--surface); color: var(--text); border-color: var(--border); }
+  .btn-secondary:hover { background: var(--surface-hover); }
+  .btn-success { background: var(--success); color: #fff; }
+  .btn-success:hover { background: var(--success-dark); }
+  .btn-warning { background: var(--warning); color: #fff; }
+  .btn-warning:hover { background: var(--warning-dark); }
+  .btn-sm { padding: 5px 12px; font-size: 12px; }
+
+  /* Detail drawer */
+  .detail-section { margin-bottom: 18px; }
+  .detail-section h3 { font-size: 13px; font-weight: 600; color: var(--text-secondary); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; border-bottom: 1px solid var(--border-light); padding-bottom: 4px; }
+  .detail-field { margin-bottom: 8px; }
+  .detail-field .label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; }
+  .detail-field .value { font-size: 13px; color: var(--text); margin-top: 2px; white-space: pre-wrap; }
+  .detail-field .value ul { margin: 0; padding-left: 18px; }
+  .detail-field .value ul li { margin-bottom: 2px; }
+
+  .ciencia-card { background: var(--surface-hover); border-radius: var(--radius-sm); padding: 10px 14px; margin-bottom: 8px; font-size: 13px; }
+  .ciencia-card strong { font-weight: 600; }
+  .action-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+  .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: var(--radius-md); color: #fff; font-size: 13px; font-weight: 500; z-index: 2000; animation: fadeUp .3s; }
+  .toast-success { background: var(--success); }
+  .toast-error { background: var(--danger); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .kpi-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 16px; box-shadow: var(--shadow-xs); }
+  .kpi-value { font-size: 24px; font-weight: 700; color: var(--primary); }
+  .kpi-label { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .kpi-value.red { color: var(--danger); }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<div class="sidebar-mobile-overlay" id="sidebarOverlay"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros">
+    <span class="sidebar-brand-text">Classic RH</span>
+  </div>
+  <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+  <nav class="sidebar-nav" id="sidebarNav">
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inicio</div>
+      <a href="app.html" class="sidebar-item" data-page="app">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+        <span class="sidebar-item-label">Dashboard</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Pessoas</div>
+      <a href="colaboradores.html" class="sidebar-item" data-page="colaboradores">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="sidebar-item-label">Colaboradores</span>
+      </a>
+      <a href="recrutamento_selecao.html" class="sidebar-item" data-page="recrutamento_selecao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+        <span class="sidebar-item-label">Admissoes</span>
+      </a>
+      <a href="desligamentos_turnover.html" class="sidebar-item" data-page="desligamentos_turnover">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></span>
+        <span class="sidebar-item-label">Desligamentos</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Processos</div>
+      <a href="ocorrencias.html" class="sidebar-item" data-page="ocorrencias">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Processos RH</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Contratos Experiencia</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">SST</div>
+      <a href="asos.html" class="sidebar-item" data-page="asos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        <span class="sidebar-item-label">ASOs</span>
+      </a>
+      <a href="treinamentos.html" class="sidebar-item" data-page="treinamentos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></span>
+        <span class="sidebar-item-label">Treinamentos</span>
+      </a>
+      <a href="epis.html" class="sidebar-item" data-page="epis">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">EPIs</span>
+      </a>
+      <a href="ordem_servico.html" class="sidebar-item active" data-page="ordem_servico">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/></svg></span>
+        <span class="sidebar-item-label">Ordens de Servico</span>
+      </a>
+      <a href="acidentes.html" class="sidebar-item" data-page="acidentes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Acidentes</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Operacional</div>
+      <a href="importar_secullum.html" class="sidebar-item" data-page="importar_secullum">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        <span class="sidebar-item-label">Ponto</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao_mensal">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Apuracao</span>
+      </a>
+      <a href="beneficios.html" class="sidebar-item" data-page="beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></span>
+        <span class="sidebar-item-label">Beneficios</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Gestao</div>
+      <a href="motor_decisoes.html" class="sidebar-item" data-page="motor_decisoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg></span>
+        <span class="sidebar-item-label">Motor de Decisao</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+        <span class="sidebar-item-label">Pendencias</span>
+      </a>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh_plano">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+        <span class="sidebar-item-label">Plano de Acao</span>
+      </a>
+      <a href="lideranca.html" class="sidebar-item" data-page="lideranca">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/></svg></span>
+        <span class="sidebar-item-label">Lideranca</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inteligencia</div>
+      <a href="dashboard_gerencial.html" class="sidebar-item" data-page="dashboard_gerencial">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        <span class="sidebar-item-label">Dashboard Executivo</span>
+      </a>
+      <a href="motor_v2_auditoria.html" class="sidebar-item" data-page="motor_v2_auditoria">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></span>
+        <span class="sidebar-item-label">Auditoria de Score</span>
+      </a>
+    </div>
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Sistema</div>
+      <a href="integracoes.html" class="sidebar-item" data-page="integracoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+        <span class="sidebar-item-label">Integracoes</span>
+      </a>
+      <a href="relatorio_beneficios.html" class="sidebar-item" data-page="relatorio_beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <span class="sidebar-item-label">Relatorios</span>
+      </a>
+    </div>
+  </nav>
+  <div class="sidebar-footer">Classic RH v2026.03</div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="topbar-menu-btn" id="menuBtn">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <div>
+        <h1 class="page-title">Ordens de Servico - SST</h1>
+        <p class="page-subtitle">Criacao, gestao e ciencia de OS</p>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <div id="rh-user-chip"></div>
+    </div>
+  </header>
+
+  <div class="page-body">
+    <!-- KPIs -->
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-value" id="kpi-total">--</div><div class="kpi-label">Total OS</div></div>
+      <div class="kpi-card"><div class="kpi-value" id="kpi-vigentes" style="color:var(--success)">--</div><div class="kpi-label">Vigentes</div></div>
+      <div class="kpi-card"><div class="kpi-value" id="kpi-rascunho">--</div><div class="kpi-label">Rascunho</div></div>
+      <div class="kpi-card"><div class="kpi-value red" id="kpi-sem-ciencia">--</div><div class="kpi-label">Func. sem Ciencia</div></div>
+    </div>
+
+    <!-- Actions -->
+    <div class="search-box">
+      <input type="text" id="searchOS" placeholder="Buscar por titulo, codigo ou setor...">
+      <select id="filterStatus">
+        <option value="">Todos status</option>
+        <option value="rascunho">Rascunho</option>
+        <option value="em_revisao">Em Revisao</option>
+        <option value="aprovada">Aprovada</option>
+        <option value="vigente">Vigente</option>
+        <option value="substituida">Substituida</option>
+        <option value="arquivada">Arquivada</option>
+      </select>
+      <button class="btn btn-primary" id="btnNovaOS">+ Nova OS</button>
+    </div>
+
+    <!-- Table -->
+    <div class="table-card">
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Codigo</th>
+              <th>Titulo</th>
+              <th>Setor</th>
+              <th>Cargo</th>
+              <th>Versao</th>
+              <th>Status</th>
+              <th>Ciencias</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="tbodyOS"></tbody>
+        </table>
+      </div>
+      <div class="table-footer" id="footerOS">Carregando...</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Nova OS -->
+<div class="modal-overlay" id="modalNovaOS">
+  <div class="modal-box">
+    <div class="modal-header">
+      <h2 id="modalNovaOSTitle">Nova Ordem de Servico</h2>
+      <button class="modal-close" id="closeNovaOS">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Titulo *</label><input type="text" id="os-titulo"></div>
+      <div class="form-row">
+        <div class="form-group"><label>Setor</label><select id="os-setor"><option value="">Selecione...</option></select></div>
+        <div class="form-group"><label>Cargo / Funcao</label><select id="os-cargo"><option value="">Selecione...</option></select></div>
+      </div>
+      <div class="form-group"><label>Atividade Principal</label><textarea id="os-atividade" placeholder="Descreva a atividade principal..."></textarea></div>
+      <div class="form-group"><label>Riscos (um por linha)</label><textarea id="os-riscos" placeholder="Risco quimico&#10;Risco ergonomico&#10;Risco de queda"></textarea></div>
+      <div class="form-group"><label>Medidas Preventivas (uma por linha)</label><textarea id="os-medidas" placeholder="Uso de luvas&#10;Treinamento NR-12"></textarea></div>
+      <div class="form-group"><label>EPIs Obrigatorios (um por linha)</label><textarea id="os-epis" placeholder="Luva nitrila&#10;Oculos de protecao"></textarea></div>
+      <div class="form-group"><label>Treinamentos Obrigatorios (um por linha)</label><textarea id="os-treinamentos" placeholder="NR-06&#10;NR-12"></textarea></div>
+      <div class="form-group"><label>Procedimentos em Emergencia</label><textarea id="os-emergencia" placeholder="Procedimentos de emergencia..."></textarea></div>
+      <div class="form-group"><label>Regras de Seguranca</label><textarea id="os-regras" placeholder="Regras gerais de seguranca..."></textarea></div>
+      <div class="form-row">
+        <div class="form-group"><label>Responsavel Tecnico</label><input type="text" id="os-responsavel"></div>
+        <div class="form-group"><label>Registro Profissional</label><input type="text" id="os-registro"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cancelNovaOS">Cancelar</button>
+      <button class="btn btn-primary" id="saveNovaOS">Salvar OS</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Detail -->
+<div class="modal-overlay" id="modalDetail">
+  <div class="modal-box" style="max-width:800px">
+    <div class="modal-header">
+      <h2 id="detailTitle">Detalhe da OS</h2>
+      <button class="modal-close" id="closeDetail">&times;</button>
+    </div>
+    <div class="modal-body" id="detailBody"></div>
+  </div>
+</div>
+
+<!-- MODAL: Ciencia -->
+<div class="modal-overlay" id="modalCiencia">
+  <div class="modal-box" style="max-width:480px">
+    <div class="modal-header">
+      <h2>Registrar Ciencia</h2>
+      <button class="modal-close" id="closeCiencia">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group"><label>Funcionario *</label><select id="ciencia-func"><option value="">Selecione...</option></select></div>
+      <div class="form-group">
+        <label>Meio de Assinatura *</label>
+        <select id="ciencia-meio">
+          <option value="digital">Digital</option>
+          <option value="fisico">Fisico</option>
+          <option value="presencial">Presencial</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Observacao</label><textarea id="ciencia-obs" placeholder="Observacoes..."></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="cancelCiencia">Cancelar</button>
+      <button class="btn btn-primary" id="saveCiencia">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast toast-success" style="display:none;"></div>
+
+<script>
+(async () => {
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','visualizador'] });
+  if (!user) return;
+
+  // Sidebar
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebarOverlay');
+  const menuBtn = document.getElementById('menuBtn');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  if (menuBtn) menuBtn.addEventListener('click', () => { sidebar.classList.add('open'); overlay.classList.add('active'); });
+  if (overlay) overlay.addEventListener('click', () => { sidebar.classList.remove('open'); overlay.classList.remove('active'); });
+  if (toggleBtn) toggleBtn.addEventListener('click', () => { sidebar.classList.toggle('collapsed'); });
+
+  // State
+  let ordens = [], setores = [], cargos = [], funcionarios = [];
+  let currentOSId = null;
+
+  // Helpers
+  const esc = s => API.esc(s);
+  function fmtDate(d) { if (!d) return '--'; return API.fmtData(d); }
+  function splitLines(text) { return (text || '').split('\n').map(l => l.trim()).filter(Boolean); }
+
+  const STATUS_MAP = {
+    rascunho: { label: 'Rascunho', cls: 'badge-gray' },
+    em_revisao: { label: 'Em Revisao', cls: 'badge-yellow' },
+    aprovada: { label: 'Aprovada', cls: 'badge-blue' },
+    vigente: { label: 'Vigente', cls: 'badge-green' },
+    substituida: { label: 'Substituida', cls: 'badge-orange' },
+    arquivada: { label: 'Arquivada', cls: 'badge-gray' },
+  };
+
+  function statusBadge(status) {
+    const s = STATUS_MAP[status] || { label: status, cls: 'badge-gray' };
+    return `<span class="badge ${s.cls}">${esc(s.label)}</span>`;
+  }
+
+  function toast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast toast-' + type;
+    t.style.display = 'block';
+    setTimeout(() => { t.style.display = 'none'; }, 3000);
+  }
+
+  // Load data
+  async function loadAll() {
+    try {
+      const [rOrdens, rSetores, rCargos, rFuncs] = await Promise.all([
+        API.get('sst_ordem_servico?order=created_at.desc'),
+        API.get('rh_setores?ativo=eq.true&order=nome'),
+        API.get('rh_cargos?order=nome'),
+        API.get('rh_colaboradores?status=eq.ativo&select=id,nome,setor,cargo&order=nome'),
+      ]);
+      ordens = rOrdens.ok ? rOrdens.data : [];
+      setores = rSetores.ok ? rSetores.data : [];
+      cargos = rCargos.ok ? rCargos.data : [];
+      funcionarios = rFuncs.ok ? rFuncs.data : [];
+    } catch (e) {
+      console.error('Erro ao carregar dados:', e);
+      ordens = []; setores = []; cargos = []; funcionarios = [];
+    }
+    populateSelects();
+    updateKPIs();
+    renderTable();
+  }
+
+  function populateSelects() {
+    const selSetor = document.getElementById('os-setor');
+    selSetor.innerHTML = '<option value="">Selecione...</option>' + setores.map(s => `<option value="${esc(s.id)}">${esc(s.nome)}</option>`).join('');
+
+    const selCargo = document.getElementById('os-cargo');
+    selCargo.innerHTML = '<option value="">Selecione...</option>' + cargos.map(c => `<option value="${esc(c.id)}">${esc(c.nome)}</option>`).join('');
+
+    const selFunc = document.getElementById('ciencia-func');
+    selFunc.innerHTML = '<option value="">Selecione...</option>' + funcionarios.map(f => `<option value="${esc(f.id)}">${esc(f.nome)} - ${esc(f.setor || '')}</option>`).join('');
+  }
+
+  function updateKPIs() {
+    document.getElementById('kpi-total').textContent = ordens.length;
+    document.getElementById('kpi-vigentes').textContent = ordens.filter(o => o.status === 'vigente').length;
+    document.getElementById('kpi-rascunho').textContent = ordens.filter(o => o.status === 'rascunho').length;
+    // sem ciencia = vigentes - will compute after ciencia data loaded per OS
+    document.getElementById('kpi-sem-ciencia').textContent = '--';
+  }
+
+  function renderTable() {
+    const search = (document.getElementById('searchOS').value || '').toLowerCase();
+    const statusFilter = document.getElementById('filterStatus').value;
+
+    let data = [...ordens];
+    if (search) data = data.filter(o =>
+      (o.titulo || '').toLowerCase().includes(search) ||
+      (o.codigo || '').toLowerCase().includes(search) ||
+      (o.setor_nome || o.setor_id || '').toString().toLowerCase().includes(search)
+    );
+    if (statusFilter) data = data.filter(o => o.status === statusFilter);
+
+    const setorMap = {};
+    setores.forEach(s => { setorMap[s.id] = s.nome; });
+    const cargoMap = {};
+    cargos.forEach(c => { cargoMap[c.id] = c.nome; });
+
+    const tbody = document.getElementById('tbodyOS');
+    const footer = document.getElementById('footerOS');
+
+    if (data.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8"><div class="empty-msg">Nenhuma Ordem de Servico encontrada</div></td></tr>';
+      footer.textContent = '0 ordens';
+      return;
+    }
+
+    tbody.innerHTML = data.map(o => `<tr data-id="${o.id}">
+      <td style="font-family:monospace;font-size:12px">${esc(o.codigo || '--')}</td>
+      <td style="font-weight:500">${esc(o.titulo)}</td>
+      <td>${esc(setorMap[o.setor_id] || o.setor_nome || '--')}</td>
+      <td>${esc(cargoMap[o.cargo_id] || o.cargo_funcao || '--')}</td>
+      <td style="text-align:center">${o.versao || 1}</td>
+      <td>${statusBadge(o.status)}</td>
+      <td style="text-align:center">${o.total_ciencias != null ? o.total_ciencias : '--'}</td>
+      <td><button class="btn btn-sm btn-secondary btn-view" data-id="${o.id}">Ver</button></td>
+    </tr>`).join('');
+
+    footer.textContent = data.length + ' ordem(ns) de servico';
+
+    // Row click
+    tbody.querySelectorAll('tr[data-id]').forEach(row => {
+      row.addEventListener('click', (e) => {
+        if (e.target.closest('button')) return;
+        openDetail(row.dataset.id);
+      });
+    });
+    tbody.querySelectorAll('.btn-view').forEach(btn => {
+      btn.addEventListener('click', () => openDetail(btn.dataset.id));
+    });
+  }
+
+  // Filters
+  document.getElementById('searchOS').addEventListener('input', renderTable);
+  document.getElementById('filterStatus').addEventListener('change', renderTable);
+
+  // ── Nova OS Modal ──
+  const modalNovaOS = document.getElementById('modalNovaOS');
+  document.getElementById('btnNovaOS').addEventListener('click', () => { modalNovaOS.classList.add('active'); });
+  document.getElementById('closeNovaOS').addEventListener('click', () => { modalNovaOS.classList.remove('active'); });
+  document.getElementById('cancelNovaOS').addEventListener('click', () => { modalNovaOS.classList.remove('active'); });
+
+  document.getElementById('saveNovaOS').addEventListener('click', async () => {
+    const titulo = document.getElementById('os-titulo').value.trim();
+    if (!titulo) { toast('Titulo e obrigatorio', 'error'); return; }
+
+    const payload = {
+      titulo,
+      setor_id: document.getElementById('os-setor').value || null,
+      cargo_id: document.getElementById('os-cargo').value || null,
+      atividade_principal: document.getElementById('os-atividade').value.trim() || null,
+      riscos: splitLines(document.getElementById('os-riscos').value),
+      medidas_preventivas: splitLines(document.getElementById('os-medidas').value),
+      epis_obrigatorios: splitLines(document.getElementById('os-epis').value),
+      treinamentos_obrigatorios: splitLines(document.getElementById('os-treinamentos').value),
+      procedimentos_emergencia: document.getElementById('os-emergencia').value.trim() || null,
+      regras_seguranca: document.getElementById('os-regras').value.trim() || null,
+      responsavel_tecnico: document.getElementById('os-responsavel').value.trim() || null,
+      registro_profissional: document.getElementById('os-registro').value.trim() || null,
+      status: 'rascunho',
+    };
+
+    const res = await API.post('sst_ordem_servico', payload);
+    if (res.ok) {
+      toast('Ordem de Servico criada com sucesso!');
+      modalNovaOS.classList.remove('active');
+      // Clear form
+      ['os-titulo','os-atividade','os-riscos','os-medidas','os-epis','os-treinamentos','os-emergencia','os-regras','os-responsavel','os-registro'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('os-setor').value = '';
+      document.getElementById('os-cargo').value = '';
+      await loadAll();
+    } else {
+      toast(res.error || 'Erro ao salvar OS', 'error');
+    }
+  });
+
+  // ── Detail Modal ──
+  const modalDetail = document.getElementById('modalDetail');
+  document.getElementById('closeDetail').addEventListener('click', () => { modalDetail.classList.remove('active'); });
+
+  async function openDetail(id) {
+    currentOSId = id;
+    const os = ordens.find(o => o.id === id);
+    if (!os) return;
+
+    // Load ciencias for this OS
+    let ciencias = [];
+    try {
+      const cienciaRes = await API.get(`sst_os_ciencia?os_id=eq.${id}&order=created_at.desc`);
+      ciencias = cienciaRes.ok ? cienciaRes.data : [];
+    } catch (e) { ciencias = []; }
+
+    const setorMap = {};
+    setores.forEach(s => { setorMap[s.id] = s.nome; });
+    const cargoMap = {};
+    cargos.forEach(c => { cargoMap[c.id] = c.nome; });
+    const funcMap = {};
+    funcionarios.forEach(f => { funcMap[f.id] = f.nome; });
+
+    function renderList(arr) {
+      if (!arr || !arr.length) return '<span style="color:var(--text-muted)">--</span>';
+      return '<ul>' + arr.map(i => `<li>${esc(i)}</li>`).join('') + '</ul>';
+    }
+
+    document.getElementById('detailTitle').textContent = os.titulo || 'Detalhe da OS';
+
+    let html = '';
+
+    // Action bar
+    html += '<div class="action-bar">';
+    if (os.status === 'rascunho') html += `<button class="btn btn-sm btn-warning" onclick="changeStatus('${id}','em_revisao')">Enviar para Revisao</button>`;
+    if (os.status === 'em_revisao') html += `<button class="btn btn-sm btn-primary" onclick="changeStatus('${id}','aprovada')">Aprovar</button>`;
+    if (os.status === 'aprovada') html += `<button class="btn btn-sm btn-success" onclick="changeStatus('${id}','vigente')">Tornar Vigente</button>`;
+    if (os.status === 'vigente') html += `<button class="btn btn-sm btn-primary" id="btnCienciaOpen">Registrar Ciencia</button>`;
+    html += '</div>';
+
+    // Info
+    html += '<div class="detail-section"><h3>Informacoes Gerais</h3>';
+    html += `<div class="form-row">
+      <div class="detail-field"><div class="label">Codigo</div><div class="value">${esc(os.codigo || '--')}</div></div>
+      <div class="detail-field"><div class="label">Versao</div><div class="value">${os.versao || 1}</div></div>
+    </div>`;
+    html += `<div class="form-row">
+      <div class="detail-field"><div class="label">Setor</div><div class="value">${esc(setorMap[os.setor_id] || os.setor_nome || '--')}</div></div>
+      <div class="detail-field"><div class="label">Cargo</div><div class="value">${esc(cargoMap[os.cargo_id] || os.cargo_funcao || '--')}</div></div>
+    </div>`;
+    html += `<div class="detail-field"><div class="label">Status</div><div class="value">${statusBadge(os.status)}</div></div>`;
+    html += `<div class="detail-field"><div class="label">Atividade Principal</div><div class="value">${esc(os.atividade_principal || '--')}</div></div>`;
+    html += '</div>';
+
+    // Riscos e medidas
+    html += '<div class="detail-section"><h3>Riscos e Medidas</h3>';
+    html += `<div class="detail-field"><div class="label">Riscos</div><div class="value">${renderList(os.riscos)}</div></div>`;
+    html += `<div class="detail-field"><div class="label">Medidas Preventivas</div><div class="value">${renderList(os.medidas_preventivas)}</div></div>`;
+    html += `<div class="detail-field"><div class="label">EPIs Obrigatorios</div><div class="value">${renderList(os.epis_obrigatorios)}</div></div>`;
+    html += `<div class="detail-field"><div class="label">Treinamentos Obrigatorios</div><div class="value">${renderList(os.treinamentos_obrigatorios)}</div></div>`;
+    html += '</div>';
+
+    // Emergencia / Regras
+    html += '<div class="detail-section"><h3>Procedimentos e Regras</h3>';
+    html += `<div class="detail-field"><div class="label">Procedimentos em Emergencia</div><div class="value">${esc(os.procedimentos_emergencia || '--')}</div></div>`;
+    html += `<div class="detail-field"><div class="label">Regras de Seguranca</div><div class="value">${esc(os.regras_seguranca || '--')}</div></div>`;
+    html += '</div>';
+
+    // Responsavel
+    html += '<div class="detail-section"><h3>Responsavel</h3>';
+    html += `<div class="form-row">
+      <div class="detail-field"><div class="label">Responsavel Tecnico</div><div class="value">${esc(os.responsavel_tecnico || '--')}</div></div>
+      <div class="detail-field"><div class="label">Registro Profissional</div><div class="value">${esc(os.registro_profissional || '--')}</div></div>
+    </div>`;
+    html += `<div class="detail-field"><div class="label">Criado em</div><div class="value">${fmtDate(os.created_at)}</div></div>`;
+    html += '</div>';
+
+    // Ciencias
+    html += '<div class="detail-section"><h3>Ciencias Registradas (' + ciencias.length + ')</h3>';
+    if (ciencias.length === 0) {
+      html += '<div class="empty-msg">Nenhuma ciencia registrada</div>';
+    } else {
+      ciencias.forEach(c => {
+        html += `<div class="ciencia-card">
+          <strong>${esc(funcMap[c.funcionario_id] || 'Funcionario')}</strong>
+          &mdash; ${esc(c.meio_assinatura || 'digital')}
+          &mdash; ${fmtDate(c.created_at)}
+          ${c.observacao ? '<br><span style="color:var(--text-secondary);font-size:12px">' + esc(c.observacao) + '</span>' : ''}
+        </div>`;
+      });
+    }
+    html += '</div>';
+
+    document.getElementById('detailBody').innerHTML = html;
+    modalDetail.classList.add('active');
+
+    // Bind ciencia button
+    const btnCiencia = document.getElementById('btnCienciaOpen');
+    if (btnCiencia) {
+      btnCiencia.addEventListener('click', () => {
+        document.getElementById('modalCiencia').classList.add('active');
+      });
+    }
+  }
+
+  // Change status
+  window.changeStatus = async function(id, newStatus) {
+    const res = await API.patch(`sst_ordem_servico?id=eq.${id}`, { status: newStatus });
+    if (res.ok) {
+      toast('Status atualizado para ' + (STATUS_MAP[newStatus]?.label || newStatus));
+      modalDetail.classList.remove('active');
+      await loadAll();
+    } else {
+      toast(res.error || 'Erro ao atualizar status', 'error');
+    }
+  };
+
+  // ── Ciencia Modal ──
+  const modalCiencia = document.getElementById('modalCiencia');
+  document.getElementById('closeCiencia').addEventListener('click', () => { modalCiencia.classList.remove('active'); });
+  document.getElementById('cancelCiencia').addEventListener('click', () => { modalCiencia.classList.remove('active'); });
+
+  document.getElementById('saveCiencia').addEventListener('click', async () => {
+    const funcId = document.getElementById('ciencia-func').value;
+    if (!funcId) { toast('Selecione um funcionario', 'error'); return; }
+    if (!currentOSId) { toast('OS nao identificada', 'error'); return; }
+
+    const payload = {
+      os_id: currentOSId,
+      funcionario_id: funcId,
+      meio_assinatura: document.getElementById('ciencia-meio').value,
+      observacao: document.getElementById('ciencia-obs').value.trim() || null,
+    };
+
+    const res = await API.post('sst_os_ciencia', payload);
+    if (res.ok) {
+      toast('Ciencia registrada com sucesso!');
+      modalCiencia.classList.remove('active');
+      document.getElementById('ciencia-func').value = '';
+      document.getElementById('ciencia-obs').value = '';
+      // Refresh detail
+      await openDetail(currentOSId);
+    } else {
+      toast(res.error || 'Erro ao registrar ciencia', 'error');
+    }
+  });
+
+  // Initial load
+  await loadAll();
+})();
+</script>
+</body>
+</html>

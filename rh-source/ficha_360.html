@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha 360 - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+/* Hero */
+.hero{display:flex;align-items:center;gap:24px;flex-wrap:wrap;padding:28px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;margin-bottom:24px}
+.avatar{width:80px;height:80px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:700;flex-shrink:0}
+.hero-info{flex:1;min-width:200px}
+.hero-info h2{font-size:22px;font-weight:700;margin:0 0 4px}
+.hero-info .hero-sub{color:var(--text-secondary);font-size:14px}
+.hero-meta{display:flex;gap:24px;flex-wrap:wrap}
+.hero-meta .hm-item{text-align:center}
+.hero-meta .hm-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.hero-meta .hm-value{font-size:15px;font-weight:600;margin-top:2px}
+.hero-alert{width:100%;padding:10px 16px;border-radius:8px;font-size:13px;font-weight:500;display:flex;align-items:center;gap:8px;margin-top:4px}
+.hero-alert.warn{background:rgba(234,179,8,.12);color:#ca8a04;border:1px solid rgba(234,179,8,.25)}
+.hero-alert.danger{background:rgba(239,68,68,.1);color:#ef4444;border:1px solid rgba(239,68,68,.2)}
+
+/* Tabs */
+.ficha-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:2px solid var(--border);margin-bottom:24px;padding-bottom:0}
+.ficha-tabs button{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:10px 16px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;white-space:nowrap;font-family:inherit;transition:color .2s,border-color .2s}
+.ficha-tabs button:hover{color:var(--text-primary)}
+.ficha-tabs button.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.tab-panel{display:none}
+.tab-panel.active{display:block}
+
+/* Info grid */
+.info-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px 32px}
+.info-grid .ig-item{display:flex;flex-direction:column;gap:2px}
+.info-grid .ig-label{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.info-grid .ig-value{font-size:14px;font-weight:500}
+
+/* Score bar */
+.score-bar{height:6px;border-radius:3px;background:var(--border);overflow:hidden;margin-top:4px;max-width:120px}
+.score-bar-fill{height:100%;border-radius:3px;transition:width .4s}
+
+/* Timeline */
+.timeline{position:relative;padding-left:24px}
+.timeline::before{content:'';position:absolute;left:7px;top:4px;bottom:4px;width:2px;background:var(--border)}
+.tl-item{position:relative;padding:0 0 20px}
+.tl-dot{position:absolute;left:-20px;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--border);background:var(--bg-card)}
+.tl-dot.blue{border-color:var(--primary);background:var(--primary)}
+.tl-dot.green{border-color:#22c55e;background:#22c55e}
+.tl-dot.amber{border-color:#eab308;background:#eab308}
+.tl-dot.red{border-color:#ef4444;background:#ef4444}
+.tl-date{font-size:11px;color:var(--text-secondary)}
+.tl-title{font-size:13px;font-weight:600;margin:2px 0}
+.tl-detail{font-size:12px;color:var(--text-secondary)}
+
+/* Helpers */
+.section-title{font-size:15px;font-weight:600;margin:0 0 12px;display:flex;align-items:center;gap:8px}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media(max-width:768px){.info-grid,.two-col,.hero-meta{grid-template-columns:1fr;flex-direction:column}.hero{flex-direction:column;text-align:center}}
+.row-vencido{background:rgba(239,68,68,.06)!important}
+.alert-inline{padding:10px 14px;border-radius:8px;font-size:13px;margin-bottom:16px;font-weight:500}
+.alert-inline.warn{background:rgba(234,179,8,.1);color:#a16207;border:1px solid rgba(234,179,8,.2)}
+.cost-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:16px}
+.cost-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:14px;text-align:center}
+.cost-card .cc-val{font-size:18px;font-weight:700;color:var(--primary)}
+.cost-card .cc-lbl{font-size:11px;color:var(--text-secondary);text-transform:uppercase;margin-top:2px}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="selectState" style="display:none;max-width:600px;margin:0 auto;padding:40px 0;">
+    <h2 style="margin-bottom:4px">Ficha 360</h2>
+    <p class="text-muted" style="margin-bottom:20px">Selecione um colaborador para visualizar a ficha completa.</p>
+    <input type="text" class="input" id="searchInput" placeholder="Buscar por nome..." style="width:100%;margin-bottom:16px;padding:12px 14px;font-size:15px;">
+    <div id="searchResults" class="card" style="max-height:400px;overflow-y:auto;"></div>
+  </div>
+  <div id="loadingState" style="display:none;text-align:center;padding:80px 0"><span class="spinner"></span><p class="text-muted" style="margin-top:12px">Carregando ficha...</p></div>
+  <div id="errorState" style="display:none;text-align:center;padding:80px 0"><p style="font-size:16px;font-weight:600;margin-bottom:8px">Colaborador nao encontrado</p><p class="text-muted">Verifique o ID e tente novamente.</p></div>
+  <div id="mainContent" style="display:none"></div>
+</div>
+
+<script>
+(async () => {
+const user = await Shell.init({ page: 'ficha_360', title: 'Ficha do Colaborador' });
+if (!user) return;
+API.setPerfil(user.perfil);
+
+const esc = s => API.esc(s);
+const fmt = (v, fb) => v != null && v !== '' ? v : (fb || '--');
+const fmtM = v => v != null ? API.fmtMoeda(v) : '--';
+const fmtD = d => d ? API.fmtData(d) : '--';
+const fmtT = d => d ? API.fmtTempo(d) : '--';
+
+function statusBadge(s, exp) {
+  if (exp && exp.em_experiencia) return '<span class="badge badge-info">Experiencia</span>';
+  const m = { ativo:'success', afastado:'warning', desligado:'danger', experiencia:'info' };
+  return `<span class="badge badge-${m[s]||'gray'}">${esc(fmt(s))}</span>`;
+}
+
+function buildTable(headers, rows, opts) {
+  const rAlign = opts?.rightCols || [];
+  let h = '<div class="data-table-wrapper"><table class="data-table"><thead><tr>';
+  headers.forEach((t,i) => h += `<th${rAlign.includes(i)?' style="text-align:right"':''}>${t}</th>`);
+  h += '</tr></thead><tbody>';
+  if (!rows || !rows.length) { h += `<tr><td colspan="${headers.length}" class="text-muted" style="text-align:center;padding:20px">Nenhum registro</td></tr>`; }
+  else rows.forEach(r => {
+    h += `<tr${r._class?' class="'+r._class+'"':''}>`;
+    r.cells.forEach((c,i) => h += `<td${rAlign.includes(i)?' style="text-align:right"':''}>${c}</td>`);
+    h += '</tr>';
+  });
+  h += '</tbody></table></div>';
+  return h;
+}
+
+(async function() {
+  const id = new URLSearchParams(location.search).get('id');
+
+  if (!id) {
+    // No ID: show collaborator selector
+    await showSelector();
+    return;
+  }
+
+  document.getElementById('loadingState').style.display = '';
+  const {ok, data} = await API.rpc('ficha_360_colaborador', {p_funcionario_id: id});
+  if (!ok || !data || data.erro) { showError(); return; }
+
+  const d = data;
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('mainContent').style.display = 'block';
+  document.getElementById('mainContent').innerHTML = renderPage(d);
+  initTabs();
+})().catch(() => {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('errorState').style.display = 'block';
+});
+
+async function showSelector() {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('selectState').style.display = '';
+
+  const res = await API.get(API.VIEWS.funcionarios_equipe + '&select=id,nome,cargo,setor,status');
+  const colabs = res.ok ? res.data : [];
+
+  const resultsEl = document.getElementById('searchResults');
+  const searchEl = document.getElementById('searchInput');
+
+  function render(filtered) {
+    if (!filtered.length) {
+      resultsEl.innerHTML = '<div style="padding:20px;text-align:center;color:var(--text-secondary);">Nenhum colaborador encontrado</div>';
+      return;
+    }
+    resultsEl.innerHTML = filtered.map(c => {
+      const statusCls = c.status === 'ativo' ? 'success' : c.status === 'afastado' ? 'warning' : 'info';
+      return `<a href="ficha_360.html?id=${c.id}" style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);text-decoration:none;color:inherit;transition:background .15s;" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background=''">
+        <div>
+          <div style="font-weight:600;font-size:14px;">${esc(c.nome)}</div>
+          <div style="font-size:12px;color:var(--text-secondary);">${esc(c.cargo || '--')} &middot; ${esc(c.setor || '--')}</div>
+        </div>
+        <span class="badge badge-${statusCls}">${esc(c.status)}</span>
+      </a>`;
+    }).join('');
+  }
+
+  render(colabs.slice(0, 50));
+
+  searchEl.addEventListener('input', function() {
+    const q = this.value.trim().toLowerCase();
+    if (!q) { render(colabs.slice(0, 50)); return; }
+    const filtered = colabs.filter(c => c.nome && c.nome.toLowerCase().includes(q));
+    render(filtered.slice(0, 50));
+  });
+
+  searchEl.focus();
+}
+
+function showError() {
+  document.getElementById('loadingState').style.display = 'none';
+  document.getElementById('errorState').style.display = 'block';
+}
+
+function renderPage(d) {
+  const initials = (d.nome || '??').split(' ').slice(0,2).map(n=>n[0]).join('').toUpperCase();
+  const sc = d.score || {};
+  const asos = d.asos || {};
+  const tre = d.treinamentos || {};
+  const fer = d.ferias || {};
+  const pend = d.pendencias || [];
+  const custos = d.custos || {};
+  const exp = d.experiencia || {};
+  const af = d.afastamento;
+
+  // Score color
+  const sVal = sc.final;
+  const sColor = sVal == null ? '#888' : sVal >= 80 ? '#22c55e' : sVal >= 60 ? '#eab308' : '#ef4444';
+
+  let html = '';
+
+  // ── HERO ──
+  html += `<div class="hero">
+    <div class="avatar">${esc(initials)}</div>
+    <div class="hero-info">
+      <h2>${esc(fmt(d.nome))}</h2>
+      <div class="hero-sub">${esc(fmt(d.cargo))} &mdash; ${esc(fmt(d.setor))}</div>
+      <div style="margin-top:6px">${statusBadge(d.status, exp)}</div>
+    </div>
+    <div class="hero-meta">
+      <div class="hm-item"><div class="hm-label">Matricula</div><div class="hm-value">${esc(fmt(d.matricula))}</div></div>
+      <div class="hm-item"><div class="hm-label">CPF</div><div class="hm-value">${d.cpf ? API.fmtCPF(d.cpf) : '--'}</div></div>
+      <div class="hm-item"><div class="hm-label">Tempo Empresa</div><div class="hm-value">${fmtT(d.tempo_empresa_dias)}</div></div>
+      <div class="hm-item"><div class="hm-label">Admissao</div><div class="hm-value">${fmtD(d.data_admissao)}</div></div>
+    </div>
+    ${exp.em_experiencia ? '<div class="hero-alert warn">&#9888; Colaborador em periodo de experiencia</div>' : ''}
+    ${af ? '<div class="hero-alert danger">&#9888; Colaborador afastado: '+esc(fmt(af.motivo || af.tipo || 'Afastamento'))+' desde '+fmtD(af.data_inicio || af.inicio)+'</div>' : ''}
+  </div>`;
+
+  // ── KPI ROW ──
+  const asoUlt = asos.ultimo || {};
+  const asoVenc = asos.vencido;
+  html += `<div class="kpi-row mb-6">
+    <div class="kpi-card">
+      <div class="kpi-icon ${sVal==null?'blue':sVal>=80?'green':sVal>=60?'amber':'red'}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <div class="kpi-value">${sVal != null ? sVal : '--'}</div>
+      <div class="kpi-label">Score</div>
+      ${sVal != null ? `<div class="score-bar"><div class="score-bar-fill" style="width:${sVal}%;background:${sColor}"></div></div>` : ''}
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon ${asoVenc?'red':'green'}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg>
+      </div>
+      <div class="kpi-value">${fmtD(asoUlt.validade)}</div>
+      <div class="kpi-label">ASO ${asoVenc ? '<span class="badge badge-danger" style="margin-left:4px">Vencido</span>' : '<span class="badge badge-success" style="margin-left:4px">OK</span>'}</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon ${tre.vencidos>0?'red':'green'}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      </div>
+      <div class="kpi-value">${fmt(tre.vencidos, '0')}</div>
+      <div class="kpi-label">Trein. Vencidos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon ${fer.vencidas>0?'red':'green'}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      </div>
+      <div class="kpi-value">${fmt(fer.vencidas, '0')}</div>
+      <div class="kpi-label">Ferias Vencidas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon ${pend.length>0?'amber':'green'}">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div class="kpi-value">${pend.length}</div>
+      <div class="kpi-label">Pendencias</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      </div>
+      <div class="kpi-value">${custos.restrito ? 'Restrito' : fmtM(custos.salario)}</div>
+      <div class="kpi-label">Custo Mensal</div>
+    </div>
+  </div>`;
+
+  // ── TABS ──
+  const tabs = ['Dados Gerais','RH','SST','Ponto','Beneficios','Documentos','Custos','Historico'];
+  html += '<div class="ficha-tabs">';
+  tabs.forEach((t,i) => html += `<button data-tab="${i}" class="${i===0?'active':''}">${t}</button>`);
+  html += '</div>';
+
+  // TAB 0: Dados Gerais
+  html += `<div class="tab-panel active" data-panel="0"><div class="two-col">
+    <div class="card"><div class="card-header"><h3>Dados Pessoais</h3></div><div class="card-body">
+      <div class="info-grid">
+        ${ig('Nome', d.nome)}${ig('CPF', d.cpf ? API.fmtCPF(d.cpf) : '--')}
+        ${ig('Nascimento', fmtD(d.data_nascimento))}${ig('Sexo', d.sexo)}
+        ${ig('Estado Civil', d.estado_civil)}${ig('Telefone', d.telefone)}
+        ${ig('Email', d.email)}${ig('PIS/PASEP', d.pis_pasep)}
+        ${ig('Endereco', d.endereco)}
+        ${d.ctps ? ig('CTPS', (d.ctps.numero||'')+'/'+(d.ctps.serie||'')) : ''}
+      </div>
+    </div></div>
+    <div class="card"><div class="card-header"><h3>Dados Contratuais</h3></div><div class="card-body">
+      <div class="info-grid">
+        ${ig('Empresa', d.empresa)}${ig('Filial', d.filial)}
+        ${ig('Setor', d.setor)}${ig('Cargo', d.cargo)}
+        ${ig('CBO', d.cbo)}${ig('Tipo Vinculo', d.tipo_vinculo)}
+        ${ig('Modalidade', d.modalidade_contrato)}${ig('Admissao', fmtD(d.data_admissao))}
+        ${d.data_desligamento ? ig('Desligamento', fmtD(d.data_desligamento)) : ''}
+        ${d.salario_base != null ? ig('Salario Base', fmtM(d.salario_base)) : ig('Salario Base', 'Restrito')}
+        ${ig('Turno', d.turno)}${ig('Carga Horaria', d.carga_horaria ? d.carga_horaria+'h' : '--')}
+        ${ig('Gestor', d.gestor_nome)}${ig('GHE', d.ghe)}
+        ${ig('Grau de Risco', d.grau_risco)}
+      </div>
+    </div></div>
+  </div>
+  ${d.transporte_onibus ? `<div class="card"><div class="card-header"><h3>Transporte</h3></div><div class="card-body"><div class="info-grid">
+    ${ig('Onibus', d.transporte_onibus)}${ig('Rota', d.transporte_rota)}${ig('Custo', fmtM(d.transporte_custo))}
+  </div></div></div>` : ''}
+  </div>`;
+
+  // TAB 1: RH
+  const oc = d.ocorrencias || {};
+  html += `<div class="tab-panel" data-panel="1">`;
+  if (oc.restrito) {
+    html += '<div class="card"><div class="card-body"><p class="text-muted">Acesso restrito a ocorrencias.</p></div></div>';
+  } else {
+    html += `<div class="kpi-row mb-4">
+      <div class="kpi-card"><div class="kpi-value">${fmt(oc.total,'0')}</div><div class="kpi-label">Ocorrencias</div></div>
+      <div class="kpi-card"><div class="kpi-value">${fmt(oc.atestados,'0')}</div><div class="kpi-label">Atestados</div></div>
+      <div class="kpi-card"><div class="kpi-value">${fmt(oc.dias_atestado,'0')}</div><div class="kpi-label">Dias Atestado</div></div>
+      <div class="kpi-card"><div class="kpi-value">${fmt(oc.advertencias,'0')}</div><div class="kpi-label">Advertencias</div></div>
+    </div>`;
+    html += '<div class="card mb-4"><div class="card-header"><h3>Ocorrencias Recentes</h3></div><div class="card-body">';
+    html += buildTable(['Tipo','Data','Dias','Descricao'], (oc.recentes||[]).map(r => ({cells:[
+      esc(fmt(r.tipo)), fmtD(r.dt), fmt(r.dias,'--'), esc(fmt(r.descricao))
+    ]})));
+    html += '</div></div>';
+  }
+  // Ferias
+  html += `<div class="card mb-4"><div class="card-header"><h3>Ferias</h3></div><div class="card-body">`;
+  if (fer.vencidas > 0) html += `<div class="alert-inline warn">&#9888; ${fer.vencidas} periodo(s) de ferias vencido(s)</div>`;
+  if (fer.proxima) html += `<p class="text-sm mb-4">Proximas ferias: ${fmtD(fer.proxima.inicio)} a ${fmtD(fer.proxima.fim)} (${fer.proxima.dias||'--'} dias) - ${esc(fmt(fer.proxima.status))}</p>`;
+  html += buildTable(['Periodo Inicio','Periodo Fim','Inicio','Fim','Dias','Vendidos','Abono','Status'],
+    (fer.lista||[]).map(r=>({cells:[
+      fmtD(r.periodo_inicio), fmtD(r.periodo_fim), fmtD(r.inicio), fmtD(r.fim),
+      fmt(r.dias), fmt(r.vendidos,'0'), fmtM(r.abono), esc(fmt(r.status))
+    ]})));
+  html += '</div></div></div>';
+
+  // TAB 2: SST
+  html += `<div class="tab-panel" data-panel="2">`;
+  // ASO
+  html += `<div class="card mb-4"><div class="card-header"><h3>ASO - Atestado de Saude Ocupacional</h3></div><div class="card-body">`;
+  if (asoUlt.tipo) {
+    html += `<div class="info-grid mb-4">
+      ${ig('Ultimo Tipo', asoUlt.tipo)}${ig('Data', fmtD(asoUlt.data))}
+      ${ig('Validade', fmtD(asoUlt.validade))}${ig('Resultado', asoUlt.resultado)}
+      ${ig('Medico', asoUlt.medico)}${ig('Restricoes', asoUlt.restricoes || 'Nenhuma')}
+    </div>`;
+  }
+  html += buildTable(['Tipo','Data','Validade','Resultado','Medico'], (asos.lista||[]).map(r=>({cells:[
+    esc(fmt(r.tipo)), fmtD(r.data), fmtD(r.validade), esc(fmt(r.resultado)), esc(fmt(r.medico))
+  ]})));
+  html += '</div></div>';
+  // Treinamentos
+  html += `<div class="card mb-4"><div class="card-header"><h3>Treinamentos (${fmt(tre.validos,'0')} validos / ${fmt(tre.vencidos,'0')} vencidos)</h3></div><div class="card-body">`;
+  html += buildTable(['Tipo','Data','Validade','Status'], (tre.lista||[]).map(r=>({
+    _class: r.vencido ? 'row-vencido' : '',
+    cells:[esc(fmt(r.tipo)), fmtD(r.data), fmtD(r.validade), r.vencido ? '<span class="badge badge-danger">Vencido</span>' : '<span class="badge badge-success">Valido</span>']
+  })));
+  html += '</div></div>';
+  // EPI
+  const epi = d.epi || {};
+  html += `<div class="card mb-4"><div class="card-header"><h3>EPI - Entregas (${fmt(epi.total_entregas,'0')} total / ${fmt(epi.entregas_12m,'0')} em 12m)</h3></div><div class="card-body">`;
+  html += buildTable(['EPI','CA','Data','Quantidade'], (epi.recentes||[]).map(r=>({cells:[
+    esc(fmt(r.epi)), esc(fmt(r.ca)), fmtD(r.dt), fmt(r.quantidade)
+  ]})));
+  html += '</div></div>';
+  // Acidentes
+  const acid = d.acidentes || {};
+  html += `<div class="card mb-4"><div class="card-header"><h3>Acidentes (${fmt(acid.total,'0')})</h3></div><div class="card-body">`;
+  html += buildTable(['Tipo','Data','Gravidade','Descricao','Dias Afast.','CAT'], (acid.lista||[]).map(r=>({cells:[
+    esc(fmt(r.tipo)), fmtD(r.data), esc(fmt(r.gravidade)), esc(fmt(r.descricao)), fmt(r.dias_afastamento,'0'), r.cat_emitida ? 'Sim' : 'Nao'
+  ]})));
+  html += '</div></div></div>';
+
+  // TAB 3: Ponto
+  const pt = d.ponto || {};
+  html += `<div class="tab-panel" data-panel="3">
+    <div class="kpi-row mb-4">
+      <div class="kpi-card"><div class="kpi-value">${fmt(pt.registros_30d,'0')}</div><div class="kpi-label">Registros 30d</div></div>
+      <div class="kpi-card"><div class="kpi-value">${fmt(pt.faltas_30d,'0')}</div><div class="kpi-label">Faltas 30d</div></div>
+      <div class="kpi-card"><div class="kpi-value">${fmt(pt.com_extra_30d,'0')}</div><div class="kpi-label">Dias c/ Extra 30d</div></div>
+    </div>
+    <div class="card mb-4"><div class="card-header"><h3>Ultimos 15 Dias</h3></div><div class="card-body">`;
+  html += buildTable(['Data','Dia','Ent.1','Sai.1','Ent.2','Sai.2','Normais','Faltas','Extra 50%','Justificativa'],
+    (pt.ultimos_dias||[]).slice(0,15).map(r=>({cells:[
+      fmtD(r.data), esc(fmt(r.dia_semana)), fmt(r.entrada1), fmt(r.saida1), fmt(r.entrada2), fmt(r.saida2),
+      fmt(r.horas_normais), fmt(r.horas_faltas), fmt(r.horas_extra_50), esc(fmt(r.justificativa))
+    ]})),
+    {rightCols:[6,7,8]}
+  );
+  html += '</div></div>';
+  html += '<div class="card mb-4"><div class="card-header"><h3>Totais Mensais</h3></div><div class="card-body">';
+  html += buildTable(['Periodo','Dias Trab.','Dias Falta','Horas Faltas','Extra 50%','Extra 100%'],
+    (pt.totais||[]).map(r=>({cells:[
+      esc(fmt(r.periodo)), fmt(r.dias_trabalhados), fmt(r.dias_falta), fmt(r.horas_faltas), fmt(r.horas_extra_50), fmt(r.horas_extra_100)
+    ]})),
+    {rightCols:[1,2,3,4,5]}
+  );
+  html += '</div></div></div>';
+
+  // TAB 4: Beneficios
+  html += `<div class="tab-panel" data-panel="4"><div class="card"><div class="card-header"><h3>Beneficios</h3></div><div class="card-body">`;
+  html += buildTable(['Tipo','Status','Valor','Data Inicio'], (d.beneficios||[]).map(r=>({cells:[
+    esc(fmt(r.tipo)), esc(fmt(r.status)), fmtM(r.valor), fmtD(r.data_inicio)
+  ]})), {rightCols:[2]});
+  html += '</div></div></div>';
+
+  // TAB 5: Documentos
+  const docs = d.documentos || {};
+  html += `<div class="tab-panel" data-panel="5"><div class="card mb-4"><div class="card-header"><h3>Documentos (${fmt(docs.total,'0')})</h3></div><div class="card-body">`;
+  if (docs.por_categoria && docs.por_categoria.length) {
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">';
+    docs.por_categoria.forEach(c => html += `<span class="badge badge-info">${esc(c.categoria)}: ${c.total}</span>`);
+    html += '</div>';
+  }
+  html += buildTable(['Arquivo','Categoria','Data'], (docs.recentes||[]).map(r=>({cells:[
+    esc(fmt(r.nome_arquivo)), esc(fmt(r.categoria)), fmtD(r.dt)
+  ]})));
+  html += '</div></div></div>';
+
+  // TAB 6: Custos
+  html += `<div class="tab-panel" data-panel="6">`;
+  if (custos.restrito) {
+    html += '<div class="card"><div class="card-body"><p class="text-muted">Voce nao tem permissao para visualizar custos deste colaborador.</p></div></div>';
+  } else {
+    html += `<div class="cost-cards mb-4">
+      <div class="cost-card"><div class="cc-val">${fmtM(custos.salario)}</div><div class="cc-lbl">Salario</div></div>
+      <div class="cost-card"><div class="cc-val">${fmtM(custos.transporte_mensal)}</div><div class="cc-lbl">Transporte</div></div>
+      <div class="cost-card"><div class="cc-val">${fmtM(custos.beneficios_total)}</div><div class="cc-lbl">Beneficios</div></div>
+      <div class="cost-card"><div class="cc-val">${fmtM(custos.sst_12m)}</div><div class="cc-lbl">SST 12m</div></div>
+    </div>`;
+    html += '<div class="card mb-4"><div class="card-header"><h3>Historico de Custos</h3></div><div class="card-body">';
+    html += buildTable(['Competencia','Custo Total'], (custos.historico||[]).map(r=>({cells:[
+      esc(fmt(r.competencia)), fmtM(r.custo_total)
+    ]})), {rightCols:[1]});
+    html += '</div></div>';
+  }
+  html += '</div>';
+
+  // TAB 7: Historico
+  html += `<div class="tab-panel" data-panel="7">`;
+  // Timeline
+  const tl = d.timeline || [];
+  if (tl.length) {
+    html += '<div class="card mb-4"><div class="card-header"><h3>Timeline</h3></div><div class="card-body"><div class="timeline">';
+    const dotColors = {admissao:'green',promocao:'blue',transferencia:'blue',desligamento:'red',afastamento:'amber',retorno:'green',ferias:'blue'};
+    tl.forEach(e => {
+      const dc = dotColors[e.tipo] || 'blue';
+      html += `<div class="tl-item"><div class="tl-dot ${dc}"></div><div class="tl-date">${fmtD(e.data)}</div><div class="tl-title">${esc(fmt(e.titulo))}</div><div class="tl-detail">${esc(fmt(e.detalhe))}</div></div>`;
+    });
+    html += '</div></div></div>';
+  }
+  // Historico Cargo
+  html += '<div class="card mb-4"><div class="card-header"><h3>Historico de Cargos</h3></div><div class="card-body">';
+  html += buildTable(['Cargo','Data','Motivo'], (d.historico_cargo||[]).map(r=>({cells:[
+    esc(fmt(r.cargo)), fmtD(r.data), esc(fmt(r.motivo))
+  ]})));
+  html += '</div></div>';
+  // Historico Salario
+  html += '<div class="card mb-4"><div class="card-header"><h3>Historico Salarial</h3></div><div class="card-body">';
+  html += buildTable(['Valor','Anterior','Data','Motivo'], (d.historico_salario||[]).map(r=>({cells:[
+    fmtM(r.valor), fmtM(r.anterior), fmtD(r.data), esc(fmt(r.motivo))
+  ]})), {rightCols:[0,1]});
+  html += '</div></div>';
+  // Historico Setor
+  html += '<div class="card mb-4"><div class="card-header"><h3>Historico de Setores</h3></div><div class="card-body">';
+  html += buildTable(['Setor','Data','Motivo'], (d.historico_setor||[]).map(r=>({cells:[
+    esc(fmt(r.setor)), fmtD(r.data), esc(fmt(r.motivo))
+  ]})));
+  html += '</div></div>';
+  // Pendencias
+  if (pend.length) {
+    html += '<div class="card mb-4"><div class="card-header"><h3>Pendencias</h3></div><div class="card-body">';
+    const sevBadge = s => ({alta:'danger',media:'warning',baixa:'info'})[s] || 'gray';
+    html += buildTable(['Tipo','Titulo','Severidade','Status','Criado em'], pend.map(r=>({cells:[
+      esc(fmt(r.tipo)), esc(fmt(r.titulo)),
+      `<span class="badge badge-${sevBadge(r.severidade)}">${esc(fmt(r.severidade))}</span>`,
+      esc(fmt(r.status)), fmtD(r.criado_em)
+    ]})));
+    html += '</div></div>';
+  }
+  html += '</div>';
+
+  return html;
+}
+
+function ig(label, value) {
+  return `<div class="ig-item"><div class="ig-label">${esc(label)}</div><div class="ig-value">${typeof value === 'string' && value.startsWith('<') ? value : esc(fmt(value))}</div></div>`;
+}
+
+function initTabs() {
+  document.querySelectorAll('.ficha-tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.ficha-tabs button').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`);
+      if (panel) panel.classList.add('active');
+    });
+  });
+}
+})();
+</script>
+</body>
+</html>

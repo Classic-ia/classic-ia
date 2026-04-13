@@ -1,0 +1,1073 @@
+<!--
+  Classic RH - DDS (Dialogo Diario de Seguranca)
+
+  CREATE TABLE rh_dds_temas (
+    id        UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    nome      TEXT NOT NULL,
+    categoria TEXT,
+    ativo     BOOLEAN DEFAULT true,
+    criado_em TIMESTAMPTZ DEFAULT now()
+  );
+
+  ALTER TABLE rh_dds_temas ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_dds_temas_all" ON rh_dds_temas FOR ALL USING (true) WITH CHECK (true);
+
+  CREATE TABLE rh_dds (
+    id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    data          DATE NOT NULL,
+    responsavel   TEXT NOT NULL,
+    setor         TEXT NOT NULL,
+    tema          TEXT NOT NULL,
+    participantes JSONB DEFAULT '[]',
+    duracao_min   INTEGER,
+    observacoes   TEXT,
+    criado_em     TIMESTAMPTZ DEFAULT now()
+  );
+
+  CREATE INDEX idx_dds_data ON rh_dds(data);
+  CREATE INDEX idx_dds_setor ON rh_dds(setor);
+
+  ALTER TABLE rh_dds ENABLE ROW LEVEL SECURITY;
+  CREATE POLICY "rh_dds_all" ON rh_dds FOR ALL USING (true) WITH CHECK (true);
+
+  -- Temas padrao
+  INSERT INTO rh_dds_temas (nome, categoria) VALUES
+    ('Uso correto de EPIs', 'Seguranca'),
+    ('Prevencao de quedas', 'Seguranca'),
+    ('Manuseio de produtos quimicos', 'Saude'),
+    ('Ergonomia', 'Saude'),
+    ('Prevencao de incendio', 'Emergencia'),
+    ('Trabalho em equipe', 'Comportamental'),
+    ('Hidratacao', 'Saude'),
+    ('Ordem e limpeza', 'Organizacao'),
+    ('Protecao de maquinas', 'Seguranca'),
+    ('Primeiros socorros', 'Emergencia');
+-->
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH &amp; SST &amp; SST - DDS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+/* dark theme removed */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
+
+/* grid bg removed */
+
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(7,17,28,.92); backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 12px 20px;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.header-left { display: flex; align-items: center; gap: 12px; }
+.back-link {
+  color: var(--muted); text-decoration: none; font-size: 13px;
+  display: flex; align-items: center; gap: 4px; transition: color .2s;
+}
+.back-link:hover { color: var(--accent); }
+.header-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, #1a3a52, #2E6B8A);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px;
+}
+.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--accent); }
+.header-sub { font-size: 11px; color: var(--muted); }
+
+.main { max-width: 1400px; margin: 0 auto; padding: 24px 20px 60px; }
+
+.kpi-row {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+  gap: 12px; margin-bottom: 24px;
+}
+.kpi-card {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 16px 14px; text-align: center;
+}
+.kpi-value {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 26px; color: var(--accent);
+}
+.kpi-label {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .08em; margin-top: 4px;
+}
+
+.tabs {
+  display: flex; gap: 4px; margin-bottom: 24px;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 5px; flex-wrap: wrap;
+}
+.tab-btn {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: transparent; color: var(--muted);
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .2s; white-space: nowrap;
+}
+.tab-btn:hover { color: var(--text); background: rgba(46,107,138,.08); }
+.tab-btn.active { background: var(--info); color: white; }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+.section {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 12px; padding: 20px; margin-bottom: 20px;
+}
+.section-title {
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 13px; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .1em;
+  margin-bottom: 14px;
+}
+
+.form-row {
+  display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-end;
+  margin-bottom: 14px;
+}
+.form-group { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 180px; }
+.form-group.full { flex: 1 1 100%; }
+.form-group label {
+  font-size: 11px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .05em; font-weight: 600;
+}
+.form-group input, .form-group select, .form-group textarea {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s;
+}
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+  border-color: var(--accent);
+}
+.form-group select option { background: var(--surface); color: var(--text); }
+.form-group textarea {
+  font-family: 'DM Mono', monospace; font-size: 12px;
+  min-height: 80px; resize: vertical; width: 100%;
+}
+
+.search-wrap { position: relative; }
+.search-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; transition: border-color .2s; width: 100%;
+}
+.search-input:focus { border-color: var(--accent); }
+.search-input::placeholder { color: var(--muted); }
+.search-results {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 200px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.search-results.open { display: block; }
+.search-result-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.search-result-item:hover { background: rgba(46,107,138,.12); }
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item .sr-name { color: var(--text); font-weight: 600; }
+.search-result-item .sr-cargo { color: var(--muted); font-size: 11px; margin-left: 8px; }
+
+/* Multi-select participantes */
+.multi-select-wrap { position: relative; }
+.multi-select-input {
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  color: var(--text); font-family: 'DM Sans', sans-serif; font-size: 13px;
+  padding: 9px 12px; outline: none; width: 100%; transition: border-color .2s;
+}
+.multi-select-input:focus { border-color: var(--accent); }
+.multi-select-input::placeholder { color: var(--muted); }
+.multi-select-dropdown {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; max-height: 250px; overflow-y: auto;
+  display: none; margin-top: 4px;
+}
+.multi-select-dropdown.open { display: block; }
+.ms-item {
+  padding: 8px 12px; font-size: 12px; cursor: pointer;
+  display: flex; align-items: center; gap: 8px;
+  transition: background .15s; border-bottom: 1px solid rgba(30,58,82,.2);
+}
+.ms-item:hover { background: rgba(46,107,138,.12); }
+.ms-item:last-child { border-bottom: none; }
+.ms-item.selected { background: rgba(200,169,110,.08); }
+.ms-check {
+  width: 16px; height: 16px; border: 1px solid var(--border); border-radius: 4px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px; color: var(--accent); flex-shrink: 0;
+}
+.ms-item.selected .ms-check { background: var(--accent); color: #0d1b2a; border-color: var(--accent); }
+
+.selected-tags {
+  display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;
+}
+.tag {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: rgba(200,169,110,.1); border: 1px solid rgba(200,169,110,.3);
+  border-radius: 6px; padding: 3px 8px; font-size: 11px; color: var(--accent);
+}
+.tag-remove {
+  cursor: pointer; font-size: 13px; color: var(--muted);
+  transition: color .15s; line-height: 1;
+}
+.tag-remove:hover { color: var(--err); }
+
+.toolbar {
+  display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center;
+}
+.toolbar input, .toolbar select {
+  background: var(--bg); border: 1px solid var(--border);
+  border-radius: 8px; padding: 9px 12px; color: var(--text);
+  font-family: 'DM Sans', sans-serif; font-size: 13px;
+  outline: none; transition: border-color .2s;
+}
+.toolbar input:focus, .toolbar select:focus { border-color: var(--accent); }
+.toolbar input::placeholder { color: var(--muted); }
+.toolbar select option { background: var(--surface); color: var(--text); }
+.filter-input { flex: 1; min-width: 200px; }
+
+.table-wrap {
+  overflow-x: auto; margin-top: 14px;
+  border: 1px solid var(--border); border-radius: 10px;
+}
+table {
+  width: 100%; border-collapse: collapse;
+  font-size: 12px; white-space: nowrap;
+}
+thead th {
+  background: var(--surface2); color: var(--muted);
+  font-family: 'Syne', sans-serif; font-weight: 700;
+  font-size: 10px; text-transform: uppercase; letter-spacing: .06em;
+  padding: 10px 10px; text-align: left;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer; user-select: none;
+}
+thead th:hover { color: var(--accent); }
+tbody tr {
+  border-bottom: 1px solid rgba(30,58,82,.3);
+  transition: background .15s; cursor: pointer;
+}
+tbody tr:hover { background: rgba(46,107,138,.08); }
+tbody td { padding: 9px 10px; }
+td.mono { font-family: 'DM Mono', monospace; font-size: 11px; }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 6px;
+  font-size: 9px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .04em;
+}
+.badge-ok { background: rgba(39,174,96,.12); color: var(--ok); }
+.badge-accent { background: rgba(200,169,110,.12); color: var(--accent); }
+
+.btn {
+  padding: 9px 18px; border: none; border-radius: 8px; cursor: pointer;
+  font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600;
+  transition: all .2s; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn-accent { background: var(--accent); color: #0d1b2a; }
+.btn-accent:hover:not(:disabled) { background: var(--accent2); }
+.btn-info { background: var(--info); color: white; }
+.btn-info:hover:not(:disabled) { background: #3a8ab0; }
+.btn-ok { background: var(--ok); color: white; }
+.btn-ok:hover:not(:disabled) { background: #2ecc71; }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border); color: var(--muted);
+}
+.btn-outline:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn-sm { padding: 6px 12px; font-size: 11px; }
+.btn-err { background: var(--err); color: white; }
+.btn-err:hover:not(:disabled) { background: #c0392b; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.6); z-index: 200;
+  display: none; align-items: center; justify-content: center;
+}
+.modal-overlay.open { display: flex; }
+.modal {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 14px; padding: 24px; max-width: 700px; width: 95%;
+  max-height: 85vh; overflow-y: auto;
+}
+.modal-title {
+  font-family: 'Syne', sans-serif; font-weight: 800;
+  font-size: 16px; color: var(--accent); margin-bottom: 16px;
+}
+.modal-close {
+  float: right; background: none; border: none; color: var(--muted);
+  font-size: 20px; cursor: pointer; transition: color .2s;
+}
+.modal-close:hover { color: var(--err); }
+
+.detail-row {
+  display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px;
+}
+.detail-item { font-size: 12px; }
+.detail-item .label { color: var(--muted); font-size: 10px; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 2px; }
+.detail-item .value { color: var(--text); font-weight: 600; }
+
+.toast {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 20px; z-index: 9999;
+  font-size: 13px; box-shadow: 0 8px 32px rgba(0,0,0,.5);
+  display: none; max-width: 90%; text-align: center;
+}
+.toast.ok { border-color: var(--ok); color: var(--ok); }
+.toast.err { border-color: var(--err); color: var(--err); }
+.toast.warn { border-color: var(--warn); color: var(--warn); }
+
+.empty-state {
+  text-align: center; padding: 40px 20px; color: var(--muted); font-size: 13px;
+}
+
+.spinner {
+  display: inline-block; width: 16px; height: 16px;
+  border: 2px solid var(--border); border-top-color: var(--accent);
+  border-radius: 50%; animation: spin .6s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+@media (max-width: 768px) {
+  .form-row { flex-direction: column; }
+  .form-group { min-width: 100%; }
+  .kpi-row { grid-template-columns: repeat(2, 1fr); }
+  .header { flex-wrap: wrap; gap: 8px; }
+  table { font-size: 11px; }
+  .tabs { flex-direction: column; }
+  .tab-btn { text-align: left; }
+  .toolbar { flex-direction: column; }
+}
+
+.footer {
+  text-align: center; padding: 20px;
+  font-size: 10px; color: #1e3a52;
+  font-family: 'DM Mono', monospace;
+}
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="header-left">
+    <a href="app.html" class="back-link">&#8592; Menu</a>
+    <div class="header-icon">&#9888;</div>
+    <div>
+      <div class="header-title">DDS - Dialogo Diario de Seguranca</div>
+      <div class="header-sub">Registro e acompanhamento de DDS</div>
+    </div>
+  </div>
+  <div id="rh-user-chip"></div>
+</div>
+
+<!-- Main -->
+<div class="main">
+
+  <!-- KPI Row -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Total DDS Mes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-participantes">--</div>
+      <div class="kpi-label">Participantes Mes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-media">--</div>
+      <div class="kpi-label">Media Participantes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-cobertura">--</div>
+      <div class="kpi-label">Cobertura do Quadro</div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="novo">Novo DDS</button>
+    <button class="tab-btn" data-tab="historico">Historico</button>
+    <button class="tab-btn" data-tab="temas">Temas</button>
+  </div>
+
+  <!-- ============ TAB: NOVO DDS ============ -->
+  <div id="tab-novo" class="tab-pane active">
+    <div class="section">
+      <div class="section-title">Registrar Novo DDS</div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Data</label>
+          <input type="date" id="novo-data">
+        </div>
+        <div class="form-group">
+          <label>Responsavel</label>
+          <input type="text" id="novo-responsavel" placeholder="Nome do responsavel">
+        </div>
+        <div class="form-group">
+          <label>Setor</label>
+          <select id="novo-setor">
+            <option value="">Selecione o setor...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Tema</label>
+          <select id="novo-tema-select">
+            <option value="">Selecione um tema cadastrado...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ou digite um tema livre</label>
+          <input type="text" id="novo-tema-livre" placeholder="Tema personalizado...">
+        </div>
+        <div class="form-group" style="flex:0;min-width:120px;">
+          <label>Duracao (min)</label>
+          <input type="number" id="novo-duracao" value="15" min="1" max="120">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Participantes</label>
+          <div class="multi-select-wrap">
+            <input type="text" class="multi-select-input" id="novo-part-search" placeholder="Buscar colaboradores..." autocomplete="off">
+            <div class="multi-select-dropdown" id="novo-part-dropdown"></div>
+          </div>
+          <div class="selected-tags" id="novo-part-tags"></div>
+          <input type="hidden" id="novo-participantes-ids">
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group full">
+          <label>Observacoes</label>
+          <textarea id="novo-observacoes" placeholder="Observacoes adicionais..."></textarea>
+        </div>
+      </div>
+
+      <div style="margin-top:18px; display:flex; gap:10px;">
+        <button class="btn btn-ok" id="novo-salvar-btn">Salvar DDS</button>
+        <button class="btn btn-outline" id="novo-limpar-btn">Limpar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: HISTORICO ============ -->
+  <div id="tab-historico" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Historico de DDS</div>
+
+      <div class="toolbar">
+        <input type="month" id="hist-mes">
+        <select id="hist-setor-filter">
+          <option value="">Todos os setores</option>
+        </select>
+        <input type="text" class="filter-input" id="hist-search" placeholder="Buscar por tema ou responsavel...">
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Data</th>
+              <th>Responsavel</th>
+              <th>Setor</th>
+              <th>Tema</th>
+              <th>Participantes</th>
+              <th>Duracao</th>
+            </tr>
+          </thead>
+          <tbody id="hist-tbody"></tbody>
+        </table>
+      </div>
+      <div id="hist-empty" class="empty-state" style="display:none;">Nenhum DDS encontrado no periodo.</div>
+    </div>
+  </div>
+
+  <!-- ============ TAB: TEMAS ============ -->
+  <div id="tab-temas" class="tab-pane">
+    <div class="section">
+      <div class="section-title">Cadastro de Temas</div>
+
+      <div class="form-row" style="margin-bottom:16px;">
+        <div class="form-group">
+          <label>Nome do Tema</label>
+          <input type="text" id="tema-nome" placeholder="Nome do tema de DDS">
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <select id="tema-categoria">
+            <option value="">Sem categoria</option>
+            <option value="Seguranca">Seguranca</option>
+            <option value="Saude">Saude</option>
+            <option value="Emergencia">Emergencia</option>
+            <option value="Comportamental">Comportamental</option>
+            <option value="Organizacao">Organizacao</option>
+            <option value="Meio Ambiente">Meio Ambiente</option>
+          </select>
+        </div>
+        <div class="form-group" style="flex:0;min-width:auto;">
+          <label>&nbsp;</label>
+          <button class="btn btn-accent btn-sm" id="tema-add-btn">Adicionar</button>
+        </div>
+      </div>
+
+      <div class="table-wrap" style="margin-top:0;">
+        <table>
+          <thead>
+            <tr>
+              <th>Tema</th>
+              <th>Categoria</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="temas-tbody"></tbody>
+        </table>
+      </div>
+      <div id="temas-empty" class="empty-state" style="display:none;">Nenhum tema cadastrado.</div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Detalhe DDS -->
+<div class="modal-overlay" id="modal-detalhe">
+  <div class="modal">
+    <button class="modal-close" id="modal-close-btn">&times;</button>
+    <div class="modal-title">Detalhe do DDS</div>
+    <div id="modal-content"></div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Footer -->
+<div class="footer">Classic RH &mdash; DDS v2026.03</div>
+
+<script>
+// ============================================================
+//  STATE
+// ============================================================
+let colaboradores = [];
+let ddsList = [];
+let temas = [];
+let selectedParticipantes = [];
+let setores = [];
+
+// ============================================================
+//  INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await RHAuth.init();
+  if (!user) return;
+
+  // Auto-fill date and responsavel
+  document.getElementById('novo-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('novo-responsavel').value = user.user_metadata?.nome || user.email || '';
+
+  initTabs();
+  await loadAll();
+
+  // Event listeners
+  document.getElementById('novo-salvar-btn').addEventListener('click', salvarDDS);
+  document.getElementById('novo-limpar-btn').addEventListener('click', limparFormNovo);
+  document.getElementById('tema-add-btn').addEventListener('click', addTema);
+
+  document.getElementById('hist-mes').addEventListener('change', renderHistorico);
+  document.getElementById('hist-setor-filter').addEventListener('change', renderHistorico);
+  document.getElementById('hist-search').addEventListener('input', renderHistorico);
+
+  document.getElementById('modal-close-btn').addEventListener('click', closeModal);
+  document.getElementById('modal-detalhe').addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) closeModal();
+  });
+
+  initMultiSelect();
+
+  // Default historico month
+  const now = new Date();
+  document.getElementById('hist-mes').value = now.toISOString().slice(0, 7);
+});
+
+// ============================================================
+//  TABS
+// ============================================================
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    });
+  });
+}
+
+// ============================================================
+//  DATA LOADING
+// ============================================================
+async function loadAll() {
+  await Promise.all([loadColaboradores(), loadDDS(), loadTemas()]);
+  buildSetores();
+  populateSetorSelects();
+  populateTemaSelect();
+  renderKPIs();
+  renderHistorico();
+  renderTemas();
+}
+
+async function loadColaboradores() {
+  try {
+    const res = await API.get('rh_colaboradores?select=id,nome,cargo,setor,status&status=eq.ativo&order=nome');
+    colaboradores = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('[DDS] Erro ao carregar colaboradores:', e);
+    colaboradores = [];
+  }
+}
+
+async function loadDDS() {
+  try {
+    const res = await API.get('rh_dds?select=*&order=data.desc');
+    ddsList = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('[DDS] Erro ao carregar DDS:', e);
+    ddsList = [];
+  }
+}
+
+async function loadTemas() {
+  try {
+    const res = await API.get('rh_dds_temas?select=*&order=nome');
+    temas = res.ok ? res.data : [];
+  } catch (e) {
+    console.warn('[DDS] Erro ao carregar temas:', e);
+    temas = [];
+  }
+}
+
+// ============================================================
+//  HELPERS
+// ============================================================
+function toast(msg, type = 'ok') {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+  el.style.display = 'block';
+  setTimeout(() => { el.style.display = 'none'; }, 3500);
+}
+
+function fmtDate(d) {
+  if (!d) return '--';
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('pt-BR');
+}
+
+function buildSetores() {
+  const s = new Set();
+  colaboradores.forEach(c => { if (c.setor) s.add(c.setor); });
+  setores = [...s].sort();
+}
+
+function populateSetorSelects() {
+  const selects = [document.getElementById('novo-setor'), document.getElementById('hist-setor-filter')];
+  selects.forEach(sel => {
+    const first = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(first);
+    setores.forEach(s => {
+      const opt = document.createElement('option');
+      opt.value = s; opt.textContent = s;
+      sel.appendChild(opt);
+    });
+  });
+}
+
+function populateTemaSelect() {
+  const sel = document.getElementById('novo-tema-select');
+  sel.innerHTML = '<option value="">Selecione um tema cadastrado...</option>';
+  temas.filter(t => t.ativo !== false).forEach(t => {
+    const opt = document.createElement('option');
+    opt.value = t.nome; opt.textContent = t.nome + (t.categoria ? ' (' + t.categoria + ')' : '');
+    sel.appendChild(opt);
+  });
+}
+
+function getColabName(id) {
+  const c = colaboradores.find(x => x.id === id);
+  return c ? c.nome : '(desconhecido)';
+}
+
+function currentMonth() {
+  return new Date().toISOString().slice(0, 7);
+}
+
+// ============================================================
+//  MULTI-SELECT PARTICIPANTES
+// ============================================================
+function initMultiSelect() {
+  const input = document.getElementById('novo-part-search');
+  const dropdown = document.getElementById('novo-part-dropdown');
+
+  input.addEventListener('focus', () => renderDropdown());
+  input.addEventListener('input', () => renderDropdown());
+
+  document.addEventListener('click', (e) => {
+    if (!e.target.closest('.multi-select-wrap')) {
+      dropdown.classList.remove('open');
+    }
+  });
+}
+
+function renderDropdown() {
+  const input = document.getElementById('novo-part-search');
+  const dropdown = document.getElementById('novo-part-dropdown');
+  const query = input.value.toLowerCase().trim();
+
+  let filtered = colaboradores;
+  if (query) {
+    filtered = colaboradores.filter(c =>
+      c.nome.toLowerCase().includes(query) ||
+      (c.cargo && c.cargo.toLowerCase().includes(query))
+    );
+  }
+
+  dropdown.innerHTML = '';
+  filtered.slice(0, 50).forEach(c => {
+    const isSelected = selectedParticipantes.includes(c.id);
+    const item = document.createElement('div');
+    item.className = 'ms-item' + (isSelected ? ' selected' : '');
+    item.innerHTML = `
+      <div class="ms-check">${isSelected ? '&#10003;' : ''}</div>
+      <div>
+        <span style="color:var(--text);font-weight:600;">${c.nome}</span>
+        <span style="color:var(--muted);font-size:11px;margin-left:6px;">${c.cargo || ''}</span>
+      </div>
+    `;
+    item.addEventListener('click', () => toggleParticipante(c.id));
+    dropdown.appendChild(item);
+  });
+
+  dropdown.classList.add('open');
+}
+
+function toggleParticipante(id) {
+  const idx = selectedParticipantes.indexOf(id);
+  if (idx >= 0) {
+    selectedParticipantes.splice(idx, 1);
+  } else {
+    selectedParticipantes.push(id);
+  }
+  renderDropdown();
+  renderPartTags();
+}
+
+function renderPartTags() {
+  const container = document.getElementById('novo-part-tags');
+  container.innerHTML = '';
+  selectedParticipantes.forEach(id => {
+    const name = getColabName(id);
+    const tag = document.createElement('span');
+    tag.className = 'tag';
+    tag.innerHTML = `${name} <span class="tag-remove" data-id="${id}">&times;</span>`;
+    container.appendChild(tag);
+  });
+
+  container.querySelectorAll('.tag-remove').forEach(btn => {
+    btn.addEventListener('click', () => {
+      toggleParticipante(btn.dataset.id);
+    });
+  });
+}
+
+// ============================================================
+//  KPIs
+// ============================================================
+function renderKPIs() {
+  const mes = currentMonth();
+  const ddsMes = ddsList.filter(d => d.data && d.data.slice(0, 7) === mes);
+
+  const totalMes = ddsMes.length;
+  document.getElementById('kpi-total').textContent = totalMes;
+
+  // Unique participantes this month
+  const partSet = new Set();
+  ddsMes.forEach(d => {
+    const parts = Array.isArray(d.participantes) ? d.participantes : [];
+    parts.forEach(p => partSet.add(p));
+  });
+  document.getElementById('kpi-participantes').textContent = partSet.size;
+
+  // Average
+  const avg = totalMes > 0 ? (partSet.size / totalMes).toFixed(1) : '0';
+  document.getElementById('kpi-media').textContent = avg;
+
+  // Cobertura
+  const totalColabs = colaboradores.length;
+  const cobertura = totalColabs > 0 ? ((partSet.size / totalColabs) * 100).toFixed(0) + '%' : '0%';
+  document.getElementById('kpi-cobertura').textContent = cobertura;
+}
+
+// ============================================================
+//  NOVO DDS - SALVAR
+// ============================================================
+async function salvarDDS() {
+  const data = document.getElementById('novo-data').value;
+  const responsavel = document.getElementById('novo-responsavel').value.trim();
+  const setor = document.getElementById('novo-setor').value;
+  const temaSelect = document.getElementById('novo-tema-select').value;
+  const temaLivre = document.getElementById('novo-tema-livre').value.trim();
+  const tema = temaLivre || temaSelect;
+  const duracao = parseInt(document.getElementById('novo-duracao').value) || null;
+  const observacoes = document.getElementById('novo-observacoes').value.trim();
+
+  if (!data || !responsavel || !setor || !tema) {
+    toast('Preencha os campos obrigatorios: data, responsavel, setor e tema.', 'err');
+    return;
+  }
+
+  if (selectedParticipantes.length === 0) {
+    toast('Selecione ao menos um participante.', 'err');
+    return;
+  }
+
+  const btn = document.getElementById('novo-salvar-btn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Salvando...';
+
+  try {
+    const res = await API.post('rh_dds', {
+      data,
+      responsavel,
+      setor,
+      tema,
+      participantes: selectedParticipantes,
+      duracao_min: duracao,
+      observacoes: observacoes || null
+    });
+
+    if (!res.ok) { toast('Erro ao salvar DDS: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+
+    toast('DDS registrado com sucesso!');
+    limparFormNovo();
+    await loadDDS();
+    renderKPIs();
+    renderHistorico();
+  } catch (e) {
+    console.error('[DDS] Erro ao salvar:', e);
+    toast('Erro ao salvar DDS: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = 'Salvar DDS';
+  }
+}
+
+function limparFormNovo() {
+  document.getElementById('novo-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('novo-setor').value = '';
+  document.getElementById('novo-tema-select').value = '';
+  document.getElementById('novo-tema-livre').value = '';
+  document.getElementById('novo-duracao').value = '15';
+  document.getElementById('novo-observacoes').value = '';
+  selectedParticipantes = [];
+  document.getElementById('novo-part-tags').innerHTML = '';
+  document.getElementById('novo-part-search').value = '';
+}
+
+// ============================================================
+//  HISTORICO
+// ============================================================
+function renderHistorico() {
+  const mes = document.getElementById('hist-mes').value;
+  const setorFilter = document.getElementById('hist-setor-filter').value;
+  const search = document.getElementById('hist-search').value.toLowerCase().trim();
+
+  let filtered = ddsList;
+
+  if (mes) {
+    filtered = filtered.filter(d => d.data && d.data.slice(0, 7) === mes);
+  }
+  if (setorFilter) {
+    filtered = filtered.filter(d => d.setor === setorFilter);
+  }
+  if (search) {
+    filtered = filtered.filter(d =>
+      (d.tema && d.tema.toLowerCase().includes(search)) ||
+      (d.responsavel && d.responsavel.toLowerCase().includes(search))
+    );
+  }
+
+  const tbody = document.getElementById('hist-tbody');
+  const empty = document.getElementById('hist-empty');
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = filtered.map(d => {
+    const parts = Array.isArray(d.participantes) ? d.participantes : [];
+    return `<tr data-id="${d.id}">
+      <td class="mono">${fmtDate(d.data)}</td>
+      <td>${d.responsavel || '--'}</td>
+      <td>${d.setor || '--'}</td>
+      <td>${d.tema || '--'}</td>
+      <td style="text-align:center;"><span class="badge badge-accent">${parts.length}</span></td>
+      <td class="mono">${d.duracao_min ? d.duracao_min + ' min' : '--'}</td>
+    </tr>`;
+  }).join('');
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    tr.addEventListener('click', () => openDetalhe(tr.dataset.id));
+  });
+}
+
+// ============================================================
+//  MODAL DETALHE
+// ============================================================
+function openDetalhe(id) {
+  const dds = ddsList.find(d => d.id === id);
+  if (!dds) return;
+
+  const parts = Array.isArray(dds.participantes) ? dds.participantes : [];
+  const partNames = parts.map(pid => getColabName(pid));
+
+  const content = document.getElementById('modal-content');
+  content.innerHTML = `
+    <div class="detail-row">
+      <div class="detail-item"><div class="label">Data</div><div class="value">${fmtDate(dds.data)}</div></div>
+      <div class="detail-item"><div class="label">Responsavel</div><div class="value">${dds.responsavel || '--'}</div></div>
+      <div class="detail-item"><div class="label">Setor</div><div class="value">${dds.setor || '--'}</div></div>
+      <div class="detail-item"><div class="label">Duracao</div><div class="value">${dds.duracao_min ? dds.duracao_min + ' min' : '--'}</div></div>
+    </div>
+    <div class="detail-row">
+      <div class="detail-item"><div class="label">Tema</div><div class="value">${dds.tema || '--'}</div></div>
+    </div>
+    <div style="margin-top:16px;">
+      <div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Participantes (${parts.length})</div>
+      <div class="selected-tags">
+        ${partNames.map(n => `<span class="tag">${n}</span>`).join('')}
+      </div>
+    </div>
+    ${dds.observacoes ? `
+    <div style="margin-top:16px;">
+      <div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Observacoes</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.6;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:'DM Mono',monospace;">${dds.observacoes}</div>
+    </div>` : ''}
+  `;
+
+  document.getElementById('modal-detalhe').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modal-detalhe').classList.remove('open');
+}
+
+// ============================================================
+//  TEMAS CRUD
+// ============================================================
+function renderTemas() {
+  const tbody = document.getElementById('temas-tbody');
+  const empty = document.getElementById('temas-empty');
+
+  if (temas.length === 0) {
+    tbody.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+
+  empty.style.display = 'none';
+  tbody.innerHTML = temas.map(t => `
+    <tr>
+      <td style="font-weight:600;color:var(--text);">${t.nome}</td>
+      <td>${t.categoria || '--'}</td>
+      <td><span class="badge ${t.ativo !== false ? 'badge-ok' : ''}" style="${t.ativo === false ? 'background:rgba(93,127,149,.1);color:var(--muted);' : ''}">${t.ativo !== false ? 'Ativo' : 'Inativo'}</span></td>
+      <td>
+        <button class="btn btn-outline btn-sm" onclick="toggleTema('${t.id}')">${t.ativo !== false ? 'Desativar' : 'Ativar'}</button>
+        <button class="btn btn-err btn-sm" onclick="deleteTema('${t.id}')">Excluir</button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+async function addTema() {
+  const nome = document.getElementById('tema-nome').value.trim();
+  const categoria = document.getElementById('tema-categoria').value;
+
+  if (!nome) {
+    toast('Informe o nome do tema.', 'err');
+    return;
+  }
+
+  try {
+    const res = await API.post('rh_dds_temas', { nome, categoria: categoria || null });
+    if (!res.ok) { toast('Erro ao adicionar tema: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+    toast('Tema adicionado com sucesso!');
+    document.getElementById('tema-nome').value = '';
+    document.getElementById('tema-categoria').value = '';
+    await loadTemas();
+    populateTemaSelect();
+    renderTemas();
+  } catch (e) {
+    toast('Erro ao adicionar tema: ' + e.message, 'err');
+  }
+}
+
+async function toggleTema(id) {
+  const tema = temas.find(t => t.id === id);
+  if (!tema) return;
+
+  try {
+    const res = await API.patch('rh_dds_temas?id=eq.' + id, { ativo: !tema.ativo });
+    if (!res.ok) { toast('Erro ao atualizar tema: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+    toast('Tema atualizado!');
+    await loadTemas();
+    populateTemaSelect();
+    renderTemas();
+  } catch (e) {
+    toast('Erro ao atualizar tema: ' + e.message, 'err');
+  }
+}
+
+async function deleteTema(id) {
+  if (!confirm('Tem certeza que deseja excluir este tema?')) return;
+
+  try {
+    const res = await API.del('rh_dds_temas?id=eq.' + id);
+    if (!res.ok) { toast('Erro ao excluir tema: ' + (res.error || 'Erro desconhecido'), 'err'); return; }
+    toast('Tema excluido!');
+    await loadTemas();
+    populateTemaSelect();
+    renderTemas();
+  } catch (e) {
+    toast('Erro ao excluir tema: ' + e.message, 'err');
+  }
+}
+</script>
+
+</body>
+</html>

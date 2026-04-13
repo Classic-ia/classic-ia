@@ -1,0 +1,73 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO INTEGRAÇÃO — CONECTORES, FILA, ORQUESTRAÇÃO
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- Depende de: FUNDACAO_BANCO_v2.sql + MODULO_SST_v2.sql + MODULO_ETL_v2.sql
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- FLUXO COMPLETO DE INTEGRAÇÃO:
+--
+--   ┌──────────────────┐
+--   │  APIs Externas    │  Convenia · BuscaEPI · Atak · Secullum
+--   └────────┬─────────┘
+--            │ Edge Function chama APIs (bearer/api_key)
+--            ▼
+--   ┌──────────────────┐
+--   │  integ_fila       │  Cada registro da API → item na fila
+--   │  (retry+backoff)  │  pendente → processando → sucesso/retry/erro
+--   └────────┬─────────┘
+--            │ integ_processar_fila() — dispatch para staging
+--            ▼
+--   ┌──────────────────┐
+--   │  Staging (stg_*)  │  Dados brutos + hash + dedup
+--   └────────┬─────────┘
+--            │ etl_processar_*() — normalização + consolidação
+--            ▼
+--   ┌──────────────────┐
+--   │  Core (rh_/sst_)  │  Com histórico versionado
+--   └──────────────────┘
+--
+-- TABELAS ADICIONADAS (6):
+--   integ_conector          — config por API (URL, auth, rate limit, retry)
+--   integ_execucao          — log de cada rodada de sync
+--   integ_fila              — fila com retry + backoff exponencial
+--   stg_atak_centros_custo  — staging Atak CC
+--   stg_atak_estrutura      — staging Atak estrutura operacional
+--   stg_atak_financeiro     — staging Atak impacto financeiro
+--
+-- FUNCTIONS ADICIONADAS (5):
+--   integ_processar_fila()       — processa fila com retry+backoff
+--   integ_health_check()         — status de saúde dos conectores
+--   integ_convenia_readiness()   — prontidão para desligar Convenia
+--   etl_processar_atak_centros_custo() — staging Atak → core
+--
+-- VIEWS (2):
+--   vw_integ_epi_consumo_setor   — inteligência: consumo EPI por setor
+--   vw_integ_dashboard           — painel de integração
+--
+-- EDGE FUNCTION: integ-sync-cron
+--   Orquestra: fila → staging → core → heartbeat → health check
+--   Ativar via Supabase Cron: cada 15 minutos
+--
+-- CONECTORES SEED (4):
+--   convenia  (REST, bearer, 60min, incremental)
+--   buscaepi  (REST, api_key, 120min, incremental)
+--   atak      (REST, bearer, 360min, incremental)
+--   secullum  (arquivo, none, 1440min, full)
+--
+-- ESTRATÉGIA DE DESLIGAMENTO CONVENIA:
+--   integ_convenia_readiness() retorna JSONB com:
+--   - cobertura de identidade (% mapeados)
+--   - dados importados (afastamentos, férias, documentos)
+--   - erros pendentes
+--   - decisão: pronto/não pronto + riscos
+--   Critério: cobertura >= 95% + zero erros pendentes
+--
+-- EXEMPLOS:
+--   SELECT * FROM integ_health_check();
+--   SELECT integ_convenia_readiness();
+--   SELECT * FROM integ_processar_fila('convenia', 100);
+--   SELECT * FROM vw_integ_dashboard;
+--   SELECT * FROM vw_integ_epi_consumo_setor;
+--
+-- TOTAL DO PROJETO: 57 tabelas, 10 views, 31 RPCs, 1 edge function.
+-- ════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,501 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gestao de EPIs - Classic RH</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.epi-tabs{display:flex;gap:4px;overflow-x:auto;border-bottom:2px solid var(--border);margin-bottom:24px;padding-bottom:0}
+.epi-tabs button{background:none;border:none;border-bottom:2px solid transparent;margin-bottom:-2px;padding:10px 18px;font-size:13px;font-weight:500;color:var(--text-secondary);cursor:pointer;white-space:nowrap;font-family:inherit;transition:color .2s,border-color .2s}
+.epi-tabs button:hover{color:var(--text-primary)}
+.epi-tabs button.active{color:var(--primary);border-bottom-color:var(--primary);font-weight:600}
+.tp{display:none}.tp.active{display:block}
+.filter-row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;margin-bottom:20px}
+.filter-row label{font-size:12px;color:var(--text-secondary);display:block;margin-bottom:4px}
+.filter-row input,.filter-row select{min-width:140px;padding:7px 10px;border:1px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit;background:var(--bg-page);color:var(--text-primary)}
+.filter-row input[type="text"]{min-width:200px}
+.drill-row{cursor:pointer;transition:background .15s}.drill-row:hover{background:rgba(37,99,235,.04)}
+.drill-panel{background:var(--bg-page);border:1px solid var(--border);border-radius:8px;margin:0 16px 12px;padding:16px 20px}
+.drill-panel h4{font-size:13px;font-weight:600;margin:0 0 10px;color:var(--text-secondary)}
+.drill-panel .data-table{font-size:12px}
+.drill-panel .data-table th{font-size:11px}
+.setor-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px}
+.setor-card{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:20px;cursor:pointer;transition:border-color .2s,box-shadow .2s}
+.setor-card:hover{border-color:var(--primary);box-shadow:0 2px 12px rgba(37,99,235,.1)}
+.setor-card .sc-name{font-size:14px;font-weight:600;margin-bottom:8px}
+.setor-card .sc-row{display:flex;justify-content:space-between;font-size:13px;color:var(--text-secondary);margin-bottom:4px}
+.setor-card .sc-val{font-weight:600;color:var(--text-primary)}
+.tbl-footer{padding:10px 16px;font-size:12px;color:var(--text-secondary);border-top:1px solid var(--border)}
+@media(max-width:640px){.epi-tabs button{padding:8px 10px;font-size:12px}.filter-row{flex-direction:column}.filter-row input,.filter-row select{min-width:100%}}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+<!-- KPIs -->
+<div class="kpi-row mb-6">
+  <div class="kpi-card">
+    <div class="kpi-icon blue"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/><rect x="9" y="3" width="6" height="4" rx="1"/></svg></div>
+    <div class="kpi-value" id="kCatalogo"><span class="spinner"></span></div>
+    <div class="kpi-label">Catalogo Ativo</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon green"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+    <div class="kpi-value" id="kEntregas"><span class="spinner"></span></div>
+    <div class="kpi-label">Total Entregas</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon amber"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></div>
+    <div class="kpi-value" id="kEntregas12"><span class="spinner"></span></div>
+    <div class="kpi-label">Entregas 12m</div>
+  </div>
+  <div class="kpi-card">
+    <div class="kpi-icon red"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="kpi-value" id="kFuncEpi"><span class="spinner"></span></div>
+    <div class="kpi-label">Funcionarios com EPI</div>
+  </div>
+</div>
+
+<!-- Tabs -->
+<div class="epi-tabs" id="tabBar">
+  <button class="active" data-t="catalogo">Catalogo</button>
+  <button data-t="entregas">Entregas Recentes</button>
+  <button data-t="funcionario">Por Funcionario</button>
+  <button data-t="setor">Por Setor</button>
+</div>
+
+<!-- TAB CATALOGO -->
+<div class="tp active" id="tp-catalogo">
+  <div class="filter-row">
+    <div><label>Buscar</label><input type="text" id="fCatBusca" placeholder="Descricao ou CA..." oninput="renderCatalogo()"></div>
+    <div><label>Categoria</label><select id="fCatCategoria" onchange="renderCatalogo()"><option value="">Todas</option></select></div>
+    <div><label>Status</label><select id="fCatAtivo" onchange="renderCatalogo()"><option value="">Todos</option><option value="true">Ativos</option><option value="false">Inativos</option></select></div>
+  </div>
+  <div class="card">
+    <div class="data-table-wrapper"><table class="data-table"><thead><tr>
+      <th>Descricao</th><th>CA</th><th>Validade CA</th><th>Fabricante</th><th>Categoria</th><th>Status</th>
+    </tr></thead><tbody id="tbCatalogo"></tbody></table></div>
+    <div class="tbl-footer" id="ftCatalogo"></div>
+  </div>
+</div>
+
+<!-- TAB ENTREGAS -->
+<div class="tp" id="tp-entregas">
+  <div class="filter-row">
+    <div><label>Buscar</label><input type="text" id="fEntBusca" placeholder="EPI ou funcionario..." oninput="renderEntregas()"></div>
+    <div><label>De</label><input type="date" id="fEntDe" onchange="renderEntregas()"></div>
+    <div><label>Ate</label><input type="date" id="fEntAte" onchange="renderEntregas()"></div>
+  </div>
+  <div class="card">
+    <div class="data-table-wrapper"><table class="data-table"><thead><tr>
+      <th>Data</th><th>EPI</th><th>CA</th><th>Funcionario</th><th>Setor</th><th style="text-align:right">Qtd</th><th>Motivo</th>
+    </tr></thead><tbody id="tbEntregas"></tbody></table></div>
+    <div class="tbl-footer" id="ftEntregas"></div>
+  </div>
+</div>
+
+<!-- TAB POR FUNCIONARIO -->
+<div class="tp" id="tp-funcionario">
+  <div class="filter-row">
+    <div><label>Buscar</label><input type="text" id="fFuncBusca" placeholder="Nome do funcionario..." oninput="renderFuncionarios()"></div>
+    <div><label>Setor</label><select id="fFuncSetor" onchange="renderFuncionarios()"><option value="">Todos</option></select></div>
+  </div>
+  <div class="card">
+    <div class="data-table-wrapper"><table class="data-table"><thead><tr>
+      <th>Funcionario</th><th>Setor</th><th style="text-align:right">Total EPIs</th><th>Ultima Entrega</th>
+    </tr></thead><tbody id="tbFuncionarios"></tbody></table></div>
+    <div class="tbl-footer" id="ftFuncionarios"></div>
+  </div>
+</div>
+
+<!-- TAB POR SETOR -->
+<div class="tp" id="tp-setor">
+  <div id="setorGrid" class="setor-grid"></div>
+</div>
+
+</div>
+
+<script>
+Shell.init({ page: 'epis', title: 'Gestao de EPIs' });
+
+const esc = s => API.esc(s);
+const fmtD = d => d ? API.fmtData(d) : '--';
+
+/* ===== State ===== */
+let catalogo = [], entregas = [], entregasAll = [], funcionarios = [], setores = [];
+let catMap = {}, funcMap = {}, setorMap = {};
+let funcAgg = [];
+let expandedFuncId = null;
+let totalEntregasServer = 0;
+let totalFuncComEpiServer = 0;
+let entregas12mServer = 0;
+
+/* ===== Tabs ===== */
+document.getElementById('tabBar').addEventListener('click', e => {
+  const btn = e.target.closest('button[data-t]');
+  if (!btn) return;
+  document.querySelectorAll('#tabBar button').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  document.querySelectorAll('.tp').forEach(p => p.classList.remove('active'));
+  document.getElementById('tp-' + btn.dataset.t).classList.add('active');
+});
+
+function switchToTab(t) {
+  document.querySelectorAll('#tabBar button').forEach(b => {
+    b.classList.toggle('active', b.dataset.t === t);
+  });
+  document.querySelectorAll('.tp').forEach(p => p.classList.toggle('active', p.id === 'tp-' + t));
+}
+
+/* ===== Load ===== */
+(async function init() {
+  try {
+    /* BUG FIX #1 & #2: Use server-side count via Prefer: count=exact header.
+       API.get with head:true returns count from content-range header.
+       We also load a larger dataset (limit=10000) for aggregation to fix
+       the "49 instead of 491" bug. For truly accurate KPIs, we use
+       separate count queries with the Prefer header. */
+
+    const cutoff12m = new Date();
+    cutoff12m.setFullYear(cutoff12m.getFullYear() - 1);
+    const cutoffStr = cutoff12m.toISOString().slice(0, 10);
+
+    const [rCat, rEnt, rEntAll, rFunc, rSet, rCntTotal, rCnt12m, rCntFunc] = await Promise.all([
+      /* Catalogo - small table, load all */
+      API.get('sst_catalogo_epi?select=id,descricao,ca_numero,ca_validade,categoria,fabricante,ativo&order=descricao'),
+      /* Entregas recentes for display (last 200) */
+      API.get('sst_epi_entrega?select=id,funcionario_id,catalogo_epi_id,data_entrega,quantidade,motivo_entrega&order=data_entrega.desc&limit=200'),
+      /* All entregas for aggregation - large limit to capture all */
+      API.get('sst_epi_entrega?select=funcionario_id,data_entrega,quantidade&order=data_entrega.desc&limit=30000'),
+      /* Funcionarios ativos */
+      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,experiencia,ferias)&limit=2000'),
+      /* Setores */
+      API.get('rh_setores?select=id,nome'),
+      /* Server-side count: Total entregas (select minimal, use header count) */
+      API.get('sst_epi_entrega?select=id&limit=1', { head: true }),
+      /* Server-side count: Entregas last 12 months */
+      API.get('sst_epi_entrega?select=id&data_entrega=gte.' + cutoffStr + '&limit=1', { head: true }),
+      /* Server-side count: Distinct funcionarios with EPI */
+      API.get('sst_epi_entrega?select=funcionario_id&limit=1', { head: true })
+    ]);
+
+    catalogo = rCat.ok ? rCat.data : [];
+    entregas = rEnt.ok ? rEnt.data : [];
+    entregasAll = rEntAll.ok ? rEntAll.data : [];
+    funcionarios = rFunc.ok ? rFunc.data : [];
+    setores = rSet.ok ? rSet.data : [];
+
+    /* Extract server counts from headers when available */
+    totalEntregasServer = (rCntTotal.ok && rCntTotal.count != null) ? rCntTotal.count : 0;
+    entregas12mServer = (rCnt12m.ok && rCnt12m.count != null) ? rCnt12m.count : 0;
+    totalFuncComEpiServer = (rCntFunc.ok && rCntFunc.count != null) ? rCntFunc.count : 0;
+
+    /* Build lookup maps */
+    catalogo.forEach(c => { catMap[c.id] = c; });
+    funcionarios.forEach(f => { funcMap[f.id] = f; });
+    setores.forEach(s => { setorMap[s.id] = s; });
+
+    buildAggregations();
+    populateFilters();
+    renderKPIs();
+    renderCatalogo();
+    renderEntregas();
+    renderFuncionarios();
+    renderSetores();
+  } catch (err) {
+    console.error('Erro ao carregar dados de EPIs:', err);
+  }
+})();
+
+/* ===== Aggregations ===== */
+function buildAggregations() {
+  const byFunc = {};
+  entregasAll.forEach(e => {
+    if (!e.funcionario_id) return;
+    if (!byFunc[e.funcionario_id]) {
+      byFunc[e.funcionario_id] = { id: e.funcionario_id, total: 0, ultima: null };
+    }
+    const f = byFunc[e.funcionario_id];
+    f.total += (e.quantidade || 1);
+    if (!f.ultima || e.data_entrega > f.ultima) f.ultima = e.data_entrega;
+  });
+  funcAgg = Object.values(byFunc).sort((a, b) => b.total - a.total);
+}
+
+/* ===== Filters ===== */
+function populateFilters() {
+  const cats = [...new Set(catalogo.map(c => c.categoria).filter(Boolean))].sort();
+  const selCat = document.getElementById('fCatCategoria');
+  cats.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c; o.textContent = c;
+    selCat.appendChild(o);
+  });
+
+  const selSet = document.getElementById('fFuncSetor');
+  setores.slice().sort((a, b) => (a.nome || '').localeCompare(b.nome || '')).forEach(s => {
+    const o = document.createElement('option');
+    o.value = s.id; o.textContent = s.nome;
+    selSet.appendChild(o);
+  });
+}
+
+/* ===== KPIs ===== */
+function renderKPIs() {
+  /* BUG FIX #1: Use server-side counts when available, client data as fallback */
+  const ativos = catalogo.filter(c => c.ativo === true || c.ativo === 'true').length;
+  document.getElementById('kCatalogo').textContent = API.fmtNum(ativos);
+
+  /* Total Entregas - prefer server count, fallback to loaded data length */
+  const totalEnt = totalEntregasServer || entregasAll.length;
+  document.getElementById('kEntregas').textContent = API.fmtNum(totalEnt);
+
+  /* Entregas last 12 months - prefer server count, fallback to client filter */
+  if (entregas12mServer) {
+    document.getElementById('kEntregas12').textContent = API.fmtNum(entregas12mServer);
+  } else {
+    const cutoff = new Date();
+    cutoff.setFullYear(cutoff.getFullYear() - 1);
+    const cutoffStr = cutoff.toISOString().slice(0, 10);
+    const ent12 = entregasAll.filter(e => e.data_entrega >= cutoffStr).length;
+    document.getElementById('kEntregas12').textContent = API.fmtNum(ent12);
+  }
+
+  /* Distinct funcionarios - prefer server count, fallback to client distinct */
+  if (totalFuncComEpiServer) {
+    document.getElementById('kFuncEpi').textContent = API.fmtNum(totalFuncComEpiServer);
+  } else {
+    const distinctFunc = new Set(entregasAll.map(e => e.funcionario_id).filter(Boolean));
+    document.getElementById('kFuncEpi').textContent = API.fmtNum(distinctFunc.size);
+  }
+}
+
+/* ===== Tab 1: Catalogo ===== */
+function renderCatalogo() {
+  const busca = (document.getElementById('fCatBusca').value || '').toLowerCase();
+  const categ = document.getElementById('fCatCategoria').value;
+  const ativo = document.getElementById('fCatAtivo').value;
+  const hoje = new Date().toISOString().slice(0, 10);
+
+  const filtered = catalogo.filter(c => {
+    if (busca && !(c.descricao || '').toLowerCase().includes(busca) && !(c.ca_numero || '').toLowerCase().includes(busca)) return false;
+    if (categ && c.categoria !== categ) return false;
+    if (ativo === 'true' && c.ativo !== true && c.ativo !== 'true') return false;
+    if (ativo === 'false' && c.ativo !== false && c.ativo !== 'false') return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tbCatalogo');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="6" class="text-muted" style="text-align:center;padding:24px">Nenhum item encontrado</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(c => {
+      const isAtivo = c.ativo === true || c.ativo === 'true';
+      const vencido = c.ca_validade && c.ca_validade < hoje;
+      const validBadge = c.ca_validade
+        ? (vencido
+          ? '<span class="badge badge-danger">Vencido ' + esc(fmtD(c.ca_validade)) + '</span>'
+          : esc(fmtD(c.ca_validade)))
+        : '--';
+      const catBadge = c.categoria
+        ? '<span class="badge badge-info">' + esc(c.categoria) + '</span>'
+        : '--';
+      const statusBadge = isAtivo
+        ? '<span class="badge badge-success">Ativo</span>'
+        : '<span class="badge badge-gray">Inativo</span>';
+      return '<tr>'
+        + '<td>' + esc(c.descricao || '--') + '</td>'
+        + '<td>' + esc(c.ca_numero || '--') + '</td>'
+        + '<td>' + validBadge + '</td>'
+        + '<td>' + esc(c.fabricante || '--') + '</td>'
+        + '<td>' + catBadge + '</td>'
+        + '<td>' + statusBadge + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+  document.getElementById('ftCatalogo').textContent = filtered.length + ' de ' + catalogo.length + ' itens';
+}
+
+/* ===== Tab 2: Entregas Recentes ===== */
+function renderEntregas() {
+  const busca = (document.getElementById('fEntBusca').value || '').toLowerCase();
+  const de = document.getElementById('fEntDe').value;
+  const ate = document.getElementById('fEntAte').value;
+
+  const filtered = entregas.filter(e => {
+    if (de && e.data_entrega < de) return false;
+    if (ate && e.data_entrega > ate) return false;
+    if (busca) {
+      const cat = catMap[e.catalogo_epi_id];
+      const func = funcMap[e.funcionario_id];
+      const epiName = (cat ? cat.descricao : '').toLowerCase();
+      const funcName = (func ? func.nome_completo : '').toLowerCase();
+      if (!epiName.includes(busca) && !funcName.includes(busca)) return false;
+    }
+    return true;
+  });
+
+  const tbody = document.getElementById('tbEntregas');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="7" class="text-muted" style="text-align:center;padding:24px">Nenhuma entrega encontrada</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(e => {
+      const cat = catMap[e.catalogo_epi_id] || {};
+      const func = funcMap[e.funcionario_id] || {};
+      const setor = func.setor_id ? setorMap[func.setor_id] : null;
+      return '<tr>'
+        + '<td>' + esc(fmtD(e.data_entrega)) + '</td>'
+        + '<td>' + esc(cat.descricao || '--') + '</td>'
+        + '<td>' + esc(cat.ca_numero || '--') + '</td>'
+        + '<td>' + esc(func.nome_completo || '--') + '</td>'
+        + '<td>' + esc(setor ? setor.nome : '--') + '</td>'
+        + '<td style="text-align:right">' + esc(String(e.quantidade || 1)) + '</td>'
+        + '<td>' + esc(e.motivo_entrega || '--') + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+  document.getElementById('ftEntregas').textContent = filtered.length + ' entregas' + (entregas.length >= 200 ? ' (ultimas 200)' : '');
+}
+
+/* ===== Tab 3: Por Funcionario (with drill-down) ===== */
+/* BUG FIX #3: Drill-down now loads deliveries on-demand via API */
+function renderFuncionarios() {
+  const busca = (document.getElementById('fFuncBusca').value || '').toLowerCase();
+  const setorId = document.getElementById('fFuncSetor').value;
+  expandedFuncId = null;
+
+  const filtered = funcAgg.filter(a => {
+    const func = funcMap[a.id];
+    if (!func) return false;
+    if (busca && !(func.nome_completo || '').toLowerCase().includes(busca)) return false;
+    if (setorId && func.setor_id !== setorId) return false;
+    return true;
+  });
+
+  const tbody = document.getElementById('tbFuncionarios');
+  if (!filtered.length) {
+    tbody.innerHTML = '<tr><td colspan="4" class="text-muted" style="text-align:center;padding:24px">Nenhum funcionario encontrado</td></tr>';
+  } else {
+    tbody.innerHTML = filtered.map(a => {
+      const func = funcMap[a.id] || {};
+      const setor = func.setor_id ? setorMap[func.setor_id] : null;
+      return '<tr class="drill-row" data-fid="' + esc(a.id) + '" onclick="toggleDrill(this)">'
+        + '<td style="color:var(--primary);font-weight:500;cursor:pointer">' + esc(func.nome_completo || '--') + '</td>'
+        + '<td>' + esc(setor ? setor.nome : '--') + '</td>'
+        + '<td style="text-align:right">' + API.fmtNum(a.total) + '</td>'
+        + '<td>' + esc(fmtD(a.ultima)) + '</td>'
+        + '</tr>';
+    }).join('');
+  }
+  document.getElementById('ftFuncionarios').textContent = filtered.length + ' funcionarios';
+}
+
+async function toggleDrill(tr) {
+  const fid = tr.dataset.fid;
+  const existing = tr.nextElementSibling;
+
+  /* If already expanded, collapse */
+  if (existing && existing.classList.contains('drill-detail-row')) {
+    existing.remove();
+    expandedFuncId = null;
+    return;
+  }
+
+  /* Close any other open drill-down */
+  document.querySelectorAll('.drill-detail-row').forEach(r => r.remove());
+  expandedFuncId = fid;
+
+  /* Create placeholder row with spinner */
+  const detailRow = document.createElement('tr');
+  detailRow.classList.add('drill-detail-row');
+  detailRow.innerHTML = '<td colspan="4"><div class="drill-panel"><span class="spinner"></span> Carregando entregas...</div></td>';
+  tr.after(detailRow);
+
+  /* BUG FIX #3: Load all deliveries for this specific funcionario on demand */
+  const res = await API.get(
+    'sst_epi_entrega?select=id,catalogo_epi_id,data_entrega,quantidade,motivo_entrega'
+    + '&funcionario_id=eq.' + encodeURIComponent(fid)
+    + '&order=data_entrega.desc'
+  );
+
+  if (!res.ok || !res.data.length) {
+    detailRow.innerHTML = '<td colspan="4"><div class="drill-panel">'
+      + '<p class="text-muted" style="text-align:center;padding:12px 0">Nenhuma entrega registrada.</p>'
+      + '</div></td>';
+    return;
+  }
+
+  const rows = res.data.map(e => {
+    const cat = catMap[e.catalogo_epi_id] || {};
+    return '<tr>'
+      + '<td>' + esc(fmtD(e.data_entrega)) + '</td>'
+      + '<td>' + esc(cat.descricao || '--') + '</td>'
+      + '<td>' + esc(cat.ca_numero || '--') + '</td>'
+      + '<td style="text-align:right">' + esc(String(e.quantidade || 1)) + '</td>'
+      + '<td>' + esc(e.motivo_entrega || '--') + '</td>'
+      + '</tr>';
+  }).join('');
+
+  const func = funcMap[fid] || {};
+  detailRow.innerHTML = '<td colspan="4"><div class="drill-panel">'
+    + '<h4>Entregas de ' + esc(func.nome_completo || '--') + ' (' + res.data.length + ' registros)</h4>'
+    + '<div class="data-table-wrapper"><table class="data-table"><thead><tr>'
+    + '<th>Data</th><th>EPI</th><th>CA</th><th style="text-align:right">Qtd</th><th>Motivo</th>'
+    + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + '</div></td>';
+}
+
+/* ===== Tab 4: Por Setor ===== */
+function renderSetores() {
+  const bySetor = {};
+  funcAgg.forEach(a => {
+    const func = funcMap[a.id];
+    if (!func || !func.setor_id) return;
+    if (!bySetor[func.setor_id]) bySetor[func.setor_id] = { total: 0, funcs: new Set() };
+    bySetor[func.setor_id].total += a.total;
+    bySetor[func.setor_id].funcs.add(a.id);
+  });
+
+  const items = setores
+    .map(s => ({
+      id: s.id,
+      nome: s.nome,
+      total: (bySetor[s.id] || {}).total || 0,
+      nfunc: bySetor[s.id] ? bySetor[s.id].funcs.size : 0
+    }))
+    .filter(s => s.total > 0)
+    .sort((a, b) => b.total - a.total);
+
+  const grid = document.getElementById('setorGrid');
+  if (!items.length) {
+    grid.innerHTML = '<p class="text-muted" style="text-align:center;padding:40px">Nenhum dado de setor encontrado.</p>';
+    return;
+  }
+
+  grid.innerHTML = items.map(s =>
+    '<div class="setor-card" onclick="drillSetor(\'' + esc(s.id) + '\')">'
+    + '<div class="sc-name">' + esc(s.nome) + '</div>'
+    + '<div class="sc-row"><span>Total EPIs</span><span class="sc-val">' + API.fmtNum(s.total) + '</span></div>'
+    + '<div class="sc-row"><span>Funcionarios</span><span class="sc-val">' + s.nfunc + '</span></div>'
+    + '</div>'
+  ).join('');
+}
+
+function drillSetor(setorId) {
+  document.getElementById('fFuncSetor').value = setorId;
+  switchToTab('funcionario');
+  renderFuncionarios();
+}
+</script>
+</body>
+</html>

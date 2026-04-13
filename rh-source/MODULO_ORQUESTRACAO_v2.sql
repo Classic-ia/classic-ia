@@ -1,0 +1,81 @@
+-- ════════════════════════════════════════════════════════════════════════════
+-- MÓDULO ORQUESTRAÇÃO — AUTOMAÇÃO OPERACIONAL
+-- Classic / APAC · Supabase (PostgreSQL 17)
+-- ════════════════════════════════════════════════════════════════════════════
+--
+-- ARQUITETURA:
+--
+--   ┌─ orch-cron-master (Edge Function, cada 5min) ─┐
+--   │                                                │
+--   │  orch_processar_jobs(10)                       │
+--   │    ↓ FOR UPDATE SKIP LOCKED                    │
+--   │  ┌──────────────────────────────┐              │
+--   │  │ orch_job (fila central)      │              │
+--   │  │ 12 jobs agendados padrão     │              │
+--   │  │ prioridade 1-10              │              │
+--   │  │ retry backoff exponencial    │              │
+--   │  └──────────┬───────────────────┘              │
+--   │             │                                  │
+--   │  ┌──────────▼──────────┐                       │
+--   │  │ orch_job_log        │ log imutável          │
+--   │  └─────────────────────┘                       │
+--   │                                                │
+--   │  orch_gerar_alertas_automaticos()              │
+--   │    ↓                                           │
+--   │  ┌──────────────────────┐  ┌────────────────┐  │
+--   │  │ orch_alerta          │→ │ orch_tarefa    │  │
+--   │  │ (com dedup)          │  │ (auto-gerada)  │  │
+--   │  └──────────────────────┘  └────────────────┘  │
+--   └────────────────────────────────────────────────┘
+--
+-- TABELAS (4):
+--   orch_job          — fila central de jobs (12 padrão seed)
+--   orch_job_log      — log imutável de execuções
+--   orch_alerta       — alertas automáticos com dedup
+--   orch_tarefa       — tarefas operacionais auto-geradas
+--
+-- FUNCTIONS (4):
+--   orch_processar_jobs(limite)        — processador com SKIP LOCKED + retry
+--   orch_reagendar_job(id)             — reprocessar jobs mortos
+--   orch_gerar_alertas_automaticos()   — gera alertas + tarefas
+--   orch_dashboard()                   — JSONB: jobs, alertas, tarefas, performance
+--
+-- VIEWS (3):
+--   vw_orch_jobs              — jobs com próximo disparo
+--   vw_orch_alertas_abertos   — alertas por severidade
+--   vw_orch_tarefas_pendentes — tarefas com urgência calculada
+--
+-- EDGE FUNCTIONS (3 total):
+--   orch-cron-master       — cron master (cada 5min)
+--   integ-convenia-proxy   — proxy API Convenia
+--   integ-sync-cron        — sync antigo (backup)
+--
+-- JOBS AGENDADOS (12):
+--   sync_convenia         1h    prio 3
+--   sync_buscaepi         2h    prio 4
+--   sync_atak             6h    prio 5
+--   processar_fila_integ  15min prio 2
+--   processar_staging     1h    prio 3
+--   reconciliar           1h    prio 4
+--   verificar_pendencias  diário prio 5
+--   verificar_risco_sst   diário prio 3
+--   gerar_alertas         diário prio 2
+--   consolidar_analitico  diário prio 6
+--   health_check          5min  prio 1
+--   limpar_staging_antigo semanal prio 7
+--
+-- ALERTAS AUTOMÁTICOS:
+--   conector_atrasado      → tarefa para admin
+--   job_morto              → tarefa urgente para admin
+--   aso_vencido            → tarefa urgente para RH
+--   epi_faltante           → tarefa alta para RH
+--   treinamento_vencido    → tarefa alta para RH
+--   conflitos_abertos      → tarefa média para RH
+--
+-- RETRY:
+--   Backoff exponencial: delay × 2^tentativa
+--   Default: 60s → 120s → 240s (3 tentativas)
+--   Job morto após max_tentativas → alerta critico + tarefa urgente
+--
+-- TOTAL PROJETO: 65 tabelas, 15 views, 42 RPCs, 3 edge functions.
+-- ════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Central de Notificacoes - Classic RH &amp; SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<style>
+  .sidebar-item-icon svg {
+    width: 18px;
+    height: 18px;
+    stroke: currentColor;
+    fill: none;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  /* Notification cards */
+  .notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .notif-card {
+    display: flex;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: all var(--transition-fast);
+    cursor: pointer;
+    box-shadow: var(--shadow-xs);
+  }
+  .notif-card:hover {
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary-200);
+  }
+  .notif-card.notif-lida {
+    opacity: 0.6;
+    background: var(--surface-hover);
+  }
+
+  .notif-bar {
+    width: 5px;
+    flex-shrink: 0;
+  }
+  .notif-bar.critica { background: var(--danger); }
+  .notif-bar.alta { background: #F97316; }
+  .notif-bar.media { background: var(--warning); }
+  .notif-bar.baixa { background: var(--primary); }
+
+  .notif-body {
+    flex: 1;
+    padding: var(--space-4) var(--space-5);
+    min-width: 0;
+  }
+
+  .notif-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-1);
+  }
+
+  .notif-title {
+    font-size: var(--text-base);
+    font-weight: var(--weight-semibold);
+    color: var(--text);
+    line-height: var(--leading-tight);
+  }
+
+  .notif-badge-crit {
+    flex-shrink: 0;
+  }
+
+  .notif-desc {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+    line-height: var(--leading-normal);
+    margin-bottom: var(--space-2);
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .notif-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    flex-wrap: wrap;
+  }
+
+  .notif-time {
+    font-size: var(--text-xs);
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+  }
+
+  .notif-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+  }
+
+  .btn-mark-read {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--text-xs);
+    font-weight: var(--weight-medium);
+    color: var(--primary);
+    background: var(--primary-50);
+    border: 1px solid var(--primary-200);
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    font-family: var(--font-family);
+    transition: all var(--transition-fast);
+  }
+  .btn-mark-read:hover {
+    background: var(--primary-100);
+    border-color: var(--primary);
+  }
+
+  /* Filter tabs override for clickable style */
+  .filter-tabs {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: var(--space-5);
+    overflow-x: auto;
+  }
+  .filter-tab {
+    padding: var(--space-3) var(--space-4);
+    font-size: var(--text-sm);
+    font-weight: var(--weight-medium);
+    color: var(--text-secondary);
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all var(--transition-fast);
+    background: none;
+    border-top: none;
+    border-left: none;
+    border-right: none;
+    font-family: var(--font-family);
+  }
+  .filter-tab:hover { color: var(--text); }
+  .filter-tab.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+    font-weight: var(--weight-semibold);
+  }
+
+  .mark-all-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+    gap: var(--space-3);
+  }
+
+  .notif-count-label {
+    font-size: var(--text-sm);
+    color: var(--text-secondary);
+  }
+
+  @media print {
+    .mark-all-bar, .notif-actions, .filter-tabs { display: none !important; }
+  }
+</style>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<!-- Mobile sidebar overlay -->
+<div class="sidebar-mobile-overlay" id="sidebarOverlay"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <img src="logo-classic-icon.jpg" alt="Classic Couros">
+    <span class="sidebar-brand-text">Classic RH</span>
+  </div>
+
+  <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="15 18 9 12 15 6"/></svg>
+  </button>
+
+  <nav class="sidebar-nav" id="sidebarNav">
+    <!-- INICIO -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Inicio</div>
+      <a href="app.html" class="sidebar-item" data-page="app">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+        <span class="sidebar-item-label">Dashboard</span>
+      </a>
+    </div>
+
+    <!-- PESSOAS -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Pessoas</div>
+      <a href="colaboradores.html" class="sidebar-item" data-page="colaboradores">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></span>
+        <span class="sidebar-item-label">Colaboradores</span>
+      </a>
+      <a href="recrutamento_selecao.html" class="sidebar-item" data-page="recrutamento_selecao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+        <span class="sidebar-item-label">Admissoes</span>
+      </a>
+      <a href="desligamentos_turnover.html" class="sidebar-item" data-page="desligamentos_turnover">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="18" y1="8" x2="23" y2="13"/><line x1="23" y1="8" x2="18" y2="13"/></svg></span>
+        <span class="sidebar-item-label">Desligamentos</span>
+      </a>
+      <a href="ferias.html" class="sidebar-item" data-page="ferias">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg></span>
+        <span class="sidebar-item-label">Ferias</span>
+      </a>
+    </div>
+
+    <!-- PROCESSOS -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Processos</div>
+      <a href="ocorrencias.html" class="sidebar-item" data-page="ocorrencias">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Processos RH</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Contratos Experiencia</span>
+      </a>
+    </div>
+
+    <!-- SST -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">SST</div>
+      <a href="asos.html" class="sidebar-item" data-page="asos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg></span>
+        <span class="sidebar-item-label">ASOs</span>
+      </a>
+      <a href="treinamentos.html" class="sidebar-item" data-page="treinamentos">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></svg></span>
+        <span class="sidebar-item-label">Treinamentos</span>
+      </a>
+      <a href="motor_v2.html" class="sidebar-item" data-page="motor_v2">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+        <span class="sidebar-item-label">EPIs</span>
+      </a>
+      <a href="acidentes.html" class="sidebar-item" data-page="acidentes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></span>
+        <span class="sidebar-item-label">Acidentes</span>
+      </a>
+    </div>
+
+    <!-- OPERACIONAL -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Operacional</div>
+      <a href="importar_secullum.html" class="sidebar-item" data-page="importar_secullum">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></span>
+        <span class="sidebar-item-label">Ponto</span>
+      </a>
+      <a href="apuracao.html" class="sidebar-item" data-page="apuracao_mensal">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg></span>
+        <span class="sidebar-item-label">Apuracao</span>
+      </a>
+      <a href="beneficios.html" class="sidebar-item" data-page="beneficios">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 00-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 00-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 000-7.78z"/></svg></span>
+        <span class="sidebar-item-label">Beneficios</span>
+      </a>
+    </div>
+
+    <!-- GESTAO -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Gestao</div>
+      <a href="alertas_rh.html" class="sidebar-item" data-page="alertas_rh">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg></span>
+        <span class="sidebar-item-label">Pendencias</span>
+      </a>
+      <a href="notificacoes.html" class="sidebar-item active" data-page="notificacoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/><line x1="1" y1="1" x2="23" y2="23"/></svg></span>
+        <span class="sidebar-item-label">Notificacoes</span>
+      </a>
+      <a href="dashboard_gerencial.html" class="sidebar-item" data-page="dashboard_gerencial">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></span>
+        <span class="sidebar-item-label">Dashboard Executivo</span>
+      </a>
+    </div>
+
+    <!-- SISTEMA -->
+    <div class="sidebar-group">
+      <div class="sidebar-group-label">Sistema</div>
+      <a href="integracoes.html" class="sidebar-item" data-page="integracoes">
+        <span class="sidebar-item-icon"><svg viewBox="0 0 24 24"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg></span>
+        <span class="sidebar-item-label">Integracoes</span>
+      </a>
+    </div>
+  </nav>
+
+  <div class="sidebar-footer">
+    Classic RH v2026.03
+  </div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="mobile-menu-btn" id="mobileMenuBtn" title="Menu">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <nav class="breadcrumb">
+        <a href="app.html">Inicio</a>
+        <span class="breadcrumb-separator">/</span>
+        <span class="breadcrumb-current">Notificacoes</span>
+      </nav>
+    </div>
+    <div class="topbar-right">
+      <button class="topbar-notification" id="notifBtn" title="Notificacoes" style="background:var(--primary-50);color:var(--primary);">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        <span class="topbar-notification-count" id="notifCount" style="display:none;">0</span>
+      </button>
+      <div class="topbar-user" id="topbarUser">
+        <div class="topbar-user-info">
+          <div class="topbar-user-name" id="userName">Carregando...</div>
+          <div class="topbar-user-role" id="userRole"></div>
+        </div>
+        <div class="avatar" id="userAvatar">--</div>
+      </div>
+    </div>
+  </header>
+
+  <!-- CONTENT AREA -->
+  <div class="content-area" id="contentArea">
+
+    <!-- Page Header -->
+    <div class="page-header">
+      <h1>Central de Notificacoes</h1>
+      <p>Alertas e avisos do sistema de RH e SST</p>
+    </div>
+
+    <!-- KPI Row -->
+    <div class="kpi-row mb-6" id="kpiRow">
+      <div class="kpi-card" style="border-left:4px solid var(--primary);">
+        <div class="kpi-icon blue">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+        </div>
+        <div class="kpi-value" id="kpi-nao-lidas"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+        <div class="kpi-label">Nao Lidas</div>
+      </div>
+      <div class="kpi-card" style="border-left:4px solid var(--danger);">
+        <div class="kpi-icon red">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <div class="kpi-value" id="kpi-criticas" style="color:var(--danger);"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
+        <div class="kpi-label">Criticas</div>
+      </div>
+    </div>
+
+    <!-- Filter tabs -->
+    <div class="filter-tabs" id="filterTabs">
+      <button class="filter-tab active" data-filter="todas">Todas</button>
+      <button class="filter-tab" data-filter="critica">Criticas</button>
+      <button class="filter-tab" data-filter="contratos">Contratos</button>
+      <button class="filter-tab" data-filter="ferias">Ferias</button>
+      <button class="filter-tab" data-filter="planos">Planos</button>
+    </div>
+
+    <!-- Mark all bar -->
+    <div class="mark-all-bar">
+      <span class="notif-count-label" id="notifCountLabel">Carregando notificacoes...</span>
+      <button class="btn btn-secondary btn-sm" id="btnMarkAll">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+        Marcar todas como lidas
+      </button>
+    </div>
+
+    <!-- Notification list -->
+    <div class="notif-list" id="notifList">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+
+    <!-- Empty state (hidden by default) -->
+    <div class="empty-state" id="emptyState" style="display:none;">
+      <div class="empty-state-icon">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 01-3.46 0"/></svg>
+      </div>
+      <div class="empty-state-title">Nenhuma notificacao</div>
+      <div class="empty-state-text">Voce esta em dia! Nao ha notificacoes pendentes no momento.</div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;padding:var(--space-6) 0;font-size:var(--text-xs);color:var(--text-muted);">
+      Classic RH &amp; SST v2026.03 &mdash; Classic Importacao e Exportacao de Couros Ltda
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  // =========================================================
+  // 1. AUTH
+  // =========================================================
+  const user = await RHAuth.init({
+    perfisPermitidos: ['administrador','rh','gestor','visualizador']
+  });
+  if (!user) return;
+
+  // =========================================================
+  // 2. USER INFO
+  // =========================================================
+  const nomeCompleto = user.nome || user.nome_completo || user.email || '';
+  const perfil = user.perfil || 'usuario';
+  const initials = nomeCompleto.split(' ').filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+
+  document.getElementById('userName').textContent = nomeCompleto;
+  document.getElementById('userRole').textContent = capitalize(perfil);
+  document.getElementById('userAvatar').textContent = initials || '--';
+
+  // =========================================================
+  // 3. SIDEBAR STATE
+  // =========================================================
+  const sidebar = document.getElementById('sidebar');
+  const toggleBtn = document.getElementById('sidebarToggle');
+  const overlay = document.getElementById('sidebarOverlay');
+  const mobileBtn = document.getElementById('mobileMenuBtn');
+
+  if (localStorage.getItem('sidebar_collapsed') === 'true') {
+    sidebar.classList.add('collapsed');
+  }
+
+  toggleBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebar_collapsed', sidebar.classList.contains('collapsed'));
+  });
+
+  mobileBtn.addEventListener('click', () => {
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+  });
+  overlay.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('active');
+  });
+
+  const currentPage = location.pathname.split('/').pop().replace('.html','') || 'notificacoes';
+  document.querySelectorAll('.sidebar-item').forEach(item => {
+    item.classList.remove('active');
+    if (item.dataset.page === currentPage) item.classList.add('active');
+  });
+
+  document.getElementById('notifBtn').addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // =========================================================
+  // 4. STATE
+  // =========================================================
+  let allNotifications = [];
+  let activeFilter = 'todas';
+
+  // =========================================================
+  // 5. LOAD DATA
+  // =========================================================
+  await loadData();
+
+  async function loadData() {
+    try {
+      // Load summary and list in parallel
+      const [summaryRes, listRes] = await Promise.all([
+        API.rpc('contar_notificacoes', {}),
+        API.get('rh_notificacao?lida=eq.false&order=created_at.desc&limit=50')
+      ]);
+
+      // Parse summary
+      let summary = { total: 0, criticas: 0 };
+      if (summaryRes.ok && summaryRes.data) {
+        const s = Array.isArray(summaryRes.data) ? summaryRes.data[0] : summaryRes.data;
+        if (s) {
+          summary.total = s.total || s.nao_lidas || 0;
+          summary.criticas = s.criticas || 0;
+        }
+      }
+
+      // KPIs
+      setKPI('kpi-nao-lidas', summary.total);
+      setKPI('kpi-criticas', summary.criticas);
+
+      // Badge in topbar
+      if (summary.total > 0) {
+        const badge = document.getElementById('notifCount');
+        badge.textContent = summary.total > 99 ? '99+' : summary.total;
+        badge.style.display = '';
+      }
+
+      // List
+      const listData = listRes.ok ? listRes.data : [];
+      allNotifications = Array.isArray(listData) ? listData : [];
+      renderList();
+
+    } catch (e) {
+      console.warn('Notificacoes error:', e.message);
+      setKPI('kpi-nao-lidas', '--');
+      setKPI('kpi-criticas', '--');
+      document.getElementById('notifList').innerHTML = `
+        <div class="alert alert-danger">
+          <span class="alert-icon">!</span>
+          <div>Erro ao carregar notificacoes. Tente recarregar a pagina.</div>
+        </div>
+      `;
+    }
+  }
+
+  // =========================================================
+  // 6. RENDER
+  // =========================================================
+  function renderList() {
+    const container = document.getElementById('notifList');
+    const emptyState = document.getElementById('emptyState');
+    const filtered = filterNotifications(allNotifications, activeFilter);
+
+    document.getElementById('notifCountLabel').textContent =
+      `${filtered.length} notificacao${filtered.length !== 1 ? 'es' : ''} encontrada${filtered.length !== 1 ? 's' : ''}`;
+
+    if (filtered.length === 0) {
+      container.innerHTML = '';
+      emptyState.style.display = '';
+      return;
+    }
+
+    emptyState.style.display = 'none';
+
+    container.innerHTML = filtered.map(n => {
+      const crit = (n.criticidade || n.prioridade || 'baixa').toLowerCase();
+      const critLabel = capitalize(crit);
+      const badgeCls = crit === 'critica' ? 'badge-danger'
+                     : crit === 'alta' ? 'badge-warning'
+                     : crit === 'media' ? 'badge-info'
+                     : 'badge-gray';
+
+      const titulo = esc(n.titulo || n.tipo || 'Notificacao');
+      const descricao = esc(n.descricao || n.mensagem || '');
+      const tempo = timeAgo(n.created_at || n.criado_em);
+      const lida = n.lida ? 'notif-lida' : '';
+
+      return `
+        <div class="notif-card ${lida}" data-id="${n.id}" data-tipo="${esc(n.referencia_tipo || n.tipo || '')}">
+          <div class="notif-bar ${crit}"></div>
+          <div class="notif-body">
+            <div class="notif-header">
+              <div class="notif-title">${titulo}</div>
+              <span class="badge ${badgeCls} notif-badge-crit">${critLabel}</span>
+            </div>
+            ${descricao ? `<div class="notif-desc">${descricao}</div>` : ''}
+            <div class="notif-footer">
+              <div class="notif-time">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                ${tempo}
+              </div>
+              <div class="notif-actions">
+                ${!n.lida ? `<button class="btn-mark-read" data-id="${n.id}" onclick="event.stopPropagation()">Marcar como lida</button>` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    // Attach click events
+    container.querySelectorAll('.notif-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const tipo = card.dataset.tipo;
+        navigateByTipo(tipo);
+      });
+    });
+
+    container.querySelectorAll('.btn-mark-read').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await markAsRead(btn.dataset.id);
+      });
+    });
+  }
+
+  function filterNotifications(list, filter) {
+    if (filter === 'todas') return list;
+    if (filter === 'critica') return list.filter(n => (n.criticidade || n.prioridade || '').toLowerCase() === 'critica');
+    if (filter === 'contratos') return list.filter(n => (n.referencia_tipo || n.tipo || '').toLowerCase().includes('contrat'));
+    if (filter === 'ferias') return list.filter(n => (n.referencia_tipo || n.tipo || '').toLowerCase().includes('feria'));
+    if (filter === 'planos') return list.filter(n => (n.referencia_tipo || n.tipo || '').toLowerCase().includes('plano'));
+    return list;
+  }
+
+  // =========================================================
+  // 7. ACTIONS
+  // =========================================================
+  async function markAsRead(id) {
+    try {
+      await API.patch(`rh_notificacao?id=eq.${id}`, { lida: true, lida_em: new Date().toISOString() });
+      // Update local state
+      const notif = allNotifications.find(n => n.id === id);
+      if (notif) notif.lida = true;
+      // Update KPI
+      const kpiEl = document.getElementById('kpi-nao-lidas');
+      const current = parseInt(kpiEl.textContent) || 0;
+      if (current > 0) setKPI('kpi-nao-lidas', current - 1);
+      renderList();
+    } catch (e) {
+      console.warn('Mark read error:', e.message);
+    }
+  }
+
+  async function markAllAsRead() {
+    try {
+      const unreadIds = allNotifications.filter(n => !n.lida).map(n => n.id);
+      if (unreadIds.length === 0) return;
+
+      await API.patch('rh_notificacao?lida=eq.false', { lida: true, lida_em: new Date().toISOString() });
+
+      allNotifications.forEach(n => n.lida = true);
+      setKPI('kpi-nao-lidas', 0);
+
+      const badge = document.getElementById('notifCount');
+      badge.style.display = 'none';
+
+      renderList();
+    } catch (e) {
+      console.warn('Mark all read error:', e.message);
+    }
+  }
+
+  function navigateByTipo(tipo) {
+    if (!tipo) return;
+    const t = tipo.toLowerCase();
+    if (t.includes('feria')) { window.location.href = 'ferias.html'; return; }
+    if (t.includes('contrat')) { window.location.href = 'apuracao.html'; return; }
+    if (t.includes('plano') || t.includes('acao')) { window.location.href = 'alertas_rh.html'; return; }
+    if (t.includes('aso') || t.includes('exame')) { window.location.href = 'asos.html'; return; }
+    if (t.includes('treinamento')) { window.location.href = 'treinamentos.html'; return; }
+    if (t.includes('epi')) { window.location.href = 'epis.html'; return; }
+    if (t.includes('acidente')) { window.location.href = 'acidentes.html'; return; }
+    if (t.includes('beneficio')) { window.location.href = 'beneficios.html'; return; }
+    // Default: stay on page
+  }
+
+  // =========================================================
+  // 8. FILTER TABS
+  // =========================================================
+  document.getElementById('filterTabs').addEventListener('click', (e) => {
+    const tab = e.target.closest('.filter-tab');
+    if (!tab) return;
+
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+
+    activeFilter = tab.dataset.filter;
+    renderList();
+  });
+
+  // Mark all button
+  document.getElementById('btnMarkAll').addEventListener('click', markAllAsRead);
+
+  // =========================================================
+  // HELPERS
+  // =========================================================
+  function setKPI(id, value) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.textContent = typeof value === 'number' ? value.toLocaleString('pt-BR') : value;
+    }
+  }
+
+  function capitalize(s) {
+    if (!s) return '';
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
+
+  const esc = s => API.esc(s);
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return '--';
+    try {
+      const now = new Date();
+      const date = new Date(dateStr);
+      const diffMs = now - date;
+      const diffMin = Math.floor(diffMs / 60000);
+      const diffHour = Math.floor(diffMs / 3600000);
+      const diffDay = Math.floor(diffMs / 86400000);
+
+      if (diffMin < 1) return 'agora';
+      if (diffMin < 60) return `ha ${diffMin} min`;
+      if (diffHour < 24) return `ha ${diffHour} hora${diffHour > 1 ? 's' : ''}`;
+      if (diffDay === 1) return 'ontem';
+      if (diffDay < 7) return `ha ${diffDay} dias`;
+      if (diffDay < 30) return `ha ${Math.floor(diffDay / 7)} semana${Math.floor(diffDay / 7) > 1 ? 's' : ''}`;
+      return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    } catch {
+      return '--';
+    }
+  }
+})();
+</script>
+</body>
+</html>

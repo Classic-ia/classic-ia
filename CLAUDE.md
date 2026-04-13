@@ -111,12 +111,13 @@ Tabela de ocorrências: `rh_acidentes` (campo `tipo`, não `tipo_acidente`; camp
 ## Pendências (próximas sessões)
 
 1. **Parser planilha ponto Secullum** — formato muito largo, precisa debug
-2. **Backup do banco** — página para admin baixar JSON das tabelas críticas
-3. **Organizar migrations SQL** — 80+ arquivos na raiz sem ordem
-4. **Unificar auth CQ + RH** — dois sistemas paralelos
-5. **Integração documentos OneDrive** — 3.732 docs catalogados
-6. **Cadastrar PIS faltantes no Secullum** — pedir ao escritório contábil
-7. **Paginação real com offset** — hoje só "carregar mais" no client
+2. **Organograma visual** — hierarquia de cargos/setores com dados reais do banco (página própria)
+3. **Backup do banco** — página para admin baixar JSON das tabelas críticas
+4. **Organizar migrations SQL** — 80+ arquivos na raiz sem ordem
+5. **Unificar auth CQ + RH** — dois sistemas paralelos
+6. **Integração documentos OneDrive** — 3.732 docs catalogados
+7. **Cadastrar PIS faltantes no Secullum** — pedir ao escritório contábil
+8. **Paginação real com offset** — hoje só "carregar mais" no client
 
 ## Git
 

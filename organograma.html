@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Organograma</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config_rh.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<style>
+.org-header{text-align:center;margin-bottom:32px}
+.org-company{font-size:11px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.1em}
+.org-ceo{display:inline-flex;flex-direction:column;align-items:center;background:var(--primary);color:#fff;padding:16px 32px;border-radius:12px;margin:12px auto}
+.org-ceo .name{font-size:16px;font-weight:700}.org-ceo .role{font-size:11px;opacity:.8}
+.org-line{width:2px;height:24px;background:var(--border);margin:0 auto}
+.org-hline{height:2px;background:var(--border);margin:0 auto}
+.org-areas{display:flex;justify-content:center;gap:0;margin-bottom:8px;flex-wrap:wrap}
+.org-area-col{display:flex;flex-direction:column;align-items:center;min-width:160px;position:relative}
+.org-area-col::before{content:'';position:absolute;top:0;left:50%;width:2px;height:12px;background:var(--border)}
+.org-area{background:var(--bg-card);border:2px solid var(--primary);border-radius:10px;padding:10px 16px;text-align:center;margin-top:12px}
+.org-area .area-name{font-size:13px;font-weight:700;color:var(--primary)}.org-area .area-head{font-size:10px;color:var(--text-secondary)}
+.org-sectors{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px;margin-top:24px}
+.org-sector{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;overflow:hidden;transition:box-shadow .2s}
+.org-sector:hover{box-shadow:0 4px 16px rgba(0,0,0,.06)}
+.org-sector-header{padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.org-sector-name{font-size:14px;font-weight:700;color:var(--text-primary)}
+.org-sector-count{font-size:20px;font-weight:800;color:var(--primary)}
+.org-sector-body{padding:12px 16px}
+.org-cargo{display:flex;justify-content:space-between;align-items:center;padding:6px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
+.org-cargo:last-child{border-bottom:none}
+.org-cargo .cargo-name{color:var(--text-secondary);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.org-cargo .cargo-qtd{font-weight:700;color:var(--text-primary);margin-left:8px}
+.org-cargo .cargo-bar{height:4px;border-radius:2px;background:rgba(37,99,235,.15);margin-top:2px;position:relative}
+.org-cargo .cargo-bar-fill{height:100%;border-radius:2px;background:var(--primary)}
+.org-stat-row{display:flex;gap:12px;margin-bottom:20px;flex-wrap:wrap}
+.org-stat{background:var(--bg-card);border:1px solid var(--border);border-radius:10px;padding:14px 20px;text-align:center;flex:1;min-width:120px}
+.org-stat .v{font-size:24px;font-weight:800;color:var(--primary)}.org-stat .l{font-size:10px;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
+.org-color-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;margin-right:8px}
+.area-prod{border-color:#2563eb}.area-prod .area-name{color:#2563eb}
+.area-admin{border-color:#8b5cf6}.area-admin .area-name{color:#8b5cf6}
+.area-qual{border-color:#059669}.area-qual .area-name{color:#059669}
+.area-sup{border-color:#d97706}.area-sup .area-name{color:#d97706}
+.sector-tag{display:inline-block;font-size:9px;font-weight:600;padding:2px 6px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.tag-prod{background:rgba(37,99,235,.08);color:#2563eb}
+.tag-admin{background:rgba(139,92,246,.08);color:#8b5cf6}
+.tag-qual{background:rgba(5,150,105,.08);color:#059669}
+.tag-sup{background:rgba(217,119,6,.08);color:#d97706}
+@media(max-width:768px){.org-sectors{grid-template-columns:1fr}.org-areas{flex-direction:column;align-items:center}}
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="orgContent"><div style="text-align:center;padding:60px;color:var(--text-secondary)"><span class="spinner"></span> Carregando organograma...</div></div>
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'organograma', title: 'Organograma' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  // Load data
+  var [funcsRes, setoresRes, cargosRes] = await Promise.all([
+    API.get('rh_funcionarios?status=eq.ativo&select=id,nome_completo,cargo_id,setor_id,gestor_id&limit=2000'),
+    API.get('rh_setores?select=id,nome&order=nome'),
+    API.get('rh_cargos?select=id,nome&order=nome')
+  ]);
+
+  var funcs = funcsRes || [];
+  var setores = (setoresRes || []).reduce(function(m, s) { m[s.id] = s.nome; return m; }, {});
+  var cargos = (cargosRes || []).reduce(function(m, c) { m[c.id] = c.nome; return m; }, {});
+
+  // Group by sector
+  var bySetor = {};
+  funcs.forEach(function(f) {
+    var sNome = setores[f.setor_id] || 'Sem setor';
+    if (!bySetor[sNome]) bySetor[sNome] = { funcs: [], cargos: {} };
+    bySetor[sNome].funcs.push(f);
+    var cNome = cargos[f.cargo_id] || 'Sem cargo';
+    bySetor[sNome].cargos[cNome] = (bySetor[sNome].cargos[cNome] || 0) + 1;
+  });
+
+  // Classify sectors into areas
+  var areaMap = {
+    'Produção': 'prod', 'Sebo': 'prod', 'Couro': 'prod', 'Classificação': 'prod',
+    'Embalagem': 'prod', 'Carga e Descarga': 'prod', 'Bate Sal': 'prod',
+    'Paletização': 'prod', 'Salga': 'prod', 'Miúdos': 'prod', 'Descongelar': 'prod',
+    'Lavação': 'prod', 'Marcenaria': 'prod', 'Doca': 'prod',
+    'Administrativo': 'admin', 'Escritório': 'admin', 'Recursos Humanos': 'admin', 'Logística': 'admin',
+    'Qualidade': 'qual', 'Limpeza': 'sup',
+    'Segurança': 'sup', 'Manutenção': 'sup'
+  };
+  var areaNames = { prod: 'Produção', admin: 'Administrativo', qual: 'Qualidade', sup: 'Apoio' };
+  var areaColors = { prod: '#2563eb', admin: '#8b5cf6', qual: '#059669', sup: '#d97706' };
+  var areaCounts = { prod: 0, admin: 0, qual: 0, sup: 0 };
+
+  // Count by area
+  Object.entries(bySetor).forEach(function(e) {
+    var area = areaMap[e[0]] || 'prod';
+    areaCounts[area] += e[1].funcs.length;
+  });
+
+  // Sort sectors by count
+  var sortedSetores = Object.entries(bySetor).sort(function(a, b) { return b[1].funcs.length - a[1].funcs.length; });
+  var totalSetores = sortedSetores.filter(function(s) { return s[1].funcs.length > 0; }).length;
+  var totalCargos = Object.keys(cargos).length;
+  var maxSetor = sortedSetores[0] ? sortedSetores[0][1].funcs.length : 1;
+
+  // Render
+  var html = '';
+
+  // Company header
+  html += '<div class="org-header">';
+  html += '<div class="org-company">Classic Importação e Exportação de Couros EIRELI</div>';
+  html += '<div class="org-ceo"><span class="name">Jean Ricardo Anacleto Pinto</span><span class="role">Administrador / Diretor</span></div>';
+  html += '</div>';
+  html += '<div class="org-line"></div>';
+
+  // Area boxes
+  html += '<div class="org-areas">';
+  ['prod', 'admin', 'qual', 'sup'].forEach(function(a) {
+    html += '<div class="org-area-col"><div class="org-area area-' + a + '">';
+    html += '<div class="area-name">' + areaNames[a] + '</div>';
+    html += '<div class="area-head">' + areaCounts[a] + ' colaboradores</div>';
+    html += '</div></div>';
+  });
+  html += '</div>';
+
+  // Stats
+  html += '<div class="org-stat-row" style="margin-top:24px">';
+  html += '<div class="org-stat"><div class="v">' + funcs.length + '</div><div class="l">Colaboradores Ativos</div></div>';
+  html += '<div class="org-stat"><div class="v">' + totalSetores + '</div><div class="l">Setores</div></div>';
+  html += '<div class="org-stat"><div class="v">' + totalCargos + '</div><div class="l">Cargos</div></div>';
+  html += '<div class="org-stat"><div class="v">' + sortedSetores[0][0] + '</div><div class="l">Maior Setor</div></div>';
+  html += '</div>';
+
+  // Sector cards
+  html += '<div style="font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--text-secondary);margin:28px 0 12px;display:flex;align-items:center;gap:8px">Setores<span style="flex:1;height:1px;background:var(--border)"></span></div>';
+  html += '<div class="org-sectors">';
+
+  sortedSetores.forEach(function(entry) {
+    var sNome = entry[0];
+    var data = entry[1];
+    if (!data.funcs.length) return;
+
+    var area = areaMap[sNome] || 'prod';
+    var tagClass = 'tag-' + area;
+    var sortedCargos = Object.entries(data.cargos).sort(function(a, b) { return b[1] - a[1]; });
+
+    html += '<div class="org-sector">';
+    html += '<div class="org-sector-header">';
+    html += '<div><div class="org-sector-name">' + sNome + '</div><span class="sector-tag ' + tagClass + '">' + areaNames[area] + '</span></div>';
+    html += '<div class="org-sector-count">' + data.funcs.length + '</div>';
+    html += '</div>';
+    html += '<div class="org-sector-body">';
+
+    sortedCargos.forEach(function(c) {
+      var pct = Math.round((c[1] / data.funcs.length) * 100);
+      html += '<div class="org-cargo">';
+      html += '<span class="cargo-name" title="' + c[0] + '">' + c[0].toLowerCase().replace(/\b\w/g, function(l) { return l.toUpperCase(); }) + '</span>';
+      html += '<span class="cargo-qtd">' + c[1] + '</span>';
+      html += '</div>';
+    });
+
+    html += '</div></div>';
+  });
+
+  html += '</div>';
+
+  document.getElementById('orgContent').innerHTML = html;
+})();
+</script>
+</body>
+</html>

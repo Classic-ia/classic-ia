@@ -109,15 +109,64 @@ jobs:
 
       - name: Verificar que service_role key NÃO está exposta
         run: |
-          # Buscar padrão de service_role key (não anon key)
           if grep -rl "service_role" --include="*.js" --include="*.html" --include="*.ts" . 2>/dev/null | grep -v node_modules | grep -v .git; then
             echo "::warning::Referência a service_role encontrada em arquivos frontend"
           fi
 
-          # Verificar .env não commitado
-          if [ -f .env ]; then
+      - name: Verificar .env não commitado
+        run: |
+          if [ -f .env ] || [ -f rh/.env ]; then
             echo "::error::Arquivo .env encontrado no repositório!"
             exit 1
           fi
 
-          echo "✓ Nenhum secret exposto detectado"
+      - name: Scan de JWT/API keys hardcoded em Python
+        run: |
+          FOUND=0
+          for f in $(find . -name "*.py" -not -path "./.git/*" -not -path "*/node_modules/*"); do
+            if grep -qP 'eyJhbGci[A-Za-z0-9_-]{20,}' "$f"; then
+              echo "::error::JWT token hardcoded em $f"
+              FOUND=1
+            fi
+            if grep -qP '(SB_KEY|supabase_key|api_key)\s*=\s*["\x27]eyJ' "$f"; then
+              echo "::error::Credential assignment hardcoded em $f"
+              FOUND=1
+            fi
+          done
+          if [ "$FOUND" -eq 1 ]; then
+            echo "::error::Credentials hardcoded detectadas! Use variáveis de ambiente."
+            exit 1
+          fi
+          echo "✓ Nenhum secret hardcoded detectado"
+
+      - name: Scan de JWT/API keys em JS/HTML
+        run: |
+          FOUND=0
+          for f in $(find . \( -name "*.js" -o -name "*.html" \) -not -path "./.git/*" -not -path "*/node_modules/*"); do
+            # Ignorar config.js e config_rh.js (anon keys são públicas por design no frontend)
+            BASE=$(basename "$f")
+            if [ "$BASE" = "config.js" ] || [ "$BASE" = "config_rh.js" ]; then continue; fi
+            if grep -qP 'service_role.*eyJhbGci' "$f"; then
+              echo "::error::Service role key em $f"
+              FOUND=1
+            fi
+          done
+          if [ "$FOUND" -eq 1 ]; then exit 1; fi
+          echo "✓ Frontend limpo"
+
+  # ── Verificar syntax Python ──────────────────────────────────
+  python-check:
+    name: Python Check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Verificar syntax Python
+        run: |
+          for f in $(find . -name "*.py" -not -path "./.git/*"); do
+            python3 -m py_compile "$f" && echo "  ✓ $(basename $f)" || exit 1
+          done

@@ -35,12 +35,18 @@ import xml.etree.ElementTree as ET
 # CONFIGURAÇÃO
 # ═══════════════════════════════════════════
 
+# ═══ CONFIG (via env vars — NUNCA hardcodar credentials) ═══
+_sb_key = os.environ.get("SUPABASE_KEY", "")
+if not _sb_key:
+    print("ERRO: variavel SUPABASE_KEY nao definida. Use: set SUPABASE_KEY=<sua_key>")
+    sys.exit(1)
+
 CONFIG = {
-    "supabase_url": "https://muiqmtnfvyffborgiwdw.supabase.co",
-    "supabase_key": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXFtdG5mdnlmZmJvcmdpd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NzQ2MTAsImV4cCI6MjA4OTQ1MDYxMH0.ReerGoDWcLrxJ1WIIKflN4Sc-st4zR1b6yWagCaPq_A",
-    "pasta_entrada": r"C:\dados_atak\entrada",
-    "pasta_processados": r"C:\dados_atak\processados",
-    "pasta_erro": r"C:\dados_atak\erro",
+    "supabase_url": os.environ.get("SUPABASE_URL", "https://muiqmtnfvyffborgiwdw.supabase.co"),
+    "supabase_key": _sb_key,
+    "pasta_entrada": os.environ.get("ATAK_PASTA_ENTRADA", r"C:\dados_atak\entrada"),
+    "pasta_processados": os.environ.get("ATAK_PASTA_PROCESSADOS", r"C:\dados_atak\processados"),
+    "pasta_erro": os.environ.get("ATAK_PASTA_ERRO", r"C:\dados_atak\erro"),
     "extensoes_validas": {".xlsx", ".xls", ".csv"},
     "watch_intervalo_seg": 300,  # 5 minutos
 }

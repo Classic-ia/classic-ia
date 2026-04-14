@@ -1227,3 +1227,47 @@ BEGIN
   END LOOP;
   RETURN jsonb_build_object('importados', v_count, 'sem_match', v_sem);
 END; $function$;
+
+-- ── calcular_ponto_totais() ── chamada por: importar_secullum.html (pos-import)
+-- Calcula totais mensais a partir de rh_ponto por periodo
+CREATE OR REPLACE FUNCTION public.calcular_ponto_totais(p_periodo text DEFAULT NULL)
+RETURNS jsonb
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_periodo TEXT;
+  v_count INT := 0;
+BEGIN
+  v_periodo := COALESCE(p_periodo, (SELECT periodo FROM rh_ponto WHERE periodo IS NOT NULL ORDER BY created_at DESC LIMIT 1));
+  IF v_periodo IS NULL THEN
+    RETURN jsonb_build_object('erro', 'Nenhum periodo encontrado em rh_ponto');
+  END IF;
+
+  DELETE FROM rh_ponto_totais WHERE periodo = v_periodo;
+
+  INSERT INTO rh_ponto_totais (
+    funcionario_id, funcionario_nome, cpf, periodo,
+    dias_trabalhados, dias_falta, dias_ferias, dias_atestado, dias_ausencia, carga_horaria
+  )
+  SELECT
+    funcionario_id,
+    MAX(funcionario_nome),
+    MAX(cpf),
+    v_periodo,
+    COUNT(*) FILTER (WHERE justificativa IS NULL AND (entrada1 IS NOT NULL OR saida1 IS NOT NULL)),
+    COUNT(*) FILTER (WHERE justificativa = 'Falta'),
+    COUNT(*) FILTER (WHERE justificativa ILIKE '%eria%'),
+    COUNT(*) FILTER (WHERE justificativa ILIKE '%atestado%' OR justificativa ILIKE '%medico%'),
+    COUNT(*) FILTER (WHERE justificativa IS NOT NULL AND justificativa NOT IN ('Falta') AND justificativa NOT ILIKE '%eria%' AND justificativa NOT ILIKE '%atestado%'),
+    MAX(carga_horaria)
+  FROM rh_ponto
+  WHERE periodo = v_periodo AND funcionario_id IS NOT NULL
+  GROUP BY funcionario_id;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+
+  RETURN jsonb_build_object('ok', true, 'periodo', v_periodo, 'funcionarios_calculados', v_count);
+END;
+$function$;

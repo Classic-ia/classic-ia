@@ -18,11 +18,14 @@ import requests
 import datetime
 from pathlib import Path
 
-# ═══ CONFIG ═══
-SB_URL = "https://muiqmtnfvyffborgiwdw.supabase.co"
-SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXFtdG5mdnlmZmJvcmdpd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NzQ2MTAsImV4cCI6MjA4OTQ1MDYxMH0.ReerGoDWcLrxJ1WIIKflN4Sc-st4zR1b6yWagCaPq_A"
+# ═══ CONFIG (via env vars — NUNCA hardcodar credentials) ═══
+SB_URL = os.environ.get("SUPABASE_URL", "https://muiqmtnfvyffborgiwdw.supabase.co")
+SB_KEY = os.environ.get("SUPABASE_KEY", "")
+if not SB_KEY:
+    print("ERRO: variavel SUPABASE_KEY nao definida. Use: set SUPABASE_KEY=<sua_key>")
+    sys.exit(1)
 
-BASE_PATH = Path(r"C:\Users\janai\OneDrive\RH e SEGURANÇA DO TRABALHO CLASSIC\RH_E_SEGURANCA_DO_TRABALHO_CLASSIC")
+BASE_PATH = Path(os.environ.get("RH_BASE_PATH", r"C:\Users\janai\OneDrive\RH e SEGURANÇA DO TRABALHO CLASSIC\RH_E_SEGURANCA_DO_TRABALHO_CLASSIC"))
 
 HEADERS = {
     "apikey": SB_KEY,

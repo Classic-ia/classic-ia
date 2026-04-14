@@ -133,6 +133,9 @@ CREATE OR REPLACE FUNCTION public.gestor_dashboard()
 AS $function$
 DECLARE v_setor_id UUID; v_setor_nome TEXT;
 BEGIN
+  IF rh_perfil_atual() = '_sem_acesso' THEN
+    RETURN jsonb_build_object('erro', 'Nao autenticado');
+  END IF;
   v_setor_id := rh_setor_do_gestor();
   SELECT nome INTO v_setor_nome FROM rh_setores WHERE id = v_setor_id;
 
@@ -254,6 +257,11 @@ DECLARE
 BEGIN
   v_perfil := rh_perfil_atual();
 
+  -- Guard: reject unauthenticated users
+  IF v_perfil = '_sem_acesso' THEN
+    RETURN jsonb_build_object('erro', 'Nao autenticado');
+  END IF;
+
   -- BASE: KPIs + resumo + confiabilidade (todos os perfis autenticados)
   v_result := jsonb_build_object(
     'perfil', v_perfil,
@@ -286,6 +294,130 @@ BEGIN
   END IF;
 
   RETURN v_result;
+END;
+$function$;
+
+-- ── motor_v2_calcular_scores() ── sub-funcao chamada por motor_v2_executar
+-- FIX B1: DELETE by periodo ONLY (nao por execucao_id que e sempre novo)
+CREATE OR REPLACE FUNCTION public.motor_v2_calcular_scores(p_execucao_id uuid, p_periodo text DEFAULT to_char((CURRENT_DATE - '1 mon'::interval), 'YYYY-MM'::text))
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_count INT := 0;
+  v_periodo_inicio DATE; v_periodo_fim DATE; v_dias_uteis INT;
+  rec RECORD;
+  v_s_presenca NUMERIC; v_s_producao NUMERIC; v_s_trein NUMERIC;
+  v_s_estab NUMERIC; v_s_epi NUMERIC; v_s_qualidade NUMERIC;
+  v_score_final NUMERIC; v_classificacao TEXT; v_confiabilidade TEXT;
+  v_fatores TEXT[];
+  v_cob_presenca NUMERIC; v_cob_producao NUMERIC; v_cob_trein NUMERIC; v_cob_epi NUMERIC;
+  v_fontes_ativas INT;
+  v_media_setor NUMERIC; v_prod_individual NUMERIC;
+  v_trein_total INT; v_trein_valido INT; v_meses_empresa NUMERIC;
+  v_epi_count INT; v_epi_recente BOOLEAN;
+  v_peso_total NUMERIC; v_soma_ponderada NUMERIC;
+  v_ponto_total INT; v_ponto_presente INT; v_ponto_faltas INT; v_ponto_ferias INT; v_ponto_base INT;
+  v_dias_com_registro INT; v_has_ponto BOOLEAN;
+BEGIN
+  v_periodo_inicio := (p_periodo || '-01')::DATE;
+  v_periodo_fim := (v_periodo_inicio + INTERVAL '1 month' - INTERVAL '1 day')::DATE;
+  SELECT COUNT(*) INTO v_dias_uteis FROM generate_series(v_periodo_inicio, LEAST(v_periodo_fim, CURRENT_DATE), '1 day') d WHERE EXTRACT(DOW FROM d) NOT IN (0, 6);
+  IF v_dias_uteis < 1 THEN v_dias_uteis := 22; END IF;
+
+  -- FIX B1: DELETE by periodo ONLY (not by execucao_id which is always new)
+  DELETE FROM motor_score WHERE periodo_referencia = p_periodo;
+
+  FOR rec IN
+    SELECT f.id, f.nome_completo, f.data_admissao, f.setor_id, f.cargo_confianca,
+      s.nome AS setor_nome, c.nome AS cargo_nome
+    FROM rh_funcionarios f LEFT JOIN rh_setores s ON s.id = f.setor_id LEFT JOIN rh_cargos c ON c.id = f.cargo_id
+    WHERE f.status = 'ativo'
+  LOOP
+    v_fatores := '{}'; v_fontes_ativas := 0;
+    v_s_presenca := NULL; v_s_producao := NULL; v_s_trein := NULL; v_s_epi := NULL;
+    IF rec.cargo_confianca = true THEN
+      v_s_presenca := 100; v_cob_presenca := 100; v_fontes_ativas := v_fontes_ativas + 1;
+      v_fatores := array_append(v_fatores, 'Cargo de confianca (isento de ponto)');
+    ELSE
+      SELECT COUNT(*) INTO v_ponto_total FROM rh_ponto WHERE funcionario_id = rec.id AND data BETWEEN v_periodo_inicio AND v_periodo_fim;
+      v_has_ponto := v_ponto_total > 0;
+      IF v_has_ponto THEN
+        SELECT COUNT(*) FILTER (WHERE justificativa IS NULL AND (entrada1 IS NOT NULL OR saida1 IS NOT NULL OR entrada2 IS NOT NULL OR saida2 IS NOT NULL OR horas_normais IS NOT NULL)),
+          COUNT(*) FILTER (WHERE justificativa = 'Falta'),
+          COUNT(*) FILTER (WHERE justificativa IS NOT NULL AND (justificativa LIKE '%eria%' OR justificativa LIKE '%Ferias%'))
+        INTO v_ponto_presente, v_ponto_faltas, v_ponto_ferias
+        FROM rh_ponto WHERE funcionario_id = rec.id AND data BETWEEN v_periodo_inicio AND v_periodo_fim;
+        v_ponto_base := GREATEST(1, v_dias_uteis - v_ponto_ferias);
+        v_s_presenca := LEAST(100, ROUND((v_ponto_presente::NUMERIC / v_ponto_base) * 100, 2));
+        v_cob_presenca := ROUND((v_ponto_total::NUMERIC / v_dias_uteis) * 100, 2);
+        v_fontes_ativas := v_fontes_ativas + 1;
+        IF v_ponto_faltas > 0 THEN v_fatores := array_append(v_fatores, v_ponto_faltas || ' falta(s)'); END IF;
+        IF v_ponto_ferias > 0 THEN v_fatores := array_append(v_fatores, v_ponto_ferias || ' dia(s) ferias'); END IF;
+      ELSE
+        SELECT COUNT(DISTINCT data) INTO v_dias_com_registro FROM producao_rateada WHERE funcionario_id = rec.id AND data BETWEEN v_periodo_inicio AND v_periodo_fim;
+        v_cob_presenca := ROUND((v_dias_com_registro::NUMERIC / v_dias_uteis) * 100, 2);
+        IF v_cob_presenca >= 50 THEN v_s_presenca := LEAST(100, v_cob_presenca); v_fontes_ativas := v_fontes_ativas + 1;
+        ELSIF v_cob_presenca > 0 THEN v_s_presenca := LEAST(100, v_cob_presenca * 1.2); v_fatores := array_append(v_fatores, 'Presenca via producao (parcial)');
+        ELSE v_fatores := array_append(v_fatores, 'Sem registro de presenca'); END IF;
+      END IF;
+    END IF;
+    v_cob_producao := v_cob_presenca;
+    IF v_cob_producao >= 30 THEN
+      SELECT COALESCE(AVG(pr.quantidade), 0) INTO v_media_setor FROM producao_rateada pr JOIN rh_funcionarios f2 ON f2.id = pr.funcionario_id AND f2.setor_id = rec.setor_id WHERE pr.data BETWEEN v_periodo_inicio AND v_periodo_fim;
+      SELECT COALESCE(AVG(quantidade), 0) INTO v_prod_individual FROM producao_rateada WHERE funcionario_id = rec.id AND data BETWEEN v_periodo_inicio AND v_periodo_fim;
+      IF v_media_setor > 0 AND v_prod_individual > 0 THEN v_s_producao := GREATEST(0, LEAST(100, (v_prod_individual / v_media_setor) * 100)); v_fontes_ativas := v_fontes_ativas + 1; END IF;
+    END IF;
+    SELECT COUNT(*), COUNT(*) FILTER (WHERE data_validade IS NULL OR data_validade >= CURRENT_DATE) INTO v_trein_total, v_trein_valido FROM sst_treinamento WHERE funcionario_id = rec.id;
+    IF v_trein_total > 0 THEN v_s_trein := (v_trein_valido::NUMERIC / v_trein_total) * 100; v_cob_trein := 100; v_fontes_ativas := v_fontes_ativas + 1;
+      IF v_trein_valido < v_trein_total THEN v_fatores := array_append(v_fatores, (v_trein_total - v_trein_valido) || ' treinamento(s) vencido(s)'); END IF;
+    ELSE v_cob_trein := 0; v_fatores := array_append(v_fatores, 'Sem registro de treinamento'); END IF;
+    v_meses_empresa := (CURRENT_DATE - COALESCE(rec.data_admissao, CURRENT_DATE))::NUMERIC / 30.44;
+    IF v_meses_empresa < 3 THEN v_s_estab := 30 + (v_meses_empresa / 3) * 30;
+    ELSIF v_meses_empresa < 12 THEN v_s_estab := 60 + ((v_meses_empresa - 3) / 9) * 20;
+    ELSIF v_meses_empresa < 36 THEN v_s_estab := 80 + ((v_meses_empresa - 12) / 24) * 20;
+    ELSE v_s_estab := 100; END IF;
+    v_fontes_ativas := v_fontes_ativas + 1;
+    IF v_meses_empresa < 3 THEN v_fatores := array_append(v_fatores, 'Periodo de experiencia'); END IF;
+    SELECT COUNT(*) INTO v_epi_count FROM sst_epi_entrega WHERE funcionario_id = rec.id AND data_entrega >= (CURRENT_DATE - 365);
+    SELECT EXISTS(SELECT 1 FROM sst_epi_entrega WHERE funcionario_id = rec.id AND data_entrega >= (CURRENT_DATE - 180)) INTO v_epi_recente;
+    IF v_epi_count > 0 THEN v_s_epi := CASE WHEN v_epi_count >= 3 THEN 100 ELSE 50 + (v_epi_count::NUMERIC / 3) * 50 END;
+      v_cob_epi := CASE WHEN v_epi_recente THEN 100 ELSE 50 END; v_fontes_ativas := v_fontes_ativas + 1;
+      IF NOT v_epi_recente THEN v_fatores := array_append(v_fatores, 'EPI: dado > 180 dias'); END IF;
+    ELSE v_cob_epi := 0; v_fatores := array_append(v_fatores, 'Sem registro de EPI'); END IF;
+    v_s_qualidade := GREATEST(0, LEAST(100, ROUND((v_fontes_ativas::NUMERIC / 5) * 100, 2)));
+    v_peso_total := 0; v_soma_ponderada := 0;
+    IF v_s_presenca IS NOT NULL THEN v_soma_ponderada := v_soma_ponderada + v_s_presenca * 0.20; v_peso_total := v_peso_total + 0.20; END IF;
+    IF v_s_producao IS NOT NULL THEN v_soma_ponderada := v_soma_ponderada + v_s_producao * 0.20; v_peso_total := v_peso_total + 0.20; END IF;
+    IF v_s_trein IS NOT NULL THEN v_soma_ponderada := v_soma_ponderada + v_s_trein * 0.20; v_peso_total := v_peso_total + 0.20; END IF;
+    v_soma_ponderada := v_soma_ponderada + v_s_estab * 0.10; v_peso_total := v_peso_total + 0.10;
+    IF v_s_epi IS NOT NULL THEN v_soma_ponderada := v_soma_ponderada + v_s_epi * 0.10; v_peso_total := v_peso_total + 0.10; END IF;
+    v_soma_ponderada := v_soma_ponderada + v_s_qualidade * 0.20; v_peso_total := v_peso_total + 0.20;
+    v_score_final := CASE WHEN v_peso_total > 0 THEN ROUND(v_soma_ponderada / v_peso_total, 2) ELSE 0 END;
+    IF v_fontes_ativas >= 4 THEN v_confiabilidade := 'alta';
+    ELSIF v_fontes_ativas >= 2 THEN v_confiabilidade := 'media';
+    ELSIF v_fontes_ativas >= 1 THEN v_confiabilidade := 'baixa';
+    ELSE v_confiabilidade := 'indeterminada'; END IF;
+    IF v_confiabilidade IN ('baixa', 'indeterminada') THEN v_classificacao := 'dado_insuficiente';
+    ELSIF v_score_final >= 75 THEN v_classificacao := 'consistente';
+    ELSIF v_score_final >= 55 THEN v_classificacao := CASE WHEN v_confiabilidade = 'alta' THEN 'regular' ELSE 'monitorar' END;
+    ELSE v_classificacao := 'atencao_operacional'; END IF;
+    INSERT INTO motor_score (execucao_id, funcionario_id, funcionario_nome, setor_nome, cargo_nome,
+      score_presenca, score_producao, score_treinamento, score_estabilidade, score_epi,
+      score_qualidade, score_final, classificacao, confiabilidade,
+      cobertura_presenca, cobertura_producao, cobertura_treinamento, cobertura_epi,
+      fontes_ativas, fatores, periodo_referencia)
+    VALUES (p_execucao_id, rec.id, rec.nome_completo, rec.setor_nome, rec.cargo_nome,
+      COALESCE(v_s_presenca, 0), COALESCE(v_s_producao, 0), COALESCE(v_s_trein, 0),
+      ROUND(v_s_estab, 2), COALESCE(v_s_epi, 0),
+      v_s_qualidade, v_score_final, v_classificacao, v_confiabilidade,
+      v_cob_presenca, v_cob_producao, v_cob_trein, v_cob_epi,
+      v_fontes_ativas, v_fatores, p_periodo);
+    v_count := v_count + 1;
+  END LOOP;
+  RETURN v_count;
 END;
 $function$;
 

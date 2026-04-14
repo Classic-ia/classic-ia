@@ -8,207 +8,14 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@700;800&display=swap');
-
-:root {
-  --bg:      #08080f;
-  --surface: #111120;
-  --border:  #1e1e35;
-  --accent:  #c8a96e;
-  --blue:    #0072B2;
-  --amber:   #E69F00;
-  --magenta: #CC79A7;
-  --green:   #27ae60;
-  --red:     #e74c3c;
-  --text:    #e0e0f0;
-  --muted:   #555577;
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
-
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: 'DM Mono', monospace;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 36px 20px 60px;
-}
-
-/* ── TELA UPLOAD ── */
-#screen-upload { width:100%; max-width:640px; }
-#screen-dash   { display:none; width:100%; max-width:960px; }
-
-header { text-align:center; margin-bottom:36px; }
-.eyebrow { font-size:10px; letter-spacing:4px; color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
-h1 {
-  font-family:'Syne',sans-serif;
-  font-size:clamp(24px,5vw,40px); font-weight:800; line-height:1.1;
-  background:linear-gradient(100deg,var(--accent),var(--amber),var(--magenta));
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:8px;
-}
-.desc { font-size:12px; color:var(--muted); line-height:1.9; }
-
-/* Drop zone */
-.dropzone {
-  width:100%; border:2px dashed var(--border); border-radius:20px;
-  padding:64px 30px; text-align:center; cursor:pointer;
-  background:var(--surface); margin-bottom:16px;
-  transition:border-color .25s, background .25s;
-}
-.dropzone:hover, .dropzone.drag { border-color:var(--accent); background:rgba(200,169,110,.06); }
-.dropzone.ready { border-color:var(--green); border-style:solid; }
-.drop-icon { font-size:46px; margin-bottom:14px; display:block; }
-.drop-title { font-family:'Syne',sans-serif; font-size:18px; font-weight:700; margin-bottom:6px; }
-.drop-sub { font-size:11px; color:var(--muted); }
-#xlsxInput { display:none; }
-
-.file-info {
-  display:none; align-items:center; gap:12px;
-  background:rgba(39,174,96,.08); border:1px solid rgba(39,174,96,.3);
-  border-radius:12px; padding:12px 16px; margin-bottom:16px;
-}
-.file-info.show { display:flex; }
-.file-name { font-size:12px; color:var(--green); flex:1; word-break:break-all; }
-.file-size { font-size:10px; color:var(--muted); white-space:nowrap; }
-.file-rm { background:none; border:none; color:var(--muted); cursor:pointer; font-size:16px; }
-.file-rm:hover { color:var(--red); }
-
-/* Instruções de formato */
-.format-hint {
-  background:var(--surface); border:1px solid var(--border); border-radius:14px;
-  padding:18px 22px; margin-top:12px;
-}
-.format-hint .fh-title { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; margin-bottom:12px; }
-.format-hint .fh-cols { display:flex; flex-wrap:wrap; gap:6px; }
-.fh-col { background:rgba(200,169,110,.08); border:1px solid rgba(200,169,110,.2); border-radius:6px; padding:4px 10px; font-size:10px; color:var(--accent); }
-
-.btn-gen {
-  width:100%; padding:16px; border:none; border-radius:14px; cursor:pointer;
-  font-family:'Syne',sans-serif; font-size:15px; font-weight:700; letter-spacing:1px;
-  background:linear-gradient(135deg,var(--accent),#a07840); color:#08080f;
-  transition:opacity .2s, transform .1s;
-}
-.btn-gen:hover:not(:disabled) { opacity:.9; transform:translateY(-1px); }
-.btn-gen:disabled { opacity:.35; cursor:not-allowed; transform:none; }
-
-.err { background:rgba(231,76,60,.1); border:1px solid rgba(231,76,60,.4); border-radius:12px; padding:14px 18px; font-size:12px; color:var(--red); margin-top:14px; display:none; line-height:1.7; }
-.err.show { display:block; }
-
-/* ── DASHBOARD ── */
-.dash-header { text-align:center; margin-bottom:24px; }
-.dash-header h2 {
-  font-family:'Syne',sans-serif; font-size:22px; font-weight:800;
-  background:linear-gradient(90deg,var(--accent),var(--amber),var(--magenta));
-  -webkit-background-clip:text; -webkit-text-fill-color:transparent; margin-bottom:4px;
-}
-.dash-sub { color:var(--muted); font-size:11px; }
-
-.top-bar { display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
-.btn-back { background:none; border:1px solid var(--border); color:var(--muted); border-radius:10px; padding:8px 16px; font-size:11px; cursor:pointer; font-family:'DM Mono',monospace; transition:border-color .2s,color .2s; }
-.btn-back:hover { border-color:var(--accent); color:var(--accent); }
-
-/* Seletor de carga */
-.carga-wrap { margin-bottom:22px; }
-.carga-label { font-size:10px; letter-spacing:3px; color:var(--muted); text-transform:uppercase; display:block; margin-bottom:8px; }
-.carga-btns { display:flex; gap:8px; flex-wrap:wrap; }
-.cbtn { padding:7px 15px; border-radius:20px; border:1px solid var(--border); background:var(--surface); color:var(--muted); font-family:'DM Mono',monospace; font-size:11px; font-weight:600; cursor:pointer; transition:all .2s; }
-.cbtn-total { background:rgba(200,169,110,.1) !important; border-color:rgba(200,169,110,.4) !important; color:var(--accent) !important; }
-.cbtn-total.active { background:var(--accent) !important; border-color:var(--accent) !important; color:#08080f !important; font-weight:800; }
-.cbtn:not(.cbtn-total):hover { border-color:var(--blue); color:var(--blue); }
-.cbtn:not(.cbtn-total).active { background:var(--blue); border-color:var(--blue); color:#fff; }
-
-/* KPIs */
-.kpi-row { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
-.kpi { border-radius:12px; padding:16px; text-align:center; }
-.kpi .lbl { font-size:9px; color:#aaa; letter-spacing:2px; text-transform:uppercase; margin-bottom:5px; }
-.kpi .val { font-size:22px; font-weight:800; line-height:1; margin-bottom:4px; font-family:'Syne',sans-serif; }
-.kpi .sub { font-size:10px; color:#777; }
-.kpi-a  { background:rgba(0,114,178,.12); border:1px solid rgba(0,114,178,.35); }
-.kpi-b  { background:rgba(230,159,0,.12);  border:1px solid rgba(230,159,0,.35); }
-.kpi-c  { background:rgba(204,121,167,.12);border:1px solid rgba(204,121,167,.35); }
-.kpi-tot{ background:rgba(255,255,255,.04); border:1px solid rgba(255,255,255,.1); }
-.kpi-c.alerta { background:rgba(231,76,60,.12); border-color:rgba(231,76,60,.45); }
-.kpi-c.alerta .val { color:var(--red) !important; }
-
-/* Barra de qualidade */
-.qualidade-bar { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 18px; margin-bottom:18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap; }
-.qual-label { font-size:10px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; white-space:nowrap; }
-.qual-track { flex:1; min-width:160px; background:var(--border); border-radius:6px; height:10px; overflow:hidden; }
-.qual-fill  { height:10px; border-radius:6px; transition:width .5s; }
-.qual-score { font-family:'Syne',sans-serif; font-size:18px; font-weight:800; white-space:nowrap; }
-.qual-desc  { font-size:11px; color:var(--muted); white-space:nowrap; }
-
-/* Tabs */
-.tabs { display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin-bottom:18px; }
-.tab { padding:7px 16px; border-radius:20px; border:none; cursor:pointer; font-size:11px; font-weight:600; font-family:'DM Mono',monospace; background:var(--surface); color:var(--muted); transition:all .2s; border:1px solid transparent; }
-.tab.active { background:var(--blue); color:#fff; border-color:var(--blue); }
-.tab.tab-frigo        { border-color:rgba(200,169,110,.3); color:var(--accent); }
-.tab.tab-frigo.active { background:var(--accent); color:#08080f; border-color:var(--accent); }
-.tab.tab-evolucao        { border-color:rgba(230,159,0,.3); color:var(--amber); }
-.tab.tab-evolucao.active { background:var(--amber); color:#111; border-color:var(--amber); }
-.tab.tab-ranking        { border-color:rgba(204,121,167,.3); color:var(--magenta); }
-.tab.tab-ranking.active { background:var(--magenta); color:#fff; border-color:var(--magenta); }
-
-.section { display:none; } .section.active { display:block; }
-.card { background:var(--surface); border:1px solid var(--border); border-radius:16px; padding:20px; margin-bottom:16px; }
-.card h3 { font-size:13px; color:#ccc; text-align:center; margin-bottom:14px; }
-.legend { display:flex; justify-content:center; gap:18px; margin-top:12px; flex-wrap:wrap; }
-.legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#ccc; }
-.legend-swatch { width:12px; height:12px; border-radius:3px; flex-shrink:0; }
-canvas { max-width:100%; }
-
-/* Ranking */
-.rank-table { width:100%; border-collapse:collapse; font-size:11px; }
-.rank-table th { color:var(--muted); font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:8px 10px; text-align:left; border-bottom:1px solid var(--border); }
-.rank-table th.num { text-align:right; }
-.rank-table td { padding:9px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; }
-.rank-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.rank-table tr:last-child td { border-bottom:none; }
-.rank-table tr:hover td { background:rgba(255,255,255,.02); }
-.rank-pos { color:var(--muted); font-size:10px; width:28px; }
-.rank-pos.gold   { color:#FFD700; font-weight:800; }
-.rank-pos.silver { color:#C0C0C0; font-weight:800; }
-.rank-pos.bronze { color:#CD7F32; font-weight:800; }
-.rank-name { color:var(--text); font-weight:500; }
-.rank-bar-wrap { width:120px; }
-.rank-bar-bg   { background:var(--border); border-radius:4px; height:6px; overflow:hidden; }
-.rank-bar-fill { height:6px; border-radius:4px; transition:width .4s; }
-.rank-alert td { background:rgba(231,76,60,.05) !important; }
-.rank-alert td:first-child { border-left:3px solid var(--red); }
-.rank-tabs { display:flex; gap:6px; margin-bottom:14px; justify-content:center; flex-wrap:wrap; }
-.rank-tab { padding:5px 14px; border-radius:16px; border:none; cursor:pointer; font-size:10px; font-weight:700; font-family:'DM Mono',monospace; background:var(--border); color:var(--muted); transition:all .2s; }
-.rank-tab.act-a { background:var(--blue);    color:#fff; }
-.rank-tab.act-b { background:var(--amber);   color:#111; }
-.rank-tab.act-c { background:var(--magenta); color:#fff; }
-
-/* Mini tabela de detalhes */
-.detail-table { width:100%; border-collapse:collapse; font-size:11px; margin-top:10px; }
-.detail-table th { color:var(--muted); font-size:9px; letter-spacing:2px; text-transform:uppercase; padding:7px 10px; border-bottom:1px solid var(--border); }
-.detail-table th.num { text-align:right; }
-.detail-table td { padding:8px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; }
-.detail-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.detail-table tr:last-child td { border-bottom:none; }
-.badge-cls { display:inline-block; padding:2px 8px; border-radius:10px; font-size:10px; font-weight:700; }
-.badge-A { background:rgba(0,114,178,.2); color:#0072B2; }
-.badge-B { background:rgba(230,159,0,.2); color:#E69F00; }
-.badge-C { background:rgba(204,121,167,.2); color:#CC79A7; }
-
-@media(max-width:600px) {
-  .kpi-row { grid-template-columns:repeat(2,1fr); }
-  .kpi-tot { grid-column:1/-1; }
-}
-</style>
+<link rel="stylesheet" href="ds.css">
 </head>
-<body>
+<body class="page-bg">
 
 <!-- ══ UPLOAD ══ -->
 <div id="screen-upload">
   <header>
-    <a href="app.html" style="display:inline-flex;align-items:center;gap:6px;font-family:'DM Mono',monospace;font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:20px;transition:color .2s,border-color .2s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">← Menu Principal</a>
+    <a href="app.html" style="display:inline-flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:11px;color:var(--muted);text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:6px 12px;margin-bottom:20px;transition:color .2s,border-color .2s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">← Menu Principal</a>
     <div class="eyebrow">Classic Couros · Análise de Recebimento</div>
     <h1>Dashboard<br>de Cargas</h1>
     <p class="desc">Exporte os registros do sistema (CSV) e arraste aqui.<br>O dashboard é gerado localmente, sem enviar dados para internet.</p>
@@ -369,12 +176,12 @@ canvas { max-width:100%; }
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <button onclick="exportRankingExcel()" title="Exportar para Excel"
-            style="display:flex;align-items:center;gap:6px;background:rgba(33,115,70,.15);border:1px solid rgba(33,115,70,.4);border-radius:8px;padding:7px 14px;color:#2e9e5b;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
+            style="display:flex;align-items:center;gap:6px;background:rgba(33,115,70,.15);border:1px solid rgba(33,115,70,.4);border-radius:8px;padding:7px 14px;color:#2e9e5b;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
             Excel
           </button>
           <button onclick="exportRankingPDF()" title="Exportar para PDF"
-            style="display:flex;align-items:center;gap:6px;background:rgba(204,74,74,.12);border:1px solid rgba(204,74,74,.35);border-radius:8px;padding:7px 14px;color:#e05555;font-family:'DM Mono',monospace;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
+            style="display:flex;align-items:center;gap:6px;background:rgba(204,74,74,.12);border:1px solid rgba(204,74,74,.35);border-radius:8px;padding:7px 14px;color:#e05555;font-family:var(--font-mono);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;letter-spacing:.5px;">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
             PDF
           </button>
@@ -382,7 +189,7 @@ canvas { max-width:100%; }
       </div>
       <div id="rankBody"></div>
       <div id="btnRelWrap" style="display:none;text-align:center;margin-top:18px">
-        <button onclick="gerarRelatorio()" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:12px;font-weight:700;cursor:pointer;font-family:'DM Mono',monospace;letter-spacing:1px">
+        <button onclick="gerarRelatorio()" style="background:var(--red);color:#fff;border:none;border-radius:10px;padding:11px 24px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-mono);letter-spacing:1px">
           📄 Exportar Relatório — Frigoríficos com Alto % Classe C
         </button>
       </div>
@@ -394,13 +201,13 @@ canvas { max-width:100%; }
     <div class="card">
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px;">
         <input type="text" id="filtroFrg" placeholder="Filtrar frigorífico..." oninput="renderDetalhes()"
-          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;flex:1;min-width:160px;">
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:var(--font-mono);font-size:11px;flex:1;min-width:160px;">
         <select id="filtroCls" onchange="renderDetalhes()"
-          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:11px;">
+          style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:7px 12px;color:var(--text);font-family:var(--font-mono);font-size:11px;">
           <option value="">Todas classes</option><option>A</option><option>B</option><option>C</option>
         </select>
         <button onclick="exportDetalhesCSV()"
-          style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--accent);font-family:'DM Mono',monospace;font-size:11px;cursor:pointer;white-space:nowrap;">
+          style="background:none;border:1px solid var(--border);border-radius:8px;padding:7px 14px;color:var(--accent);font-family:var(--font-mono);font-size:11px;cursor:pointer;white-space:nowrap;">
           ⬇ CSV
         </button>
       </div>
@@ -1049,13 +856,7 @@ function gerarRelatorio(){
 
   const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Relatório Qualidade Cargas — ${dataArq}</title>
-<style>
-  @page{size:A4;margin:20mm 18mm;}
-  @media print{.no-print{display:none!important}body{margin:0}}
-  body{font-family:Arial,sans-serif;color:#222;background:#fff;margin:0;padding:24px;}
-  .btn-print{background:#2980b9;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:24px;margin-right:10px;}
-  .btn-close{background:#777;color:#fff;border:none;border-radius:8px;padding:10px 22px;font-size:13px;font-weight:700;cursor:pointer;margin-bottom:24px;}
-</style></head><body>
+</head><body class="page-bg">
 <div class="no-print" style="padding:12px 0">
   <button class="btn-print" onclick="window.print()">🖨 Imprimir / Salvar como PDF</button>
   <button class="btn-close" onclick="window.close()">✕ Fechar</button>

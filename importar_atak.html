@@ -4,231 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Importar Relatório Atak · Classic CQ</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
-<style>
-:root {
-  --bg:       #080f1a;
-  --bg2:      #0d1b2a;
-  --bg3:      #1a2f45;
-  --border:   #1e3a52;
-  --gold:     #c8a96e;
-  --gold2:    #e8c987;
-  --blue:     #2E6B8A;
-  --blue2:    #3d8aad;
-  --text:     #e8f0f5;
-  --muted:    #6b8a9a;
-  --green:    #27ae60;
-  --yellow:   #f39c12;
-  --red:      #e74c3c;
-  --radius:   10px;
-}
-* { box-sizing: border-box; margin: 0; padding: 0; }
-body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; min-height: 100vh; }
-
-/* ── HEADER ── */
-.header {
-  background: linear-gradient(135deg, var(--bg2) 0%, #0a1520 100%);
-  border-bottom: 1px solid var(--border);
-  padding: 16px 24px;
-  display: flex; align-items: center; gap: 16px;
-}
-.header-logo { width: 36px; height: 36px; object-fit: contain; }
-.header-title { font-family: 'Syne', sans-serif; font-weight: 800; font-size: 18px; color: var(--gold); }
-.header-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
-.btn-back {
-  margin-left: auto; padding: 8px 16px; background: transparent;
-  border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--muted); font-size: 13px; cursor: pointer; text-decoration: none;
-  display: flex; align-items: center; gap: 6px; transition: all .2s;
-}
-.btn-back:hover { border-color: var(--blue); color: var(--text); }
-
-/* ── LAYOUT ── */
-.container { max-width: 1200px; margin: 0 auto; padding: 24px; }
-.page-title { font-family: 'Syne', sans-serif; font-size: 24px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
-.page-sub { font-size: 13px; color: var(--muted); margin-bottom: 24px; }
-
-/* ── CARDS ── */
-.card {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 20px; margin-bottom: 20px;
-}
-.card-title {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
-  color: var(--gold); text-transform: uppercase; letter-spacing: .05em;
-  margin-bottom: 16px; display: flex; align-items: center; gap: 8px;
-}
-
-/* ── UPLOAD ZONE ── */
-.upload-zone {
-  border: 2px dashed var(--border); border-radius: var(--radius);
-  padding: 48px 24px; text-align: center; cursor: pointer;
-  transition: all .25s; position: relative;
-}
-.upload-zone:hover, .upload-zone.drag { border-color: var(--blue); background: rgba(46,107,138,.08); }
-.upload-zone.done { border-color: var(--green); border-style: solid; }
-.upload-icon { font-size: 40px; margin-bottom: 12px; }
-.upload-label { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 6px; }
-.upload-hint { font-size: 12px; color: var(--muted); }
-.upload-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-
-/* ── PROGRESS ── */
-.progress-bar { background: var(--bg3); border-radius: 6px; height: 6px; overflow: hidden; margin: 12px 0; display: none; }
-.progress-fill { height: 100%; background: linear-gradient(90deg, var(--blue), var(--gold)); border-radius: 6px; transition: width .3s; width: 0; }
-.progress-text { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--muted); }
-
-/* ── STATS GRID ── */
-.stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-.stat-box {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 16px; text-align: center;
-}
-.stat-num { font-family: 'Syne', sans-serif; font-size: 28px; font-weight: 800; color: var(--gold); }
-.stat-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-top: 4px; }
-.stat-box.green .stat-num { color: var(--green); }
-.stat-box.yellow .stat-num { color: var(--yellow); }
-.stat-box.red .stat-num { color: var(--red); }
-
-/* ── TABELA ── */
-.table-wrap { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-thead th {
-  background: var(--bg3); color: var(--muted); font-weight: 600;
-  font-size: 11px; text-transform: uppercase; letter-spacing: .05em;
-  padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border);
-  cursor: pointer; user-select: none; white-space: nowrap;
-}
-thead th:hover { color: var(--text); }
-thead th .sort-arrow { margin-left: 4px; opacity: .4; }
-thead th.sorted .sort-arrow { opacity: 1; color: var(--gold); }
-tbody tr { border-bottom: 1px solid rgba(30,58,82,.5); transition: background .15s; }
-tbody tr:hover { background: rgba(46,107,138,.1); }
-tbody td { padding: 10px 12px; }
-.td-lote { font-family: 'DM Mono', monospace; font-size: 12px; color: var(--gold); font-weight: 600; }
-.td-forn { font-weight: 500; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.td-num { font-family: 'DM Mono', monospace; text-align: right; }
-.badge {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 26px; height: 26px; border-radius: 50%;
-  font-family: 'Syne', sans-serif; font-weight: 800; font-size: 12px;
-}
-.badge-A { background: rgba(39,174,96,.2); color: var(--green); }
-.badge-B { background: rgba(243,156,18,.2); color: var(--yellow); }
-.badge-C { background: rgba(231,76,60,.2); color: var(--red); }
-
-/* ── DEFEITOS MINI BAR ── */
-.def-bar { display: flex; gap: 2px; height: 14px; width: 100px; }
-.def-seg { border-radius: 2px; height: 100%; }
-
-/* ── FILTROS ── */
-.filters { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 16px; align-items: center; }
-.filter-input {
-  background: var(--bg3); border: 1px solid var(--border); border-radius: var(--radius);
-  color: var(--text); font-size: 13px; padding: 8px 12px; outline: none;
-  transition: border .2s;
-}
-.filter-input:focus { border-color: var(--blue); }
-.filter-select { appearance: none; cursor: pointer; padding-right: 28px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b8a9a'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
-.filter-count { font-size: 12px; color: var(--muted); margin-left: auto; }
-
-/* ── BOTÕES ── */
-.btn {
-  padding: 10px 20px; border-radius: var(--radius); font-size: 13px; font-weight: 600;
-  cursor: pointer; border: none; display: inline-flex; align-items: center; gap: 8px;
-  transition: all .2s; font-family: 'DM Sans', sans-serif;
-}
-.btn-primary { background: var(--blue); color: white; }
-.btn-primary:hover { background: var(--blue2); }
-.btn-gold { background: var(--gold); color: #080f1a; }
-.btn-gold:hover { background: var(--gold2); }
-.btn-outline { background: transparent; border: 1px solid var(--border); color: var(--muted); }
-.btn-outline:hover { border-color: var(--blue); color: var(--text); }
-.btn-danger { background: rgba(231,76,60,.15); border: 1px solid rgba(231,76,60,.3); color: var(--red); }
-.btn-danger:hover { background: rgba(231,76,60,.25); }
-.btn:disabled { opacity: .4; cursor: not-allowed; }
-.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-
-/* ── ANÁLISE PANEL ── */
-.analysis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-@media (max-width: 700px) { .analysis-grid { grid-template-columns: 1fr; } }
-
-.rank-list { display: flex; flex-direction: column; gap: 8px; }
-.rank-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px; background: var(--bg3); border-radius: 8px;
-  border: 1px solid var(--border);
-}
-.rank-pos { font-family: 'DM Mono', monospace; font-size: 11px; color: var(--muted); width: 20px; }
-.rank-nome { font-size: 13px; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.rank-val { font-family: 'DM Mono', monospace; font-size: 13px; font-weight: 600; }
-.rank-bar-bg { height: 4px; background: var(--bg); border-radius: 2px; margin-top: 4px; }
-.rank-bar-fill { height: 100%; border-radius: 2px; background: var(--blue); transition: width .6s; }
-
-/* ── ALERTA ── */
-.alert {
-  padding: 12px 16px; border-radius: var(--radius); font-size: 13px;
-  display: none; margin-bottom: 16px; align-items: center; gap: 10px;
-}
-.alert.show { display: flex; }
-.alert-success { background: rgba(39,174,96,.15); border: 1px solid rgba(39,174,96,.3); color: #6fcf97; }
-.alert-error   { background: rgba(231,76,60,.15); border: 1px solid rgba(231,76,60,.3); color: var(--red); }
-.alert-info    { background: rgba(46,107,138,.2); border: 1px solid var(--border); color: var(--text); }
-
-/* ── DETAIL MODAL ── */
-.modal-overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100;
-  display: none; align-items: center; justify-content: center; padding: 20px;
-}
-.modal-overlay.show { display: flex; }
-.modal-box {
-  background: var(--bg2); border: 1px solid var(--border); border-radius: 14px;
-  padding: 28px; max-width: 640px; width: 100%; max-height: 90vh; overflow-y: auto;
-}
-.modal-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; }
-.modal-title { font-family: 'Syne', sans-serif; font-size: 18px; font-weight: 700; }
-.modal-close { background: none; border: none; color: var(--muted); font-size: 20px; cursor: pointer; line-height: 1; }
-.def-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid rgba(30,58,82,.4); font-size: 13px; }
-.def-row:last-child { border: none; }
-.def-nome { color: var(--muted); }
-.def-val { font-family: 'DM Mono', monospace; font-weight: 600; }
-.def-pct-bar { width: 80px; height: 6px; background: var(--bg3); border-radius: 3px; overflow: hidden; }
-.def-pct-fill { height: 100%; border-radius: 3px; }
-
-/* ── EMPTY STATE ── */
-.empty { text-align: center; padding: 60px 24px; color: var(--muted); }
-.empty-icon { font-size: 48px; margin-bottom: 12px; opacity: .4; }
-.empty-text { font-size: 14px; }
-
-/* ── TOAST ── */
-.toast {
-  position: fixed; bottom: 24px; right: 24px; z-index: 200;
-  background: var(--bg3); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 12px 20px; font-size: 13px;
-  transform: translateY(80px); opacity: 0; transition: all .3s; pointer-events: none;
-}
-.toast.show { transform: translateY(0); opacity: 1; }
-
-/* ── SUPABASE STATUS ── */
-.sync-status { font-size: 11px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
-.sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
-.sync-dot.off { background: var(--red); }
-
-/* ── TABS ── */
-.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
-.tab {
-  padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--muted);
-  cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s;
-  font-family: 'DM Sans', sans-serif;
-}
-.tab:hover { color: var(--text); }
-.tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-
-.tab-panel { display: none; }
-.tab-panel.active { display: block; }
-</style>
+<link rel="stylesheet" href="ds.css">
 </head>
-<body>
+<body class="page-bg">
 
 <!-- HEADER -->
 <div class="header">
@@ -837,7 +615,7 @@ function renderAnalise() {
     ['C','Crítico (>12%)','var(--red)'],
   ].map(([c,label,cor]) => `
     <div style="flex:1;min-width:160px;background:var(--bg3);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center">
-      <div style="font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:${cor}">${cls[c]}</div>
+      <div style="font-family:var(--font-family);font-size:32px;font-weight:800;color:${cor}">${cls[c]}</div>
       <div style="font-size:12px;color:var(--muted);margin:4px 0">${label}</div>
       <div style="font-size:18px;font-weight:700;color:${cor}">${Math.round(cls[c]/total*100)}%</div>
     </div>
@@ -872,7 +650,7 @@ function renderDefeitos() {
       <div style="margin-bottom:12px">
         <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:5px">
           <span style="color:var(--text);font-weight:500">${DEF_LABELS[k]}</span>
-          <span style="font-family:'DM Mono',monospace;color:var(--muted)">${v.toLocaleString('pt-BR')} pçs &nbsp;·&nbsp; <span style="color:${DEF_COLORS[k]}">${pct}%</span></span>
+          <span style="font-family:var(--font-mono);color:var(--muted)">${v.toLocaleString('pt-BR')} pçs &nbsp;·&nbsp; <span style="color:${DEF_COLORS[k]}">${pct}%</span></span>
         </div>
         <div style="height:10px;background:var(--bg3);border-radius:5px;overflow:hidden">
           <div style="height:100%;width:${barW}%;background:${DEF_COLORS[k]};border-radius:5px;transition:width .6s"></div>
@@ -918,11 +696,11 @@ function abrirDetalhe(loteNum) {
   document.getElementById('modalLoteBody').innerHTML = `
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px">
       <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:var(--gold)">${l.qtd_total.toLocaleString('pt-BR')}</div>
+        <div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:var(--gold)">${l.qtd_total.toLocaleString('pt-BR')}</div>
         <div style="font-size:11px;color:var(--muted)">Peças</div>
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:12px;text-align:center">
-        <div style="font-family:'DM Mono',monospace;font-size:20px;font-weight:700;color:${l.pct_defeito>12?'var(--red)':l.pct_defeito>5?'var(--yellow)':'var(--green)'}">${l.pct_defeito.toFixed(1)}%</div>
+        <div style="font-family:var(--font-mono);font-size:20px;font-weight:700;color:${l.pct_defeito>12?'var(--red)':l.pct_defeito>5?'var(--yellow)':'var(--green)'}">${l.pct_defeito.toFixed(1)}%</div>
         <div style="font-size:11px;color:var(--muted)">% Defeito</div>
       </div>
       <div style="background:var(--bg3);border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px">

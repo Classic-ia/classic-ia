@@ -6,481 +6,9 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#0e0e0e">
 <title>Inspeção CQ — Classic Couros</title>
-<style>
-/* ──────────────────────────────────────────────────
-   VARIÁVEIS
-────────────────────────────────────────────────── */
-:root {
-  color-scheme: dark;
-  --bg:       #0e0e0e;
-  --bg2:      #141414;
-  --bg3:      #1a1a1a;
-  --bg4:      #222;
-  --border:   #2a2a2a;
-  --border2:  #333;
-  --accent:   #c8a96e;
-  --accent2:  #e2c98a;
-  --accent3:  rgba(200,169,110,.1);
-  --text:     #e8e3da;
-  --muted:    #7a7468;
-  --muted2:   #4a4540;
-
-  /* status */
-  --aprovado:       #27ae60;
-  --aprovado-bg:    rgba(39,174,96,.12);
-  --aprovado-bd:    rgba(39,174,96,.35);
-  --ressalva:       #d4a843;
-  --ressalva-bg:    rgba(212,168,67,.12);
-  --ressalva-bd:    rgba(212,168,67,.35);
-  --desconto:       #e07b30;
-  --desconto-bg:    rgba(224,123,48,.12);
-  --desconto-bd:    rgba(224,123,48,.35);
-  --reprovado:      #cc4444;
-  --reprovado-bg:   rgba(204,68,68,.12);
-  --reprovado-bd:   rgba(204,68,68,.35);
-  --critico-bg:     rgba(204,68,68,.18);
-  --critico-bd:     #cc4444;
-
-  --radius:    14px;
-  --radius-sm: 10px;
-  --touch:     54px; /* altura mínima de toque */
-}
-
-/* ──────────────────────────────────────────────────
-   RESET + BASE
-────────────────────────────────────────────────── */
-*, *::before, *::after { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
-html { font-size: 16px; }
-body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, 'Segoe UI', 'DM Sans', sans-serif;
-  min-height: 100vh;
-  padding-bottom: 100px; /* espaço para o botão fixo */
-  -webkit-font-smoothing: antialiased;
-}
-input, select, textarea, button { font-family: inherit; }
-
-/* ──────────────────────────────────────────────────
-   HEADER
-────────────────────────────────────────────────── */
-.header {
-  background: var(--bg2);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 100;
-  padding: 0 16px;
-  height: 56px;
-  display: flex; align-items: center; gap: 12px;
-}
-.header-logo { height: 34px; width: auto; border-radius: 6px; }
-.header-info { flex: 1; }
-.header-title {
-  font-size: 13px; font-weight: 700; color: var(--accent);
-  line-height: 1.2;
-}
-.header-sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
-.header-id {
-  font-size: 9px; color: var(--muted); font-family: monospace;
-  background: var(--bg3); border: 1px solid var(--border2);
-  padding: 4px 8px; border-radius: 6px; white-space: nowrap;
-}
-.back-link {
-  font-size: 10px; color: var(--muted); text-decoration: none;
-  border: 1px solid var(--border2); border-radius: 6px;
-  padding: 5px 10px; transition: all .15s;
-}
-.back-link:hover { color: var(--accent); border-color: var(--accent); }
-
-/* ──────────────────────────────────────────────────
-   PÁGINA
-────────────────────────────────────────────────── */
-.page { max-width: 600px; margin: 0 auto; padding: 16px 12px; }
-
-/* ──────────────────────────────────────────────────
-   CARTÃO
-────────────────────────────────────────────────── */
-.card {
-  background: var(--bg2);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  overflow: hidden;
-  margin-bottom: 14px;
-}
-.card-header {
-  padding: 14px 16px 12px;
-  border-bottom: 1px solid var(--border);
-  display: flex; align-items: center; gap: 10px;
-}
-.card-icon { font-size: 20px; }
-.card-title { font-size: 13px; font-weight: 700; letter-spacing: .03em; }
-.card-num {
-  margin-left: auto; background: var(--accent3); color: var(--accent);
-  font-size: 10px; font-weight: 700; padding: 3px 9px;
-  border-radius: 20px; border: 1px solid rgba(200,169,110,.2);
-  font-family: monospace;
-}
-.card-body { padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-
-/* ──────────────────────────────────────────────────
-   CAMPO
-────────────────────────────────────────────────── */
-.field { display: flex; flex-direction: column; gap: 6px; }
-.field-label {
-  font-size: 11px; font-weight: 700; color: var(--muted);
-  text-transform: uppercase; letter-spacing: .06em;
-  display: flex; align-items: center; gap: 5px;
-}
-.req { color: var(--reprovado); font-size: 13px; line-height: 1; }
-.field-input {
-  height: var(--touch);
-  background: var(--bg3);
-  border: 1.5px solid var(--border2);
-  border-radius: var(--radius-sm);
-  color: var(--text);
-  font-size: 16px; /* evita zoom no iOS */
-  padding: 0 14px;
-  transition: border-color .15s;
-  width: 100%;
-  -webkit-appearance: none;
-}
-.field-input:focus {
-  outline: none;
-  border-color: var(--accent);
-  background: rgba(200,169,110,.05);
-}
-.field-input::placeholder { color: var(--muted2); }
-.field-input.error { border-color: var(--reprovado) !important; }
-.field-input.scannable { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2'%3E%3Cpath d='M3 7V5a2 2 0 012-2h2M17 3h2a2 2 0 012 2v2M21 17v2a2 2 0 01-2 2h-2M7 21H5a2 2 0 01-2-2v-2M8 7v10M12 7v10M16 7v10'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; padding-right: 32px; }
-.field-input.scan-ok { border-color: var(--green, #27ae60) !important; background-color: rgba(39,174,96,.08); transition: all .3s; }
-.field-input[type="date"],
-.field-input[type="time"] { cursor: pointer; }
-select.field-input { cursor: pointer; }
-select.field-input option, select.field-input optgroup {
-  background: #1a1a1a; color: #e8e3da;
-}
-select.field-input option:checked {
-  background: var(--accent, #c8a96e); color: #1a1200;
-}
-select.field-input optgroup {
-  font-weight: 700; color: var(--accent, #c8a96e);
-}
-
-textarea.field-input {
-  height: auto; min-height: 90px; padding: 12px 14px;
-  resize: vertical; line-height: 1.5;
-}
-
-/* ──────────────────────────────────────────────────
-   GRID 2 COLUNAS
-────────────────────────────────────────────────── */
-.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-
-/* ──────────────────────────────────────────────────
-   DEFEITOS — CARD GRANDE
-────────────────────────────────────────────────── */
-.defect-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-.defect-item {
-  background: var(--bg3);
-  border: 1.5px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 12px 12px 10px;
-  display: flex; flex-direction: column; gap: 8px;
-  transition: border-color .15s;
-  position: relative;
-}
-.defect-item.active { border-color: var(--reprovado); background: var(--reprovado-bg); }
-.defect-item.active .defect-name { color: var(--reprovado); }
-.defect-icon { font-size: 18px; line-height: 1; }
-.defect-name { font-size: 11px; font-weight: 700; color: var(--muted); letter-spacing:.03em; }
-.defect-input {
-  height: 48px;
-  background: var(--bg4);
-  border: 1px solid var(--border2);
-  border-radius: 8px;
-  color: var(--text);
-  font-size: 22px; font-weight: 700;
-  text-align: center;
-  width: 100%;
-  -webkit-appearance: none;
-  appearance: none;
-}
-.defect-item.active .defect-input { color: var(--reprovado); border-color: var(--reprovado-bd); }
-.defect-input:focus { outline: none; border-color: var(--accent); }
-
-/* botões +/- */
-.defect-stepper { display: flex; gap: 6px; align-items: center; }
-.step-btn {
-  background: var(--bg4); border: 1px solid var(--border2);
-  border-radius: 8px; width: 40px; height: 40px;
-  font-size: 20px; font-weight: 700; color: var(--muted);
-  cursor: pointer; display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0; transition: all .15s; user-select: none;
-  -webkit-user-select: none;
-}
-.step-btn:active { background: var(--accent3); color: var(--accent); border-color: var(--accent); transform: scale(.95); }
-.step-btn.minus:active { background: var(--reprovado-bg); color: var(--reprovado); border-color: var(--reprovado-bd); }
-.defect-stepper .defect-input { flex: 1; min-width: 36px; height: 40px; font-size: 18px; }
-.defect-pct {
-  text-align: center;
-  font-family: 'DM Mono', monospace; font-size: 10px; font-weight: 600;
-  color: var(--muted); white-space: nowrap;
-  margin-top: 2px; min-height: 14px;
-  transition: color .2s;
-}
-.defect-item.active .defect-pct { color: var(--reprovado); }
-
-/* ──────────────────────────────────────────────────
-   RESULTADO — BLOCO PRINCIPAL
-────────────────────────────────────────────────── */
-.result-block {
-  border-radius: var(--radius-sm);
-  padding: 18px 16px;
-  border: 2px solid var(--border2);
-  background: var(--bg3);
-  transition: all .3s;
-}
-.result-block.aprovado   { border-color: var(--aprovado-bd);  background: var(--aprovado-bg); }
-.result-block.ressalva   { border-color: var(--ressalva-bd);  background: var(--ressalva-bg); }
-.result-block.desconto   { border-color: var(--desconto-bd);  background: var(--desconto-bg); }
-.result-block.reprovado  { border-color: var(--reprovado-bd); background: var(--reprovado-bg); }
-
-.result-pct {
-  font-size: 52px; font-weight: 800; line-height: 1; font-family: monospace;
-  color: var(--muted); text-align: center; margin-bottom: 6px;
-  transition: color .3s;
-}
-.result-block.aprovado  .result-pct  { color: var(--aprovado); }
-.result-block.ressalva  .result-pct  { color: var(--ressalva); }
-.result-block.desconto  .result-pct  { color: var(--desconto); }
-.result-block.reprovado .result-pct  { color: var(--reprovado); }
-
-.result-label {
-  font-size: 15px; font-weight: 700; text-align: center; color: var(--muted);
-  letter-spacing: .05em; text-transform: uppercase; margin-bottom: 12px;
-  transition: color .3s;
-}
-.result-block.aprovado  .result-label  { color: var(--aprovado); }
-.result-block.ressalva  .result-label  { color: var(--ressalva); }
-.result-block.desconto  .result-label  { color: var(--desconto); }
-.result-block.reprovado .result-label  { color: var(--reprovado); }
-
-.result-row {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 7px 0; border-top: 1px solid rgba(255,255,255,.05);
-  font-size: 12px;
-}
-.result-row .rk { color: var(--muted); }
-.result-row .rv { font-weight: 700; font-family: monospace; font-size: 14px; }
-
-.critico-alert {
-  display: none; background: var(--reprovado-bg); border: 1px solid var(--reprovado-bd);
-  border-radius: 8px; padding: 10px 13px; font-size: 12px; color: var(--reprovado);
-  font-weight: 600; text-align: center; margin-top: 10px; animation: pulse 1.5s infinite;
-}
-.critico-alert.show { display: block; }
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.7} }
-
-/* Barra de progresso */
-.progress-bar { height: 8px; background: var(--bg4); border-radius: 6px; overflow: hidden; margin-top: 10px; }
-.progress-fill { height: 100%; border-radius: 6px; width: 0; transition: width .4s, background .3s; }
-
-/* ──────────────────────────────────────────────────
-   STATUS FINAL — SELETOR GRANDE
-────────────────────────────────────────────────── */
-/* Status grid removido — decisão está no módulo lancamento_cargas.html */
-.status-grid { display: none; }
-.status-opt {
-  border: 2px solid var(--border2);
-  border-radius: var(--radius-sm);
-  padding: 14px 10px;
-  text-align: center;
-  cursor: pointer;
-  transition: all .15s;
-  background: var(--bg3);
-  user-select: none; -webkit-user-select: none;
-}
-.status-opt input[type=radio] { display: none; }
-.status-opt .so-icon { font-size: 22px; margin-bottom: 6px; display: block; }
-.status-opt .so-label { font-size: 11px; font-weight: 700; letter-spacing:.04em; color: var(--muted); }
-.status-opt.selected-aprovado   { border-color: var(--aprovado);  background: var(--aprovado-bg); }
-.status-opt.selected-ressalva   { border-color: var(--ressalva);  background: var(--ressalva-bg); }
-.status-opt.selected-desconto   { border-color: var(--desconto);  background: var(--desconto-bg); }
-.status-opt.selected-reprovado  { border-color: var(--reprovado); background: var(--reprovado-bg); }
-.status-opt.selected-aprovado  .so-label { color: var(--aprovado); }
-.status-opt.selected-ressalva  .so-label { color: var(--ressalva); }
-.status-opt.selected-desconto  .so-label { color: var(--desconto); }
-.status-opt.selected-reprovado .so-label { color: var(--reprovado); }
-
-/* ──────────────────────────────────────────────────
-   DESCONTO — campo condicional
-────────────────────────────────────────────────── */
-.conditional-block {
-  display: none; background: var(--bg3);
-  border: 1.5px solid var(--border2);
-  border-radius: var(--radius-sm); padding: 14px;
-  animation: fadeIn .2s ease;
-}
-.conditional-block.show { display: block; }
-@keyframes fadeIn { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
-
-/* ──────────────────────────────────────────────────
-   FOTOS
-────────────────────────────────────────────────── */
-.foto-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
-.foto-btn {
-  height: 110px;
-  background: var(--bg3);
-  border: 2px dashed var(--border2);
-  border-radius: var(--radius-sm);
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  gap: 8px; cursor: pointer; transition: all .15s;
-  position: relative; overflow: hidden;
-  font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing:.03em;
-}
-.foto-btn:active { border-color: var(--accent); background: var(--accent3); }
-.foto-btn .foto-icon { font-size: 28px; }
-.foto-btn input[type=file] { display: none; }
-.foto-btn img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: calc(var(--radius-sm) - 2px); }
-.foto-btn .foto-overlay {
-  position: absolute; inset: 0; background: rgba(0,0,0,.45);
-  display: flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 700; color: #fff; letter-spacing:.05em;
-  border-radius: calc(var(--radius-sm) - 2px);
-}
-.foto-btn.has-foto { border-style: solid; border-color: var(--accent); }
-
-/* Popup de escolha Camera/Galeria */
-.foto-source-popup {
-  position: fixed; inset: 0; background: rgba(0,0,0,.6);
-  z-index: 250; display: flex; align-items: flex-end; justify-content: center;
-  padding: 16px;
-  animation: fadeIn .15s ease;
-}
-.foto-source-popup .popup-sheet {
-  background: var(--bg2); border: 1px solid var(--border);
-  border-radius: 14px; padding: 16px; width: 100%; max-width: 360px;
-  display: flex; flex-direction: column; gap: 8px;
-}
-.foto-source-popup .popup-title {
-  font-family: 'Syne', sans-serif; font-weight: 700; font-size: 14px;
-  color: var(--text); text-align: center; margin-bottom: 4px;
-}
-.foto-source-popup .popup-btn {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 16px; border: 1px solid var(--border); border-radius: 10px;
-  background: var(--bg3); color: var(--text); font-size: 14px; font-weight: 600;
-  cursor: pointer; transition: background .15s;
-}
-.foto-source-popup .popup-btn:active { background: var(--accent3); border-color: var(--accent); }
-.foto-source-popup .popup-btn svg { flex-shrink: 0; }
-.foto-source-popup .popup-cancel {
-  padding: 12px; border: none; border-radius: 10px; margin-top: 4px;
-  background: transparent; color: var(--muted); font-size: 13px;
-  font-weight: 600; cursor: pointer; text-align: center;
-}
-
-/* ──────────────────────────────────────────────────
-   BOTÃO SALVAR — FIXO NO RODAPÉ
-────────────────────────────────────────────────── */
-.save-bar {
-  position: fixed; bottom: 0; left: 0; right: 0;
-  background: var(--bg2); border-top: 1px solid var(--border);
-  padding: 12px 16px; z-index: 200;
-  display: flex; gap: 10px; align-items: center;
-}
-.save-status { flex: 1; font-size: 11px; color: var(--muted); }
-.btn-save {
-  height: 52px; min-width: 180px;
-  background: linear-gradient(135deg, var(--accent), var(--accent2));
-  border: none; border-radius: var(--radius-sm);
-  color: #1a1200; font-size: 15px; font-weight: 800;
-  cursor: pointer; letter-spacing: .04em;
-  transition: all .15s; display: flex; align-items: center; justify-content: center; gap: 8px;
-  box-shadow: 0 4px 18px rgba(200,169,110,.25);
-}
-.btn-save:active { transform: scale(.97); box-shadow: none; }
-.btn-save:disabled { background: var(--bg3); color: var(--muted); box-shadow: none; cursor: not-allowed; }
-
-/* ──────────────────────────────────────────────────
-   TOAST + MODAL
-────────────────────────────────────────────────── */
-.toast {
-  position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%) translateY(20px);
-  background: var(--bg4); color: var(--text);
-  padding: 12px 20px; border-radius: 30px;
-  font-size: 13px; font-weight: 600;
-  border: 1px solid var(--border2);
-  opacity: 0; transition: all .25s; pointer-events: none; z-index: 300;
-  max-width: calc(100vw - 40px); text-align: center;
-  box-shadow: 0 8px 32px rgba(0,0,0,.4);
-}
-.toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.toast.ok   { background: var(--aprovado-bg); border-color: var(--aprovado-bd); color: var(--aprovado); }
-.toast.err  { background: var(--reprovado-bg); border-color: var(--reprovado-bd); color: var(--reprovado); }
-
-/* modal sucesso */
-.modal-overlay {
-  display: none; position: fixed; inset: 0; background: rgba(0,0,0,.8);
-  z-index: 400; align-items: center; justify-content: center; padding: 20px;
-}
-.modal-overlay.show { display: flex; }
-.modal-box {
-  background: var(--bg2); border: 1px solid var(--border2);
-  border-radius: var(--radius); padding: 28px 22px; width: 100%; max-width: 360px;
-  text-align: center;
-}
-.modal-icon { font-size: 48px; margin-bottom: 10px; }
-.modal-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
-.modal-sub { font-size: 12px; color: var(--muted); line-height: 1.6; margin-bottom: 20px; }
-.modal-id { font-size: 18px; font-weight: 800; color: var(--accent); font-family: monospace; letter-spacing:.1em; }
-.modal-actions { display: flex; gap: 10px; }
-.modal-btn {
-  flex: 1; height: 48px; border-radius: var(--radius-sm);
-  font-size: 13px; font-weight: 700; cursor: pointer; transition: all .15s;
-}
-.modal-btn.primary { background: var(--accent); border: none; color: #1a1200; }
-.modal-btn.secondary { background: none; border: 1.5px solid var(--border2); color: var(--muted); }
-.modal-btn:active { transform: scale(.97); }
-
-/* ──────────────────────────────────────────────────
-   INFO CHIP
-────────────────────────────────────────────────── */
-.info-chip {
-  display: inline-flex; align-items: center; gap: 5px;
-  background: var(--bg3); border: 1px solid var(--border2);
-  border-radius: 8px; padding: 5px 10px;
-  font-size: 10px; color: var(--muted); font-family: monospace;
-}
-.field-hint { font-size: 10px; color: var(--muted2); margin-top: -4px; }
-
-/* ──────────────────────────────────────────────────
-   OFFLINE BANNER
-────────────────────────────────────────────────── */
-.offline-banner {
-  display: none; background: var(--ressalva-bg); border-bottom: 1px solid var(--ressalva-bd);
-  padding: 8px 16px; font-size: 11px; color: var(--ressalva); font-weight: 600;
-  text-align: center;
-}
-.offline-banner.show { display: block; }
-
-/* ──────────────────────────────────────────────────
-   RESPONSIVO
-────────────────────────────────────────────────── */
-@media (max-width: 380px) {
-  .defect-grid { grid-template-columns: 1fr; }
-  .foto-grid { grid-template-columns: 1fr; }
-  .status-grid { grid-template-columns: 1fr 1fr; }
-  .grid-2 { grid-template-columns: 1fr; }
-}
-@media (min-width: 600px) {
-  .page { padding: 20px 24px; }
-  .defect-grid { grid-template-columns: 1fr 1fr 1fr; }
-}
-</style>
+<link rel="stylesheet" href="ds.css">
 </head>
-<body>
+<body class="page-bg">
 
 <!-- Offline Banner -->
 <div class="offline-banner" id="offlineBanner">Sem conexao — modo offline ativo · dados salvos localmente</div>
@@ -518,7 +46,7 @@ textarea.field-input {
 <!-- WORKFLOW: Painel de revisão (Bloco 6) -->
 <div id="wf-revisao-panel" style="display:none;max-width:600px;margin:0 auto;padding:8px 12px;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
-    <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:12px;font-family:'Syne',sans-serif;">
+    <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:12px;font-family:var(--font-family);">
       Revisão da Inspeção
     </div>
     <div style="display:flex;gap:8px;margin-bottom:12px;">
@@ -540,7 +68,7 @@ textarea.field-input {
     <button id="wf-rev-submit" onclick="submeterRevisao()" style="
       width:100%;padding:12px;border:none;border-radius:var(--radius-sm);
       background:var(--accent);color:#0e0e0e;font-size:14px;font-weight:700;
-      cursor:pointer;font-family:'DM Sans',sans-serif;
+      cursor:pointer;font-family:var(--font-family);
     ">Submeter Revisão</button>
   </div>
 </div>
@@ -548,7 +76,7 @@ textarea.field-input {
 <!-- WORKFLOW: Histórico de revisões + NCs (Bloco 6+7) -->
 <div id="wf-historico" style="display:none;max-width:600px;margin:0 auto;padding:8px 12px;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
-    <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:12px;font-family:'Syne',sans-serif;">
+    <div style="font-size:14px;font-weight:700;color:var(--accent);margin-bottom:12px;font-family:var(--font-family);">
       Timeline do Workflow
     </div>
     <div id="wf-timeline"></div>
@@ -559,7 +87,7 @@ textarea.field-input {
 <div id="wf-ncs-card" style="display:none;max-width:600px;margin:0 auto;padding:8px 12px;">
   <div style="background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-      <div style="font-size:14px;font-weight:700;color:var(--accent);font-family:'Syne',sans-serif;">
+      <div style="font-size:14px;font-weight:700;color:var(--accent);font-family:var(--font-family);">
         Não Conformidades
       </div>
       <button id="wf-nc-btn" onclick="abrirModalNC()" style="
@@ -582,7 +110,7 @@ textarea.field-input {
     background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius);
     padding:24px;max-width:500px;width:100%;max-height:90vh;overflow-y:auto;
   ">
-    <div style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:16px;font-family:'Syne',sans-serif;">
+    <div style="font-size:16px;font-weight:700;color:var(--accent);margin-bottom:16px;font-family:var(--font-family);">
       Registrar Não Conformidade
     </div>
     <div style="display:flex;flex-direction:column;gap:12px;">
@@ -799,7 +327,7 @@ textarea.field-input {
         <div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;
              padding:24px;max-width:420px;width:100%;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
-            <div style="font-family:'Syne',sans-serif;font-weight:700;font-size:16px;" id="ocrModalTitle">Fotografar</div>
+            <div style="font-family:var(--font-family);font-weight:700;font-size:16px;" id="ocrModalTitle">Fotografar</div>
             <button onclick="fecharOCR()" style="background:none;border:1px solid var(--border);border-radius:6px;color:var(--muted);font-size:14px;cursor:pointer;padding:4px 10px;transition:all .15s;" onmouseover="this.style.color='var(--accent)';this.style.borderColor='var(--accent)'" onmouseout="this.style.color='var(--muted)';this.style.borderColor='var(--border)'">Fechar</button>
           </div>
           <div style="background:var(--bg3);border-radius:8px;overflow:hidden;margin-bottom:16px;aspect-ratio:16/9;display:flex;align-items:center;justify-content:center;" id="ocrPreview">
@@ -826,7 +354,7 @@ textarea.field-input {
             <div style="display:flex;gap:8px;align-items:center;">
               <input type="text" id="ocrTexto"
                 style="flex:1;background:var(--bg3);border:1px solid var(--blue);border-radius:8px;
-                       padding:10px 12px;color:var(--text);font-family:'DM Mono',monospace;font-size:14px;outline:none;">
+                       padding:10px 12px;color:var(--text);font-family:var(--font-mono);font-size:14px;outline:none;">
               <button onclick="confirmarOCR()"
                 style="padding:10px 16px;background:var(--green,#27ae60);border:none;border-radius:8px;
                        color:white;font-size:13px;font-weight:700;cursor:pointer;">Usar</button>
@@ -2599,7 +2127,7 @@ function abrirConfigN8n(){
       <input type="url" id="_n8nUrlInput" value="${atual}"
         placeholder="http://localhost:5678"
         style="width:100%;padding:10px 12px;background:var(--bg3);border:1px solid var(--border);
-               border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:13px;
+               border-radius:8px;color:var(--text);font-family:var(--font-mono);font-size:13px;
                outline:none;box-sizing:border-box;">
       <div style="margin:8px 0 4px;font-size:11px;color:var(--muted);">
         Status: <span id="_n8nStatus" style="color:var(--muted);">—</span>
@@ -2907,24 +2435,7 @@ function gerarPDFInspecao() {
 
   const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <title>Relatório de Inspeção CQ</title>
-<style>
-  body{font-family:Arial,sans-serif;font-size:12px;color:#1a1a1a;max-width:780px;margin:0 auto;padding:20px;}
-  .hdr{background:#1a3a52;color:white;padding:16px 20px;border-radius:6px;margin-bottom:20px;}
-  .hdr h1{color:#c8a96e;font-size:17px;margin:0 0 3px}
-  .hdr p{color:#8bafc4;font-size:11px;margin:0}
-  h2{font-size:12px;color:#2E6B8A;border-bottom:2px solid #2E6B8A;padding-bottom:4px;margin:16px 0 8px}
-  table{width:100%;border-collapse:collapse;margin-bottom:10px}
-  th{background:#1a3a52;color:white;padding:6px 8px;text-align:left;font-size:11px}
-  td{padding:5px 8px;font-size:12px}
-  .info td:first-child{font-weight:600;color:#444;width:180px}
-  .cls{padding:10px 14px;border-radius:6px;font-weight:700;display:inline-block;margin:6px 0;font-size:13px}
-  .obs{background:#f8f9fa;border-left:3px solid #c8a96e;padding:10px;font-size:12px;margin:8px 0}
-  .footer{margin-top:28px;padding-top:10px;border-top:1px solid #ddd;color:#888;font-size:10px;display:flex;justify-content:space-between}
-  .ass{display:flex;justify-content:space-between;margin-top:36px}
-  .ass-bloco{text-align:center;width:45%}
-  .ass-linha{border-top:1px solid #555;margin-top:36px;padding-top:5px;font-size:11px}
-  @media print{body{padding:0}}
-</style></head><body>
+</head><body class="page-bg">
 
 <div class="hdr">
   <h1>RELATÓRIO DE INSPEÇÃO DE QUALIDADE</h1>

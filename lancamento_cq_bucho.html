@@ -5,306 +5,24 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lançamento CQ Bucho — Classic Couros</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
-<style>
-@import url('https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,400;0,500;1,400&family=DM+Sans:wght@400;500;600&family=Syne:wght@700;800&display=swap');
-
-:root {
-  --bg:       #08080f;
-  --surface:  #111120;
-  --surface2: #16162a;
-  --border:   #1e1e35;
-  --border2:  #2a2a48;
-  --accent:   #c8a96e;
-  --accent2:  #a07840;
-  --text:     #e0e0f0;
-  --muted:    #555577;
-  --muted2:   #777799;
-  --green:    #27ae60;
-  --amber:    #e69f00;
-  --red:      #e74c3c;
-  --blue:     #0072b2;
-  --ok:       rgba(39,174,96,.12);
-  --ok-b:     rgba(39,174,96,.3);
-  --warn:     rgba(230,159,0,.12);
-  --warn-b:   rgba(230,159,0,.35);
-  --danger:   rgba(231,76,60,.12);
-  --danger-b: rgba(231,76,60,.35);
-}
-
-* { margin:0; padding:0; box-sizing:border-box; }
-body { background:var(--bg); color:var(--text); font-family:'DM Sans',sans-serif; min-height:100vh; }
-
-/* ── LAYOUT ── */
-.app-shell { display:flex; flex-direction:column; min-height:100vh; }
-
-/* Header */
-.app-header {
-  background:var(--surface); border-bottom:1px solid var(--border);
-  padding:0 24px; display:flex; align-items:center; gap:16px; height:58px; position:sticky; top:0; z-index:100;
-}
-.app-logo { font-family:'Syne',sans-serif; font-size:15px; font-weight:800; color:var(--accent); letter-spacing:.5px; }
-.app-sep { width:1px; height:24px; background:var(--border); }
-.app-title { font-size:13px; color:var(--muted2); }
-.header-spacer { flex:1; }
-.btn-icon {
-  background:none; border:1px solid var(--border); border-radius:8px;
-  color:var(--muted2); font-size:11px; font-family:'DM Mono',monospace;
-  padding:6px 14px; cursor:pointer; transition:all .2s;
-}
-.btn-icon:hover { border-color:var(--accent); color:var(--accent); }
-
-/* Tabs top */
-.top-tabs { display:flex; gap:0; border-bottom:1px solid var(--border); background:var(--surface); padding:0 24px; }
-.ttab {
-  padding:12px 18px; font-size:12px; font-family:'DM Mono',monospace; font-weight:600;
-  color:var(--muted); cursor:pointer; border-bottom:2px solid transparent;
-  transition:all .2s; white-space:nowrap; background:none; border-top:none; border-left:none; border-right:none;
-}
-.ttab.active { color:var(--accent); border-bottom-color:var(--accent); }
-.ttab:hover:not(.active) { color:var(--muted2); }
-
-/* Main area */
-.main { flex:1; padding:28px 24px; max-width:1100px; margin:0 auto; width:100%; }
-
-/* Cards */
-.card {
-  background:var(--surface); border:1px solid var(--border); border-radius:14px;
-  padding:20px 22px; margin-bottom:18px;
-}
-.card-title {
-  font-family:'Syne',sans-serif; font-size:12px; font-weight:800;
-  letter-spacing:.12em; text-transform:uppercase; color:var(--accent); margin-bottom:16px;
-  display:flex; align-items:center; gap:8px;
-}
-.card-title::after { content:''; flex:1; height:1px; background:var(--border); }
-
-/* Grid helpers */
-.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
-.grid-3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; }
-.grid-4 { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; }
-
-/* Form fields */
-.field { display:flex; flex-direction:column; gap:6px; }
-.field label { font-size:10px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; }
-.field input, .field select, .field textarea {
-  background:var(--bg); border:1px solid var(--border); border-radius:8px;
-  padding:9px 12px; color:var(--text); font-family:'DM Mono',monospace; font-size:12px;
-  transition:border-color .2s; width:100%;
-}
-.field input:focus, .field select:focus, .field textarea:focus {
-  outline:none; border-color:var(--accent);
-}
-.field input[type=number]::-webkit-inner-spin-button { opacity:.4; }
-select option { background:var(--surface); }
-
-/* Paletes */
-.palete-grid {
-  display:grid; grid-template-columns:repeat(8,1fr); gap:8px; margin-top:4px;
-}
-.palete-col { display:flex; flex-direction:column; gap:4px; }
-.palete-label {
-  text-align:center; font-size:9px; font-family:'DM Mono',monospace;
-  color:var(--muted); letter-spacing:.08em; padding:3px;
-  background:var(--surface2); border-radius:4px; border:1px solid var(--border);
-}
-.palete-input {
-  background:var(--bg); border:1px solid var(--border); border-radius:6px;
-  padding:7px 4px; color:var(--text); font-family:'DM Mono',monospace;
-  font-size:13px; font-weight:500; text-align:center; width:100%;
-  transition:border-color .2s;
-}
-.palete-input:focus { outline:none; border-color:var(--accent); }
-.palete-total {
-  background:rgba(200,169,110,.08); border:1px solid rgba(200,169,110,.2);
-  border-radius:6px; padding:7px 4px; color:var(--accent);
-  font-family:'DM Mono',monospace; font-size:13px; font-weight:700; text-align:center;
-}
-
-/* Seção de etapas de contagem */
-.etapas { display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; }
-.etapa-card {
-  background:var(--surface2); border:1px solid var(--border2); border-radius:10px; padding:14px;
-}
-.etapa-title {
-  font-size:9px; letter-spacing:.14em; text-transform:uppercase;
-  color:var(--muted2); font-family:'DM Mono',monospace; margin-bottom:10px;
-  display:flex; justify-content:space-between; align-items:center;
-}
-.etapa-lote {
-  font-family:'Syne',sans-serif; font-size:20px; font-weight:800; color:var(--text);
-  text-align:center; padding:8px 0;
-}
-.etapa-lote-label { font-size:9px; color:var(--muted); font-family:'DM Mono',monospace; text-align:center; }
-.etapa-diff {
-  display:flex; justify-content:space-between; align-items:center;
-  background:var(--bg); border:1px solid var(--border); border-radius:6px;
-  padding:6px 10px; margin-top:10px; font-size:11px; font-family:'DM Mono',monospace;
-}
-.diff-val { font-weight:700; font-size:14px; }
-.diff-pos { color:var(--green); }
-.diff-neg { color:var(--red); }
-.diff-zero { color:var(--muted); }
-
-/* Condições do produto — checkboxes estilizados */
-.cond-grid {
-  display:grid; grid-template-columns:repeat(4,1fr); gap:10px;
-}
-.cond-item {
-  background:var(--bg); border:1px solid var(--border); border-radius:8px;
-  padding:10px 12px; cursor:pointer; transition:all .2s;
-  display:flex; flex-direction:column; gap:6px;
-}
-.cond-item:hover { border-color:var(--border2); }
-.cond-item.ativo { border-color:rgba(200,169,110,.5); background:rgba(200,169,110,.05); }
-.cond-nome {
-  font-size:10px; letter-spacing:.08em; text-transform:uppercase;
-  color:var(--muted); font-family:'DM Mono',monospace;
-  display:flex; align-items:center; gap:6px;
-}
-.cond-dot { width:6px; height:6px; border-radius:50%; background:var(--border); flex-shrink:0; transition:background .2s; }
-.cond-item.ativo .cond-dot { background:var(--accent); }
-.cond-qtd-wrap { display:flex; gap:0; align-items:stretch; }
-.cond-reset {
-  background:rgba(231,76,60,.15); border:1px solid rgba(231,76,60,.3); border-left:none;
-  border-radius:0 6px 6px 0; color:#e74c3c; font-size:14px; font-weight:700;
-  padding:0 8px; cursor:pointer; transition:all .2s; display:flex; align-items:center;
-}
-.cond-reset:hover { background:rgba(231,76,60,.3); }
-.cond-qtd {
-  background:var(--surface); border:1px solid var(--border); border-radius:6px 0 0 6px;
-  padding:6px 8px; color:var(--text); font-family:'DM Mono',monospace;
-  font-size:14px; font-weight:500; text-align:center; width:100%;
-}
-.cond-qtd:focus { outline:none; border-color:var(--accent); }
-
-/* Painel de resultados */
-.result-row {
-  display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:12px; margin-bottom:14px;
-}
-.result-kpi {
-  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
-  padding:14px; text-align:center;
-}
-.result-kpi .rlbl { font-size:9px; color:var(--muted); letter-spacing:.1em; text-transform:uppercase; font-family:'DM Mono',monospace; margin-bottom:5px; }
-.result-kpi .rval { font-family:'Syne',sans-serif; font-size:22px; font-weight:800; line-height:1; }
-.result-kpi .rsub { font-size:10px; color:var(--muted); margin-top:4px; }
-
-.situacao-badge {
-  display:inline-block; padding:4px 14px; border-radius:20px; font-size:11px;
-  font-family:'DM Mono',monospace; font-weight:700; letter-spacing:.06em;
-}
-.sit-ok      { background:var(--ok);     border:1px solid var(--ok-b);     color:var(--green); }
-.sit-atencao { background:var(--warn);   border:1px solid var(--warn-b);   color:var(--amber); }
-.sit-critico { background:var(--danger); border:1px solid var(--danger-b); color:var(--red); }
-
-/* Barra de porcentagem */
-.pct-bar-wrap { background:var(--border); border-radius:4px; height:6px; overflow:hidden; margin-top:6px; }
-.pct-bar { height:6px; border-radius:4px; transition:width .4s; }
-
-/* Botões de ação */
-.btn-row { display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-top:6px; }
-.btn-primary {
-  background:linear-gradient(135deg,var(--accent),var(--accent2)); color:#08080f;
-  border:none; border-radius:10px; padding:11px 22px; font-family:'Syne',sans-serif;
-  font-size:13px; font-weight:800; cursor:pointer; letter-spacing:.04em;
-  transition:opacity .2s, transform .1s;
-}
-.btn-primary:hover { opacity:.9; transform:translateY(-1px); }
-.btn-secondary {
-  background:none; border:1px solid var(--border); color:var(--muted2);
-  border-radius:10px; padding:10px 18px; font-family:'DM Mono',monospace;
-  font-size:11px; cursor:pointer; transition:all .2s;
-}
-.btn-secondary:hover { border-color:var(--accent); color:var(--accent); }
-.btn-danger {
-  background:none; border:1px solid var(--danger-b); color:var(--red);
-  border-radius:10px; padding:10px 18px; font-family:'DM Mono',monospace;
-  font-size:11px; cursor:pointer; transition:all .2s;
-}
-
-/* Tabela de fechamento */
-.fech-table { width:100%; border-collapse:collapse; font-size:12px; }
-.fech-table th {
-  color:var(--muted); font-size:9px; letter-spacing:.12em; text-transform:uppercase;
-  padding:8px 10px; text-align:left; border-bottom:1px solid var(--border);
-  font-family:'DM Mono',monospace; font-weight:500;
-}
-.fech-table th.num { text-align:right; }
-.fech-table td { padding:10px 10px; border-bottom:1px solid #1a1a2e; vertical-align:middle; font-family:'DM Mono',monospace; }
-.fech-table td.num { text-align:right; font-variant-numeric:tabular-nums; }
-.fech-table tr:last-child td { border-bottom:none; }
-.fech-table tr:hover td { background:rgba(255,255,255,.015); }
-.fech-table tfoot td {
-  border-top:2px solid var(--border2); background:var(--surface2);
-  font-weight:700; color:var(--accent); padding:12px 10px;
-}
-
-/* Alert toast */
-.toast {
-  position:fixed; bottom:24px; right:24px; z-index:999;
-  background:var(--surface2); border:1px solid var(--border2);
-  border-radius:12px; padding:14px 18px; font-size:12px; font-family:'DM Mono',monospace;
-  max-width:320px; box-shadow:0 8px 32px rgba(0,0,0,.6);
-  transform:translateY(120%); transition:transform .3s ease;
-}
-.toast.show { transform:translateY(0); }
-.toast.toast-ok { border-color:var(--ok-b); color:var(--green); }
-.toast.toast-err { border-color:var(--danger-b); color:var(--red); }
-
-/* Resumo Cabecalho */
-.resumo-header {
-  background:var(--surface2); border:1px solid var(--border); border-radius:10px;
-  padding:14px 18px; display:flex; gap:24px; flex-wrap:wrap; align-items:center;
-  margin-bottom:18px;
-}
-.rh-item { display:flex; flex-direction:column; gap:2px; }
-.rh-lbl { font-size:9px; letter-spacing:.1em; text-transform:uppercase; color:var(--muted); font-family:'DM Mono',monospace; }
-.rh-val { font-size:14px; font-weight:600; font-family:'DM Mono',monospace; color:var(--text); }
-
-/* Seção vazia */
-.empty-state {
-  text-align:center; padding:48px 20px; color:var(--muted);
-  font-family:'DM Mono',monospace; font-size:12px;
-}
-.empty-icon { font-size:36px; margin-bottom:12px; display:block; }
-
-/* Scrollable table */
-.table-wrap { overflow-x:auto; }
-
-/* Mobile */
-@media(max-width:700px) {
-  .main { padding:16px; }
-  .palete-grid { grid-template-columns:repeat(4,1fr); }
-  .etapas { grid-template-columns:1fr; }
-  .cond-grid { grid-template-columns:repeat(2,1fr); }
-  .result-row { grid-template-columns:1fr 1fr; }
-  .grid-2,.grid-3,.grid-4 { grid-template-columns:1fr; }
-}
-
-/* Diff color inline */
-input.is-diff-pos { border-color:rgba(39,174,96,.4); }
-input.is-diff-neg { border-color:rgba(231,76,60,.4); }
-
-/* Highlight required */
-.required-missing { border-color:var(--red) !important; }
-</style>
 <script src="config.js"></script>
 <script src="cq_api.js"></script>
 <script src="cq_auth.js"></script>
 <script src="cq_fornecedores.js"></script>
+<link rel="stylesheet" href="ds.css">
 </head>
-<body>
+<body class="page-bg">
 <div class="app-shell">
 
   <!-- HEADER -->
   <div class="app-header">
-    <a href="app.html" style="color:var(--muted2);font-size:11px;font-family:'DM Mono',monospace;text-decoration:none;letter-spacing:.08em;margin-right:4px;">← Menu</a>
+    <a href="app.html" style="color:var(--muted2);font-size:11px;font-family:var(--font-mono);text-decoration:none;letter-spacing:.08em;margin-right:4px;">← Menu</a>
     <div class="app-sep"></div>
     <span class="app-logo">CLASSIC</span>
     <div class="app-sep"></div>
     <span class="app-title">Controle de Qualidade — Lançamento de Bucho</span>
     <div class="header-spacer"></div>
-    <span id="huser" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-right:12px;"></span>
+    <span id="huser" style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-right:12px;"></span>
     <button class="btn-icon" onclick="exportarCSV()" style="margin-right:8px;">Exportar CSV</button>
     <button class="btn-icon" onclick="CQAuth.logout()">Sair</button>
   </div>
@@ -511,7 +229,7 @@ input.is-diff-neg { border-color:rgba(231,76,60,.4); }
           <button class="btn-primary" onclick="salvarLancamento()">Salvar Lancamento</button>
           <button class="btn-secondary" onclick="limparFormulario()">Limpar</button>
         </div>
-        <div id="save-status" style="font-size:11px;color:var(--muted);font-family:'DM Mono',monospace;margin-top:10px;"></div>
+        <div id="save-status" style="font-size:11px;color:var(--muted);font-family:var(--font-mono);margin-top:10px;"></div>
       </div>
     </div><!-- /tab-formulario -->
 
@@ -965,7 +683,7 @@ function renderFechamento(){
       </tr></thead>
       <tbody>${rows}</tbody>
       <tfoot><tr>
-        <td colspan="4" style="font-family:'Syne',sans-serif;font-size:11px;">TOTAL QUALITATIVO E QUANTITATIVO DA VIAGEM</td>
+        <td colspan="4" style="font-family:var(--font-family);font-size:11px;">TOTAL QUALITATIVO E QUANTITATIVO DA VIAGEM</td>
         <td class="num">${totFrigo.toLocaleString('pt-BR')}</td>
         <td class="num">${totClassic.toLocaleString('pt-BR')}</td>
         <td class="num" style="${diffCls}">${totDiff>=0?'+':''}${totDiff.toLocaleString('pt-BR')}</td>
@@ -1103,14 +821,7 @@ function exportarRelatorio(){
 
   const html=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
 <title>Fechamento CQ — ${motorista} — ${dataViagem}</title>
-<style>
-  @page{size:A4 landscape;margin:15mm 12mm;}
-  @media print{.no-print{display:none!important}body{margin:0}}
-  body{font-family:Arial,sans-serif;color:#222;background:#fff;margin:0;padding:20px;font-size:11px;}
-  .btn-print{background:#2980b9;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:20px;margin-right:10px;}
-  .btn-close{background:#777;color:#fff;border:none;border-radius:8px;padding:9px 20px;font-size:12px;font-weight:700;cursor:pointer;margin-bottom:20px;}
-  table{border-collapse:collapse;}
-</style></head><body>
+</head><body class="page-bg">
 <div class="no-print" style="padding:10px 0">
   <button class="btn-print" onclick="window.print()">Imprimir / Salvar como PDF</button>
   <button class="btn-close" onclick="window.close()">X Fechar</button>

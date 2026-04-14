@@ -4,97 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Classic CQ — Relatórios de Cargas</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
-<style>
-:root{--bg:#0a0a0a;--surface:#141414;--surface2:#1c1c1c;--border:#2a2a2a;--accent:#c8a96e;--accent2:#e8c98e;--text:#f0ede8;--muted:#888;--error:#e05c5c;--success:#5cb85c;--warning:#f0a844;}
-*{margin:0;padding:0;box-sizing:border-box;}
-body{background:var(--bg);color:var(--text);font-family:'DM Sans',sans-serif;min-height:100vh;}
-header{position:sticky;top:0;z-index:100;background:var(--surface);border-bottom:1px solid var(--border);padding:12px 24px;display:flex;align-items:center;justify-content:space-between;}
-.hlogo{display:flex;align-items:center;gap:10px;}
-.hlogo img{height:28px;filter:invert(1);}
-.hlogo-text{font-family:'Syne',sans-serif;font-size:14px;font-weight:800;}
-.hlogo-text span{color:var(--accent);}
-.hright{display:flex;align-items:center;gap:10px;}
-.nav-back{color:var(--muted);font-size:11px;text-decoration:none;letter-spacing:0.1em;}
-.btn-sair{background:transparent;border:1px solid var(--border);border-radius:2px;color:var(--muted);font-size:10px;padding:5px 10px;cursor:pointer;letter-spacing:0.1em;text-transform:uppercase;}
-main{max-width:1200px;margin:0 auto;padding:28px 20px;}
-
-/* TABS */
-.tabs{display:flex;gap:4px;margin-bottom:28px;border-bottom:1px solid var(--border);}
-.tab{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:10px 16px;cursor:pointer;border-bottom:2px solid transparent;transition:.2s;}
-.tab.active{color:var(--accent);border-bottom-color:var(--accent);}
-.tab-pane{display:none;}
-.tab-pane.active{display:block;}
-
-/* FILTROS */
-.filter-bar{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:16px 20px;display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;margin-bottom:22px;}
-.fg{display:flex;flex-direction:column;gap:5px;min-width:160px;}
-.fg label{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);}
-.fg select,.fg input{background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:13px;padding:8px 12px;outline:none;}
-.fg select:focus,.fg input:focus{border-color:var(--accent);}
-.btn-filtrar{background:var(--accent);border:none;border-radius:2px;color:#000;font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;padding:9px 20px;cursor:pointer;}
-.btn-limpar{background:transparent;border:1px solid var(--border);border-radius:2px;color:var(--muted);font-size:11px;letter-spacing:0.1em;text-transform:uppercase;padding:9px 16px;cursor:pointer;}
-
-/* KPIs */
-.kpi-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:22px;}
-.kpi{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:18px;}
-.kpi-label{font-size:10px;letter-spacing:0.12em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;}
-.kpi-val{font-family:'Syne',sans-serif;font-size:26px;font-weight:800;}
-.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px;}
-.kpi-A .kpi-val{color:var(--success);}
-.kpi-B .kpi-val{color:var(--warning);}
-.kpi-C .kpi-val{color:var(--error);}
-.kpi-acc .kpi-val{color:var(--accent);}
-
-/* Charts */
-.chart-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:22px;}
-@media(max-width:700px){.chart-grid{grid-template-columns:1fr;}}
-.chart-box{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:20px;}
-.chart-box.full{grid-column:1/-1;}
-.chart-title{font-family:'Syne',sans-serif;font-size:11px;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent);margin-bottom:16px;}
-
-/* RANKING TABLE */
-.rank-box{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:20px;margin-bottom:22px;overflow-x:auto;}
-.rank-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.rank-title{font-family:'Syne',sans-serif;font-size:13px;font-weight:700;color:var(--accent);}
-.search-input{background:var(--bg);border:1px solid var(--border);border-radius:2px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:12px;padding:6px 12px;outline:none;width:200px;}
-.search-input:focus{border-color:var(--accent);}
-table{width:100%;border-collapse:collapse;font-size:12px;}
-th{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--muted);padding:10px 12px;text-align:left;border-bottom:1px solid var(--border);cursor:pointer;white-space:nowrap;user-select:none;}
-th:hover{color:var(--text);}
-th.sort-asc::after{content:" ↑";color:var(--accent);}
-th.sort-desc::after{content:" ↓";color:var(--accent);}
-td{padding:10px 12px;border-bottom:1px solid rgba(255,255,255,0.04);white-space:nowrap;}
-tr:hover td{background:rgba(255,255,255,0.02);}
-.badge{display:inline-block;font-size:9px;letter-spacing:0.1em;text-transform:uppercase;border-radius:2px;padding:2px 7px;font-weight:700;}
-.badge-A{background:rgba(92,184,92,0.15);color:var(--success);}
-.badge-B{background:rgba(240,168,68,0.15);color:var(--warning);}
-.badge-C{background:rgba(224,92,92,0.15);color:var(--error);}
-.medal-1{color:#FFD700;font-size:14px;}
-.medal-2{color:#C0C0C0;font-size:14px;}
-.medal-3{color:#CD7F32;font-size:14px;}
-
-/* BAR VISUAL */
-.pct-bar{display:flex;height:8px;border-radius:1px;overflow:hidden;width:140px;background:var(--bg);}
-.pct-bar-a{background:var(--success);}
-.pct-bar-b{background:var(--warning);}
-.pct-bar-c{background:var(--error);}
-
-/* Paginacao */
-.pagination{display:flex;gap:6px;justify-content:center;margin-top:14px;align-items:center;font-size:12px;color:var(--muted);}
-.page-btn{background:var(--surface2);border:1px solid var(--border);border-radius:2px;color:var(--text);font-size:11px;padding:5px 10px;cursor:pointer;}
-.page-btn.active{background:var(--accent);color:#000;border-color:var(--accent);font-weight:700;}
-.page-btn:hover:not(.active){border-color:var(--accent);color:var(--accent);}
-
-/* Detalhe frigorífico */
-.detail-card{background:var(--surface);border:1px solid var(--border);border-radius:2px;padding:20px;margin-bottom:16px;}
-.detail-title{font-family:'Syne',sans-serif;font-size:15px;font-weight:800;margin-bottom:4px;}
-.detail-sub{font-size:12px;color:var(--muted);margin-bottom:16px;}
-.empty{text-align:center;color:var(--muted);font-size:13px;padding:40px;}
-</style>
+<link rel="stylesheet" href="ds.css">
 </head>
-<body>
+<body class="page-bg">
 
 <header>
   <div class="hlogo">
@@ -109,7 +22,7 @@ tr:hover td{background:rgba(255,255,255,0.02);}
 
 <main>
   <div style="margin-bottom:24px;">
-    <div style="font-family:'Syne',sans-serif;font-size:20px;font-weight:800;">Relatórios de Cargas</div>
+    <div style="font-family:var(--font-family);font-size:20px;font-weight:800;">Relatórios de Cargas</div>
     <div style="font-size:13px;color:var(--muted);margin-top:2px;">Análise por frigorífico, por carga e ranking de fornecedores</div>
   </div>
 

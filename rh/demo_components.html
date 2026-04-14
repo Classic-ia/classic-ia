@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Demo Componentes ERP</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="ui_components.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="demo"></div>
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'demo', title: 'Demo Componentes' });
+
+  const el = document.getElementById('demo');
+  if (!el) return;
+
+  let html = '';
+
+  // 1. PAGE HEADER
+  html += '<h2 style="margin:0 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">1. PageHeader</h2>';
+  html += UI.pageHeader({
+    title: 'Colaboradores',
+    subtitle: '133 ativos, 10 afastados',
+    actions: [
+      { label: 'Novo', class: 'btn-primary', onclick: "alert('Novo')" },
+      { label: 'Exportar', class: 'btn-outline', onclick: "alert('Export')" }
+    ]
+  });
+
+  // 2. ACTION BAR
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">2. ActionBar</h2>';
+  html += UI.actionBar({
+    left: [
+      { label: 'Novo', class: 'btn-primary', onclick: "alert('Novo')" },
+      { label: 'Filtrar', class: 'btn-outline', onclick: "alert('Filtrar')" },
+    ],
+    right: [
+      { label: 'Exportar', class: 'btn-outline' },
+      { label: 'Atualizar', class: 'btn-outline', onclick: "location.reload()" },
+    ]
+  });
+
+  // 3. FILTER BAR
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">3. FilterBar</h2>';
+  html += UI.filterBar({
+    id: 'demoFilters',
+    filters: [
+      { id: 'fBusca', type: 'text', label: 'Busca', placeholder: 'Nome ou CPF...' },
+      { id: 'fStatus', type: 'select', label: 'Status', options: [
+        { value: '', label: 'Todos' },
+        { value: 'ativo', label: 'Ativo' },
+        { value: 'afastado', label: 'Afastado' },
+        { value: 'desligado', label: 'Desligado' }
+      ]},
+      { id: 'fPeriodo', type: 'month', label: 'Periodo' }
+    ],
+    onApply: "alert('Aplicar filtros')",
+    onClear: "alert('Limpar')"
+  });
+
+  // 4. KPI GRID
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">4. KPIGrid</h2>';
+  html += UI.kpiGrid([
+    { value: '133', label: 'Ativos', color: 'var(--success)' },
+    { value: '10', label: 'Afastados', color: 'var(--warning)' },
+    { value: '483', label: 'Desligados', color: 'var(--text-muted)' },
+    { value: '2', label: 'ASOs Vencidos', color: 'var(--danger)' },
+    { value: '607', label: 'Ferias', color: 'var(--info)' }
+  ]);
+
+  // 5. DATA TABLE
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">5. DataTable</h2>';
+  html += UI.dataTable({
+    columns: [
+      { key: 'nome', label: 'Nome', sortable: true },
+      { key: 'cargo', label: 'Cargo' },
+      { key: 'setor', label: 'Setor' },
+      { key: 'status', label: 'Status', render: r => UI.statusBadge(r.status, r.status) },
+      { key: 'admissao', label: 'Admissao', align: 'right' }
+    ],
+    rows: [
+      { nome: 'Maria Silva', cargo: 'Analista RH', setor: 'Administrativo', status: 'ativo', admissao: '15/03/2020' },
+      { nome: 'Joao Santos', cargo: 'Operador', setor: 'Producao', status: 'afastado', admissao: '10/01/2019' },
+      { nome: 'Ana Costa', cargo: 'Tecnica SST', setor: 'SST', status: 'ativo', admissao: '22/07/2021' },
+      { nome: 'Pedro Lima', cargo: 'Motorista', setor: 'Logistica', status: 'desligado', admissao: '05/11/2018' },
+      { nome: 'Lucia Ferreira', cargo: 'Supervisora', setor: 'Producao', status: 'ativo', admissao: '01/06/2022' }
+    ],
+    totalRows: 5,
+    pageSize: 50,
+    currentPage: 1,
+    emptyMsg: 'Nenhum colaborador encontrado'
+  });
+
+  // 6. STATUS BADGES
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">6. StatusBadge</h2>';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">';
+  ['ativo','pendente','vencido','info','desligado','bloqueado','valido','encerrada'].forEach(s => {
+    html += UI.statusBadge(s.charAt(0).toUpperCase() + s.slice(1), s) + ' ';
+  });
+  html += '</div>';
+
+  // 7. FORM SECTION
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">7. FormSection</h2>';
+  html += UI.formSection({
+    title: 'Dados Pessoais',
+    fields: [
+      { id: 'fNome', label: 'Nome Completo', type: 'text', required: true, placeholder: 'Nome do colaborador' },
+      { id: 'fCPF', label: 'CPF', type: 'text', placeholder: '000.000.000-00' },
+      { id: 'fCargo', label: 'Cargo', type: 'select', options: [
+        { value: '', label: 'Selecione...' },
+        { value: '1', label: 'Analista RH' },
+        { value: '2', label: 'Operador' }
+      ]},
+      { id: 'fAdmissao', label: 'Data Admissao', type: 'date' },
+      { id: 'fObs', label: 'Observacoes', type: 'textarea', full: true, placeholder: 'Notas...' }
+    ]
+  });
+
+  // 8. EMPTY STATE
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">8. EmptyState</h2>';
+  html += UI.emptyState('Nenhum acidente registrado');
+
+  // 9. LOADING
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">9. Loading</h2>';
+  html += UI.loadingCenter('Carregando dados...');
+
+  // 10. CONFIRM DIALOG (button trigger)
+  html += '<h2 style="margin:24px 0 8px;font-size:13px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">10. ConfirmDialog</h2>';
+  html += '<button class="btn btn-danger" onclick="UI.confirmDialog({title:\'Excluir registro?\',message:\'Esta acao nao pode ser desfeita.\',confirmLabel:\'Excluir\',danger:true,onConfirm:()=>UI.toast(\'Excluido!\',\'ok\')})">Testar ConfirmDialog</button>';
+  html += ' <button class="btn btn-outline" onclick="UI.toast(\'Operacao realizada!\',\'ok\')">Testar Toast OK</button>';
+  html += ' <button class="btn btn-outline" onclick="UI.toast(\'Erro ao salvar\',\'erro\')">Testar Toast Erro</button>';
+
+  el.innerHTML = html;
+})();
+</script>
+</body>
+</html>

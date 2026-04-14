@@ -168,8 +168,229 @@ const UI = (() => {
     document.head.appendChild(s);
   }
 
+  // ============================================================
+  // PAGE HEADER (config-driven)
+  // ============================================================
+  function pageHeader(config) {
+    const { title, subtitle, actions } = config;
+    let actionsHtml = '';
+    if (actions && actions.length) {
+      actionsHtml = '<div class="page-header-actions">' +
+        actions.map(a => `<button class="btn ${a.class || 'btn-outline'}" onclick="${a.onclick || ''}">${a.icon || ''}${API.esc(a.label)}</button>`).join('') +
+        '</div>';
+    }
+    return `<div class="page-header">
+      <div class="page-header-text">
+        <h1 class="page-header-title">${API.esc(title)}</h1>
+        ${subtitle ? `<p class="page-header-subtitle">${API.esc(subtitle)}</p>` : ''}
+      </div>
+      ${actionsHtml}
+    </div>`;
+  }
+
+  // ============================================================
+  // ACTION BAR (config-driven)
+  // ============================================================
+  function actionBar(config) {
+    const { left = [], right = [] } = config;
+    const renderBtn = b => `<button class="btn ${b.class || 'btn-outline'}" onclick="${b.onclick || ''}" ${b.disabled ? 'disabled' : ''}>${b.icon ? b.icon + ' ' : ''}${API.esc(b.label)}</button>`;
+    return `<div class="action-bar">
+      <div class="action-bar-group">${left.map(renderBtn).join('')}</div>
+      <div class="action-bar-spacer"></div>
+      <div class="action-bar-group">${right.map(renderBtn).join('')}</div>
+    </div>`;
+  }
+
+  // ============================================================
+  // FILTER BAR (config-driven)
+  // ============================================================
+  function filterBar(config) {
+    const { id, filters = [], onApply, onClear } = config;
+    let html = `<div class="filter-bar" id="${id || 'filterBar'}">`;
+    filters.forEach(f => {
+      html += '<div class="filter-group">';
+      html += `<label>${API.esc(f.label)}</label>`;
+      if (f.type === 'text') {
+        html += `<input type="text" id="${f.id}" placeholder="${f.placeholder || ''}" value="${f.value || ''}">`;
+      } else if (f.type === 'select') {
+        html += `<select id="${f.id}">`;
+        (f.options || []).forEach(o => {
+          const val = typeof o === 'object' ? o.value : o;
+          const lbl = typeof o === 'object' ? o.label : o;
+          html += `<option value="${val}" ${val === f.value ? 'selected' : ''}>${API.esc(lbl)}</option>`;
+        });
+        html += '</select>';
+      } else if (f.type === 'date') {
+        html += `<input type="date" id="${f.id}" value="${f.value || ''}">`;
+      } else if (f.type === 'month') {
+        html += `<input type="month" id="${f.id}" value="${f.value || ''}">`;
+      }
+      html += '</div>';
+    });
+    html += '<div class="filter-actions">';
+    html += `<button class="btn btn-primary btn-sm" onclick="${onApply || ''}">Aplicar</button>`;
+    html += `<button class="btn btn-outline btn-sm" onclick="${onClear || ''}">Limpar</button>`;
+    html += '</div></div>';
+    return html;
+  }
+
+  // ============================================================
+  // DATA TABLE (config-driven, sort + pagination + actions)
+  // ============================================================
+  function dataTable(config) {
+    const { columns, rows, emptyMsg, pageSize = 50, currentPage = 1, totalRows, onSort, onPageChange, onRowClick } = config;
+    if (!rows || rows.length === 0) return emptyState(emptyMsg);
+
+    let html = '<div class="table-scroll"><table class="data-table"><thead><tr>';
+    columns.forEach(col => {
+      const sortable = col.sortable ? ' style="cursor:pointer"' : '';
+      const sortIcon = col.sortDir === 'asc' ? ' ↑' : col.sortDir === 'desc' ? ' ↓' : '';
+      const onclick = col.sortable && onSort ? ` onclick="${onSort}('${col.key}')"` : '';
+      const align = col.align === 'right' ? ' class="text-right"' : col.align === 'center' ? ' class="text-center"' : '';
+      html += `<th${sortable}${onclick}${align}>${API.esc(col.label)}${sortIcon}</th>`;
+    });
+    html += '</tr></thead><tbody>';
+
+    rows.forEach((row, i) => {
+      const click = onRowClick ? ` onclick="${onRowClick}(${i})" style="cursor:pointer"` : '';
+      html += `<tr${click}>`;
+      columns.forEach(col => {
+        const val = col.render ? col.render(row) : (row[col.key] ?? '');
+        const align = col.align === 'right' ? ' class="text-right"' : col.align === 'center' ? ' class="text-center"' : '';
+        html += `<td${align}>${val}</td>`;
+      });
+      html += '</tr>';
+    });
+    html += '</tbody></table></div>';
+
+    // Pagination
+    if (totalRows && pageSize) {
+      const totalPages = Math.ceil(totalRows / pageSize);
+      if (totalPages > 1) {
+        html += pagination({ currentPage, totalPages, totalRows, pageSize, onChange: onPageChange });
+      } else {
+        html += `<div class="pagination"><span class="pagination-info">${totalRows} registro${totalRows !== 1 ? 's' : ''}</span></div>`;
+      }
+    }
+    return html;
+  }
+
+  // ============================================================
+  // PAGINATION
+  // ============================================================
+  function pagination(config) {
+    const { currentPage, totalPages, totalRows, pageSize, onChange } = config;
+    const start = (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, totalRows);
+    let html = `<div class="pagination">
+      <span class="pagination-info">Exibindo ${start}-${end} de ${totalRows}</span>
+      <div class="pagination-controls">`;
+    html += `<button class="pagination-btn" onclick="${onChange}(1)" ${currentPage <= 1 ? 'disabled' : ''}>&#171;</button>`;
+    html += `<button class="pagination-btn" onclick="${onChange}(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>&#8249;</button>`;
+    const maxVisible = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+    let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+    if (endPage - startPage < maxVisible - 1) startPage = Math.max(1, endPage - maxVisible + 1);
+    for (let p = startPage; p <= endPage; p++) {
+      html += `<button class="pagination-btn ${p === currentPage ? 'active' : ''}" onclick="${onChange}(${p})">${p}</button>`;
+    }
+    html += `<button class="pagination-btn" onclick="${onChange}(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>&#8250;</button>`;
+    html += `<button class="pagination-btn" onclick="${onChange}(${totalPages})" ${currentPage >= totalPages ? 'disabled' : ''}>&#187;</button>`;
+    html += '</div></div>';
+    return html;
+  }
+
+  // ============================================================
+  // FORM SECTION (config-driven)
+  // ============================================================
+  function formSection(config) {
+    const { title, fields = [], columns } = config;
+    let html = '<div class="form-section">';
+    if (title) html += `<h3 class="form-section-title">${API.esc(title)}</h3>`;
+    html += `<div class="form-grid" ${columns ? `style="grid-template-columns:repeat(${columns},1fr)"` : ''}>`;
+    fields.forEach(f => {
+      const fullClass = f.full ? ' form-field-full' : '';
+      html += `<div class="form-field${fullClass}">`;
+      html += `<label for="${f.id}">${API.esc(f.label)}${f.required ? ' *' : ''}</label>`;
+      if (f.type === 'select') {
+        html += `<select id="${f.id}" ${f.required ? 'required' : ''}>`;
+        (f.options || []).forEach(o => {
+          const val = typeof o === 'object' ? o.value : o;
+          const lbl = typeof o === 'object' ? o.label : o;
+          html += `<option value="${val}" ${val === f.value ? 'selected' : ''}>${API.esc(lbl)}</option>`;
+        });
+        html += '</select>';
+      } else if (f.type === 'textarea') {
+        html += `<textarea id="${f.id}" placeholder="${f.placeholder || ''}" ${f.required ? 'required' : ''}>${f.value || ''}</textarea>`;
+      } else if (f.type === 'checkbox') {
+        html += `<label style="display:flex;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="${f.id}" ${f.checked ? 'checked' : ''}> ${API.esc(f.checkLabel || '')}</label>`;
+      } else {
+        html += `<input type="${f.type || 'text'}" id="${f.id}" value="${f.value || ''}" placeholder="${f.placeholder || ''}" ${f.required ? 'required' : ''} ${f.disabled ? 'disabled' : ''}>`;
+      }
+      html += '</div>';
+    });
+    html += '</div></div>';
+    return html;
+  }
+
+  // ============================================================
+  // KPI GRID (wrapper responsivo para kpiCards)
+  // ============================================================
+  function kpiGrid(items, opts = {}) {
+    const cls = opts.compact ? 'kpi-grid-compact' : 'kpi-grid';
+    return `<div class="${cls}">${items.map(i => kpiCard(i.value, i.label, i)).join('')}</div>`;
+  }
+
+  // ============================================================
+  // CONFIRM DIALOG
+  // ============================================================
+  function confirmDialog(config) {
+    const { title = 'Confirmar', message, confirmLabel = 'Confirmar', cancelLabel = 'Cancelar', onConfirm, danger } = config;
+    const id = 'confirm-' + Date.now();
+    const overlay = document.createElement('div');
+    overlay.className = 'confirm-overlay';
+    overlay.id = id;
+    overlay.innerHTML = `<div class="confirm-dialog">
+      <h3 class="confirm-dialog-title">${API.esc(title)}</h3>
+      <p class="confirm-dialog-message">${API.esc(message)}</p>
+      <div class="confirm-dialog-actions">
+        <button class="btn btn-outline" onclick="document.getElementById('${id}').remove()">${API.esc(cancelLabel)}</button>
+        <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="${id}-ok">${API.esc(confirmLabel)}</button>
+      </div>
+    </div>`;
+    document.body.appendChild(overlay);
+    overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+    document.getElementById(id + '-ok').addEventListener('click', () => { overlay.remove(); if (onConfirm) onConfirm(); });
+  }
+
+  // ============================================================
+  // STATUS BADGE (expanded)
+  // ============================================================
+  function statusBadge(text, status) {
+    const map = {
+      ativo: 'badge-success', success: 'badge-success', ok: 'badge-success', valido: 'badge-success',
+      pendente: 'badge-warning', warning: 'badge-warning', vencer: 'badge-warning',
+      vencido: 'badge-danger', danger: 'badge-danger', erro: 'badge-danger', bloqueado: 'badge-danger',
+      info: 'badge-info', desligado: 'badge-muted', inativo: 'badge-muted', encerrada: 'badge-muted'
+    };
+    const cls = map[status] || map[text?.toLowerCase()] || 'badge-default';
+    return `<span class="badge ${cls}">${API.esc(text)}</span>`;
+  }
+
+  // Inject animation CSS
+  if (typeof document !== 'undefined' && !document.getElementById('ui-comp-styles')) {
+    const s = document.createElement('style');
+    s.id = 'ui-comp-styles';
+    s.textContent = '@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}} @keyframes spin{to{transform:rotate(360deg)}} @keyframes fadeIn{from{opacity:0}to{opacity:1}}';
+    document.head.appendChild(s);
+  }
+
   return {
+    // Legacy (backward compat)
     table, kpiCard, skeleton, spinner, loadingCenter, emptyState,
-    toast, badge, modal, openModal, closeModal, progressBar, card
+    toast, badge, modal, openModal, closeModal, progressBar, card,
+    // New ERP components (config-driven)
+    pageHeader, actionBar, filterBar, dataTable, pagination,
+    formSection, kpiGrid, confirmDialog, statusBadge
   };
 })();

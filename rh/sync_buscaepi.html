@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Sync BuscaEPI</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="shell.js"></script>
+<script src="ui_components.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="page-root"></div>
+</div>
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'integracoes', title: 'Sync BuscaEPI' });
+  if (!user) return;
+  if (!['administrador','rh'].includes(user.perfil)) {
+    document.getElementById('page-root').innerHTML = UI.emptyState('Acesso restrito a administrador/RH');
+    return;
+  }
+
+  // ═══ CONFIG ═══
+  const BUSCAEPI_BASE = 'https://buscaepi.com.br/api';
+  let TOKEN_AUTH = '';
+  let TOKEN_ACCESS = '';
+  let running = false;
+
+  // ═══ STATE ═══
+  let log = [];
+  let stats = { lidos: 0, novos: 0, erros: 0, paginas: 0 };
+
+  // ═══ LOAD CREDENTIALS FROM DB ═══
+  async function loadCredentials() {
+    const { ok, data } = await API.get('integ_conector?nome=eq.buscaepi&select=config_extra');
+    if (!ok || !data || !data[0]) throw new Error('Conector BuscaEPI nao encontrado no banco');
+    const cfg = data[0].config_extra;
+    TOKEN_AUTH = cfg.token_auth;
+    TOKEN_ACCESS = cfg.token_access;
+    if (!TOKEN_AUTH || !TOKEN_ACCESS) throw new Error('Tokens BuscaEPI nao configurados');
+  }
+
+  // ═══ FETCH FROM BUSCAEPI API ═══
+  async function fetchBuscaEPI(endpoint, page = 1, perPage = 100) {
+    const url = `${BUSCAEPI_BASE}/v1/${endpoint}?page=${page}&per_page=${perPage}`;
+    const res = await fetch(url, {
+      headers: {
+        'Authorization': 'Basic ' + TOKEN_AUTH,
+        'x-access-token': TOKEN_ACCESS,
+      }
+    });
+    if (!res.ok) throw new Error(`API ${res.status}: ${await res.text().then(t => t.slice(0,200))}`);
+    return res.json();
+  }
+
+  // ═══ HASH (simple for dedup) ═══
+  function simpleHash(obj) {
+    const str = JSON.stringify(obj);
+    let h = 0;
+    for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
+    return Math.abs(h).toString(16).padStart(8, '0');
+  }
+
+  // ═══ SAVE TO STAGING ═══
+  async function saveToStaging(entity, items) {
+    const rows = items.map(item => ({
+      id_origem: String(item.id_entrega || item.id_colaborador || item.id_item_entrega || item.id || Math.random()),
+      origem_sistema: 'buscaepi',
+      payload_json: item,
+      hash_registro: simpleHash(item),
+      status_processamento: 'pendente'
+    }));
+
+    // Insert in batches of 100
+    let inserted = 0;
+    for (let i = 0; i < rows.length; i += 100) {
+      const batch = rows.slice(i, i + 100);
+      const { ok, error } = await API.post(`stg_buscaepi_${entity}`, batch);
+      if (ok) inserted += batch.length;
+      else addLog('warn', `Batch ${Math.floor(i/100)+1}: ${error || 'erro ao inserir'}`);
+    }
+    return inserted;
+  }
+
+  // ═══ PROCESS STAGING -> CORE ═══
+  async function processStaging() {
+    addLog('info', 'Processando staging -> core (etl_processar_buscaepi_entregas)...');
+    const { ok, data, error } = await API.rpc('etl_processar_buscaepi_entregas');
+    if (ok && data) {
+      addLog('ok', `ETL: ${data.total || data[0]} total, ${data.inseridos || data[1]} inseridos, ${data.erros || data[2]} erros`);
+    } else {
+      addLog('erro', `ETL falhou: ${error || 'sem resposta'}`);
+    }
+  }
+
+  // ═══ MAIN SYNC ═══
+  async function runSync() {
+    if (running) return;
+    running = true;
+    log = [];
+    stats = { lidos: 0, novos: 0, erros: 0, paginas: 0 };
+    render();
+
+    const entity = document.getElementById('sel-entity').value;
+    const perPage = parseInt(document.getElementById('sel-perpage').value) || 200;
+    const maxPages = parseInt(document.getElementById('sel-maxpages').value) || 50;
+
+    try {
+      await loadCredentials();
+      addLog('ok', `Credenciais carregadas. Sync ${entity}, ${perPage}/pagina, max ${maxPages} paginas`);
+
+      // Test connection
+      addLog('info', 'Testando conexao com BuscaEPI...');
+      const test = await fetchBuscaEPI(entity, 1, 1);
+      const total = test.total || test.meta?.total || '?';
+      addLog('ok', `API respondeu. Total disponivel: ${total}`);
+
+      // Paginated fetch
+      let page = 1;
+      let hasMore = true;
+
+      while (hasMore && page <= maxPages) {
+        addLog('info', `Buscando pagina ${page}/${maxPages}...`);
+        const apiData = await fetchBuscaEPI(entity, page, perPage);
+        const items = apiData.data || apiData.items || apiData || [];
+
+        if (!Array.isArray(items) || items.length === 0) {
+          addLog('info', `Pagina ${page} vazia. Fim.`);
+          hasMore = false;
+          break;
+        }
+
+        stats.lidos += items.length;
+        stats.paginas = page;
+
+        // Save to staging
+        const saved = await saveToStaging(entity, items);
+        stats.novos += saved;
+        addLog('ok', `Pagina ${page}: ${items.length} lidos, ${saved} salvos no staging`);
+
+        if (items.length < perPage) {
+          addLog('info', 'Ultima pagina (menos registros que per_page). Fim.');
+          hasMore = false;
+        }
+
+        page++;
+        render();
+
+        // Small delay to avoid rate limiting
+        await new Promise(r => setTimeout(r, 300));
+      }
+
+      // Process staging -> core
+      if (entity === 'entregas' && stats.novos > 0) {
+        await processStaging();
+      }
+
+      // Update heartbeat
+      await API.patch('integ_conector?nome=eq.buscaepi', { ultimo_heartbeat: new Date().toISOString() });
+
+      addLog('ok', `CONCLUIDO: ${stats.lidos} lidos, ${stats.novos} staging, ${stats.paginas} paginas`);
+
+    } catch (err) {
+      addLog('erro', `ERRO: ${err.message}`);
+      stats.erros++;
+    }
+
+    running = false;
+    render();
+  }
+
+  // ═══ LOG ═══
+  function addLog(tipo, msg) {
+    const time = new Date().toLocaleTimeString('pt-BR');
+    log.push({ tipo, msg, time });
+    render();
+  }
+
+  // ═══ RENDER ═══
+  function render() {
+    const el = document.getElementById('page-root');
+    const logColors = { ok: 'var(--success)', erro: 'var(--danger)', warn: 'var(--warning)', info: 'var(--text-secondary)' };
+
+    el.innerHTML = `
+      ${UI.pageHeader({
+        title: 'Sync BuscaEPI',
+        subtitle: 'Importacao em lote de entregas, EPIs e colaboradores do BuscaEPI'
+      })}
+
+      ${UI.kpiGrid([
+        { value: stats.lidos, label: 'Registros lidos', color: 'var(--info)' },
+        { value: stats.novos, label: 'Salvos no staging', color: 'var(--success)' },
+        { value: stats.paginas, label: 'Paginas processadas' },
+        { value: stats.erros, label: 'Erros', color: stats.erros > 0 ? 'var(--danger)' : 'var(--text-muted)' }
+      ])}
+
+      <div class="form-section">
+        <h3 class="form-section-title">Configuracao do Sync</h3>
+        <div class="form-grid">
+          <div class="form-field">
+            <label for="sel-entity">Entidade</label>
+            <select id="sel-entity">
+              <option value="entregas" selected>Entregas (EPI)</option>
+              <option value="colaboradores">Colaboradores</option>
+              <option value="epis">Catalogo EPIs</option>
+              <option value="ca">Certificados CA</option>
+              <option value="os">Ordens Servico</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="sel-perpage">Registros por pagina</label>
+            <select id="sel-perpage">
+              <option value="50">50</option>
+              <option value="100">100</option>
+              <option value="200" selected>200</option>
+              <option value="500">500</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label for="sel-maxpages">Max paginas</label>
+            <select id="sel-maxpages">
+              <option value="5">5 (teste)</option>
+              <option value="20">20</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+              <option value="250">250 (completo)</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary" onclick="runSync()" ${running ? 'disabled' : ''}>
+            ${running ? 'Sincronizando...' : 'Iniciar Sync'}
+          </button>
+          ${running ? '<span style="color:var(--warning);font-size:13px">⏳ Em andamento — nao feche esta pagina</span>' : ''}
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3 class="form-section-title">Log de execucao (${log.length} entradas)</h3>
+        <div style="max-height:400px;overflow-y:auto;font-family:var(--font-mono);font-size:12px;line-height:1.8">
+          ${log.length === 0 ? '<p style="color:var(--text-muted)">Clique em Iniciar Sync para comecar.</p>' :
+            log.map(l => `<div style="color:${logColors[l.tipo] || 'var(--text)'}">
+              <span style="color:var(--text-muted)">[${l.time}]</span> ${API.esc(l.msg)}
+            </div>`).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  // Expose runSync globally for onclick
+  window.runSync = runSync;
+
+  render();
+})();
+</script>
+</body>
+</html>

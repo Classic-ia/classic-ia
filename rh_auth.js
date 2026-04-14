@@ -87,14 +87,49 @@ const RHAuth = (function () {
 
   async function _log(acao, detalhes = {}) {
     if (!_user) return;
+    // created_at default do banco (NOW()); schema usa created_at, não criado_em
     try { await _post('rh_audit_log', {
       usuario_id:    _user.id,
       usuario_email: _user.email,
       usuario_nome:  _user.nome,
       acao,
-      detalhes: JSON.stringify(detalhes),
-      criado_em: new Date().toISOString(),
+      detalhes:      JSON.stringify(detalhes),
+      user_agent:    navigator.userAgent.slice(0, 250),
     }); } catch(e) { console.warn('[RHAuth] audit_log:', e.message); }
+  }
+
+  // ──────────────────────────────────────────────────────────────────
+  // Auditoria específica de login admin (Bloco 2)
+  // Chama RPC rh_registrar_login_admin após login bem-sucedido.
+  // NUNCA silencia: erros vão para console.error e são re-checados.
+  // ──────────────────────────────────────────────────────────────────
+  async function _registrarLoginAdmin(sucesso, motivo) {
+    if (!_user) return;
+    const ehAdmin = _user.perfil === 'administrador' || _user.perfil === 'admin';
+    if (!ehAdmin) return; // registrar apenas para admins
+
+    try {
+      const r = await fetch(`${SB_URL}/rest/v1/rpc/rh_registrar_login_admin`, {
+        method: 'POST',
+        headers: _h(),
+        body: JSON.stringify({
+          p_usuario_id:    _user.id,
+          p_usuario_email: _user.email,
+          p_usuario_nome:  _user.nome,
+          p_ip:            null, // browser não acessa IP — captura ocorre via header no Supabase se configurado
+          p_user_agent:    navigator.userAgent.slice(0, 250),
+          p_sucesso:       !!sucesso,
+          p_detalhes:      motivo ? JSON.stringify({ motivo }) : null,
+        }),
+      });
+      if (!r.ok) {
+        // NÃO silenciar — auditoria administrativa é crítica
+        const txt = await r.text().catch(() => '');
+        console.error('[RHAuth] FALHA AO REGISTRAR LOGIN_ADMIN:', r.status, txt);
+      }
+    } catch (e) {
+      console.error('[RHAuth] EXCEÇÃO AO REGISTRAR LOGIN_ADMIN:', e.message);
+    }
   }
 
   function _mkToken() {
@@ -298,6 +333,8 @@ const RHAuth = (function () {
     }
     await _abrirSessao(data.refresh_token);
     await _log('login', { email, dispositivo: navigator.userAgent.slice(0, 80) });
+    // Auditoria específica de admin (Bloco 2) — não silencia erros
+    await _registrarLoginAdmin(true, null);
     _resetTimers();
     return _user;
   }

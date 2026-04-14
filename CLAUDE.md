@@ -56,7 +56,7 @@
 - `rh_ponto` — Registros diários de ponto (batidas, HE, faltas, noturno)
 - `rh_acoes` — Ações rastreáveis do painel do gestor (resolver/justificar/delegar)
 - `rh_ferias` — Controle de férias
-- `rh_audit_trail` — Auditoria automática (triggers em 5 tabelas)
+- `rh_audit_log` — Auditoria automática (triggers em 5 tabelas). Campos: id, usuario_id, usuario_email, usuario_nome, acao, tabela, registro_id, dados_antes, dados_depois, ip_origem, user_agent, sucesso, detalhes, created_at. Ação `LOGIN_ADMIN` registrada via RPC `rh_registrar_login_admin`.
 
 ### RPCs Importantes
 - `painel_gestor_dados()` — KPIs, score de risco, vencimentos, experiência, afastados

@@ -1,9 +1,16 @@
 /**
- * sw.js — Service Worker Classic CQ
- * Estratégia: Network-first com cache fallback
+ * sw.js — Service Worker Classic CQ / RH
  *
- * Cacheia assets estáticos e dados de cadastro para modo offline.
- * Inspeções feitas offline são salvas em IndexedDB e sincronizadas ao reconectar.
+ * Estratégia (revisada — Bloco 3 / 2026-04-14):
+ *   - HTML e rota raiz "/":       NETWORK-ONLY (nunca cachear)
+ *     ↳ evita o clássico problema de "deploy novo mas usuário vê HTML antigo"
+ *   - Assets estáticos (js/css/img/font): CACHE-FIRST com fallback network
+ *   - Dados de cadastro (cadastros_atak, cq_produtos, etc): NETWORK-FIRST
+ *   - Auth endpoints:             IGNORADOS (sempre direto à rede)
+ *
+ * Versionamento:
+ *   Bumpar CACHE_VERSION a cada deploy expurga caches antigos
+ *   (mesmo os que porventura tenham HTML de versões anteriores).
  *
  * Registro (em login.html ou app.html):
  *   if ('serviceWorker' in navigator) {
@@ -11,19 +18,13 @@
  *   }
  */
 
-const CACHE_VERSION = 'cq-v2026.03.23';
+const CACHE_VERSION = 'classic-v2026.04.14';
 const CACHE_STATIC = `${CACHE_VERSION}-static`;
 const CACHE_DATA = `${CACHE_VERSION}-data`;
 
-// Assets estáticos para pré-cache
+// Assets estáticos para pré-cache — SOMENTE não-HTML.
+// IMPORTANTE: NÃO incluir .html aqui. HTML deve ir sempre à rede.
 const STATIC_ASSETS = [
-  '/',
-  '/app.html',
-  '/login.html',
-  '/inspecao_qualidade.html',
-  '/fila_inspecoes.html',
-  '/recebimento_lote.html',
-  '/rastreabilidade_lote.html',
   '/config.js',
   '/cq_api.js',
   '/cq_auth.js',
@@ -58,17 +59,35 @@ self.addEventListener('install', (event) => {
   );
 });
 
-// ── ACTIVATE ────────────────────────────────────────────────
+// ── ACTIVATE — limpa caches de versões anteriores (incluindo HTML legado)
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then(keys =>
-      Promise.all(
-        keys
-          .filter(key => key !== CACHE_STATIC && key !== CACHE_DATA)
-          .map(key => caches.delete(key))
-      )
-    ).then(() => self.clients.claim())
-  );
+  event.waitUntil((async () => {
+    const keys = await caches.keys();
+    await Promise.all(
+      keys
+        // Remove qualquer cache que NÃO seja da versão atual
+        .filter(key => key !== CACHE_STATIC && key !== CACHE_DATA)
+        .map(key => caches.delete(key))
+    );
+
+    // Varredura extra: remover entradas HTML/root que caches antigos possam
+    // ter deixado para trás (defesa em profundidade contra cache antigo)
+    for (const key of [CACHE_STATIC, CACHE_DATA]) {
+      try {
+        const cache = await caches.open(key);
+        const requests = await cache.keys();
+        await Promise.all(requests.map(req => {
+          const u = new URL(req.url);
+          if (isHtmlPath(u)) return cache.delete(req);
+          return null;
+        }));
+      } catch (e) {
+        console.warn('[SW] Falha limpando HTML do cache:', e.message);
+      }
+    }
+
+    await self.clients.claim();
+  })());
 });
 
 // ── FETCH ───────────────────────────────────────────────────
@@ -81,7 +100,18 @@ self.addEventListener('fetch', (event) => {
   // Ignorar requests de auth (tokens, login)
   if (url.pathname.includes('/auth/')) return;
 
-  // Dados de cadastro: Network-first, cache de fallback (TTL 1h)
+  // ── HTML e rota raiz: NETWORK-ONLY (nunca cachear) ──
+  // Cobre tanto navegações (accept: text/html) quanto extensão .html explícita e "/".
+  if (
+    isHtmlPath(url) ||
+    event.request.mode === 'navigate' ||
+    (event.request.headers.get('accept') || '').includes('text/html')
+  ) {
+    event.respondWith(networkOnly(event.request));
+    return;
+  }
+
+  // Dados de cadastro: Network-first, cache de fallback
   if (DATA_PATTERNS.some(p => p.test(event.request.url))) {
     event.respondWith(networkFirstWithCache(event.request, CACHE_DATA));
     return;
@@ -92,15 +122,22 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(cacheFirstWithNetwork(event.request, CACHE_STATIC));
     return;
   }
-
-  // Páginas HTML: Network-first com fallback
-  if (event.request.headers.get('accept')?.includes('text/html')) {
-    event.respondWith(networkFirstWithCache(event.request, CACHE_STATIC));
-    return;
-  }
+  // Demais: deixa o browser tratar (sem intervenção do SW)
 });
 
 // ── ESTRATÉGIAS ─────────────────────────────────────────────
+
+// Network-only — para HTML/navegação. Em caso de offline, mostra página offline.
+async function networkOnly(request) {
+  try {
+    return await fetch(request);
+  } catch {
+    return new Response(offlineHTML(), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 503,
+    });
+  }
+}
 
 async function networkFirstWithCache(request, cacheName) {
   try {
@@ -113,14 +150,6 @@ async function networkFirstWithCache(request, cacheName) {
   } catch {
     const cached = await caches.match(request);
     if (cached) return cached;
-
-    // Fallback para página offline
-    if (request.headers.get('accept')?.includes('text/html')) {
-      return new Response(offlineHTML(), {
-        headers: { 'Content-Type': 'text/html' },
-      });
-    }
-
     return new Response(JSON.stringify({ error: 'offline' }), {
       status: 503,
       headers: { 'Content-Type': 'application/json' },
@@ -144,14 +173,23 @@ async function cacheFirstWithNetwork(request, cacheName) {
   }
 }
 
+// ── HELPERS ─────────────────────────────────────────────────
+
 function isStaticAsset(url) {
   return /\.(js|css|png|jpg|jpeg|svg|ico|woff2?)$/i.test(url.pathname);
 }
 
-// ── OFFLINE SYNC (IndexedDB) ────────────────────────────────
+function isHtmlPath(url) {
+  // Root, terminações .html ou path sem extensão (assume HTML/rota SPA)
+  if (url.pathname === '/' || url.pathname === '') return true;
+  if (/\.html?$/i.test(url.pathname)) return true;
+  // path sem extensão (ex: /ferias, /app) — trata como HTML
+  const last = url.pathname.split('/').pop() || '';
+  if (last && !last.includes('.')) return true;
+  return false;
+}
 
-// O frontend salva inspeções pendentes em IndexedDB via cq_offline.js
-// Quando reconecta, o SW dispara evento de sync
+// ── OFFLINE SYNC (IndexedDB) ────────────────────────────────
 
 self.addEventListener('sync', (event) => {
   if (event.tag === 'sync-inspecoes') {
@@ -160,7 +198,6 @@ self.addEventListener('sync', (event) => {
 });
 
 async function syncPendingInspecoes() {
-  // Notificar o frontend para processar a fila
   const clients = await self.clients.matchAll();
   for (const client of clients) {
     client.postMessage({ type: 'SYNC_INSPECOES' });
@@ -175,7 +212,7 @@ function offlineHTML() {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Classic CQ — Offline</title>
+  <title>Classic — Offline</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {

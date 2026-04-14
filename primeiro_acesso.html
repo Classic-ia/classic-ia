@@ -183,6 +183,20 @@ async function definirSenha() {
   btn.textContent = 'SALVANDO...';
 
   try {
+    // ───────────────────────────────────────────────────────────
+    // VALIDAÇÃO SERVER-SIDE (Bloco 1)
+    // Chama RPC rh_validar_email_dominio — a regex acima é UX apenas;
+    // a whitelist definitiva está no banco e não pode ser bypass-ada.
+    // ───────────────────────────────────────────────────────────
+    const { data: dominioOk, error: errValida } = await db.rpc('rh_validar_email_dominio', { p_email: email });
+    if (errValida) {
+      console.error('[primeiro_acesso] RPC validação falhou:', errValida);
+      throw new Error('Falha ao validar domínio (' + (errValida.message || 'erro do servidor') + ')');
+    }
+    if (dominioOk !== true) {
+      throw new Error('Domínio de email não autorizado. Use um email corporativo.');
+    }
+
     const hash = await hashSenha(senha);
 
     // Verifica se usuário existe

@@ -84,9 +84,13 @@
 --                                                          (dashboards,
 --                                                          CRUD, ETL)
 --
+-- 19  VIEWS_FRONTEND_COMPATIBILIDADE.sql    2 views        Compatibilidade
+--                                                          (vw_funcionario_base,
+--                                                          rh_colaboradores)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   177 tabelas | 30 views | 67 functions | 60 triggers
+--   177 tabelas | 32 views | 67 functions | 60 triggers
 --   64 tabelas com RLS | 219 policies
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

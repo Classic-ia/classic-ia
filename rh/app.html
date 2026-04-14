@@ -205,7 +205,7 @@
   async function loadPrioridades() {
     const el = document.getElementById('prioridadesBody');
     try {
-      const res = await API.get('orch_alerta?status=eq.aberto&order=prioridade.desc,criado_em.desc&limit=8&select=id,tipo,titulo,prioridade,criado_em');
+      const res = await API.get('orch_alerta?status=eq.aberto&order=severidade.desc,created_at.desc&limit=8&select=id,tipo,titulo,severidade,created_at');
       const data = res.ok ? res.data : [];
       if (!data.length) {
         el.innerHTML = emptyState('Nenhuma prioridade pendente');
@@ -213,7 +213,7 @@
       }
       let html = '<ul class="priority-list">';
       data.forEach(item => {
-        const prio = (item.prioridade || 'media').toLowerCase();
+        const prio = (item.severidade || 'media').toLowerCase();
         const cls = prio === 'alta' || prio === 'critica' ? 'high' : prio === 'media' ? 'medium' : 'low';
         const icon = cls === 'high' ? '!' : cls === 'medium' ? '-' : 'i';
         html += `
@@ -221,7 +221,7 @@
             <div class="priority-icon ${cls}">${icon}</div>
             <div class="priority-content">
               <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Sem titulo')}</div>
-              <div class="priority-meta">${API.esc(item.tipo || '')} &middot; ${API.fmtData(item.criado_em)}</div>
+              <div class="priority-meta">${API.esc(item.tipo || '')} &middot; ${API.fmtData(item.created_at)}</div>
             </div>
             <span class="badge badge-${cls === 'high' ? 'danger' : cls === 'medium' ? 'warning' : 'info'}">${API.esc(capitalize(prio))}</span>
           </li>`;
@@ -239,7 +239,7 @@
   async function loadAlertas() {
     const el = document.getElementById('alertasBody');
     try {
-      const res = await API.get('orch_alerta?status=eq.aberto&prioridade=in.(alta,critica)&order=criado_em.desc&limit=6&select=id,tipo,titulo,prioridade,criado_em');
+      const res = await API.get('orch_alerta?status=eq.aberto&severidade=in.(alta,critica)&order=created_at.desc&limit=6&select=id,tipo,titulo,severidade,created_at');
       const data = res.ok ? res.data : [];
       if (!data.length) {
         el.innerHTML = emptyState('Nenhum alerta critico');
@@ -254,7 +254,7 @@
             </div>
             <div class="priority-content">
               <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Alerta')}</div>
-              <div class="priority-meta">${API.fmtData(item.criado_em)}</div>
+              <div class="priority-meta">${API.fmtData(item.created_at)}</div>
             </div>
           </li>`;
       });
@@ -275,8 +275,10 @@
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
       const isoDate = ninetyDaysAgo.toISOString().slice(0, 10);
 
+      // Inclui status='experiencia' — caso contrario perde-se quem ja' foi
+      // marcado como em periodo de experiencia (filtro pre-existente excluia).
       const res = await API.get(
-        `vw_funcionario_base?status=eq.ativo&data_admissao=gte.${isoDate}&select=id,nome,data_admissao&order=data_admissao.asc`
+        `vw_funcionario_base?status=in.(ativo,experiencia)&data_admissao=gte.${isoDate}&select=id,nome,data_admissao&order=data_admissao.asc`
       );
       const data = res.ok ? res.data : [];
 
@@ -316,7 +318,7 @@
   async function loadIntegracoes() {
     const el = document.getElementById('integBody');
     try {
-      const res = await API.get('integ_conector?select=id,nome,tipo,ativo,ultimo_sync,status_sync&order=nome.asc');
+      const res = await API.get('integ_conector?select=id,nome,tipo,sync_habilitado,ultimo_heartbeat,status&order=nome.asc');
       const data = res.ok ? res.data : [];
 
       if (!data.length) {
@@ -332,8 +334,8 @@
 
       let html = '<div class="grid-auto gap-3">';
       data.forEach(c => {
-        const online = c.ativo && c.status_sync !== 'erro';
-        const lastSync = c.ultimo_sync ? API.fmtData(c.ultimo_sync) : 'Nunca';
+        const online = c.sync_habilitado && c.status !== 'erro';
+        const lastSync = c.ultimo_heartbeat ? API.fmtData(c.ultimo_heartbeat) : 'Nunca';
         html += `
           <div class="integ-card">
             <div class="integ-icon"><span class="status-dot ${online ? 'online' : 'offline'}"></span></div>

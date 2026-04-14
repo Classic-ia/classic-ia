@@ -209,7 +209,12 @@ const API = (() => {
     if (_currentPerfil === 'administrador') return true;
     const key = acao ? `${recurso}_${acao}` : recurso;
     const allowed = PERMISSIONS[key];
-    if (!allowed) return true;
+    // Deny-by-default: se o recurso não está mapeado em PERMISSIONS, nega
+    // e loga para facilitar detecção de recursos esquecidos.
+    if (!allowed) {
+      console.warn('[canAccess] Recurso não mapeado em PERMISSIONS:', key, '— negado por default');
+      return false;
+    }
     return allowed.includes(_currentPerfil);
   }
 

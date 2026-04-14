@@ -18,10 +18,28 @@
   .sql-box strong { color: #e8a020; }
   .btn-copy { width: 100%; background: #161c2c; border: 1px solid #252d42; color: #6b7a99; font-family: monospace; font-size: 12px; padding: 9px; border-radius: 4px; cursor: pointer; margin-top: 10px; }
   .btn-copy:hover { border-color: #e8a020; color: #e8a020; }
+  .env-warn { background:#3a1a00; border:1px solid #e8a020; border-radius:4px; padding:12px; margin-bottom:16px; font-size:11px; color:#e8a020; line-height:1.5; }
 </style>
+<script>
+// ─────────────────────────────────────────────────────────────
+// Guard de ambiente: ferramenta só funciona em localhost/dev
+// TODO: migrar para RPC rh_reset_senha(p_user_id, p_nova_senha) no Supabase (hash server-side com bcrypt)
+// ─────────────────────────────────────────────────────────────
+(function(){
+  var host = location.hostname;
+  var ehDev = host === 'localhost' || host === '127.0.0.1' || host === '' || host.endsWith('.local');
+  if (!ehDev) {
+    document.addEventListener('DOMContentLoaded', function(){
+      document.body.innerHTML = '<div style="max-width:420px;margin:80px auto;padding:40px;background:#2a0000;border:1px solid #e03535;border-radius:8px;color:#e03535;font-family:monospace;text-align:center;font-size:14px;line-height:1.6;">🔒 <strong>Ferramenta de desenvolvimento</strong><br><br>Uso apenas em localhost/dev.<br>Acesso bloqueado em produção.</div>';
+    });
+    throw new Error('gerar_hash: ambiente de produção bloqueado');
+  }
+})();
+</script>
 </head>
 <body>
 <div class="box">
+  <div class="env-warn">⚠ <strong>FERRAMENTA LOCAL APENAS</strong> — Esta página gera SQL com senha em plaintext. Nunca exponha em produção. Ideal: usar RPC segura no Supabase.</div>
   <h2>🔑 Gerador de Hash — Classic CQ</h2>
   <label>E-mail do usuário</label>
   <input type="email" id="email" value="gestor@classic.com.br">

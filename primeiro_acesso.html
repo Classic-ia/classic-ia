@@ -104,6 +104,35 @@
 const { createClient } = supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_KEY);
 
+// ──────────────────────────────────────────────────────────────────────
+// Guard de bootstrap: bloqueia acesso se já houver administrador ativo
+// Validação definitiva deve ocorrer via RPC no Supabase — este guard é UX/defesa em profundidade
+// ──────────────────────────────────────────────────────────────────────
+const DOMINIO_PERMITIDO = /@classiccouros\.com\.br$/i;
+
+async function verificarBootstrap() {
+  try {
+    const { data, error } = await db.from('usuarios')
+      .select('id')
+      .eq('ativo', true)
+      .in('perfil', ['administrador','admin'])
+      .limit(1);
+    if (error) {
+      console.warn('[primeiro_acesso] Erro ao verificar bootstrap:', error.message);
+      return; // não bloquear em caso de erro de rede — permite tentativa
+    }
+    if (data && data.length > 0) {
+      document.getElementById('form-area').style.display = 'none';
+      const done = document.getElementById('step-done');
+      done.style.display = 'block';
+      done.innerHTML = '<div class="check">🔒</div><p>Sistema já inicializado.<br>Use a tela de login.</p><a href="login.html" class="btn-ir">▶ IR PARA O LOGIN</a>';
+    }
+  } catch (e) {
+    console.warn('[primeiro_acesso] Falha no guard:', e);
+  }
+}
+document.addEventListener('DOMContentLoaded', verificarBootstrap);
+
 async function hashSenha(senha) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(senha));
   return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -146,6 +175,7 @@ async function definirSenha() {
   const btn = document.getElementById('btn-salvar');
 
   if (!email) { mostrarMsg('Informe o e-mail', 'err'); return; }
+  if (!DOMINIO_PERMITIDO.test(email)) { mostrarMsg('Apenas e-mails @classiccouros.com.br são permitidos', 'err'); return; }
   if (senha.length < 6) { mostrarMsg('Senha mínima: 6 caracteres', 'err'); return; }
   if (senha !== senha2) { mostrarMsg('As senhas não coincidem', 'err'); return; }
 

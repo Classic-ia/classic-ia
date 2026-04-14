@@ -68,14 +68,16 @@
 ```
 Score = (faltas_90d * 8) + (advertencias_90d * 15) + (atestados_90d * 5) + (experiencia * 10)
 ```
-Tabela de ocorrências: `rh_acidentes` (campo `tipo`, não `tipo_acidente`; campo `criado_em`, não `created_at`)
+Tabela de ocorrências: `rh_acidentes` (campo `tipo_acidente`, `created_at`, `funcionario_id`)
 
 ### Nomes de Colunas (cuidado)
-- `rh_acidentes`: tipo (não tipo_acidente), criado_em (não created_at), funcionario_id
-- `rh_funcionarios`: nome_completo, cargo_id (FK rh_cargos), setor_id (FK rh_setores)
-- `sst_aso`: data_validade (não data_vencimento), funcionario_id
+- `rh_acidentes`: **tipo_acidente** (valores: `tipico` | `trajeto` | `doenca_ocupacional`), **created_at**, funcionario_id, gravidade (`leve`|`moderado`|`grave`|`fatal`), data_ocorrencia, cat_emitida, dias_afastamento
+- `rh_funcionarios`: nome_completo, cargo_id (FK rh_cargos), setor_id (FK rh_setores), matricula, pis_pasep (14 chars)
+- `sst_aso`: data_validade (não data_vencimento), funcionario_id, tipo_exame, data_exame
 - `rh_treinamentos`: treinamento (não nome_treinamento), colaborador_id, data_vencimento
 - `rh_aso` e `rh_treinamentos` são VIEWS, não tabelas (não criar índices nelas)
+
+> **Convenção de timestamps:** tabelas do módulo **RH** (`rh_*`, `sst_*`, `rs_*`, `esocial_*`) usam `created_at` / `updated_at`. Tabelas do módulo **CQ** (`cq_*`, `registros_cq_*`) usam `criado_em`. **Não misturar.** Ao editar uma query, verifique o módulo da tabela antes de escolher o nome da coluna.
 
 ## Transporte
 

@@ -1,5 +1,11 @@
 // rh_api.js — Utilitário centralizado de chamadas API do Classic RH
 // Requer: config.js e rh_auth.js carregados antes deste arquivo.
+//
+// STATUS: métodos legacy (get/post/patch/delete) estão DEPRECATED.
+// Novas páginas devem usar RH_API.v2.{get,post,patch,del,rpc} que retornam
+// o contrato padronizado { ok, data, error, status } (mesmo formato de api.js).
+// Roadmap: migrar páginas ativas (gestao_rh_sst, painel_gestor, ferias, etc)
+// e depois remover os métodos legacy.
 
 const RH_API = {
   async fetch(endpoint, options = {}) {
@@ -74,6 +80,70 @@ const RH_API = {
       method: 'DELETE',
       headers: { 'Prefer': 'return=minimal' },
     });
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // v2 — Contrato padronizado { ok, data, error, status }
+  // Migração incremental: páginas novas devem usar RH_API.v2.*
+  // ═══════════════════════════════════════════════════════════════
+  v2: {
+    async _parse(res) {
+      const status = res.status;
+      if (!res.ok) {
+        let msg = 'HTTP ' + status;
+        try { const t = await res.text(); if (t) msg = t; } catch {}
+        return { ok: false, data: null, error: msg, status };
+      }
+      try {
+        const data = await res.json();
+        return { ok: true, data, error: null, status };
+      } catch (e) {
+        // 204 No Content ou body vazio são válidos para POST/PATCH/DELETE
+        return { ok: true, data: null, error: null, status };
+      }
+    },
+
+    async get(endpoint) {
+      const res = await RH_API.fetch(endpoint);
+      return this._parse(res);
+    },
+
+    async post(endpoint, body, prefer) {
+      const headers = {};
+      if (prefer) headers['Prefer'] = prefer;
+      const res = await RH_API.fetch(endpoint, { method: 'POST', headers, body });
+      return this._parse(res);
+    },
+
+    async patch(endpoint, body) {
+      const res = await RH_API.fetch(endpoint, {
+        method: 'PATCH',
+        headers: { 'Prefer': 'return=representation' },
+        body,
+      });
+      return this._parse(res);
+    },
+
+    async del(endpoint) {
+      const res = await RH_API.fetch(endpoint, {
+        method: 'DELETE',
+        headers: { 'Prefer': 'return=minimal' },
+      });
+      return this._parse(res);
+    },
+
+    async rpc(fn, args) {
+      const res = await RH_API.fetch('rpc/' + fn, {
+        method: 'POST',
+        body: args || {},
+      });
+      return this._parse(res);
+    },
+  },
+
+  // Atalho — retorna mesmo contrato v2
+  async rpc(fn, args) {
+    return this.v2.rpc(fn, args);
   },
 
   // Toast de erro global

@@ -298,8 +298,18 @@ async function startAutoGen(){
   document.getElementById('btnConfirmGerar').disabled = true;
   openModal('modalGerar');
 
+  // Tenta sst_acidente primeiro; se tabela não existir (404) faz fallback para rh_acidentes
+  async function getAcidentes(){
+    const sel = 'select=id,funcionario_id,data_ocorrencia,tipo_acidente,cat_emitida';
+    let r = await API.get('sst_acidente?' + sel);
+    if (!r.ok && (r.status === 404 || /relation .* does not exist/i.test(r.error||''))) {
+      console.warn('[monitor-esocial] sst_acidente indisponível, usando rh_acidentes');
+      r = await API.get('rh_acidentes?' + sel);
+    }
+    return r;
+  }
   const [acidentes, asos, existentes] = await Promise.all([
-    API.get('sst_acidente?select=id,funcionario_id,data_ocorrencia,tipo_acidente,cat_emitida'),
+    getAcidentes(),
     API.get('sst_aso?select=id,funcionario_id,tipo_exame,data_exame,data_validade'),
     API.get('esocial_eventos?select=id,tipo,funcionario_id,data_fato')
   ]);

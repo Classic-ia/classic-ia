@@ -131,10 +131,30 @@
   if (!user) return;
   API.setPerfil(user.perfil);
 
+  /* ── Filial context (filtro multi-filial) ── */
+  var filialAtiva = (typeof FilialContext !== 'undefined' && FilialContext.getFilialAtiva) ? FilialContext.getFilialAtiva() : null;
+  // TODO: passar p_filial_id ao RPC painel_gestor_dados (requer alteração no Supabase);
+  // por enquanto filtramos no cliente após receber os dados.
+
   /* ── Load data ── */
   var res = await API.rpc('painel_gestor_dados', {});
-  if (!res.ok || !res.data) { document.getElementById('mainContent').innerHTML = '<div class="loading-center">Erro ao carregar dados.</div>'; return; }
+  if (!res.ok || !res.data) {
+    var errMsg = API.esc(res.error || ('HTTP ' + (res.status || '?')) || 'Desconhecido');
+    document.getElementById('mainContent').innerHTML = '<div class="loading-center" style="color:var(--red);">Erro ao carregar dados: ' + errMsg + '</div>';
+    return;
+  }
   var D = res.data;
+
+  // Filtro por filial (client-side) — aplica se houver filial ativa e dado tiver campo filial_id/setor
+  if (filialAtiva && filialAtiva.id) {
+    var matchFilial = function(item) {
+      if (item.filial_id) return item.filial_id === filialAtiva.id;
+      return true; // sem campo filial_id, não filtra (preserva dados agregados)
+    };
+    ['risco','vencimentos','experiencia','afastados','acoes'].forEach(function(k){
+      if (Array.isArray(D[k])) D[k] = D[k].filter(matchFilial);
+    });
+  }
   var kpis = D.kpis || {};
   var risco = D.risco || [];
   var riscoSetor = D.risco_setor || [];
@@ -171,19 +191,29 @@
   var expCriticos = experiencia.filter(function(e) { return e.dias_restantes <= 7; });
   var afastRetorno = afastados.filter(function(a) { return a.dias_retorno !== null && a.dias_retorno <= 10; });
 
+  // Helper: gera botão de ação usando data-* (evita XSS via onclick inline)
+  function btnAcao(funcId, nome, setor, tipo, label, extraClass) {
+    return '<button class="btn-acao' + (extraClass ? ' ' + extraClass : '') +
+      '" data-func-id="' + API.esc(funcId || '') +
+      '" data-func-nome="' + API.esc(nome || '') +
+      '" data-func-setor="' + API.esc(setor || '') +
+      '" data-tipo="' + API.esc(tipo || '') +
+      '">' + API.esc(label) + '</button>';
+  }
+
   if (criticos.length || expCriticos.length || afastRetorno.length) {
     html += '<div class="urg-block critico"><div class="urg-title"><span class="dot"></span>CRITICO — Acao Hoje</div>';
     criticos.forEach(function(v) {
       html += '<div class="urg-item"><span class="name">' + API.esc(v.nome) + '</span><span class="meta">' + tipoIcon(v.tipo) + ': ' + API.esc(v.detalhe || '') + '</span><span class="days neg">' + daysLabel(v.dias_restantes) + '</span>';
-      html += '<div class="urg-actions"><button class="act-resolve" onclick="openAcao(\'' + v.funcionario_id + '\',\'' + API.esc(v.nome) + '\',\'' + API.esc(v.setor) + '\',\'' + v.tipo + ' vencido\')">Resolver</button></div></div>';
+      html += '<div class="urg-actions">' + btnAcao(v.funcionario_id, v.nome, v.setor, v.tipo + ' vencido', 'Resolver', 'act-resolve') + '</div></div>';
     });
     expCriticos.forEach(function(e) {
-      html += '<div class="urg-item"><span class="name">' + API.esc(e.nome) + '</span><span class="meta">Contrato ' + e.periodo + '</span><span class="days soon">' + daysLabel(e.dias_restantes) + '</span>';
-      html += '<div class="urg-actions"><button onclick="openAcao(\'' + e.id + '\',\'' + API.esc(e.nome) + '\',\'' + API.esc(e.setor) + '\',\'experiencia\')">Decidir</button></div></div>';
+      html += '<div class="urg-item"><span class="name">' + API.esc(e.nome) + '</span><span class="meta">Contrato ' + API.esc(e.periodo) + '</span><span class="days soon">' + daysLabel(e.dias_restantes) + '</span>';
+      html += '<div class="urg-actions">' + btnAcao(e.id, e.nome, e.setor, 'experiencia', 'Decidir') + '</div></div>';
     });
     afastRetorno.forEach(function(a) {
       html += '<div class="urg-item"><span class="name">' + API.esc(a.nome) + '</span><span class="meta">Retorno ' + afastIcon(a.tipo_afastamento) + '</span><span class="days soon">' + daysLabel(a.dias_retorno) + '</span>';
-      html += '<div class="urg-actions"><button onclick="openAcao(\'' + a.id + '\',\'' + API.esc(a.nome) + '\',\'' + API.esc(a.setor) + '\',\'retorno_afastado\')">Preparar</button></div></div>';
+      html += '<div class="urg-actions">' + btnAcao(a.id, a.nome, a.setor, 'retorno_afastado', 'Preparar') + '</div></div>';
     });
     html += '</div>';
   }
@@ -194,7 +224,7 @@
     html += '<div class="urg-block alerta"><div class="urg-title"><span class="dot"></span>ALERTA — Esta Semana</div>';
     alertas.forEach(function(v) {
       html += '<div class="urg-item"><span class="name">' + API.esc(v.nome) + '</span><span class="meta">' + tipoIcon(v.tipo) + ': ' + API.esc(v.detalhe || '') + '</span><span class="days soon">' + daysLabel(v.dias_restantes) + '</span>';
-      html += '<div class="urg-actions"><button onclick="openAcao(\'' + v.funcionario_id + '\',\'' + API.esc(v.nome) + '\',\'' + API.esc(v.setor) + '\',\'' + v.tipo + ' vencendo\')">Agendar</button></div></div>';
+      html += '<div class="urg-actions">' + btnAcao(v.funcionario_id, v.nome, v.setor, v.tipo + ' vencendo', 'Agendar') + '</div></div>';
     });
     html += '</div>';
   }
@@ -287,6 +317,18 @@
   }
 
   document.getElementById('mainContent').innerHTML = html;
+
+  // Event delegation: captura cliques nos botões .btn-acao e lê data-* (sem XSS via onclick)
+  document.getElementById('mainContent').addEventListener('click', function(ev){
+    var btn = ev.target.closest('.btn-acao');
+    if (!btn) return;
+    window.openAcao(
+      btn.getAttribute('data-func-id') || '',
+      btn.getAttribute('data-func-nome') || '',
+      btn.getAttribute('data-func-setor') || '',
+      btn.getAttribute('data-tipo') || ''
+    );
+  });
 
   /* ── Modal logic ── */
   window.openAcao = function(funcId, nome, setor, tipo) {

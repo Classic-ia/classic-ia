@@ -46,62 +46,35 @@ Deno.serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ── Ler credenciais do banco ──────────────────────────────────────────
+    // ── Ler conector do banco (sempre necessario para id) ─────────────────
     const { data: conector } = await supabase
       .from("integ_conector")
       .select("id, config_extra")
       .eq("nome", "convenia")
       .single();
 
-    if (!conector?.config_extra?.token) {
-      return jsonRes({ success: false, error: "Token Convenia nao configurado em integ_conector" }, 400);
+    if (!conector) {
+      return jsonRes({ success: false, error: "Conector 'convenia' nao encontrado em integ_conector" }, 400);
     }
 
-    const token: string = conector.config_extra.token;
     const conectorId: string = conector.id;
-
-    const convHeaders = {
-      "api-token": token,
-      "Content-Type": "application/json",
-      "Accept": "application/json",
-    };
 
     // ── Parse request body ────────────────────────────────────────────────
     const body = await req.json().catch(() => ({}));
     const action: string = body.action || "test";
 
     // ══════════════════════════════════════════════════════════════════════
-    // ACTION: test — valida token com 1 registro
-    // ══════════════════════════════════════════════════════════════════════
-    if (action === "test") {
-      const res = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, {
-        headers: convHeaders,
-      });
-      if (res.ok) {
-        // Atualiza heartbeat
-        await supabase
-          .from("integ_conector")
-          .update({ ultimo_heartbeat: new Date().toISOString(), status: "ativo" })
-          .eq("id", conectorId);
-
-        return jsonRes({ success: true, status: res.status, message: "Conexao OK" });
-      }
-      const errText = await res.text().catch(() => "");
-      return jsonRes({ success: false, status: res.status, error: errText.slice(0, 300) });
-    }
-
-    // ══════════════════════════════════════════════════════════════════════
-    // ACTION: save_token — salva/atualiza token no banco
+    // ACTION: save_token — salva/atualiza token (nao precisa de token existente)
     // ══════════════════════════════════════════════════════════════════════
     if (action === "save_token") {
       const newToken = body.token;
       if (!newToken || typeof newToken !== "string" || newToken.length < 10) {
-        return jsonRes({ success: false, error: "Token invalido" }, 400);
+        return jsonRes({ success: false, error: "Token invalido (minimo 10 caracteres)" }, 400);
       }
 
-      // Testar token antes de salvar
+      // Testar token antes de salvar (headers frescos, sem depender de token anterior)
       const testRes = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, {
-        headers: { ...convHeaders, "api-token": newToken },
+        headers: { "api-token": newToken, "Content-Type": "application/json", "Accept": "application/json" },
       });
       if (!testRes.ok) {
         return jsonRes({ success: false, error: `Token rejeitado pela Convenia (HTTP ${testRes.status})` }, 400);
@@ -119,6 +92,37 @@ Deno.serve(async (req) => {
         .eq("id", conectorId);
 
       return jsonRes({ success: true, message: "Token salvo e validado" });
+    }
+
+    // ── Para todas as outras actions, token obrigatorio ───────────────────
+    const token: string = conector.config_extra?.token;
+    if (!token) {
+      return jsonRes({ success: false, error: "Token Convenia nao configurado. Use save_token primeiro." }, 400);
+    }
+
+    const convHeaders = {
+      "api-token": token,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+    };
+
+    // ══════════════════════════════════════════════════════════════════════
+    // ACTION: test — valida token com 1 registro
+    // ══════════════════════════════════════════════════════════════════════
+    if (action === "test") {
+      const res = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, {
+        headers: convHeaders,
+      });
+      if (res.ok) {
+        await supabase
+          .from("integ_conector")
+          .update({ ultimo_heartbeat: new Date().toISOString(), status: "ativo" })
+          .eq("id", conectorId);
+
+        return jsonRes({ success: true, status: res.status, message: "Conexao OK" });
+      }
+      const errText = await res.text().catch(() => "");
+      return jsonRes({ success: false, status: res.status, error: errText.slice(0, 300) });
     }
 
     // ══════════════════════════════════════════════════════════════════════

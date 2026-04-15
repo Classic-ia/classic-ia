@@ -93,6 +93,75 @@
   </div>
 </div>
 
+<!-- ── Modal: Registrar decisao de contrato de experiencia ── -->
+<div class="modal-overlay" id="decisaoModal" role="dialog" aria-modal="true" aria-labelledby="decisaoModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="decisaoModalTitle">Registrar decisao de contrato</h2>
+      <button class="modal-close" type="button" id="decisaoCloseBtn" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section" style="padding:0;border:0;background:transparent;">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="form-field">
+            <label>Colaborador</label>
+            <input class="form-input" id="dmColab"     readonly>
+          </div>
+          <div class="form-field">
+            <label>Periodo</label>
+            <input class="form-input" id="dmPeriodo"   readonly>
+          </div>
+          <div class="form-field">
+            <label>Admissao</label>
+            <input class="form-input" id="dmAdmissao"  readonly>
+          </div>
+          <div class="form-field">
+            <label>Vencimento</label>
+            <input class="form-input" id="dmVencimento" readonly>
+          </div>
+        </div>
+
+        <div class="form-field form-field-full" style="margin-top:var(--space-4);">
+          <label>Decisao <span style="color:var(--danger);">*</span></label>
+          <div class="form-checkbox-group" id="dmDecisaoGroup" style="flex-direction:column;gap:var(--space-2);">
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="renovar">
+              <span><strong style="color:var(--success);">Renovar</strong> &middot; efetivar / continuar</span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="avaliar">
+              <span><strong style="color:var(--info);">Avaliar</strong> &middot; agendar nova analise</span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="ressalva">
+              <span><strong style="color:var(--warning);">Ressalva</strong> &middot; renovar com plano de melhoria <em>(justificativa obrigatoria)</em></span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="nao-renovar">
+              <span><strong style="color:var(--danger);">Nao renovar</strong> &middot; encerrar contrato <em>(justificativa obrigatoria)</em></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-field form-field-full" style="margin-top:var(--space-4);">
+          <label>Justificativa <span id="dmJustReq" style="color:var(--danger);display:none;">*</span></label>
+          <textarea class="form-textarea" id="dmJustificativa" rows="4"
+            placeholder="Minimo 10 caracteres para ressalva ou nao-renovar"></textarea>
+          <div class="form-hint">Obrigatorio para "ressalva" e "nao renovar".</div>
+        </div>
+
+        <div class="alert alert-danger" id="dmErro" style="display:none;margin-top:var(--space-4);"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" type="button" id="dmCancelar">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="dmConfirmar">
+        <span id="dmConfirmarLabel">Registrar decisao</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <script>
 (async () => {
 
@@ -106,6 +175,13 @@
   let activeFilter = 'todos';
   const HOJE = new Date();
   HOJE.setHours(0, 0, 0, 0);
+
+  // Mapa funcionarioId+'_'+periodo -> { decisao, decidido_em, justificativa }
+  // populado em loadData() via RPC rh_listar_decisoes_experiencia
+  let decisoesMap = {};
+
+  // Estado do modal de decisao
+  let modalContext = null; // { colabId, nome, periodo, admissao, vencimento }
 
   // ----- Utility -----
   function diffDays(dateStr) {
@@ -135,14 +211,20 @@
   async function loadData() {
     let colaboradores = [], asos = [], treinamentos = [];
     try {
-      const [resColab, resAsos, resTrein] = await Promise.all([
+      const [resColab, resAsos, resTrein, resDecisoes] = await Promise.all([
         API.get('rh_colaboradores?status=in.(ativo,afastado,ferias,experiencia)&select=id,nome,categoria,data_admissao,data_nascimento,cargo,unidade'),
         API.get('rh_asos?select=id,colaborador_id,tipo_aso,data_realizacao,data_vencimento,status'),
         API.get('rh_treinamentos?select=id,colaborador_id,treinamento,data_realizacao,data_vencimento,status'),
+        API.rpc('rh_listar_decisoes_experiencia'),
       ]);
       colaboradores = resColab.ok ? resColab.data : [];
       asos          = resAsos.ok  ? resAsos.data  : [];
       treinamentos  = resTrein.ok ? resTrein.data : [];
+
+      // Indexa decisoes por funcionario+periodo
+      decisoesMap = {};
+      const lista = resDecisoes.ok && Array.isArray(resDecisoes.data) ? resDecisoes.data : [];
+      lista.forEach(d => { decisoesMap[d.funcionario_id + '_' + d.periodo] = d; });
     } catch (err) {
       console.error('Erro ao carregar dados de alertas:', err);
       API.logEvent('UI_ERROR', { page: 'alertas_rh', error: err.message });
@@ -511,8 +593,15 @@
     else if (a.dias === 0) daysLabel = 'HOJE';
     else                   daysLabel = a.dias + 'd';
 
+    // Verifica se existe decisao registrada para este contrato+periodo
+    const decisaoKey = a.colabId + '_' + (a.periodo || 0);
+    const decisaoRegistrada = (a.categoria === 'contrato' && a.periodo) ? decisoesMap[decisaoKey] : null;
+
     let decisionHtml = '';
-    if (a.decisao) {
+    if (decisaoRegistrada) {
+      const labelMap = { 'renovar':'Renovado', 'avaliar':'Em avaliacao', 'ressalva':'Com ressalva', 'nao-renovar':'Nao renovar' };
+      decisionHtml = '<span class="pend-item-decision ' + decisaoRegistrada.decisao + '" title="Decidido em ' + fmtDate((decisaoRegistrada.decidido_em || '').slice(0,10)) + '">&#10003; ' + esc(labelMap[decisaoRegistrada.decisao] || decisaoRegistrada.decisao) + '</span>';
+    } else if (a.decisao) {
       decisionHtml = '<span class="pend-item-decision ' + a.decisao + '">' + esc(a.decisaoLabel) + '</span>';
     }
 
@@ -529,6 +618,27 @@
     html += '  </div>';
     html += '  <div class="pend-item-actions">';
     html += '    <a href="' + a.link + '" class="pend-item-action">Ver ficha</a>';
+
+    // CTA "Registrar decisao" — apenas para contratos sem decisao registrada
+    if (a.categoria === 'contrato' && a.periodo && !decisaoRegistrada) {
+      const ctxAttr = "openDecisaoModal(this)";
+      html += '    <button type="button" class="pend-item-action secondary"';
+      html += '      data-colab-id="' + esc(a.colabId) + '"';
+      html += '      data-colab-nome="' + esc(a.nome) + '"';
+      html += '      data-periodo="' + a.periodo + '"';
+      html += '      data-admissao="' + esc((a.detalhe.match(/(\d{2}\/\d{2}\/\d{4})/) || [,''])[1]) + '"';
+      html += '      data-vencimento="' + esc(fmtDate(a.dataRef)) + '"';
+      html += '      onclick="' + ctxAttr + '">Registrar decisao</button>';
+    }
+    if (a.categoria === 'contrato' && a.periodo && decisaoRegistrada) {
+      html += '    <button type="button" class="pend-item-action secondary"';
+      html += '      data-colab-id="' + esc(a.colabId) + '"';
+      html += '      data-colab-nome="' + esc(a.nome) + '"';
+      html += '      data-periodo="' + a.periodo + '"';
+      html += '      data-admissao=""';
+      html += '      data-vencimento="' + esc(fmtDate(a.dataRef)) + '"';
+      html += '      onclick="openDecisaoModal(this)">Revisar</button>';
+    }
     html += '  </div>';
     html += '</div>';
     return html;
@@ -564,6 +674,120 @@
     document.getElementById('content').style.display = 'none';
     document.getElementById('loading-state').style.display = 'flex';
     await loadData();
+  });
+
+  // ────────────────────────────────────────────────────────────────────────
+  // MODAL DE DECISAO — chama RPC rh_registrar_decisao_experiencia
+  // ────────────────────────────────────────────────────────────────────────
+  const dmModal     = document.getElementById('decisaoModal');
+  const dmJustReq   = document.getElementById('dmJustReq');
+  const dmJustEl    = document.getElementById('dmJustificativa');
+  const dmErroEl    = document.getElementById('dmErro');
+  const dmConfirmEl = document.getElementById('dmConfirmar');
+  const dmConfirmLb = document.getElementById('dmConfirmarLabel');
+
+  window.openDecisaoModal = function(btn) {
+    modalContext = {
+      colabId:   btn.dataset.colabId,
+      nome:      btn.dataset.colabNome,
+      periodo:   parseInt(btn.dataset.periodo, 10),
+      admissao:  btn.dataset.admissao || '',
+      vencimento: btn.dataset.vencimento || '',
+    };
+    document.getElementById('dmColab').value      = modalContext.nome;
+    document.getElementById('dmPeriodo').value    = modalContext.periodo === 1 ? '1o periodo (45 dias)' : '2o periodo (90 dias)';
+    document.getElementById('dmAdmissao').value   = modalContext.admissao || '—';
+    document.getElementById('dmVencimento').value = modalContext.vencimento;
+    document.querySelectorAll('input[name="dmDecisao"]').forEach(r => { r.checked = false; });
+    dmJustEl.value = '';
+    dmJustReq.style.display = 'none';
+    dmErroEl.style.display = 'none';
+    dmConfirmEl.disabled = false;
+    dmConfirmLb.textContent = 'Registrar decisao';
+
+    // Pre-popula com decisao existente se houver
+    const key = modalContext.colabId + '_' + modalContext.periodo;
+    const existing = decisoesMap[key];
+    if (existing) {
+      const r = document.querySelector('input[name="dmDecisao"][value="' + existing.decisao + '"]');
+      if (r) r.checked = true;
+      if (existing.justificativa) dmJustEl.value = existing.justificativa;
+      onDecisaoChange();
+    }
+
+    dmModal.classList.add('active');
+    setTimeout(() => dmJustEl.focus(), 100);
+  };
+
+  window.closeDecisaoModal = function() {
+    dmModal.classList.remove('active');
+    modalContext = null;
+  };
+
+  function onDecisaoChange() {
+    const v = document.querySelector('input[name="dmDecisao"]:checked')?.value;
+    const requerJust = (v === 'nao-renovar' || v === 'ressalva');
+    dmJustReq.style.display = requerJust ? '' : 'none';
+  }
+  document.querySelectorAll('input[name="dmDecisao"]').forEach(r => r.addEventListener('change', onDecisaoChange));
+
+  document.getElementById('dmCancelar').addEventListener('click', closeDecisaoModal);
+  document.getElementById('dmCloseBtn'); // pode estar ausente em ids antigos
+  const closeBtn = document.getElementById('decisaoCloseBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDecisaoModal);
+  dmModal.addEventListener('click', (e) => { if (e.target === dmModal) closeDecisaoModal(); });
+
+  document.getElementById('dmConfirmar').addEventListener('click', async () => {
+    if (!modalContext) return;
+    dmErroEl.style.display = 'none';
+
+    const decisao = document.querySelector('input[name="dmDecisao"]:checked')?.value;
+    if (!decisao) {
+      dmErroEl.textContent = 'Selecione uma decisao.';
+      dmErroEl.style.display = '';
+      return;
+    }
+    const justificativa = dmJustEl.value.trim();
+    if ((decisao === 'nao-renovar' || decisao === 'ressalva') && justificativa.length < 10) {
+      dmErroEl.textContent = 'Justificativa de pelo menos 10 caracteres e obrigatoria para "' + decisao + '".';
+      dmErroEl.style.display = '';
+      dmJustEl.focus();
+      return;
+    }
+
+    dmConfirmEl.disabled = true;
+    dmConfirmLb.textContent = 'Registrando...';
+
+    const res = await API.rpc('rh_registrar_decisao_experiencia', {
+      p_funcionario_id: modalContext.colabId,
+      p_periodo:        modalContext.periodo,
+      p_decisao:        decisao,
+      p_justificativa:  justificativa || null,
+    });
+
+    if (!res.ok) {
+      dmErroEl.textContent = res.error || 'Falha ao registrar decisao.';
+      dmErroEl.style.display = '';
+      dmConfirmEl.disabled = false;
+      dmConfirmLb.textContent = 'Registrar decisao';
+      return;
+    }
+
+    // Sucesso — atualiza local map e re-renderiza, fecha modal
+    const key = modalContext.colabId + '_' + modalContext.periodo;
+    decisoesMap[key] = {
+      funcionario_id: modalContext.colabId,
+      periodo:        modalContext.periodo,
+      decisao,
+      justificativa:  justificativa || null,
+      decidido_em:    new Date().toISOString(),
+    };
+    closeDecisaoModal();
+    renderSections();
+
+    if (typeof toast === 'function') {
+      toast('Decisao registrada: ' + decisao, 'success');
+    }
   });
 
   // ----- Initial load + auto-refresh -----

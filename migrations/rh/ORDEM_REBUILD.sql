@@ -88,9 +88,14 @@
 --                                                          (vw_funcionario_base,
 --                                                          rh_colaboradores)
 --
+-- 20  MODULO_DECISAO_EXPERIENCIA.sql        1 tabela,      Decisão executiva
+--                                           2 RPCs,        sobre contratos
+--                                           1 view,        de experiência
+--                                           4 RLS policies (45d e 90d)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   177 tabelas | 32 views | 67 functions | 60 triggers
---   64 tabelas com RLS | 219 policies
+--   178 tabelas | 33 views | 69 functions | 61 triggers
+--   65 tabelas com RLS | 223 policies
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

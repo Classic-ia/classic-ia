@@ -2,25 +2,26 @@
   Classic RH - Controle de ASOs (Atestados de Saude Ocupacional)
   NR-07 / PCMSO
 
+  Schema canonico (SEGURANCA_SUPABASE.sql):
   CREATE TABLE rh_asos (
-    id                   UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    colaborador_id       UUID REFERENCES rh_colaboradores(id),
-    tipo                 TEXT NOT NULL CHECK (tipo IN ('admissional','periodico','retorno','mudanca_funcao','demissional')),
-    data_exame           DATE NOT NULL,
-    medico               TEXT NOT NULL,
-    crm                  TEXT NOT NULL,
-    resultado            TEXT NOT NULL CHECK (resultado IN ('apto','inapto','apto_restricao')),
-    restricoes           TEXT,
-    validade_meses       INTEGER NOT NULL DEFAULT 12,
-    data_vencimento      DATE NOT NULL,
-    exames_complementares TEXT,
+    id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    colaborador_id       UUID NOT NULL REFERENCES rh_colaboradores(id) ON DELETE CASCADE,
+    tipo_aso             TEXT NOT NULL CHECK (tipo_aso IN ('admissional','periodico','retorno','mudanca_funcao','demissional')),
+    data_realizacao      DATE NOT NULL,
+    data_vencimento      DATE,
+    resultado            TEXT CHECK (resultado IN ('apto','inapto','apto_restricao')),
+    medico_nome          TEXT,
+    medico_crm           TEXT,
+    riscos_avaliados     TEXT,
     observacoes          TEXT,
-    criado_em            TIMESTAMPTZ DEFAULT now()
+    status               TEXT DEFAULT 'valido' CHECK (status IN ('valido','vencido','cancelado')),
+    registrado_por       UUID REFERENCES auth.users(id),
+    criado_em            TIMESTAMPTZ DEFAULT now(),
+    atualizado_em        TIMESTAMPTZ DEFAULT now()
   );
 
   CREATE INDEX idx_asos_colaborador ON rh_asos(colaborador_id);
   CREATE INDEX idx_asos_vencimento ON rh_asos(data_vencimento);
-  CREATE INDEX idx_asos_tipo ON rh_asos(tipo);
 
   -- RLS
   ALTER TABLE rh_asos ENABLE ROW LEVEL SECURITY;
@@ -138,7 +139,7 @@
             <th data-sort="cargo">Cargo</th>
             <th data-sort="tipo">Ultimo ASO</th>
             <th>Tipo</th>
-            <th data-sort="data_exame">Data Exame</th>
+            <th data-sort="data_realizacao">Data Exame</th>
             <th>Validade</th>
             <th data-sort="data_vencimento">Data Vencimento</th>
             <th data-sort="status">Status</th>
@@ -478,7 +479,7 @@ async function loadColaboradores() {
 
 async function loadASOs() {
   try {
-    const _res = await API.get('rh_asos?select=*&order=data_exame.desc');
+    const _res = await API.get('rh_asos?select=*&order=data_realizacao.desc');
     asos = _res.ok ? _res.data : [];
   } catch (e) {
     console.warn('[ASOs] Erro ao carregar ASOs:', e);
@@ -551,7 +552,7 @@ function calcValidadeMeses(dataNasc, cargo) {
 function getUltimoASO(colabId) {
   const colabAsos = asos.filter(a => a.colaborador_id === colabId);
   if (colabAsos.length === 0) return null;
-  colabAsos.sort((a, b) => b.data_exame.localeCompare(a.data_exame));
+  colabAsos.sort((a, b) => (b.data_realizacao || '').localeCompare(a.data_realizacao || ''));
   return colabAsos[0];
 }
 
@@ -607,7 +608,7 @@ function renderPainel() {
     rows = rows.filter(r => r.status === filterStatus);
   }
   if (filterTipo && rows.length) {
-    rows = rows.filter(r => r.aso && r.aso.tipo === filterTipo);
+    rows = rows.filter(r => r.aso && r.aso.tipo_aso === filterTipo);
   }
 
   // Sort by vencimento (vencidos first, then vencendo, then vigentes, then sem)
@@ -673,9 +674,9 @@ function renderPainel() {
       <td style="color:var(--text);font-weight:600;">${esc(c.nome)}</td>
       <td>${esc(c.cargo || '--')}</td>
       <td>${a ? resultadoLabel(a.resultado) : '--'}</td>
-      <td>${a ? '<span class="badge badge-accent">' + esc(TIPOS_ASO[a.tipo] || a.tipo) + '</span>' : '--'}</td>
-      <td class="mono">${a ? fmtDate(a.data_exame) : '--'}</td>
-      <td class="mono">${a ? a.validade_meses + 'm' : '--'}</td>
+      <td>${a ? '<span class="badge badge-accent">' + esc(TIPOS_ASO[a.tipo_aso] || a.tipo_aso) + '</span>' : '--'}</td>
+      <td class="mono">${a ? fmtDate(a.data_realizacao) : '--'}</td>
+      <td class="mono">${a && a.data_realizacao && a.data_vencimento ? Math.round((new Date(a.data_vencimento) - new Date(a.data_realizacao)) / (30*86400000)) + 'm' : '--'}</td>
       <td class="mono">${a ? fmtDate(a.data_vencimento) : '--'}</td>
       <td>${statusLabel(r.status)}</td>
     </tr>`;
@@ -832,18 +833,19 @@ async function salvarASO() {
   if (!crm) { toast('Informe o CRM do medico.', 'err'); return; }
   if (!vencimento) { toast('Data de vencimento nao calculada. Informe a data do exame.', 'err'); return; }
 
+  // Schema rh_asos (SEGURANCA_SUPABASE.sql): colaborador_id, tipo_aso, data_realizacao,
+  // data_vencimento, resultado, medico_nome, medico_crm, riscos_avaliados, observacoes, status
+  const examesTxt = examesSel.length > 0 ? '\n[Exames complementares] ' + examesSel.join(', ') : '';
   const payload = {
-    funcionario_id: colabId,
+    colaborador_id: colabId,
     tipo_aso: tipo,
     data_realizacao: dataExame,
-    medico,
-    crm,
+    medico_nome: medico,
+    medico_crm: crm,
     resultado,
-    restricoes: resultado === 'apto_restricao' ? restricoes : null,
-    validade_meses: validade,
+    riscos_avaliados: resultado === 'apto_restricao' ? restricoes : null,
     data_vencimento: vencimento,
-    exames_complementares: examesSel.length > 0 ? examesSel.join(', ') : null,
-    observacoes: observacoes || null,
+    observacoes: (observacoes || '') + examesTxt || null,
     criado_em: new Date().toISOString()
   };
 
@@ -917,7 +919,7 @@ function onHistColabSelected(colab) {
   // ASOs for this colaborador
   const colabAsos = asos
     .filter(a => a.colaborador_id === colab.id)
-    .sort((a, b) => b.data_exame.localeCompare(a.data_exame));
+    .sort((a, b) => (b.data_realizacao || '').localeCompare(a.data_realizacao || ''));
 
   // Current status
   const ultimo = colabAsos.length > 0 ? colabAsos[0] : null;
@@ -932,7 +934,7 @@ function onHistColabSelected(colab) {
     proximoExame.setDate(proximoExame.getDate() - 30); // agendar 30 dias antes
 
     statusInfo.innerHTML = `
-      <div>Ultimo exame: <strong>${fmtDate(ultimo.data_exame)}</strong> (${TIPOS_ASO[ultimo.tipo] || ultimo.tipo})</div>
+      <div>Ultimo exame: <strong>${fmtDate(ultimo.data_realizacao)}</strong> (${TIPOS_ASO[ultimo.tipo_aso] || ultimo.tipo_aso})</div>
       <div>Resultado: ${resultadoLabel(ultimo.resultado)}</div>
       <div>Vencimento: <strong>${fmtDate(ultimo.data_vencimento)}</strong>
         (${diasRestantes >= 0 ? diasRestantes + ' dias restantes' : Math.abs(diasRestantes) + ' dias vencido'})</div>
@@ -958,16 +960,15 @@ function onHistColabSelected(colab) {
     const cls = i === 0 && st === 'vigente' ? 'current' : (st === 'vencido' ? 'expired' : '');
     return `<div class="timeline-item ${cls}">
       <div class="timeline-meta">
-        <span><strong>${TIPOS_ASO[a.tipo] || a.tipo}</strong></span>
-        <span>${fmtDate(a.data_exame)}</span>
+        <span><strong>${TIPOS_ASO[a.tipo_aso] || a.tipo_aso}</strong></span>
+        <span>${fmtDate(a.data_realizacao)}</span>
         ${statusLabel(st)}
         ${resultadoLabel(a.resultado)}
       </div>
       <div class="timeline-detail">
-        <div>Medico: <strong>${esc(a.medico)}</strong> (CRM: ${esc(a.crm)})</div>
-        <div>Validade: <strong>${a.validade_meses} meses</strong> | Vencimento: <strong>${fmtDate(a.data_vencimento)}</strong></div>
-        ${a.restricoes ? '<div>Restricoes: <strong>' + esc(a.restricoes) + '</strong></div>' : ''}
-        ${a.exames_complementares ? '<div>Exames: ' + esc(a.exames_complementares) + '</div>' : ''}
+        <div>Medico: <strong>${esc(a.medico_nome)}</strong> (CRM: ${esc(a.medico_crm)})</div>
+        <div>Vencimento: <strong>${fmtDate(a.data_vencimento)}</strong></div>
+        ${a.riscos_avaliados ? '<div>Riscos avaliados: <strong>' + esc(a.riscos_avaliados) + '</strong></div>' : ''}
         ${a.observacoes ? '<div>Obs: ' + esc(a.observacoes) + '</div>' : ''}
       </div>
     </div>`;

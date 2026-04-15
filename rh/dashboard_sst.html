@@ -280,12 +280,13 @@ async function loadKPIs2() {
   const turnover = totalAtivos > 0 ? ((desligMes.length / totalAtivos) * 100).toFixed(1) : '0.0';
   renderKPI('kpi-turnover', turnover + '%', 'Turnover (periodo)', parseFloat(turnover) > 3 ? 'Acima do ideal' : 'Dentro do esperado', parseFloat(turnover) <= 3);
 
-  // 6. Absenteismo
-  const apuracao = await RH_API.get(`rh_apuracao_mensal?mes=gte.${pStart}&select=faltas,dias_uteis`);
+  // 6. Absenteismo (schema: competencia text 'YYYY-MM', faltas_*, dias_uteis_periodo)
+  const compStart = pStart.slice(0, 7); // YYYY-MM
+  const apuracao = await RH_API.get(`rh_apuracao_mensal?competencia=gte.${compStart}&select=faltas_justificadas,faltas_injustificadas,dias_uteis_periodo`);
   let absenteismo = 0;
   if (apuracao.length > 0) {
-    const totalFaltas = apuracao.reduce((s, r) => s + (r.faltas || 0), 0);
-    const totalDias = apuracao.reduce((s, r) => s + (r.dias_uteis || 0), 0);
+    const totalFaltas = apuracao.reduce((s, r) => s + (r.faltas_justificadas || 0) + (r.faltas_injustificadas || 0), 0);
+    const totalDias = apuracao.reduce((s, r) => s + (r.dias_uteis_periodo || 0), 0);
     absenteismo = totalDias > 0 ? ((totalFaltas / totalDias) * 100).toFixed(1) : 0;
   }
   renderKPI('kpi-absenteismo', absenteismo + '%', 'Absenteismo', parseFloat(absenteismo) > 5 ? 'Acima do limite' : 'Normal', parseFloat(absenteismo) <= 5);
@@ -382,7 +383,8 @@ async function loadChartOcorrencias() {
 }
 
 async function loadChartSetores() {
-  const colaboradores = await RH_API.get('rh_funcionarios?status=eq.ativo&select=setor');
+  // usa vw_funcionario_base que ja' faz o JOIN com rh_setores e expoe `setor` (nome)
+  const colaboradores = await RH_API.get('vw_funcionario_base?status=eq.ativo&select=setor');
 
   const grouped = {};
   colaboradores.forEach(c => {

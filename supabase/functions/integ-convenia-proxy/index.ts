@@ -13,13 +13,13 @@ const corsHeaders = {
 
 const CONVENIA_BASE = "https://public-api.convenia.com.br/api/v3";
 
-// Entidades suportadas e suas tabelas de staging
-const ENTITY_MAP: Record<string, { endpoint: string; staging: string; perPage: number }> = {
-  funcionarios:  { endpoint: "employees",  staging: "stg_convenia_funcionarios",  perPage: 100 },
-  afastamentos:  { endpoint: "leaves",     staging: "stg_convenia_afastamentos",  perPage: 100 },
-  ferias:        { endpoint: "vacations",  staging: "stg_convenia_ferias",        perPage: 100 },
-  folha:         { endpoint: "payrolls",   staging: "stg_convenia_documentos",    perPage: 24  },
-  beneficios:    { endpoint: "benefits",   staging: "stg_convenia_documentos",    perPage: 100 },
+// Entidades suportadas, tabelas de staging, e origem_sistema para dedup
+const ENTITY_MAP: Record<string, { endpoint: string; staging: string; perPage: number; origem: string }> = {
+  funcionarios:  { endpoint: "employees",  staging: "stg_convenia_funcionarios",  perPage: 100, origem: "convenia" },
+  afastamentos:  { endpoint: "leaves",     staging: "stg_convenia_afastamentos",  perPage: 100, origem: "convenia" },
+  ferias:        { endpoint: "vacations",  staging: "stg_convenia_ferias",        perPage: 100, origem: "convenia" },
+  folha:         { endpoint: "payrolls",   staging: "stg_convenia_documentos",    perPage: 24,  origem: "convenia_folha" },
+  beneficios:    { endpoint: "benefits",   staging: "stg_convenia_documentos",    perPage: 100, origem: "convenia_benef" },
 };
 
 function jsonRes(body: Record<string, unknown>, status = 200) {
@@ -29,8 +29,23 @@ function jsonRes(body: Record<string, unknown>, status = 200) {
   });
 }
 
+// Hash deterministico: ordena chaves recursivamente para garantir
+// que o mesmo payload sempre gere o mesmo hash, independente da
+// ordem de serializacao da API Convenia.
+function sortKeys(obj: unknown): unknown {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sortKeys);
+  return Object.keys(obj as Record<string, unknown>)
+    .sort()
+    .reduce((acc, k) => {
+      acc[k] = sortKeys((obj as Record<string, unknown>)[k]);
+      return acc;
+    }, {} as Record<string, unknown>);
+}
+
 function hashPayload(item: unknown): string {
-  const bytes = new TextEncoder().encode(JSON.stringify(item));
+  const canonical = JSON.stringify(sortKeys(item));
+  const bytes = new TextEncoder().encode(canonical);
   return Array.from(new Uint8Array(bytes))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("")
@@ -126,6 +141,56 @@ Deno.serve(async (req) => {
     }
 
     // ══════════════════════════════════════════════════════════════════════
+    // ACTION: health_check — valida integracao completa
+    // ══════════════════════════════════════════════════════════════════════
+    if (action === "health_check") {
+      // 1. Testar API Convenia
+      let apiOk = false;
+      try {
+        const hcRes = await fetch(`${CONVENIA_BASE}/employees?per_page=1`, { headers: convHeaders });
+        apiOk = hcRes.ok;
+      } catch { apiOk = false; }
+
+      // 2. Contar registros no staging
+      const { count: stgFunc } = await supabase
+        .from("stg_convenia_funcionarios").select("*", { count: "exact", head: true });
+      const { count: stgAfas } = await supabase
+        .from("stg_convenia_afastamentos").select("*", { count: "exact", head: true });
+      const { count: stgFer } = await supabase
+        .from("stg_convenia_ferias").select("*", { count: "exact", head: true });
+      const { count: stgDoc } = await supabase
+        .from("stg_convenia_documentos").select("*", { count: "exact", head: true });
+
+      // 3. Ultima execucao bem-sucedida
+      const { data: lastExec } = await supabase
+        .from("integ_execucao")
+        .select("tipo_entidade, status, inicio, registros_lidos, registros_erro")
+        .eq("conector_id", conectorId)
+        .eq("status", "sucesso")
+        .order("inicio", { ascending: false })
+        .limit(5);
+
+      // 4. Heartbeat
+      const heartbeat = conector.config_extra?.ultimo_heartbeat || null;
+
+      return jsonRes({
+        success: true,
+        health: {
+          api_convenia: apiOk ? "online" : "offline",
+          token_configurado: !!token,
+          heartbeat,
+          staging: {
+            funcionarios: stgFunc || 0,
+            afastamentos: stgAfas || 0,
+            ferias: stgFer || 0,
+            documentos: stgDoc || 0,
+          },
+          ultimas_execucoes: lastExec || [],
+        },
+      });
+    }
+
+    // ══════════════════════════════════════════════════════════════════════
     // ACTION: sync_* — sincroniza entidade (funcionarios, afastamentos, etc.)
     // ══════════════════════════════════════════════════════════════════════
     const entityKey = action.replace("sync_", "");
@@ -181,17 +246,22 @@ Deno.serve(async (req) => {
         totalRead += items.length;
 
         // ── Preparar registros para staging ────────────────────────────
+        // CHAVE DE CONCILIACAO: id_origem = ID estavel da Convenia (nunca random)
         const stagingRows = items.map((item: Record<string, unknown>) => {
-          const idOrigem = String(item.id || item.uuid || `pg${page}-${Math.random().toString(36).slice(2, 8)}`);
+          const idOrigem = String(item.id || item.uuid || item.employee_id || "");
+          if (!idOrigem) {
+            totalError++;
+            return null;
+          }
           return {
             id_origem: idOrigem,
-            origem_sistema: "convenia",
+            origem_sistema: entityConf.origem,
             payload_json: item,
             hash_registro: hashPayload(item),
             importacao_id: execId,
             status_processamento: "pendente",
           };
-        });
+        }).filter(Boolean);
 
         // ── Upsert no staging (ignora duplicados por hash) ────────────
         const { data: inserted, error: insertErr } = await supabase
@@ -254,6 +324,7 @@ Deno.serve(async (req) => {
       return jsonRes({
         success: true,
         entity: entityKey,
+        exec_id: execId,
         total_lidos: totalRead,
         total_novos_staging: totalNew,
         total_erros: totalError,

@@ -311,42 +311,38 @@
 
 <script>
 // ================================================================
-// CONFIG
+// CONFIG — estado em memoria (ZERO localStorage)
 // ================================================================
-const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
-let conveniaConfig = JSON.parse(localStorage.getItem('convenia_config') || '{}');
-let conveniaLogs   = JSON.parse(localStorage.getItem('convenia_logs')   || '[]');
-let conveniaData   = JSON.parse(localStorage.getItem('convenia_data')   || '{"funcionarios":[],"folhas":[],"beneficios":[],"afastamentos":[],"ferias":[]}');
-let conveniaWebhooks = JSON.parse(localStorage.getItem('convenia_webhooks') || '[]');
+let conveniaLogs = [];
+let conveniaData = { funcionarios: [], folhas: [], beneficios: [], afastamentos: [], ferias: [] };
+let conveniaWebhooks = [];
 
 // ================================================================
 // INIT
 // ================================================================
 document.addEventListener('DOMContentLoaded', async () => {
-  // Carregar config salva nos inputs
-  if (conveniaConfig.token)      document.getElementById('convenia_token').value = conveniaConfig.token;
-  if (conveniaConfig.empresa_id) document.getElementById('convenia_empresa_id').value = conveniaConfig.empresa_id;
-  if (conveniaConfig.auto_sync)  document.getElementById('convenia_auto_sync').value = conveniaConfig.auto_sync;
+  // Auth RH primeiro (necessario para callProxy)
+  if (typeof RHAuth !== 'undefined') {
+    try { await RHAuth.check(); } catch(e) {}
+  }
 
-  atualizarStatusCards();
   renderLogs();
-  renderWebhooks();
 
   // Verificar conexão via proxy (token no servidor)
   await testarConexaoSilencioso();
 
-  // Renderizar dados em cache
-  if (conveniaData.funcionarios.length) renderFuncionarios(conveniaData.funcionarios);
-  if (conveniaData.folhas.length) renderFolhas(conveniaData.folhas);
-  if (conveniaData.beneficios.length) renderBeneficios(conveniaData.beneficios);
-  if (conveniaData.afastamentos.length) renderAfastamentos(conveniaData.afastamentos);
-  if (conveniaData.ferias.length) renderFeriasConvenia(conveniaData.ferias);
-
-  // Auth RH
-  if (typeof RHAuth !== 'undefined') {
-    try { await RHAuth.check(); } catch(e) {}
-  }
+  // Carregar funcionarios do staging (dados reais do banco)
+  await carregarFuncionariosStaging();
+  atualizarStatusCards();
 });
+
+async function carregarFuncionariosStaging() {
+  try {
+    const stg = await API.get('stg_convenia_funcionarios?origem_sistema=eq.convenia&order=created_at.desc&limit=500');
+    conveniaData.funcionarios = (stg.ok ? stg.data : []).map(row => row.payload_json);
+    if (conveniaData.funcionarios.length) renderFuncionarios(conveniaData.funcionarios);
+  } catch(e) { console.warn('Erro ao carregar staging:', e); }
+}
 
 // ================================================================
 // UTILS
@@ -359,9 +355,6 @@ function fmtMoeda(v) {
   if (v == null) return '—';
   return Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
-function getToken() { return conveniaConfig.token || ''; }
-function getHeaders() { return { 'api-token': getToken(), 'Content-Type': 'application/json', 'Accept': 'application/json' }; }
-
 // ── Proxy server-side (token no banco, nunca no browser) ──
 async function callProxy(action, extra = {}) {
   const jwt = RHAuth.getAuthToken();
@@ -384,9 +377,7 @@ async function callProxy(action, extra = {}) {
 }
 
 function salvarDados() {
-  localStorage.setItem('convenia_data', JSON.stringify(conveniaData));
-  localStorage.setItem('convenia_logs', JSON.stringify(conveniaLogs));
-  localStorage.setItem('convenia_webhooks', JSON.stringify(conveniaWebhooks));
+  // no-op: dados ficam em memoria e no staging (banco)
 }
 
 function addLog(tipo, msg, detalhe = '') {
@@ -419,51 +410,53 @@ function toggleToken() {
 // ================================================================
 async function salvarConfig() {
   const token = document.getElementById('convenia_token').value.trim();
-  const empresa_id = document.getElementById('convenia_empresa_id').value.trim();
-  const auto_sync = document.getElementById('convenia_auto_sync').value;
+  if (!token) { showToast('Informe o token para salvar', 'warn'); return; }
 
-  // Salvar config local (mantém token para syncs legados de folha/beneficios/afastamentos/ferias)
-  conveniaConfig = { token, empresa_id, auto_sync };
-  localStorage.setItem('convenia_config', JSON.stringify(conveniaConfig));
-
-  // Salvar token no servidor via Edge Function (seguro — para sync employees via proxy)
-  if (token) {
-    try {
-      const r = await callProxy('save_token', { token });
-      if (!r.success) {
-        showToast('Token rejeitado: ' + (r.error || 'erro'), 'err');
-        addLog('error', 'Token rejeitado pelo servidor', r.error || '');
-        return;
-      }
-      showToast('Token validado e salvo no servidor! ✅');
-      addLog('success', 'Token salvo no servidor', 'Validado pela API Convenia');
-      return;
-    } catch (e) {
-      showToast('Erro ao salvar token no servidor: ' + e.message, 'err');
-      addLog('error', 'Falha ao salvar token no servidor', e.message);
+  try {
+    const r = await callProxy('save_token', { token });
+    if (!r.success) {
+      showToast('Token rejeitado: ' + (r.error || 'erro'), 'err');
+      addLog('error', 'Token rejeitado pelo servidor', r.error || '');
       return;
     }
+    showToast('Token validado e salvo no servidor! ✅');
+    addLog('success', 'Token salvo no servidor', 'Validado pela API Convenia');
+    document.getElementById('convenia_token').value = '';
+    document.getElementById('convenia_token').placeholder = 'Token configurado no servidor';
+    await testarConexaoSilencioso();
+  } catch (e) {
+    showToast('Erro ao salvar token: ' + e.message, 'err');
+    addLog('error', 'Falha ao salvar token no servidor', e.message);
   }
-
-  showToast('Configuração salva! ✅');
-  addLog('info', 'Configuração atualizada');
 }
 
 // ================================================================
 // STATUS CARDS
 // ================================================================
 function atualizarStatusCards() {
-  const ultima = conveniaConfig.ultima_sync;
-  document.getElementById('st-ultima-sync').textContent = ultima ? fmtDate(ultima) : '—';
-  document.getElementById('st-sync-sub').textContent    = ultima ? new Date(ultima).toLocaleTimeString('pt-BR') : 'Nunca sincronizado';
-  document.getElementById('st-funcionarios').textContent = conveniaData.funcionarios.length || '—';
-  document.getElementById('st-func-sub').textContent     = conveniaData.funcionarios.length ? `${conveniaData.funcionarios.filter(f => f.status === 'active' || f.active).length} ativos` : 'Aguardando sincronização';
-  document.getElementById('st-pendentes').textContent    = calcPendentes();
+  const total = conveniaData.funcionarios.length;
+  document.getElementById('st-funcionarios').textContent = total || '—';
+  document.getElementById('st-func-sub').textContent = total
+    ? `${conveniaData.funcionarios.filter(f => f.active !== false).length} ativos`
+    : 'Aguardando sincronização';
+  // Ultima sync e pendentes sao carregados do banco (integ_execucao)
+  carregarUltimaSync();
 }
 
-function calcPendentes() {
-  // Funcionários na Convenia que não existem no Supabase (mock)
-  return 0;
+async function carregarUltimaSync() {
+  try {
+    const r = await API.get('integ_execucao?conector_id=not.is.null&tipo_entidade=eq.funcionarios&status=eq.sucesso&order=inicio.desc&limit=1');
+    if (r.ok && r.data?.length) {
+      const exec = r.data[0];
+      document.getElementById('st-ultima-sync').textContent = fmtDate(exec.inicio);
+      document.getElementById('st-sync-sub').textContent = new Date(exec.inicio).toLocaleTimeString('pt-BR');
+      document.getElementById('st-pendentes').textContent = exec.registros_erro || 0;
+    } else {
+      document.getElementById('st-ultima-sync').textContent = '—';
+      document.getElementById('st-sync-sub').textContent = 'Nunca sincronizado';
+      document.getElementById('st-pendentes').textContent = 0;
+    }
+  } catch { /* silencioso */ }
 }
 
 // ================================================================
@@ -526,13 +519,7 @@ async function syncFuncionarios() {
     atualizarSyncProg(70);
 
     // Carregar dados do staging para exibicao
-    const stg = await API.get('stg_convenia_funcionarios?origem_sistema=eq.convenia&order=created_at.desc&limit=500');
-    const todos = (stg.ok ? stg.data : []).map(row => row.payload_json);
-
-    conveniaData.funcionarios = todos;
-    conveniaConfig.ultima_sync = new Date().toISOString();
-    localStorage.setItem('convenia_config', JSON.stringify(conveniaConfig));
-    salvarDados();
+    await carregarFuncionariosStaging();
     atualizarStatusCards();
     atualizarSyncProg(100);
 
@@ -555,26 +542,24 @@ async function syncFuncionarios() {
 // SYNC FOLHA
 // ================================================================
 async function syncFolha() {
-  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
   mostrarTab('folha');
-  mostrarSyncOverlay('Buscando Folhas de Pagamento...', 'Conectando à Convenia...');
+  mostrarSyncOverlay('Buscando Folhas de Pagamento...', 'Sincronizando via proxy...');
 
   try {
     atualizarSyncProg(30);
-    const res = await fetch(`${CONVENIA_BASE}/payrolls?per_page=24`, { headers: getHeaders() });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const lista = json.data || json.payrolls || json || [];
-    atualizarSyncProg(80);
+    const r = await callProxy('sync_folha');
+    if (!r.success) throw new Error(r.error || 'Falha no sync');
+    atualizarSyncProg(70);
 
-    conveniaData.folhas = Array.isArray(lista) ? lista : [];
-    salvarDados();
+    // Carregar do staging (origem_sistema = convenia_folha)
+    const stg = await API.get('stg_convenia_documentos?origem_sistema=eq.convenia_folha&order=created_at.desc&limit=200');
+    conveniaData.folhas = (stg.ok ? stg.data : []).map(row => row.payload_json);
     atualizarSyncProg(100);
     setTimeout(() => {
       esconderSyncOverlay();
       renderFolhas(conveniaData.folhas);
-      showToast(`${conveniaData.folhas.length} folhas encontradas! ✅`);
-      addLog('success', 'Sync folha concluído', `${conveniaData.folhas.length} registros`);
+      showToast(`${r.total_lidos} folhas lidas, ${r.total_novos_staging} novas ✅`);
+      addLog('success', 'Sync folha via proxy', `${r.total_lidos} lidos`);
     }, 300);
   } catch (e) {
     esconderSyncOverlay();
@@ -587,26 +572,23 @@ async function syncFolha() {
 // SYNC BENEFÍCIOS
 // ================================================================
 async function syncBeneficios() {
-  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
   mostrarTab('beneficios');
-  mostrarSyncOverlay('Buscando Benefícios...', 'Conectando à Convenia...');
+  mostrarSyncOverlay('Buscando Benefícios...', 'Sincronizando via proxy...');
 
   try {
     atualizarSyncProg(30);
-    const res = await fetch(`${CONVENIA_BASE}/benefits`, { headers: getHeaders() });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const lista = json.data || json.benefits || json || [];
-    atualizarSyncProg(80);
+    const r = await callProxy('sync_beneficios');
+    if (!r.success) throw new Error(r.error || 'Falha no sync');
+    atualizarSyncProg(70);
 
-    conveniaData.beneficios = Array.isArray(lista) ? lista : [];
-    salvarDados();
+    const stg = await API.get('stg_convenia_documentos?origem_sistema=eq.convenia_benef&order=created_at.desc&limit=200');
+    conveniaData.beneficios = (stg.ok ? stg.data : []).map(row => row.payload_json);
     atualizarSyncProg(100);
     setTimeout(() => {
       esconderSyncOverlay();
       renderBeneficios(conveniaData.beneficios);
-      showToast(`${conveniaData.beneficios.length} benefícios encontrados! ✅`);
-      addLog('success', 'Sync benefícios concluído', `${conveniaData.beneficios.length} registros`);
+      showToast(`${r.total_lidos} benefícios lidos, ${r.total_novos_staging} novos ✅`);
+      addLog('success', 'Sync benefícios via proxy', `${r.total_lidos} lidos`);
     }, 300);
   } catch (e) {
     esconderSyncOverlay();
@@ -619,23 +601,21 @@ async function syncBeneficios() {
 // SYNC AFASTAMENTOS
 // ================================================================
 async function syncAfastamentos() {
-  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
-  mostrarSyncOverlay('Buscando Afastamentos...', 'Conectando à Convenia...');
+  mostrarSyncOverlay('Buscando Afastamentos...', 'Sincronizando via proxy...');
   try {
-    atualizarSyncProg(40);
-    const res = await fetch(`${CONVENIA_BASE}/leaves?per_page=100`, { headers: getHeaders() });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const lista = json.data || json.leaves || json || [];
-    atualizarSyncProg(90);
-    conveniaData.afastamentos = Array.isArray(lista) ? lista : [];
-    salvarDados();
+    atualizarSyncProg(30);
+    const r = await callProxy('sync_afastamentos');
+    if (!r.success) throw new Error(r.error || 'Falha no sync');
+    atualizarSyncProg(70);
+
+    const stg = await API.get('stg_convenia_afastamentos?origem_sistema=eq.convenia&order=created_at.desc&limit=500');
+    conveniaData.afastamentos = (stg.ok ? stg.data : []).map(row => row.payload_json);
     atualizarSyncProg(100);
     setTimeout(() => {
       esconderSyncOverlay();
       renderAfastamentos(conveniaData.afastamentos);
-      showToast(`${conveniaData.afastamentos.length} afastamentos encontrados! ✅`);
-      addLog('success', 'Sync afastamentos concluído', `${conveniaData.afastamentos.length} registros`);
+      showToast(`${r.total_lidos} afastamentos lidos, ${r.total_novos_staging} novos ✅`);
+      addLog('success', 'Sync afastamentos via proxy', `${r.total_lidos} lidos`);
     }, 300);
   } catch (e) {
     esconderSyncOverlay();
@@ -648,23 +628,21 @@ async function syncAfastamentos() {
 // SYNC FÉRIAS
 // ================================================================
 async function syncFerias() {
-  if (!getToken()) { showToast('Configure o Token da API primeiro', 'warn'); return; }
-  mostrarSyncOverlay('Buscando Férias...', 'Conectando à Convenia...');
+  mostrarSyncOverlay('Buscando Férias...', 'Sincronizando via proxy...');
   try {
-    atualizarSyncProg(40);
-    const res = await fetch(`${CONVENIA_BASE}/vacations?per_page=100`, { headers: getHeaders() });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const json = await res.json();
-    const lista = json.data || json.vacations || json || [];
-    atualizarSyncProg(90);
-    conveniaData.ferias = Array.isArray(lista) ? lista : [];
-    salvarDados();
+    atualizarSyncProg(30);
+    const r = await callProxy('sync_ferias');
+    if (!r.success) throw new Error(r.error || 'Falha no sync');
+    atualizarSyncProg(70);
+
+    const stg = await API.get('stg_convenia_ferias?origem_sistema=eq.convenia&order=created_at.desc&limit=500');
+    conveniaData.ferias = (stg.ok ? stg.data : []).map(row => row.payload_json);
     atualizarSyncProg(100);
     setTimeout(() => {
       esconderSyncOverlay();
       renderFeriasConvenia(conveniaData.ferias);
-      showToast(`${conveniaData.ferias.length} registros de férias encontrados! ✅`);
-      addLog('success', 'Sync férias concluído', `${conveniaData.ferias.length} registros`);
+      showToast(`${r.total_lidos} férias lidas, ${r.total_novos_staging} novas ✅`);
+      addLog('success', 'Sync férias via proxy', `${r.total_lidos} lidos`);
     }, 300);
   } catch (e) {
     esconderSyncOverlay();
@@ -949,7 +927,6 @@ function salvarWebhook() {
   if (document.getElementById('wh_afastamento').checked) eventos.push('employee.leave');
 
   conveniaWebhooks.push({ id: Date.now(), url, eventos, ativo: true, criado: new Date().toISOString() });
-  salvarDados();
   closeModal('modalWebhook');
   renderWebhooks();
   showToast('Webhook configurado! 🔔');
@@ -975,7 +952,6 @@ function renderWebhooks() {
 
 function removerWebhook(id) {
   conveniaWebhooks = conveniaWebhooks.filter(w => w.id !== id);
-  salvarDados();
   renderWebhooks();
   showToast('Webhook removido');
 }
@@ -1000,7 +976,6 @@ function renderLogs() {
 function limparLogs() {
   if (!confirm('Limpar todos os logs?')) return;
   conveniaLogs = [];
-  salvarDados();
   renderLogs();
 }
 

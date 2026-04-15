@@ -93,9 +93,14 @@
 --                                           1 view,        de experiência
 --                                           4 RLS policies (45d e 90d)
 --
+-- 21  MODULO_CIPA_ACOES.sql                 1 tabela,      Ações/deliberações
+--                                           3 RLS policies de reuniões CIPA
+--                                                          (backend da aba
+--                                                          "Ações" em cipa.html)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   178 tabelas | 33 views | 69 functions | 61 triggers
---   65 tabelas com RLS | 223 policies
+--   179 tabelas | 33 views | 70 functions | 62 triggers
+--   66 tabelas com RLS | 226 policies
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

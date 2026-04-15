@@ -74,19 +74,33 @@ DROP POLICY IF EXISTS p_decisao_exp_write  ON public.rh_decisao_experiencia;
 DROP POLICY IF EXISTS p_decisao_exp_update ON public.rh_decisao_experiencia;
 DROP POLICY IF EXISTS p_decisao_exp_delete ON public.rh_decisao_experiencia;
 
+-- Predicate reusavel: perfil atual e' rh ou administrador
+-- Usa rh_usuarios (backbone RBAC real em producao). has_perfil() nao existe
+-- em producao porque rh_perfis_acesso nao foi deployada.
+CREATE OR REPLACE FUNCTION public.fn_decisao_exp_pode_gravar()
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.rh_usuarios
+     WHERE auth_uid = auth.uid()
+       AND perfil IN ('administrador', 'rh')
+       AND ativo = true
+  );
+$$;
+
 -- READ: todos autenticados
 CREATE POLICY p_decisao_exp_read ON public.rh_decisao_experiencia
   FOR SELECT TO authenticated USING (true);
 
--- WRITE: rh + admin
+-- WRITE: administrador + rh (via rh_usuarios)
 CREATE POLICY p_decisao_exp_write ON public.rh_decisao_experiencia
   FOR INSERT TO authenticated
-  WITH CHECK (public.has_perfil('rh') OR public.has_perfil('admin'));
+  WITH CHECK (public.fn_decisao_exp_pode_gravar());
 
 CREATE POLICY p_decisao_exp_update ON public.rh_decisao_experiencia
   FOR UPDATE TO authenticated
-  USING      (public.has_perfil('rh') OR public.has_perfil('admin'))
-  WITH CHECK (public.has_perfil('rh') OR public.has_perfil('admin'));
+  USING      (public.fn_decisao_exp_pode_gravar())
+  WITH CHECK (public.fn_decisao_exp_pode_gravar());
 
 -- DELETE: bloqueado (decisao e' historico imutavel; UPDATE sobrescreve)
 CREATE POLICY p_decisao_exp_delete ON public.rh_decisao_experiencia
@@ -114,8 +128,8 @@ BEGIN
   IF v_uid IS NULL THEN
     RAISE EXCEPTION 'Sessao nao autenticada' USING ERRCODE = '28000';
   END IF;
-  IF NOT (public.has_perfil('rh') OR public.has_perfil('admin')) THEN
-    RAISE EXCEPTION 'Apenas perfis rh/admin podem registrar decisoes' USING ERRCODE = '42501';
+  IF NOT public.fn_decisao_exp_pode_gravar() THEN
+    RAISE EXCEPTION 'Apenas perfis administrador/rh podem registrar decisoes' USING ERRCODE = '42501';
   END IF;
 
   -- Validacao de entrada

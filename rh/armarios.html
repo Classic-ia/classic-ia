@@ -62,7 +62,11 @@
       <option value="bloqueado">Bloqueados</option>
     </select>
     <input type="text" class="search-input" id="busca" placeholder="Buscar colaborador...">
-    <button class="btn btn-primary btn-sm" id="btnAtribuir">+ Atribuir Armario</button>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" id="btnExcel">&#8595; Excel</button>
+      <button class="btn btn-ghost btn-sm" id="btnPDF">&#128438; Imprimir/PDF</button>
+      <button class="btn btn-primary btn-sm" id="btnAtribuir">+ Atribuir Armario</button>
+    </div>
   </div>
 
   <!-- Tabs por tipo -->
@@ -413,6 +417,128 @@
 
     closeModalLib();
     await loadAll();
+  });
+
+  // =========================================================
+  // EXPORT HELPERS
+  // =========================================================
+  function getExportRows() {
+    const ocupMap = {};
+    ocupacoes.forEach(o => { ocupMap[o.armario_id] = o; });
+    const funcMap = {};
+    funcionarios.forEach(f => { funcMap[f.id] = f; });
+    const blocoMap = {};
+    blocos.forEach(b => { blocoMap[b.id] = b; });
+
+    return armarios.filter(a => {
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      if (filtroTipo && tipo !== filtroTipo) return false;
+      if (filtroStatus && a.status !== filtroStatus) return false;
+      return true;
+    }).sort((a, b) => {
+      const tA = (blocoMap[a.bloco_id] || {}).tipo || '';
+      const tB = (blocoMap[b.bloco_id] || {}).tipo || '';
+      if (tA !== tB) return tA.localeCompare(tB);
+      return parseInt(a.codigo) - parseInt(b.codigo);
+    }).map(a => {
+      const ocup = ocupMap[a.id];
+      const func = ocup ? funcMap[ocup.funcionario_id] : null;
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      return {
+        numero: a.codigo,
+        colaborador: func ? func.nome : '',
+        setor: func ? (func.setor || '') : '',
+        tipo: tipo === 'feminino' ? 'Feminino' : tipo === 'masculino' ? 'Masculino' : tipo || '',
+        situacao: a.status === 'ocupado' ? 'OK' : a.status === 'bloqueado' ? 'Bloqueado' : 'VAGO',
+        desde: ocup ? (ocup.data_atribuicao || '') : '',
+      };
+    });
+  }
+
+  // =========================================================
+  // EXPORT EXCEL (CSV com BOM para Excel)
+  // =========================================================
+  document.getElementById('btnExcel').addEventListener('click', () => {
+    const rows = getExportRows();
+    const header = ['Numero', 'Colaborador', 'Setor', 'Tipo', 'Situacao', 'Desde'];
+    const csv = [
+      header.join(';'),
+      ...rows.map(r => [r.numero, r.colaborador, r.setor, r.tipo, r.situacao, r.desde].map(v => '"' + (v || '').replace(/"/g, '""') + '"').join(';'))
+    ].join('\r\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const tipoLabel = filtroTipo ? '_' + filtroTipo : '';
+    a.download = `armarios${tipoLabel}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // =========================================================
+  // EXPORT PDF (via impressao do navegador)
+  // =========================================================
+  document.getElementById('btnPDF').addEventListener('click', () => {
+    const rows = getExportRows();
+    const tipoLabel = filtroTipo ? (filtroTipo === 'feminino' ? 'Feminino' : 'Masculino') : 'Todos';
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const ocupados = rows.filter(r => r.situacao === 'OK').length;
+    const vagos = rows.filter(r => r.situacao === 'VAGO').length;
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Relacao de Armarios - ${tipoLabel}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#1e293b; padding:20px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; border-bottom:2px solid #2563eb; padding-bottom:12px; }
+  .header h1 { font-size:16px; color:#2563eb; }
+  .header .sub { font-size:10px; color:#64748b; margin-top:2px; }
+  .header .right { text-align:right; font-size:10px; color:#64748b; }
+  .kpis { display:flex; gap:24px; margin-bottom:12px; font-size:11px; }
+  .kpis b { font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th { background:#f1f5f9; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; padding:6px 8px; text-align:left; border-bottom:2px solid #cbd5e1; }
+  td { padding:5px 8px; border-bottom:1px solid #e2e8f0; font-size:11px; }
+  tr:nth-child(even) { background:#f8fafc; }
+  .vago { color:#94a3b8; font-style:italic; }
+  .footer { margin-top:16px; text-align:center; font-size:9px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:8px; }
+  @media print { body { padding:10px; } }
+</style>
+</head><body>
+  <div class="header">
+    <div>
+      <h1>Relacao de Armarios — ${tipoLabel}</h1>
+      <div class="sub">Classic Importacao e Exportacao de Couros Ltda — CNPJ 08.849.964/0001-10</div>
+    </div>
+    <div class="right">Data: ${hoje}<br>Total: ${rows.length} armarios</div>
+  </div>
+  <div class="kpis">
+    <div>Ocupados: <b>${ocupados}</b></div>
+    <div>Vagos: <b>${vagos}</b></div>
+    <div>Taxa: <b>${rows.length ? Math.round(ocupados/rows.length*100) : 0}%</b></div>
+  </div>
+  <table>
+    <thead><tr><th style="width:40px">N</th><th>Colaborador</th><th>Setor</th><th>Tipo</th><th style="width:70px">Situacao</th><th style="width:80px">Desde</th></tr></thead>
+    <tbody>
+      ${rows.map(r => `<tr>
+        <td>${r.numero}</td>
+        <td${!r.colaborador?' class="vago"':''}>${r.colaborador || '--'}</td>
+        <td>${r.setor || '--'}</td>
+        <td>${r.tipo}</td>
+        <td>${r.situacao}</td>
+        <td>${r.desde ? new Date(r.desde+'T00:00:00').toLocaleDateString('pt-BR') : '--'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+  <div class="footer">Classic RH & SST — Gestao de Armarios — Impresso em ${hoje}</div>
+</body></html>`);
+    printWin.document.close();
+    setTimeout(() => printWin.print(), 300);
   });
 
   // =========================================================

@@ -42,16 +42,15 @@ WHERE NOT EXISTS (
 );
 
 -- 4. ATRIBUIR ARMARIOS FEMININOS
--- Funcao auxiliar para atribuir por nome
 DO $$
 DECLARE
+  rec record;
   v_arm_id uuid;
   v_func_id uuid;
   v_bloco_fem uuid := 'a0000000-0000-0000-0000-000000000001';
 BEGIN
-  -- Array de (numero_armario, nome_colaboradora)
   FOR rec IN
-    SELECT * FROM (VALUES
+    SELECT column1 AS codigo, column2 AS nome FROM (VALUES
       ('1', 'CLARICE GONCALO MIRANDA'),
       ('2', 'CRISTIANE DOS SANTOS'),
       ('3', 'PATRICIA MAIARA DA CRUZ'),
@@ -116,7 +115,7 @@ BEGIN
 
     -- Buscar funcionario por nome (fuzzy)
     SELECT id INTO v_func_id FROM rh_funcionarios
-    WHERE UPPER(UNACCENT(nome_completo)) LIKE '%' || UPPER(LEFT(rec.nome, 15)) || '%'
+    WHERE UPPER(TRANSLATE(nome_completo, 'ÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇáéíóúàèìòùâêîôûãõç', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%' || UPPER(LEFT(rec.nome, 15)) || '%'
       AND status IN ('ativo', 'ferias', 'experiencia')
     LIMIT 1;
 
@@ -134,12 +133,13 @@ END $$;
 -- 5. ATRIBUIR ARMARIOS MASCULINOS
 DO $$
 DECLARE
+  rec record;
   v_arm_id uuid;
   v_func_id uuid;
   v_bloco_mas uuid := 'a0000000-0000-0000-0000-000000000002';
 BEGIN
   FOR rec IN
-    SELECT * FROM (VALUES
+    SELECT column1 AS codigo, column2 AS nome FROM (VALUES
       ('1', 'JONAS LOPES'),
       ('2', 'MARIO SERGIO CARVALHO'),
       ('3', 'ANDERSON LUIZ DE SOUZA'),
@@ -209,7 +209,7 @@ BEGIN
     IF v_arm_id IS NULL THEN CONTINUE; END IF;
 
     SELECT id INTO v_func_id FROM rh_funcionarios
-    WHERE UPPER(UNACCENT(nome_completo)) LIKE '%' || UPPER(LEFT(rec.nome, 15)) || '%'
+    WHERE UPPER(TRANSLATE(nome_completo, 'ÁÉÍÓÚÀÈÌÒÙÂÊÎÔÛÃÕÇáéíóúàèìòùâêîôûãõç', 'AEIOUAEIOUAEIOUAOCaeiouaeiouaeiouaoc')) LIKE '%' || UPPER(LEFT(rec.nome, 15)) || '%'
       AND status IN ('ativo', 'ferias', 'experiencia')
     LIMIT 1;
 

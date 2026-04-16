@@ -40,19 +40,19 @@
       <div class="kpi-value" id="kpi-pendencias"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
       <div class="kpi-label">Pendencias Abertas</div>
     </a>
-    <a class="kpi-card" href="alertas_rh.html">
+    <a class="kpi-card" href="asos.html">
       <div class="kpi-icon green">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <div class="kpi-value" id="kpi-acoes"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
-      <div class="kpi-label">Planos de Acao</div>
+      <div class="kpi-label">Itens Vencidos</div>
     </a>
-    <a class="kpi-card" href="motor_v2.html">
+    <a class="kpi-card" href="treinamentos.html">
       <div class="kpi-icon blue">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </div>
       <div class="kpi-value" id="kpi-score"><span class="skeleton" style="width:48px;height:28px;display:inline-block;"></span></div>
-      <div class="kpi-label">Score Operacional</div>
+      <div class="kpi-label">Vencem em 30 dias</div>
     </a>
   </div>
 
@@ -153,92 +153,143 @@
   });
 
   // =========================================================
-  // 3. LOAD ALL DATA
+  // 3. DADOS REAIS (ASOs, treinamentos, contratos)
   // =========================================================
-  loadKPIs();
+  const today = new Date().toISOString().slice(0, 10);
+  const in30 = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+  const d90ago = new Date(Date.now() - 90 * 86400000).toISOString().slice(0, 10);
+
+  // Carregar tudo em paralelo
+  const [rFuncs, rAsos, rTreinos, rContratos] = await Promise.all([
+    API.get('rh_funcionarios?status=in.(ativo,ferias,experiencia)&select=id'),
+    API.get(`rh_asos?data_vencimento=lte.${in30}&select=id,tipo,data_vencimento,resultado,colaborador_id&order=data_vencimento.asc&limit=100`),
+    API.get(`rh_treinamentos?data_vencimento=lte.${in30}&select=id,data_vencimento,colaborador_id&order=data_vencimento.asc&limit=100`),
+    API.get(`vw_funcionario_base?status=eq.ativo&data_admissao=gte.${d90ago}&select=id,nome,data_admissao`),
+  ]);
+
+  const funcsAtivos = rFuncs.ok ? rFuncs.data : [];
+  const asosData = rAsos.ok ? rAsos.data : [];
+  const treinosData = rTreinos.ok ? rTreinos.data : [];
+  const contratosData = rContratos.ok ? rContratos.data : [];
+
+  const asosVencidos = asosData.filter(a => a.data_vencimento < today);
+  const asosVencendo = asosData.filter(a => a.data_vencimento >= today);
+  const treinosVencidos = treinosData.filter(t => t.data_vencimento < today);
+  const treinosVencendo = treinosData.filter(t => t.data_vencimento >= today);
+
+  const todayDate = new Date();
+  const contratosUrgentes = contratosData.filter(c => {
+    const dias = Math.floor((todayDate - new Date(c.data_admissao)) / 86400000);
+    return (dias >= 40 && dias <= 50) || dias >= 80;
+  });
+
+  const totalPendencias = asosVencidos.length + treinosVencidos.length + contratosUrgentes.length;
+
+  // =========================================================
+  // 5. KPIs
+  // =========================================================
+  setKPI('kpi-ativos', funcsAtivos.length || '--');
+  setKPI('kpi-pendencias', totalPendencias);
+  setKPI('kpi-acoes', asosVencidos.length + treinosVencidos.length);
+  setKPI('kpi-score', asosVencendo.length + treinosVencendo.length);
+
+  // Atualizar labels dos KPIs para refletir dados reais
+  const kpiLabels = document.querySelectorAll('.kpi-label');
+  if (kpiLabels[1]) kpiLabels[1].textContent = 'Pendencias Criticas';
+  if (kpiLabels[2]) kpiLabels[2].textContent = 'Itens Vencidos';
+  if (kpiLabels[3]) kpiLabels[3].textContent = 'Vencem em 30 dias';
+
+  // Chamar todas as funcoes de carregamento
   loadPrioridades();
   loadAlertas();
   loadExperiencia();
   loadIntegracoes();
 
   // =========================================================
-  // 4. KPIs
+  // 6. PRIORIDADES DO DIA (dados reais)
   // =========================================================
-  async function loadKPIs() {
-    try {
-      const [funcs, alertas, acoes, tarefas] = await Promise.all([
-        API.get('rh_funcionarios?status=in.(ativo,ferias,experiencia)&select=id'),
-        API.get('orch_alerta?status=eq.aberto&select=id'),
-        API.get('acao_plano?status=not.in.(concluida,cancelada,descartada)&select=id'),
-        API.get('orch_tarefa?status=eq.pendente&select=id'),
-      ]);
-
-      setKPI('kpi-ativos', funcs.ok ? funcs.data.length : '--');
-      setKPI('kpi-pendencias', alertas.ok ? alertas.data.length : '--');
-      setKPI('kpi-acoes', acoes.ok ? acoes.data.length : '--');
-      setKPI('kpi-score', tarefas.ok ? tarefas.data.length : '--');
-    } catch (e) {
-      console.warn('KPIs error:', e.message);
-      ['kpi-ativos','kpi-pendencias','kpi-acoes','kpi-score'].forEach(id => setKPI(id, '--'));
-    }
-  }
-
-  // =========================================================
-  // 5. PRIORITIES
-  // =========================================================
-  async function loadPrioridades() {
+  function loadPrioridades() {
     const el = document.getElementById('prioridadesBody');
-    try {
-      const res = await API.get('orch_alerta?status=eq.aberto&order=prioridade.desc,criado_em.desc&limit=8&select=id,tipo,titulo,prioridade,criado_em');
-      const data = res.ok ? res.data : [];
-      if (!data.length) {
-        el.innerHTML = emptyState('Nenhuma prioridade pendente');
-        return;
-      }
-      let html = '<ul class="priority-list">';
-      data.forEach(item => {
-        const prio = (item.prioridade || 'media').toLowerCase();
-        const cls = prio === 'alta' || prio === 'critica' ? 'high' : prio === 'media' ? 'medium' : 'low';
-        const icon = cls === 'high' ? '!' : cls === 'medium' ? '-' : 'i';
-        html += `
-          <li class="priority-item">
-            <div class="priority-icon ${cls}">${icon}</div>
-            <div class="priority-content">
-              <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Sem titulo')}</div>
-              <div class="priority-meta">${API.esc(item.tipo || '')} &middot; ${API.fmtData(item.criado_em)}</div>
-            </div>
-            <span class="badge badge-${cls === 'high' ? 'danger' : cls === 'medium' ? 'warning' : 'info'}">${API.esc(capitalize(prio))}</span>
-          </li>`;
-      });
-      html += '</ul>';
-      el.innerHTML = html;
-    } catch (e) {
-      el.innerHTML = emptyState('Erro ao carregar prioridades');
-    }
+    const items = [];
+
+    if (asosVencidos.length)
+      items.push({ titulo: `${asosVencidos.length} ASO(s) vencido(s)`, tipo: 'ASO', prio: 'critica', href: 'asos.html' });
+    if (treinosVencidos.length)
+      items.push({ titulo: `${treinosVencidos.length} treinamento(s) vencido(s)`, tipo: 'Treinamento', prio: 'critica', href: 'treinamentos.html' });
+    if (contratosUrgentes.length)
+      items.push({ titulo: `${contratosUrgentes.length} contrato(s) experiencia proximo(s) do vencimento`, tipo: 'Contrato', prio: 'alta', href: '#tblExperiencia' });
+    if (asosVencendo.length)
+      items.push({ titulo: `${asosVencendo.length} ASO(s) vencem nos proximos 30 dias`, tipo: 'ASO', prio: 'media', href: 'asos.html' });
+    if (treinosVencendo.length)
+      items.push({ titulo: `${treinosVencendo.length} treinamento(s) vencem nos proximos 30 dias`, tipo: 'Treinamento', prio: 'media', href: 'treinamentos.html' });
+
+    if (!items.length) { el.innerHTML = emptyState('Nenhuma prioridade pendente'); return; }
+
+    let html = '<ul class="priority-list">';
+    items.forEach(item => {
+      const cls = item.prio === 'critica' ? 'high' : item.prio === 'alta' ? 'high' : 'medium';
+      const badgeCls = item.prio === 'critica' ? 'danger' : item.prio === 'alta' ? 'warning' : 'info';
+      html += `
+        <li class="priority-item" onclick="location.href='${item.href}'" style="cursor:pointer">
+          <div class="priority-icon ${cls}">${cls === 'high' ? '!' : '-'}</div>
+          <div class="priority-content">
+            <div class="priority-title">${API.esc(item.titulo)}</div>
+            <div class="priority-meta">${API.esc(item.tipo)}</div>
+          </div>
+          <span class="badge badge-${badgeCls}">${API.esc(capitalize(item.prio))}</span>
+        </li>`;
+    });
+    html += '</ul>';
+    el.innerHTML = html;
   }
 
   // =========================================================
-  // 6. CRITICAL ALERTS
+  // 7. ALERTAS CRITICOS (itens individuais com nomes)
   // =========================================================
   async function loadAlertas() {
     const el = document.getElementById('alertasBody');
     try {
-      const res = await API.get('orch_alerta?status=eq.aberto&prioridade=in.(alta,critica)&order=criado_em.desc&limit=6&select=id,tipo,titulo,prioridade,criado_em');
-      const data = res.ok ? res.data : [];
-      if (!data.length) {
-        el.innerHTML = emptyState('Nenhum alerta critico');
-        return;
+      // Buscar nomes dos colaboradores para os IDs dos itens vencidos
+      const ids = [...new Set([
+        ...asosVencidos.map(a => a.colaborador_id),
+        ...treinosVencidos.map(t => t.colaborador_id)
+      ])].filter(Boolean);
+
+      let nomeMap = {};
+      if (ids.length) {
+        const idsParam = ids.slice(0, 30).map(id => `"${id}"`).join(',');
+        const res = await API.get(`vw_funcionario_base?id=in.(${idsParam})&select=id,nome`);
+        if (res.ok) res.data.forEach(f => { nomeMap[f.id] = f.nome; });
       }
+
+      const alertas = [];
+      asosVencidos.slice(0, 4).forEach(a => {
+        alertas.push({
+          titulo: nomeMap[a.colaborador_id] || 'Colaborador',
+          detalhe: `ASO ${a.tipo || ''} vencido em ${API.fmtData(a.data_vencimento)}`,
+          href: 'asos.html'
+        });
+      });
+      treinosVencidos.slice(0, 4).forEach(t => {
+        alertas.push({
+          titulo: nomeMap[t.colaborador_id] || 'Colaborador',
+          detalhe: `Treinamento vencido em ${API.fmtData(t.data_vencimento)}`,
+          href: 'treinamentos.html'
+        });
+      });
+
+      if (!alertas.length) { el.innerHTML = emptyState('Nenhum alerta critico'); return; }
+
       let html = '<ul class="priority-list">';
-      data.forEach(item => {
+      alertas.slice(0, 6).forEach(item => {
         html += `
-          <li class="priority-item">
+          <li class="priority-item" onclick="location.href='${item.href}'" style="cursor:pointer">
             <div class="priority-icon high">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             </div>
             <div class="priority-content">
-              <div class="priority-title">${API.esc(item.titulo || item.tipo || 'Alerta')}</div>
-              <div class="priority-meta">${API.fmtData(item.criado_em)}</div>
+              <div class="priority-title">${API.esc(item.titulo)}</div>
+              <div class="priority-meta">${API.esc(item.detalhe)}</div>
             </div>
           </li>`;
       });

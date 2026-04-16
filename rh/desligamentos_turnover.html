@@ -366,30 +366,44 @@
     colaboradores = _resColabs.ok ? _resColabs.data : [];
     ocorrencias = _resOcorrs.ok ? _resOcorrs.data : [];
 
-    // Merge: rh_desligamentos + rh_funcionarios desligados
-    const desligTabela = (_resDesligs.ok ? _resDesligs.data : []).filter(d => d.data_desligamento >= isoInicio);
+    // Normalizar dados de rh_desligamentos (campo pode ser tipo ou tipo_desligamento)
+    const desligTabela = (_resDesligs.ok ? _resDesligs.data : [])
+      .filter(d => d.data_desligamento >= isoInicio)
+      .map(d => ({
+        ...d,
+        tipo: d.tipo || d.tipo_desligamento || null,
+        categoria: d.categoria || d.categoria_causa || null,
+        nome: d.nome || d.colaborador_nome || '',
+        motivo: d.motivo || d.descricao || '',
+      }));
+
     const funcDeslig = _resFuncDeslig.ok ? _resFuncDeslig.data : [];
 
-    // Criar mapa de IDs que ja estao em rh_desligamentos
-    const idsDeslig = new Set(desligTabela.map(d => d.colaborador_id).filter(Boolean));
+    // Deduplicar: criar chave nome+data dos que ja estao em rh_desligamentos
+    const chaveDeslig = new Set(desligTabela.map(d =>
+      (d.nome || d.colaborador_nome || '').toUpperCase().trim() + '|' + (d.data_desligamento || '')
+    ));
+    const idsDeslig = new Set(desligTabela.map(d => d.colaborador_id || d.funcionario_id).filter(Boolean));
 
     // Adicionar funcionarios desligados que NAO estao em rh_desligamentos
-    const funcExtras = funcDeslig.filter(f => !idsDeslig.has(f.id)).map(f => {
-      // Buscar nome do setor e cargo via colaboradores (view)
+    const funcExtras = funcDeslig.filter(f => {
+      if (idsDeslig.has(f.id)) return false;
+      const chave = (f.nome_completo || '').toUpperCase().trim() + '|' + (f.data_desligamento || '');
+      return !chaveDeslig.has(chave);
+    }).map(f => {
       const colab = colaboradores.find(c => c.id === f.id) || {};
       const tempoDias = f.data_admissao && f.data_desligamento
         ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
         : 0;
       return {
         colaborador_id: f.id,
-        colaborador_nome: f.nome_completo,
         nome: f.nome_completo,
         data_desligamento: f.data_desligamento,
         data_admissao: f.data_admissao,
         cargo: colab.cargo || '',
         setor: colab.setor || '',
         salario: f.salario_base,
-        tipo: null,  // sem classificacao
+        tipo: null,
         motivo: null,
         tempo_empresa_dias: tempoDias,
         _origem: 'rh_funcionarios',
@@ -425,10 +439,12 @@
   function computeKPIs() {
     const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
     const totalDeslig = desligamentos.length;
+    // Normalizar tipo (pode vir como tipo ou tipo_desligamento)
+    desligamentos.forEach(d => { if (!d.tipo && d.tipo_desligamento) d.tipo = d.tipo_desligamento; });
     const pedidos = desligamentos.filter(d => d.tipo === 'pedido_demissao').length;
     const empresa = desligamentos.filter(d => d.tipo === 'demissao_empresa' || d.tipo === 'justa_causa').length;
     const termino = desligamentos.filter(d => d.tipo === 'termino_contrato').length;
-    const semTipo = desligamentos.filter(d => !d.tipo || !['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'].includes(d.tipo)).length;
+    const semTipo = desligamentos.filter(d => !d.tipo || !['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo','morte','outros'].includes(d.tipo)).length;
     const curto = desligamentos.filter(d => (d.tempo_empresa_dias || 0) < 90).length;
     const tempoMedio = totalDeslig > 0
       ? Math.round(desligamentos.reduce((s, d) => s + (d.tempo_empresa_dias || 0), 0) / totalDeslig)
@@ -1583,8 +1599,10 @@
           colaborador_nome: r.nome, nome: r.nome,
           data_desligamento: r.data_desligamento,
           data_admissao: r.data_admissao,
-          tipo: r.tipo, categoria: r.causa,
-          motivo: r.motivo, cargo: r.cargo, setor: r.setor,
+          tipo: r.tipo, tipo_desligamento: r.tipo,
+          categoria: r.causa, categoria_causa: r.causa,
+          motivo: r.motivo, descricao: r.motivo,
+          cargo: r.cargo, setor: r.setor,
           salario: r.salario || null,
           tempo_empresa_dias: r.tempo_empresa_dias,
         });

@@ -390,14 +390,24 @@ function renderPage(d) {
   if (custos.restrito) {
     html += '<div class="card"><div class="card-body"><p class="text-muted">Voce nao tem permissao para visualizar custos deste colaborador.</p></div></div>';
   } else {
-    html += `<div class="cost-cards mb-4">
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.salario)}</div><div class="cc-lbl">Salario</div></div>
-      <div class="cost-card" style="cursor:pointer" onclick="document.querySelector('[data-tab=\\'4\\']').click()"><div class="cc-val">${fmtM(custos.transporte_mensal)}</div><div class="cc-lbl">Transporte</div></div>
-      <div class="cost-card" style="cursor:pointer" onclick="document.querySelector('[data-tab=\\'4\\']').click()"><div class="cc-val">${fmtM(custos.beneficios_total)}</div><div class="cc-lbl">Beneficios &#8599;</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.sst_12m)}</div><div class="cc-lbl">SST 12m</div></div>
-    </div>`;
+    // Calcular beneficios_total a partir dos beneficios ativos reais
+    const benAtivos = (d.beneficios || []).filter(b => b.status === 'ativo' && b.valor);
+    const benTotal = benAtivos.reduce((s, b) => s + (parseFloat(b.valor) || 0), 0);
+    const benTotalDisplay = benTotal > 0 ? benTotal : custos.beneficios_total;
+
+    html += '<div class="cost-cards mb-4">';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.salario) + '</div><div class="cc-lbl">Salario</div></div>';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.transporte_mensal) + '</div><div class="cc-lbl">Transporte</div></div>';
+    html += '<div class="cost-card" style="cursor:pointer" onclick="document.querySelectorAll(\'[data-tab]\')[4].click()"><div class="cc-val">' + fmtM(benTotalDisplay) + '</div><div class="cc-lbl">Beneficios &#8599;</div></div>';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.sst_12m) + '</div><div class="cc-lbl">SST 12m</div></div>';
+    html += '</div>';
+
+    if (benTotal > 0 && custos.beneficios_total && Math.abs(benTotal - custos.beneficios_total) > 1) {
+      html += '<div class="insight-box" style="margin-bottom:16px;border-left-color:var(--warning);background:var(--warning-light);font-size:12px;"><strong>Divergencia:</strong> Valor no banco: ' + fmtM(custos.beneficios_total) + ' | Soma dos beneficios ativos: ' + fmtM(benTotal) + '. Verificar se ha encargos ou valores historicos incluidos no calculo.</div>';
+    }
+
     // Detalhe dos beneficios dentro da aba Custos
-    html += '<div class="card mb-4"><div class="card-header"><h3>Composicao dos Beneficios — R$ ' + (custos.beneficios_total != null ? custos.beneficios_total.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '0,00') + '</h3></div><div class="card-body">';
+    html += '<div class="card mb-4"><div class="card-header"><h3>Composicao dos Beneficios — ' + fmtM(benTotalDisplay) + '</h3></div><div class="card-body">';
     html += buildTable(['Tipo','Status','Valor Mensal','Desde'], (d.beneficios||[]).map(r=>({cells:[
       esc(fmt(r.tipo)),
       r.status === 'ativo' ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-gray">' + esc(fmt(r.status)) + '</span>',

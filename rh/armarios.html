@@ -220,7 +220,7 @@
       if (filtroTipo && tipo !== filtroTipo) return false;
       if (filtroStatus && a.status !== filtroStatus) return false;
       if (filtroBusca) {
-        const ocup = ocupMap[a.armario_id || a.id];
+        const ocup = ocupMap[a.id];
         if (ocup) {
           const func = funcMap[ocup.funcionario_id];
           if (func && func.nome.toLowerCase().includes(filtroBusca)) return true;
@@ -266,10 +266,17 @@
       let statusBadge, nomeCol, setorCol, desdeCol, acoes;
       if (a.status === 'ocupado' && func) {
         statusBadge = '<span class="badge badge-success">Ocupado</span>';
+        const nomeEsc = API.esc(func.nome).replace(/'/g, "\\'");
         nomeCol = `<a href="ficha_360.html?id=${func.id}" class="text-link">${API.esc(func.nome)}</a>`;
         setorCol = API.esc(func.setor || '--');
         desdeCol = ocup ? API.fmtData(ocup.data_atribuicao) : '--';
-        acoes = `<button class="btn btn-ghost btn-sm" onclick="liberar('${a.id}','${API.esc(func.nome)}')">Liberar</button>`;
+        acoes = `<button class="btn btn-ghost btn-sm" onclick="liberar('${a.id}','${nomeEsc}')">Liberar</button>`;
+      } else if (a.status === 'ocupado' && !func) {
+        statusBadge = '<span class="badge badge-warning">Ocupado (sem registro)</span>';
+        nomeCol = '<span class="text-muted">Dados inconsistentes</span>';
+        setorCol = '--';
+        desdeCol = ocup ? API.fmtData(ocup.data_atribuicao) : '--';
+        acoes = `<button class="btn btn-ghost btn-sm" onclick="liberar('${a.id}','Desconhecido')">Liberar</button>`;
       } else if (a.status === 'bloqueado') {
         statusBadge = '<span class="badge badge-danger">Bloqueado</span>';
         nomeCol = '<span class="text-muted">--</span>';

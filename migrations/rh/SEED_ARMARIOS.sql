@@ -18,27 +18,27 @@ ON CONFLICT DO NOTHING;
 -- 2. CRIAR ARMARIOS FEMININOS (1-63)
 INSERT INTO arm_armarios (codigo, bloco_id, tipo, status, ativo)
 SELECT
-  n::text,
+  LPAD(n::text, 3, '0'),
   'a0000000-0000-0000-0000-000000000001',
   'feminino',
   'disponivel',
   true
 FROM generate_series(1, 63) AS n
 WHERE NOT EXISTS (
-  SELECT 1 FROM arm_armarios WHERE codigo = n::text AND bloco_id = 'a0000000-0000-0000-0000-000000000001'
+  SELECT 1 FROM arm_armarios WHERE codigo = LPAD(n::text, 3, '0') AND bloco_id = 'a0000000-0000-0000-0000-000000000001'
 );
 
 -- 3. CRIAR ARMARIOS MASCULINOS (1-64)
 INSERT INTO arm_armarios (codigo, bloco_id, tipo, status, ativo)
 SELECT
-  n::text,
+  LPAD(n::text, 3, '0'),
   'a0000000-0000-0000-0000-000000000002',
   'masculino',
   'disponivel',
   true
 FROM generate_series(1, 64) AS n
 WHERE NOT EXISTS (
-  SELECT 1 FROM arm_armarios WHERE codigo = n::text AND bloco_id = 'a0000000-0000-0000-0000-000000000002'
+  SELECT 1 FROM arm_armarios WHERE codigo = LPAD(n::text, 3, '0') AND bloco_id = 'a0000000-0000-0000-0000-000000000002'
 );
 
 -- 4. ATRIBUIR ARMARIOS FEMININOS
@@ -101,9 +101,9 @@ BEGIN
       ('63', 'ARMARIO DE JOGOS')
     ) AS t(codigo, nome)
   LOOP
-    -- Buscar armario
+    -- Buscar armario (codigo com padding 3 digitos)
     SELECT id INTO v_arm_id FROM arm_armarios
-    WHERE codigo = rec.codigo AND bloco_id = v_bloco_fem LIMIT 1;
+    WHERE codigo = LPAD(rec.codigo, 3, '0') AND bloco_id = v_bloco_fem LIMIT 1;
 
     IF v_arm_id IS NULL THEN CONTINUE; END IF;
 
@@ -205,8 +205,9 @@ BEGIN
       ('62', 'ALESSANDRO DOS SANTOS')
     ) AS t(codigo, nome)
   LOOP
+    -- Buscar armario (codigo com padding 3 digitos)
     SELECT id INTO v_arm_id FROM arm_armarios
-    WHERE codigo = rec.codigo AND bloco_id = v_bloco_mas LIMIT 1;
+    WHERE codigo = LPAD(rec.codigo, 3, '0') AND bloco_id = v_bloco_mas LIMIT 1;
 
     IF v_arm_id IS NULL THEN CONTINUE; END IF;
 
@@ -216,7 +217,9 @@ BEGIN
     LIMIT 1;
 
     IF v_func_id IS NOT NULL THEN
-      IF NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE armario_id = v_arm_id AND data_devolucao IS NULL) THEN
+      IF NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE armario_id = v_arm_id AND data_devolucao IS NULL)
+         AND NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE funcionario_id = v_func_id AND data_devolucao IS NULL)
+      THEN
         INSERT INTO arm_ocupacoes (armario_id, funcionario_id, data_atribuicao, chave_entregue)
         VALUES (v_arm_id, v_func_id, CURRENT_DATE, true);
       END IF;

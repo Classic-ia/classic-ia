@@ -631,16 +631,53 @@
       });
     }
 
-    // Ponto: Muitas demissoes pela empresa
-    if (empresa >= 3) {
+    // Ponto: Demissoes pela empresa — analise profunda do ciclo
+    if (empresa >= 1) {
       const pctEmp = ((empresa/totalDeslig)*100).toFixed(0);
+      const demitidos = desligamentos.filter(d => d.tipo === 'demissao_empresa');
       const setorTop = Object.entries(empresaPorSetor).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s,n])=>s+' ('+n+')').join(', ');
+
+      // Classificar por tempo de empresa para identificar ONDE no ciclo falhou
+      const dem30 = demitidos.filter(d => (d.tempo_empresa_dias||0) <= 30).length;
+      const dem90 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 30 && (d.tempo_empresa_dias||0) <= 90).length;
+      const dem180 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 90 && (d.tempo_empresa_dias||0) <= 180).length;
+      const dem1a = demitidos.filter(d => (d.tempo_empresa_dias||0) > 180 && (d.tempo_empresa_dias||0) <= 365).length;
+      const demMais = demitidos.filter(d => (d.tempo_empresa_dias||0) > 365).length;
+
+      let analise = empresa + ' colaborador(es) foram desligados pela empresa (' + pctEmp + '%). ';
+      analise += 'Quando a empresa precisa demitir, o problema pode ter comecado muito antes:';
+
+      let ciclo = '<table class="tbl" style="margin-top:8px;margin-bottom:8px;">';
+      ciclo += '<thead><tr><th>Fase</th><th>Qtd</th><th>O que indica</th><th>Onde verificar</th></tr></thead><tbody>';
+
+      if (dem30 > 0) ciclo += '<tr><td><span class="badge badge-danger">Ate 30 dias</span></td><td style="font-weight:700;color:var(--danger);">'+dem30+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Contratacao errada. O perfil nao bateu com a vaga, ou a realidade do trabalho era diferente do prometido.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Descricao de vaga, entrevista, validacao de perfil tecnico e comportamental, tour pela fabrica antes de contratar.</td></tr>';
+
+      if (dem90 > 0) ciclo += '<tr><td><span class="badge badge-warning">31-90 dias</span></td><td style="font-weight:700;color:var(--warning);">'+dem90+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Integracao falhou. O colaborador entrou mas nao recebeu suporte, treinamento ou acompanhamento suficiente.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Programa de onboarding, acompanhamento pelo gestor no periodo de experiencia, feedback no 15o, 30o e 60o dia.</td></tr>';
+
+      if (dem180 > 0) ciclo += '<tr><td><span class="badge badge-info">91-180 dias</span></td><td style="font-weight:700;">'+dem180+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Gestao de desempenho falhou. O colaborador nao atingiu o esperado, mas sera que recebeu metas claras e feedback?</td>' +
+        '<td style="white-space:normal;font-size:11px;">Avaliacao de experiencia, PDI, conversa 1:1, metas escritas, registro de feedbacks dados.</td></tr>';
+
+      if (dem1a > 0) ciclo += '<tr><td><span class="badge badge-blue">6m-1 ano</span></td><td style="font-weight:700;">'+dem1a+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Problema de longa data. O colaborador ficou, mas nao evoluiu. Questionar: houve oportunidade de desenvolvimento?</td>' +
+        '<td style="white-space:normal;font-size:11px;">Plano de desenvolvimento, treinamentos oferecidos, avaliacao de desempenho formal, conversas de carreira.</td></tr>';
+
+      if (demMais > 0) ciclo += '<tr><td><span class="badge badge-green">Mais de 1 ano</span></td><td style="font-weight:700;">'+demMais+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Colaborador antigo que nao se adaptou a mudancas, ou gestao tolerou baixo desempenho por muito tempo.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Avaliacao periodica de desempenho, feedback contínuo, plano de melhoria com prazo antes de desligar.</td></tr>';
+
+      ciclo += '</tbody></table>';
+
       erros.push({
-        titulo: 'Volume de demissoes pela empresa',
-        gravidade: empresa > totalDeslig * 0.5 ? 'critico' : 'atencao',
-        detalhe: empresa + ' colaborador(es) foram desligados pela empresa (' + pctEmp + '%). Esse volume merece investigacao.',
-        causa: 'Verificar: os criterios de selecao estao adequados? O periodo de experiencia tem acompanhamento? Gestores estao dando feedback antes de demitir?',
-        evidencia: 'Setores: ' + (setorTop || 'distribuido'),
+        titulo: 'A empresa esta precisando demitir — em que momento o problema comecou?',
+        gravidade: empresa > totalDeslig * 0.4 ? 'critico' : 'atencao',
+        detalhe: analise,
+        causa: ciclo,
+        evidencia: 'Setores com mais demissoes: ' + (setorTop || 'distribuido') + '. Cada fase exige uma acao diferente — nao existe solucao unica.',
       });
     }
 
@@ -697,7 +734,11 @@
         html += '<div style="border-left:3px solid '+cor+';background:'+bgCor+';border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:10px;">';
         html += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">'+icone+' '+e.titulo+' <span class="badge badge-'+(e.gravidade==='critico'?'danger':'warning')+'">'+e.gravidade.toUpperCase()+'</span></div>';
         html += '<div style="font-size:12px;margin-bottom:4px;">'+e.detalhe+'</div>';
-        html += '<div style="font-size:11px;color:var(--text-secondary);"><strong>Causa provavel:</strong> '+e.causa+'</div>';
+        if (e.causa.includes('<table')) {
+          html += '<div style="margin:8px 0;">'+e.causa+'</div>';
+        } else {
+          html += '<div style="font-size:11px;color:var(--text-secondary);"><strong>Possibilidades:</strong> '+e.causa+'</div>';
+        }
         html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;"><strong>Evidencia:</strong> '+e.evidencia+'</div>';
         html += '</div>';
       });
@@ -719,9 +760,21 @@
       acoes.push({ area: 'Carreira', prazo: '60 dias', acao: 'Implementar plano de desenvolvimento individual (PDI) para colaboradores-chave. Criar trilha de crescimento visivel (auxiliar → operador → lider).', impacto: 'Dar perspectiva de futuro e reduzir saidas voluntarias' });
     }
 
-    if (empresa >= 3) {
-      acoes.push({ area: 'Selecao', prazo: 'Imediato', acao: 'Revisar criterios de contratacao. Incluir avaliacao tecnica e comportamental. Validar referencias. Periodo de experiencia com metas claras e acompanhamento quinzenal.', impacto: 'Reduzir demissoes por performance' });
-      acoes.push({ area: 'Gestao', prazo: '30 dias', acao: 'Treinar gestores em feedback construtivo e gestao de desempenho. Implementar conversa 1:1 mensal obrigatoria entre gestor e equipe.', impacto: 'Corrigir problemas antes da demissao' });
+    if (empresa >= 1) {
+      const demitidos = desligamentos.filter(d => d.tipo === 'demissao_empresa');
+      const dem30 = demitidos.filter(d => (d.tempo_empresa_dias||0) <= 30).length;
+      const dem90 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 30 && (d.tempo_empresa_dias||0) <= 90).length;
+      const demDepois = demitidos.filter(d => (d.tempo_empresa_dias||0) > 90).length;
+
+      if (dem30 > 0) {
+        acoes.push({ area: 'Selecao', prazo: 'Imediato', acao: 'Se demitimos ' + dem30 + ' pessoa(s) em menos de 30 dias, o problema esta NA CONTRATACAO. Revisar: descricao da vaga bate com a realidade? Candidato fez teste pratico? Conheceu o ambiente antes? Gestor participou da entrevista?', impacto: 'Parar de contratar errado = parar de demitir cedo' });
+      }
+      if (dem90 > 0) {
+        acoes.push({ area: 'Integracao', prazo: '2 semanas', acao: 'Se demitimos ' + dem90 + ' pessoa(s) entre 30-90 dias, o problema esta NA INTEGRACAO. Criar: padrinho no setor, checklist de 1a semana, feedback obrigatorio no 15o e 45o dia, acompanhamento formal do gestor direto.', impacto: 'Dar chance real ao colaborador antes de desligar' });
+      }
+      if (demDepois > 0) {
+        acoes.push({ area: 'Gestao', prazo: '30 dias', acao: 'Se demitimos ' + demDepois + ' pessoa(s) com mais de 90 dias, o problema esta NA GESTAO. Verificar: existia PDI? Houve feedback formal antes? Metas estavam escritas? O gestor tentou recuperar? Implementar: conversa 1:1 mensal, avaliacao trimestral, plano de melhoria de 30 dias ANTES de qualquer demissao.', impacto: 'Evitar demissoes que poderiam ser evitadas com gestao' });
+      }
     }
 
     if (setCriticos.length > 0) {

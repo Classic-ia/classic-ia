@@ -15,18 +15,9 @@
 </head>
 <body class="page-bg">
 
-<div class="header">
-  <div class="header-left">
-    <a href="app.html" class="back-link">&#8592; Painel</a>
-    <div>
-      <div class="header-title">Analise de Desligamentos &amp; Turnover</div>
-      <div class="header-sub">Causa raiz, indicadores e analise cruzada</div>
-    </div>
-  </div>
-  <div id="rh-user-chip"></div>
-</div>
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
 
-<div class="main">
   <div id="loading-state" class="loading-state">
     <div class="loading-spinner"></div>
     Carregando dados...
@@ -326,15 +317,14 @@
     </div>
 
   </div>
-</div>
-
-<div class="footer">Classic RH &amp; SST v2026.03 — Analise de Desligamentos e Turnover</div>
+</div><!-- /shell-content -->
 
 <script>
 (async () => {
 
-  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','admin','diretoria','visualizador'] });
+  const user = await Shell.init({ page: 'desligamentos', title: 'Desligamentos & Turnover' });
   if (!user) return;
+  API.setPerfil(user.perfil);
 
   let colaboradores = [];
   let desligamentos = [];
@@ -445,6 +435,7 @@
 
     document.getElementById('loading-state').style.display = 'none';
     document.getElementById('content').style.display = 'block';
+    checkFixCard();
   }
 
   function computeKPIs() {
@@ -1339,11 +1330,14 @@
   };
 
   // ── Diagnostico e fix de registros ──
-  // Mostrar card de fix se ha registros sem tipo
-  const semTipoCount = desligamentos.filter(d => !d.tipo).length;
-  if (semTipoCount > 0) {
-    document.getElementById('fix-card').style.display = '';
-    document.getElementById('fix-msg').textContent = semTipoCount + ' registros sem tipo classificado. Use o botao abaixo para detectar a estrutura da tabela.';
+  function checkFixCard() {
+    const semTipoCount = desligamentos.filter(d => !d.tipo).length;
+    if (semTipoCount > 0) {
+      document.getElementById('fix-card').style.display = '';
+      document.getElementById('fix-msg').textContent = semTipoCount + ' registros sem tipo classificado. Clique em "Detectar estrutura" e depois reimporte o CSV.';
+    } else {
+      document.getElementById('fix-card').style.display = 'none';
+    }
   }
 
   document.getElementById('btn-detect-schema').addEventListener('click', async () => {

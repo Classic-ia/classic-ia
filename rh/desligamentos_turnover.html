@@ -67,6 +67,7 @@
       <button class="tab-btn" data-tab="inteligencia">Inteligencia RH</button>
       <button class="tab-btn" data-tab="lista">Lista Desligamentos</button>
       <button class="tab-btn" data-tab="cruzada">Analise Cruzada</button>
+      <button class="tab-btn" data-tab="importar">Importar Convenia</button>
       <button class="tab-btn" data-tab="registrar">+ Registrar</button>
     </div>
 
@@ -175,6 +176,40 @@
           <div class="card-title">Correlacao Absenteismo x Desligamento</div>
           <div id="cruzada-absenteismo"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Tab: Importar Convenia -->
+    <div class="tab-content" id="tab-importar">
+      <div class="card">
+        <div class="card-title">Importar Desligamentos do Convenia</div>
+        <p class="text-muted" style="margin:8px 0 16px;font-size:13px;">
+          Exporte os dados do Convenia (Desligados → Exportar) e arraste o arquivo CSV aqui.
+          O sistema classifica automaticamente o tipo (pedido/empresa/termino/acordo) e a causa.
+        </p>
+        <div class="upload-zone" id="import-zone">
+          <div class="drop-icon">&#128196;</div>
+          <div class="drop-title">Arraste o CSV do Convenia aqui</div>
+          <div class="drop-sub">ou clique para selecionar o arquivo</div>
+          <input type="file" id="import-file" accept=".csv,.txt,.tsv" style="display:none">
+        </div>
+        <div id="import-preview" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div><strong id="import-count">0</strong> desligamentos encontrados</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm" id="import-cancel">Cancelar</button>
+              <button class="btn btn-primary btn-sm" id="import-confirm">Importar Todos</button>
+            </div>
+          </div>
+          <div id="import-stats" style="margin-bottom:12px;"></div>
+          <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+            <table class="tbl" id="import-table">
+              <thead><tr><th>Nome</th><th>Data</th><th>Tipo Convenia</th><th>Tipo Classificado</th><th>Causa</th><th>Tempo</th></tr></thead>
+              <tbody id="import-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="import-result" style="display:none;margin-top:16px;"></div>
       </div>
     </div>
 
@@ -1261,6 +1296,191 @@
     }
     return false;
   };
+
+  // ── Import Convenia CSV ──
+  function classificarTipo(tipoConvenia) {
+    const t = (tipoConvenia || '').toLowerCase();
+    if (t.includes('pedido do empregado') || t.includes('antecipado pelo empregado')) return 'pedido_demissao';
+    if (t.includes('pedido da empresa') || t.includes('antecipado pelo empregador')) return 'demissao_empresa';
+    if (t.includes('justa causa') && t.includes('empresa')) return 'justa_causa';
+    if (t.includes('acordo')) return 'acordo_mutuo';
+    if (t.includes('morte')) return 'morte';
+    if (t.includes('término') || t.includes('termino') || t.includes('tempo determinado')) return 'termino_contrato';
+    if (t.includes('quebra') && t.includes('empregado')) return 'pedido_demissao';
+    if (t.includes('quebra') && (t.includes('empresa') || t.includes('estágio') || t.includes('estagio'))) return 'demissao_empresa';
+    if (t.includes('outros')) return 'outros';
+    return 'outros';
+  }
+
+  function classificarCausa(motivo, obs, tipo, tempoDias) {
+    const txt = ((motivo || '') + ' ' + (obs || '')).toLowerCase();
+    if (tempoDias != null && tempoDias <= 90) return 'admissao';
+    if (txt.match(/salari|financ|proposta|benefic|remuner/)) return 'financeiro';
+    if (txt.match(/lider|gestor|chefe|ambient|carga|turno|conflito/)) return 'operacional';
+    if (txt.match(/famil|pessoal|mudanc|saude|cidade/)) return 'pessoal';
+    if (txt.match(/adapt|expectativa/)) return 'admissao';
+    if (tipo === 'termino_contrato') return 'admissao';
+    return null;
+  }
+
+  const TIPO_LABELS = {
+    pedido_demissao: 'Pedido demissao',
+    demissao_empresa: 'Empresa demitiu',
+    justa_causa: 'Justa causa',
+    acordo_mutuo: 'Acordo mutuo',
+    termino_contrato: 'Fim contrato',
+    morte: 'Morte',
+    outros: 'Outros',
+  };
+
+  let importRows = [];
+
+  const importZone = document.getElementById('import-zone');
+  const importFile = document.getElementById('import-file');
+
+  importZone.addEventListener('click', () => importFile.click());
+  importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.classList.add('dragover'); });
+  importZone.addEventListener('dragleave', () => importZone.classList.remove('dragover'));
+  importZone.addEventListener('drop', e => { e.preventDefault(); importZone.classList.remove('dragover'); processFile(e.dataTransfer.files[0]); });
+  importFile.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+  function processFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result;
+      // Detect separator (tab or semicolon or comma)
+      const firstLine = text.split('\n')[0];
+      const sep = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
+      const lines = text.split('\n').map(l => l.split(sep).map(c => c.replace(/^"|"$/g, '').trim()));
+
+      // Find header indices
+      const headers = lines[0].map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+      const iNome = headers.findIndex(h => h.includes('nome do colaborador'));
+      const iData = headers.findIndex(h => h.includes('data de desligamento'));
+      const iTipo = headers.findIndex(h => h.includes('tipo de desligamento'));
+      const iMotivo = headers.findIndex(h => h.includes('motivo do desligamento'));
+      const iObs = headers.findIndex(h => h.includes('observacoes') || h.includes('observações'));
+      const iCargo = headers.findIndex(h => h.includes('cargo'));
+      const iSetor = headers.findIndex(h => h.includes('departamento'));
+      const iAdmissao = headers.findIndex(h => h.includes('data de admissao') || h.includes('data de admissão'));
+      const iSalario = headers.findIndex(h => h.includes('salario') || h.includes('salário'));
+      const iId = headers.findIndex(h => h.includes('id (identificador'));
+      const iStatus = headers.findIndex(h => h.includes('status de desligamento'));
+
+      if (iNome < 0 || iData < 0 || iTipo < 0) {
+        alert('CSV invalido. Verifique se contem as colunas: Nome do colaborador, Data de desligamento, Tipo de desligamento');
+        return;
+      }
+
+      importRows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const row = lines[i];
+        if (!row || row.length < 3) continue;
+        const nome = row[iNome];
+        const dataDeslig = row[iData];
+        if (!nome || !dataDeslig || dataDeslig === 'Não informado') continue;
+
+        // Parse date (DD/MM/YYYY or YYYY-MM-DD)
+        let dataISO = dataDeslig;
+        if (dataDeslig.includes('/')) {
+          const p = dataDeslig.split('/');
+          dataISO = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+        }
+
+        const tipoConvenia = row[iTipo] || '';
+        const motivo = iMotivo >= 0 ? row[iMotivo] : '';
+        const obs = iObs >= 0 ? row[iObs] : '';
+        const cargo = iCargo >= 0 ? row[iCargo] : '';
+        const setor = iSetor >= 0 ? row[iSetor] : '';
+        const admissao = iAdmissao >= 0 ? row[iAdmissao] : '';
+        const salarioStr = iSalario >= 0 ? row[iSalario] : '';
+        const idConvenia = iId >= 0 ? row[iId] : '';
+        const statusDeslig = iStatus >= 0 ? row[iStatus] : '';
+
+        // Only import "Concluida"
+        if (statusDeslig && !statusDeslig.toLowerCase().includes('conclu')) continue;
+
+        let admISO = admissao;
+        if (admissao && admissao.includes('/')) {
+          const p = admissao.split('/');
+          admISO = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+        }
+
+        const salario = salarioStr ? parseFloat(salarioStr.replace(/\./g, '').replace(',', '.')) || 0 : 0;
+        const tempoDias = admISO && dataISO ? Math.ceil((new Date(dataISO) - new Date(admISO)) / 86400000) : null;
+
+        const tipo = classificarTipo(tipoConvenia);
+        const causa = classificarCausa(motivo, obs, tipo, tempoDias);
+
+        importRows.push({
+          nome, data_desligamento: dataISO, tipo_convenia: tipoConvenia,
+          tipo, causa, motivo: motivo || tipoConvenia, cargo, setor,
+          data_admissao: admISO || null, salario, tempo_empresa_dias: tempoDias,
+          id_convenia: idConvenia,
+        });
+      }
+
+      // Show preview
+      document.getElementById('import-zone').style.display = 'none';
+      document.getElementById('import-preview').style.display = '';
+      document.getElementById('import-count').textContent = importRows.length;
+
+      // Stats
+      const stats = {};
+      importRows.forEach(r => { stats[r.tipo] = (stats[r.tipo] || 0) + 1; });
+      document.getElementById('import-stats').innerHTML = Object.entries(stats)
+        .map(([t, n]) => '<span class="badge badge-' + (t === 'pedido_demissao' ? 'warning' : t === 'demissao_empresa' ? 'danger' : 'info') + '" style="margin:2px;">' + (TIPO_LABELS[t] || t) + ': ' + n + '</span>').join(' ');
+
+      // Table
+      document.getElementById('import-tbody').innerHTML = importRows.slice(0, 100).map(r => {
+        const tipoBadge = r.tipo === 'pedido_demissao' ? 'warning' : r.tipo === 'demissao_empresa' ? 'danger' : r.tipo === 'acordo_mutuo' ? 'blue' : 'info';
+        return '<tr><td>' + esc(r.nome) + '</td><td>' + fmtDate(r.data_desligamento) + '</td><td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + esc(r.tipo_convenia) + '</td><td><span class="badge badge-' + tipoBadge + '">' + (TIPO_LABELS[r.tipo] || r.tipo) + '</span></td><td>' + esc(r.causa || '--') + '</td><td>' + (r.tempo_empresa_dias != null ? r.tempo_empresa_dias + 'd' : '--') + '</td></tr>';
+      }).join('');
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  document.getElementById('import-cancel').addEventListener('click', () => {
+    document.getElementById('import-zone').style.display = '';
+    document.getElementById('import-preview').style.display = 'none';
+    importRows = [];
+  });
+
+  document.getElementById('import-confirm').addEventListener('click', async () => {
+    const btn = document.getElementById('import-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+
+    let ok = 0, skip = 0, err = 0;
+    for (const r of importRows) {
+      try {
+        // Check if already exists
+        const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(r.nome) + '&data_desligamento=eq.' + r.data_desligamento + '&select=id&limit=1');
+        if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
+
+        const res = await API.post('rh_desligamentos', {
+          colaborador_nome: r.nome, nome: r.nome,
+          data_desligamento: r.data_desligamento,
+          data_admissao: r.data_admissao,
+          tipo: r.tipo, categoria: r.causa,
+          motivo: r.motivo, cargo: r.cargo, setor: r.setor,
+          salario: r.salario || null,
+          tempo_empresa_dias: r.tempo_empresa_dias,
+        });
+        if (res.ok) ok++; else err++;
+      } catch (e) { err++; }
+    }
+
+    document.getElementById('import-result').style.display = '';
+    document.getElementById('import-result').innerHTML =
+      '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' +
+      '<strong>Importacao concluida!</strong><br>' +
+      ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)' +
+      '</div>';
+
+    btn.textContent = 'Concluido';
+    setTimeout(() => loadData(), 1000);
+  });
 
   // ── Tab switching ──
   document.querySelectorAll('.tab-btn').forEach(btn => {

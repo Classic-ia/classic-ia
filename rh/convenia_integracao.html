@@ -648,11 +648,50 @@ async function syncFerias() {
     atualizarSyncProg(90);
     conveniaData.ferias = Array.isArray(lista) ? lista : [];
     salvarDados();
+    atualizarSyncProg(95);
+
+    // Persistir no Supabase (rh_ferias)
+    if (typeof API !== 'undefined' && conveniaData.ferias.length > 0) {
+      let saved = 0;
+      for (const v of conveniaData.ferias) {
+        const empName = v.employee?.name || v.funcionario || '';
+        const startDate = v.start_date || v.inicio || '';
+        const endDate = v.end_date || v.fim || '';
+        const days = v.days || v.dias || null;
+        const empId = v.employee?.id || v.employee_id || v.funcionario_id || null;
+
+        if (!empName || !startDate) continue;
+
+        // Buscar funcionario por nome se nao tem ID
+        let funcId = empId;
+        if (!funcId) {
+          const search = await API.get('rh_funcionarios?nome_completo=ilike.*' + encodeURIComponent(empName.split(' ').slice(0,2).join(' ')) + '*&select=id&limit=1');
+          if (search.ok && search.data && search.data.length > 0) funcId = search.data[0].id;
+        }
+
+        if (!funcId) continue;
+
+        // Check duplicata
+        const check = await API.get('rh_ferias?funcionario_id=eq.' + funcId + '&data_inicio=eq.' + startDate + '&select=id&limit=1');
+        if (check.ok && check.data && check.data.length > 0) continue;
+
+        const res = await API.post('rh_ferias', {
+          funcionario_id: funcId,
+          data_inicio: startDate,
+          data_fim: endDate || null,
+          dias_gozados: parseInt(days) || null,
+          status: (v.status || '').toLowerCase().includes('conclu') ? 'concluida' : 'agendada',
+        });
+        if (res.ok) saved++;
+      }
+      addLog('info', 'Férias salvas no Supabase', saved + ' de ' + conveniaData.ferias.length + ' registros persistidos');
+    }
+
     atualizarSyncProg(100);
     setTimeout(() => {
       esconderSyncOverlay();
       renderFeriasConvenia(conveniaData.ferias);
-      showToast(`${conveniaData.ferias.length} registros de férias encontrados! ✅`);
+      showToast(`${conveniaData.ferias.length} registros de férias encontrados e salvos! ✅`);
       addLog('success', 'Sync férias concluído', `${conveniaData.ferias.length} registros`);
     }, 300);
   } catch (e) {

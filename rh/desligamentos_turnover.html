@@ -367,24 +367,44 @@
     });
 
     // 2. Distribuição por Causa (donut)
-    const causas = { admissao: 0, operacional: 0, financeiro: 0, pessoal: 0 };
+    const causas = { admissao: 0, operacional: 0, financeiro: 0, pessoal: 0, sem_classificacao: 0 };
     desligamentos.forEach(d => {
-      // Extract category from motivo field
-      const mot = (d.motivo || '').toLowerCase();
-      if (mot.includes('admiss') || mot.includes('adapt') || mot.includes('expectativa')) causas.admissao++;
-      else if (mot.includes('opera') || mot.includes('lider') || mot.includes('ambiente') || mot.includes('carga') || mot.includes('conflito')) causas.operacional++;
-      else if (mot.includes('financ') || mot.includes('salari') || mot.includes('benefic')) causas.financeiro++;
-      else if (mot.includes('pessoal') || mot.includes('famil') || mot.includes('mudanc') || mot.includes('saude')) causas.pessoal++;
-      else causas.pessoal++; // default
+      // 1) Tentar campo 'categoria' direto (se existir na tabela)
+      const cat = (d.categoria || '').toLowerCase();
+      if (cat && causas.hasOwnProperty(cat)) { causas[cat]++; return; }
+
+      // 2) Tentar extrair do prefixo [CATEGORIA] no motivo
+      const mot = (d.motivo || '');
+      const match = mot.match(/^\[([A-Z]+)\]/);
+      if (match) {
+        const prefix = match[1].toLowerCase();
+        if (causas.hasOwnProperty(prefix)) { causas[prefix]++; return; }
+      }
+
+      // 3) Busca por palavras-chave no texto do motivo
+      const motL = mot.toLowerCase();
+      if (motL.includes('admiss') || motL.includes('adapt') || motL.includes('expectativa') || motL.includes('experiencia') || motL.includes('nao se adaptou')) causas.admissao++;
+      else if (motL.includes('opera') || motL.includes('lider') || motL.includes('ambiente') || motL.includes('carga') || motL.includes('conflito') || motL.includes('gestor') || motL.includes('chefe')) causas.operacional++;
+      else if (motL.includes('financ') || motL.includes('salari') || motL.includes('benefic') || motL.includes('proposta') || motL.includes('remuner')) causas.financeiro++;
+      else if (motL.includes('pessoal') || motL.includes('famil') || motL.includes('mudanc') || motL.includes('saude') || motL.includes('cidade')) causas.pessoal++;
+      else causas.sem_classificacao++;
     });
+
+    // Incluir sem_classificacao no grafico se houver
+    const CATEGORIAS_CHART = { ...CATEGORIAS };
+    if (causas.sem_classificacao > 0) {
+      CATEGORIAS_CHART.sem_classificacao = { label: 'Sem classificacao', color: '#94a3b8' };
+    } else {
+      delete causas.sem_classificacao;
+    }
 
     charts.causas = new Chart(document.getElementById('chart-causas'), {
       type: 'doughnut',
       data: {
-        labels: Object.keys(causas).map(k => CATEGORIAS[k].label),
+        labels: Object.keys(causas).map(k => (CATEGORIAS_CHART[k] || {}).label || k),
         datasets: [{
           data: Object.values(causas),
-          backgroundColor: Object.keys(causas).map(k => CATEGORIAS[k].color),
+          backgroundColor: Object.keys(causas).map(k => (CATEGORIAS_CHART[k] || {}).color || '#94a3b8'),
           borderWidth: 0,
         }]
       },
@@ -459,15 +479,25 @@
       return;
     }
 
-    // Causa principal
-    const maxCausa = Object.entries(causas).sort((a,b) => b[1] - a[1])[0];
-    if (maxCausa[1] > 0) {
+    // Causa principal (ignorar sem_classificacao para insight)
+    const causasReais = Object.entries(causas).filter(([k]) => k !== 'sem_classificacao').sort((a,b) => b[1] - a[1]);
+    const maxCausa = causasReais[0];
+    if (maxCausa && maxCausa[1] > 0) {
       const pct = ((maxCausa[1]/totalDeslig)*100).toFixed(0);
-      insights.push('<div class="insight-box"><strong>Causa principal:</strong> ' + CATEGORIAS[maxCausa[0]].label + ' (' + pct + '% dos desligamentos). ' +
-        (maxCausa[0] === 'admissao' ? 'Sugere revisar processo seletivo e alinhamento de expectativas na contratacao.' :
-         maxCausa[0] === 'operacional' ? 'Sugere avaliar liderancas, ambiente de trabalho e carga nos setores criticos.' :
-         maxCausa[0] === 'financeiro' ? 'Sugere benchmark salarial e revisao de beneficios.' :
-         'Motivos pessoais sao menos controlaveis, mas vale verificar se ha padrao por setor.') + '</div>');
+      const sugestao = {
+        admissao: 'Sugere revisar processo seletivo, descricao de vaga e programa de integracao (onboarding).',
+        operacional: 'Sugere avaliar liderancas, ambiente de trabalho, carga horaria e canais de comunicacao nos setores criticos.',
+        financeiro: 'Sugere benchmark salarial regional, revisao de beneficios e plano de cargos e salarios.',
+        pessoal: 'Motivos pessoais sao menos controlaveis, mas vale verificar se ha padrao por setor ou turno.',
+      };
+      insights.push('<div class="insight-box"><strong>Causa principal:</strong> ' + (CATEGORIAS[maxCausa[0]]||{}).label + ' (' + pct + '% dos desligamentos). ' + (sugestao[maxCausa[0]] || '') + '</div>');
+    }
+
+    // Alerta de registros sem classificacao
+    const semClass = causas.sem_classificacao || 0;
+    if (semClass > 0) {
+      const pct = ((semClass/totalDeslig)*100).toFixed(0);
+      insights.push('<div class="insight-box" style="border-left-color:var(--warning);background:var(--warning-light);"><strong>Atencao:</strong> ' + semClass + ' desligamento(s) (' + pct + '%) sem classificacao de causa. Edite esses registros para melhorar a analise.</div>');
     }
 
     // Turnover de curto prazo

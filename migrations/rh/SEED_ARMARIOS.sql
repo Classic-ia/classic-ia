@@ -120,8 +120,10 @@ BEGIN
     LIMIT 1;
 
     IF v_func_id IS NOT NULL THEN
-      -- Criar ocupacao se nao existe
-      IF NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE armario_id = v_arm_id AND data_devolucao IS NULL) THEN
+      -- Criar ocupacao se nao existe (verifica armario E funcionario)
+      IF NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE armario_id = v_arm_id AND data_devolucao IS NULL)
+         AND NOT EXISTS (SELECT 1 FROM arm_ocupacoes WHERE funcionario_id = v_func_id AND data_devolucao IS NULL)
+      THEN
         INSERT INTO arm_ocupacoes (armario_id, funcionario_id, data_atribuicao, chave_entregue)
         VALUES (v_arm_id, v_func_id, CURRENT_DATE, true);
       END IF;

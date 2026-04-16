@@ -181,6 +181,17 @@
 
     <!-- Tab: Importar Convenia -->
     <div class="tab-content" id="tab-importar">
+      <!-- Diagnostico / Fix -->
+      <div class="card mb-4" id="fix-card" style="display:none;">
+        <div class="card-title">&#9888; Registros sem classificacao detectados</div>
+        <p class="text-muted" style="margin:8px 0 12px;font-size:13px;" id="fix-msg"></p>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" id="btn-detect-schema">Detectar estrutura da tabela</button>
+          <button class="btn btn-ghost btn-sm" id="btn-fix-limpar">Limpar duplicatas</button>
+        </div>
+        <div id="fix-result" style="margin-top:12px;"></div>
+      </div>
+
       <!-- Sync via API -->
       <div class="card mb-4">
         <div class="card-title">Sincronizar via API Convenia</div>
@@ -1327,6 +1338,73 @@
     return false;
   };
 
+  // ── Diagnostico e fix de registros ──
+  // Mostrar card de fix se ha registros sem tipo
+  const semTipoCount = desligamentos.filter(d => !d.tipo).length;
+  if (semTipoCount > 0) {
+    document.getElementById('fix-card').style.display = '';
+    document.getElementById('fix-msg').textContent = semTipoCount + ' registros sem tipo classificado. Use o botao abaixo para detectar a estrutura da tabela.';
+  }
+
+  document.getElementById('btn-detect-schema').addEventListener('click', async () => {
+    const result = document.getElementById('fix-result');
+    result.innerHTML = '<div class="loading">Detectando...</div>';
+
+    // Pegar 1 registro para ver as colunas
+    const sample = await API.get('rh_desligamentos?select=*&limit=1');
+    if (!sample.ok || !sample.data || !sample.data.length) {
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">Erro ao acessar tabela rh_desligamentos</div>';
+      return;
+    }
+
+    const cols = Object.keys(sample.data[0]);
+    const temTipo = cols.includes('tipo');
+    const temTipoDeslig = cols.includes('tipo_desligamento');
+    const temCategoria = cols.includes('categoria');
+    const temCategoriaCausa = cols.includes('categoria_causa');
+    const temNome = cols.includes('nome');
+    const temColabNome = cols.includes('colaborador_nome');
+    const temMotivo = cols.includes('motivo');
+    const temDescricao = cols.includes('descricao');
+
+    let html = '<div style="font-size:12px;margin-bottom:12px;"><strong>Colunas encontradas:</strong> ' + cols.join(', ') + '</div>';
+    html += '<div style="font-size:12px;margin-bottom:8px;">';
+    html += 'Campo tipo: <strong>' + (temTipoDeslig ? 'tipo_desligamento' : temTipo ? 'tipo' : 'NAO ENCONTRADO') + '</strong><br>';
+    html += 'Campo causa: <strong>' + (temCategoriaCausa ? 'categoria_causa' : temCategoria ? 'categoria' : 'NAO ENCONTRADO') + '</strong><br>';
+    html += 'Campo nome: <strong>' + (temNome ? 'nome' : temColabNome ? 'colaborador_nome' : 'NAO ENCONTRADO') + '</strong>';
+    html += '</div>';
+
+    // Salvar no estado para uso na importacao
+    window._dbSchema = { temTipo, temTipoDeslig, temCategoria, temCategoriaCausa, temNome, temColabNome, temMotivo, temDescricao };
+
+    html += '<div class="insight-box">Use esses nomes de coluna ao importar. O importador foi atualizado para usar automaticamente os nomes corretos.</div>';
+    result.innerHTML = html;
+  });
+
+  document.getElementById('btn-fix-limpar').addEventListener('click', async () => {
+    if (!confirm('Isso vai remover registros duplicados (mesmo nome + mesma data). Continuar?')) return;
+    const result = document.getElementById('fix-result');
+    result.innerHTML = '<div class="loading">Buscando duplicatas...</div>';
+
+    const all = await API.get('rh_desligamentos?select=id,nome,colaborador_nome,data_desligamento&order=data_desligamento.desc');
+    if (!all.ok) { result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">Erro ao buscar registros</div>'; return; }
+
+    const seen = new Set();
+    let deleted = 0;
+    for (const r of all.data) {
+      const chave = ((r.nome || r.colaborador_nome || '') + '|' + (r.data_desligamento || '')).toUpperCase();
+      if (seen.has(chave)) {
+        await API.del('rh_desligamentos?id=eq.' + r.id);
+        deleted++;
+      } else {
+        seen.add(chave);
+      }
+    }
+
+    result.innerHTML = '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' + deleted + ' duplicata(s) removida(s). Recarregando...</div>';
+    setTimeout(() => loadData(), 1000);
+  });
+
   // ── Sync via Convenia API ──
   document.getElementById('btn-sync-api').addEventListener('click', async () => {
     const btn = document.getElementById('btn-sync-api');
@@ -1595,17 +1673,43 @@
         const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(r.nome) + '&data_desligamento=eq.' + r.data_desligamento + '&select=id&limit=1');
         if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
 
-        const res = await API.post('rh_desligamentos', {
-          colaborador_nome: r.nome, nome: r.nome,
-          data_desligamento: r.data_desligamento,
-          data_admissao: r.data_admissao,
-          tipo: r.tipo, tipo_desligamento: r.tipo,
-          categoria: r.causa, categoria_causa: r.causa,
-          motivo: r.motivo, descricao: r.motivo,
-          cargo: r.cargo, setor: r.setor,
-          salario: r.salario || null,
-          tempo_empresa_dias: r.tempo_empresa_dias,
-        });
+        // Construir payload dinamico baseado no schema detectado
+        const sc = window._dbSchema || {};
+        const payload = { data_desligamento: r.data_desligamento };
+
+        // Nome
+        if (sc.temNome !== false) payload.nome = r.nome;
+        if (sc.temColabNome !== false) payload.colaborador_nome = r.nome;
+
+        // Tipo (usar o campo correto da tabela)
+        if (sc.temTipoDeslig) { payload.tipo_desligamento = r.tipo; }
+        else if (sc.temTipo) { payload.tipo = r.tipo; }
+        else { payload.tipo = r.tipo; payload.tipo_desligamento = r.tipo; }
+
+        // Causa
+        if (sc.temCategoriaCausa) { payload.categoria_causa = r.causa; }
+        else if (sc.temCategoria) { payload.categoria = r.causa; }
+        else { payload.categoria = r.causa; payload.categoria_causa = r.causa; }
+
+        // Motivo
+        if (sc.temDescricao) payload.descricao = r.motivo || 'Importado via CSV';
+        if (sc.temMotivo !== false) payload.motivo = r.motivo;
+
+        // Demais campos
+        payload.data_admissao = r.data_admissao;
+        payload.cargo = r.cargo;
+        payload.setor = r.setor;
+        payload.salario = r.salario || null;
+        payload.tempo_empresa_dias = r.tempo_empresa_dias;
+
+        let res = await API.post('rh_desligamentos', payload);
+        // Fallback: se falhou, tentar sem campos opcionais
+        if (!res.ok) {
+          const fallback = { nome: r.nome, data_desligamento: r.data_desligamento, motivo: r.motivo || 'CSV' };
+          if (r.tipo) fallback.tipo = r.tipo;
+          if (r.tipo) fallback.tipo_desligamento = r.tipo;
+          res = await API.post('rh_desligamentos', fallback);
+        }
         if (res.ok) ok++; else err++;
       } catch (e) { err++; }
     }

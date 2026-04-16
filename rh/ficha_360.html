@@ -182,12 +182,12 @@ function renderPage(d) {
   const asoUlt = asos.ultimo || {};
   const asoVenc = asos.vencido;
   html += `<div class="kpi-row mb-6">
-    <div class="kpi-card">
+    <div class="kpi-card" style="cursor:pointer" onclick="document.getElementById('score-detail').style.display=document.getElementById('score-detail').style.display==='none'?'block':'none'">
       <div class="kpi-icon ${sVal==null?'blue':sVal>=80?'green':sVal>=60?'amber':'red'}">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <div class="kpi-value">${sVal != null ? sVal : '--'}</div>
-      <div class="kpi-label">Score</div>
+      <div class="kpi-label">Score &#9660;</div>
       ${sVal != null ? `<div class="score-bar"><div class="score-bar-fill" style="width:${sVal}%;background:${sColor}"></div></div>` : ''}
     </div>
     <div class="kpi-card">
@@ -226,6 +226,51 @@ function renderPage(d) {
       <div class="kpi-label">Custo Mensal</div>
     </div>
   </div>`;
+
+  // ── SCORE DETAIL (expandivel) ──
+  const scoreD = sc.dimensoes || sc;
+  html += '<div id="score-detail" class="card mb-6" style="display:none;">';
+  html += '<div class="card-header"><h3>Detalhamento do Score — ' + (sVal != null ? sVal : '--') + ' pontos</h3></div>';
+  html += '<div class="card-body">';
+
+  // Dimensoes do score
+  const dims = [
+    { key: 'presenca', label: 'Presenca / Assiduidade', icon: '&#128197;' },
+    { key: 'producao', label: 'Producao / Produtividade', icon: '&#9881;' },
+    { key: 'treinamento', label: 'Treinamentos / NRs', icon: '&#128218;' },
+    { key: 'estabilidade', label: 'Estabilidade / Tempo de Casa', icon: '&#128336;' },
+    { key: 'epi', label: 'EPI / Conformidade SST', icon: '&#128737;' },
+    { key: 'qualidade', label: 'Qualidade', icon: '&#11088;' },
+  ];
+
+  html += '<table class="data-table"><thead><tr><th>Dimensao</th><th style="text-align:right">Score</th><th style="width:40%">Barra</th></tr></thead><tbody>';
+  dims.forEach(dim => {
+    const val = scoreD['score_' + dim.key] ?? scoreD[dim.key] ?? null;
+    const pct = val != null ? Math.min(val, 100) : 0;
+    const cor = val == null ? '#CBD5E1' : val >= 80 ? '#22c55e' : val >= 60 ? '#eab308' : '#ef4444';
+    html += '<tr>';
+    html += '<td>' + dim.icon + ' ' + dim.label + '</td>';
+    html += '<td style="text-align:right;font-weight:700;color:' + cor + '">' + (val != null ? val.toFixed ? val.toFixed(1) : val : '--') + '</td>';
+    html += '<td><div style="background:#F1F5F9;height:12px;border-radius:6px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + cor + ';border-radius:6px;transition:width 0.3s;"></div></div></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // Classificacao e cobertura
+  const classif = sc.classificacao || scoreD.classificacao || '';
+  const conf = sc.confiabilidade || scoreD.confiabilidade || '';
+  if (classif || conf) {
+    html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+    if (classif) {
+      const clsBadge = classif === 'consistente' ? 'success' : classif === 'regular' ? 'info' : classif === 'monitorar' ? 'warning' : 'danger';
+      html += '<span class="badge badge-' + clsBadge + '">' + esc(classif) + '</span>';
+    }
+    if (conf) html += '<span class="badge badge-gray">Confiabilidade: ' + esc(conf) + '</span>';
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:12px;font-size:11px;color:var(--text-muted);">Score calculado pelo Motor v2. Clique no card para fechar. <a href="motor_v2.html" class="text-link">Ver Motor Completo</a></div>';
+  html += '</div></div>';
 
   // ── TABS ──
   const tabs = ['Dados Gerais','RH','SST','Ponto','Beneficios','Documentos','Custos','Historico'];

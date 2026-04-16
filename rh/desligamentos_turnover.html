@@ -181,11 +181,25 @@
 
     <!-- Tab: Importar Convenia -->
     <div class="tab-content" id="tab-importar">
-      <div class="card">
-        <div class="card-title">Importar Desligamentos do Convenia</div>
+      <!-- Sync via API -->
+      <div class="card mb-4">
+        <div class="card-title">Sincronizar via API Convenia</div>
         <p class="text-muted" style="margin:8px 0 16px;font-size:13px;">
-          Exporte os dados do Convenia (Desligados → Exportar) e arraste o arquivo CSV aqui.
-          O sistema classifica automaticamente o tipo (pedido/empresa/termino/acordo) e a causa.
+          Busca os funcionarios desligados diretamente pela API do Convenia e importa com tipo classificado.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" id="btn-sync-api">Buscar Desligados da API</button>
+          <span id="sync-api-status" class="text-muted" style="font-size:12px;"></span>
+        </div>
+        <div id="sync-api-result" style="display:none;margin-top:12px;"></div>
+      </div>
+
+      <!-- Import CSV -->
+      <div class="card">
+        <div class="card-title">Importar via CSV/Excel</div>
+        <p class="text-muted" style="margin:8px 0 16px;font-size:13px;">
+          Alternativa: exporte do Convenia (Desligados → Exportar) e arraste o arquivo CSV/Excel aqui.
+          O sistema classifica automaticamente o tipo e a causa.
         </p>
         <div class="upload-zone" id="import-zone">
           <div class="drop-icon">&#128196;</div>
@@ -1296,6 +1310,113 @@
     }
     return false;
   };
+
+  // ── Sync via Convenia API ──
+  document.getElementById('btn-sync-api').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-sync-api');
+    const status = document.getElementById('sync-api-status');
+    const result = document.getElementById('sync-api-result');
+
+    // Buscar config do Convenia
+    const cfg = JSON.parse(localStorage.getItem('convenia_config') || '{}');
+    if (!cfg.token) {
+      alert('Token da API Convenia nao configurado. Va em Integracoes → Convenia para configurar.');
+      return;
+    }
+
+    btn.disabled = true;
+    status.textContent = 'Buscando funcionarios da API...';
+
+    try {
+      const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
+      const hdrs = { 'api-token': cfg.token, 'Content-Type': 'application/json', 'Accept': 'application/json' };
+
+      // Buscar todos os funcionarios (incluindo desligados)
+      let todos = [], page = 1, totalPages = 1;
+      do {
+        status.textContent = 'Pagina ' + page + '...';
+        const res = await fetch(CONVENIA_BASE + '/employees?page=' + page + '&per_page=100', { headers: hdrs });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - Verifique o token');
+        const json = await res.json();
+        const lista = json.data || json.employees || json || [];
+        if (!Array.isArray(lista)) break;
+        todos = todos.concat(lista);
+        if (json.meta) totalPages = json.meta.last_page || json.meta.total_pages || 1;
+        page++;
+      } while (page <= totalPages && page <= 30);
+
+      // Filtrar desligados (situation === 'dismissed' ou status similar)
+      const desligados = todos.filter(e => {
+        const sit = (e.situation || e.status || '').toLowerCase();
+        return sit === 'dismissed' || sit === 'desligado' || sit === 'terminated' ||
+               e.dismissed_at || e.termination_date || e.data_desligamento;
+      });
+
+      status.textContent = desligados.length + ' desligado(s) encontrado(s) de ' + todos.length + ' total';
+
+      if (desligados.length === 0) {
+        result.style.display = '';
+        result.innerHTML = '<div class="insight-box" style="border-left-color:var(--warning);background:var(--warning-light);">' +
+          '<strong>Nenhum desligado encontrado via API.</strong> ' +
+          'A API retornou ' + todos.length + ' funcionarios mas nenhum com status "dismissed". ' +
+          'Possiveis causas: a API pode nao retornar desligados no endpoint padrao, ou o campo de status tem outro nome. ' +
+          'Use a importacao via CSV como alternativa.</div>';
+        btn.disabled = false;
+        return;
+      }
+
+      // Processar e importar
+      let ok = 0, skip = 0, err = 0;
+      for (const emp of desligados) {
+        const nome = emp.name || emp.nome || emp.full_name || '';
+        const dataDeslig = emp.dismissed_at || emp.termination_date || emp.data_desligamento || '';
+        const dataAdm = emp.admission_date || emp.hired_at || emp.data_admissao || '';
+        const cargo = emp.role || emp.position || emp.cargo || '';
+        const setor = emp.department || emp.setor || '';
+        const salario = emp.salary || emp.salario || 0;
+        const tipoConvenia = emp.dismissal_type || emp.tipo_desligamento || emp.termination_type || '';
+        const motivo = emp.dismissal_reason || emp.motivo_desligamento || '';
+
+        if (!nome || !dataDeslig) continue;
+
+        const dataISO = dataDeslig.includes('/') ?
+          dataDeslig.split('/').reverse().join('-') : dataDeslig.substring(0, 10);
+        const admISO = dataAdm ? (dataAdm.includes('/') ?
+          dataAdm.split('/').reverse().join('-') : dataAdm.substring(0, 10)) : null;
+
+        const tempoDias = admISO && dataISO ?
+          Math.ceil((new Date(dataISO) - new Date(admISO)) / 86400000) : null;
+        const tipo = classificarTipo(tipoConvenia);
+        const causa = classificarCausa(motivo, '', tipo, tempoDias);
+
+        // Check duplicata
+        const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(nome) + '&data_desligamento=eq.' + dataISO + '&select=id&limit=1');
+        if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
+
+        const res = await API.post('rh_desligamentos', {
+          colaborador_nome: nome, nome: nome,
+          data_desligamento: dataISO, data_admissao: admISO,
+          tipo: tipo, categoria: causa,
+          motivo: motivo || tipoConvenia || 'Via API Convenia',
+          cargo: cargo, setor: setor,
+          salario: parseFloat(salario) || null,
+          tempo_empresa_dias: tempoDias,
+        });
+        if (res.ok) ok++; else err++;
+      }
+
+      result.style.display = '';
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' +
+        '<strong>Sync concluido!</strong> ' + ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)</div>';
+
+      if (ok > 0) setTimeout(() => loadData(), 1000);
+    } catch (e) {
+      result.style.display = '';
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">' +
+        '<strong>Erro:</strong> ' + e.message + '</div>';
+    }
+    btn.disabled = false;
+  });
 
   // ── Import Convenia CSV ──
   function classificarTipo(tipoConvenia) {

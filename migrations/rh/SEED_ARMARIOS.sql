@@ -50,7 +50,7 @@ DECLARE
   v_bloco_fem uuid := 'a0000000-0000-0000-0000-000000000001';
 BEGIN
   FOR rec IN
-    SELECT column1 AS codigo, column2 AS nome FROM (VALUES
+    SELECT codigo, nome FROM (VALUES
       ('1', 'CLARICE GONCALO MIRANDA'),
       ('2', 'CRISTIANE DOS SANTOS'),
       ('3', 'PATRICIA MAIARA DA CRUZ'),
@@ -139,7 +139,7 @@ DECLARE
   v_bloco_mas uuid := 'a0000000-0000-0000-0000-000000000002';
 BEGIN
   FOR rec IN
-    SELECT column1 AS codigo, column2 AS nome FROM (VALUES
+    SELECT codigo, nome FROM (VALUES
       ('1', 'JONAS LOPES'),
       ('2', 'MARIO SERGIO CARVALHO'),
       ('3', 'ANDERSON LUIZ DE SOUZA'),

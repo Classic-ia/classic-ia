@@ -67,10 +67,28 @@ function buildTable(headers, rows, opts) {
   }
 
   document.getElementById('loadingState').style.display = '';
-  const {ok, data} = await API.rpc('ficha_360_colaborador', {p_funcionario_id: id});
+  const [{ok, data}, armRes] = await Promise.all([
+    API.rpc('ficha_360_colaborador', {p_funcionario_id: id}),
+    API.get(`arm_ocupacoes?funcionario_id=eq.${id}&data_devolucao=is.null&select=id,armario_id,data_atribuicao,chave_entregue,arm_armarios(codigo,tipo,status,arm_blocos(nome,tipo))`)
+  ]);
   if (!ok || !data || data.erro) { showError(); return; }
 
   const d = data;
+  // Attach armario data
+  d._armario = null;
+  if (armRes.ok && armRes.data && armRes.data.length > 0) {
+    const oc = armRes.data[0];
+    const arm = oc.arm_armarios || {};
+    const bloco = arm.arm_blocos || {};
+    d._armario = {
+      numero: arm.codigo || '--',
+      tipo: bloco.tipo || arm.tipo || '--',
+      bloco: bloco.nome || '--',
+      desde: oc.data_atribuicao,
+      chave: oc.chave_entregue,
+    };
+  }
+
   document.getElementById('loadingState').style.display = 'none';
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('mainContent').innerHTML = renderPage(d);
@@ -154,6 +172,7 @@ function renderPage(d) {
       <div class="hm-item"><div class="hm-label">CPF</div><div class="hm-value">${d.cpf ? API.fmtCPF(d.cpf) : '--'}</div></div>
       <div class="hm-item"><div class="hm-label">Tempo Empresa</div><div class="hm-value">${fmtT(d.tempo_empresa_dias)}</div></div>
       <div class="hm-item"><div class="hm-label">Admissao</div><div class="hm-value">${fmtD(d.data_admissao)}</div></div>
+      <div class="hm-item"><div class="hm-label">Armario</div><div class="hm-value">${d._armario ? '<a href="armarios.html" class="text-link">N ' + esc(d._armario.numero) + ' (' + esc(d._armario.tipo) + ')</a>' : '<span class="text-muted">Sem armario</span>'}</div></div>
     </div>
     ${exp.em_experiencia ? '<div class="hero-alert warn">&#9888; Colaborador em periodo de experiencia</div>' : ''}
     ${af ? '<div class="hero-alert danger">&#9888; Colaborador afastado: '+esc(fmt(af.motivo || af.tipo || 'Afastamento'))+' desde '+fmtD(af.data_inicio || af.inicio)+'</div>' : ''}
@@ -243,6 +262,15 @@ function renderPage(d) {
   ${d.transporte_onibus ? `<div class="card"><div class="card-header"><h3>Transporte</h3></div><div class="card-body"><div class="info-grid">
     ${ig('Onibus', d.transporte_onibus)}${ig('Rota', d.transporte_rota)}${ig('Custo', fmtM(d.transporte_custo))}
   </div></div></div>` : ''}
+  <div class="card"><div class="card-header"><h3>Armario</h3></div><div class="card-body">
+    ${d._armario ? `<div class="info-grid">
+      ${ig('Numero', d._armario.numero)}
+      ${ig('Vestiario', d._armario.bloco)}
+      ${ig('Tipo', d._armario.tipo === 'feminino' ? 'Feminino' : d._armario.tipo === 'masculino' ? 'Masculino' : d._armario.tipo)}
+      ${ig('Desde', fmtD(d._armario.desde))}
+      ${ig('Chave Entregue', d._armario.chave ? 'Sim' : 'Nao')}
+    </div>` : '<p class="text-muted">Nenhum armario atribuido. <a href="armarios.html" class="text-link">Atribuir</a></p>'}
+  </div></div>
   </div>`;
 
   // TAB 1: RH

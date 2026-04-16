@@ -43,12 +43,18 @@
       <button class="period-btn" data-meses="24">24 meses</button>
     </div>
 
+    <!-- Alerta de dados -->
+    <div id="alerta-dados" style="display:none;background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+      <strong>&#9888; Dados incompletos:</strong> <span id="alerta-dados-msg"></span>
+    </div>
+
     <!-- KPIs -->
     <div class="kpi-row">
       <div class="kpi-card"><div class="num red" id="kpi-deslig">0</div><div class="lbl">Desligamentos</div></div>
       <div class="kpi-card"><div class="num orange" id="kpi-pedido">0</div><div class="lbl">Pediu demissao</div></div>
       <div class="kpi-card"><div class="num red" id="kpi-empresa">0</div><div class="lbl">Empresa demitiu</div></div>
       <div class="kpi-card"><div class="num blue" id="kpi-termino">0</div><div class="lbl">Fim contrato</div></div>
+      <div class="kpi-card" id="kpi-semtipo-card" style="display:none"><div class="num gold" id="kpi-semtipo">0</div><div class="lbl">Sem classificacao</div></div>
       <div class="kpi-card"><div class="num orange" id="kpi-turnover">0%</div><div class="lbl">Turnover Geral</div></div>
       <div class="kpi-card"><div class="num red" id="kpi-curto">0%</div><div class="lbl">Turnover &lt;90d</div></div>
       <div class="kpi-card"><div class="num gold" id="kpi-tempo">0</div><div class="lbl">Tempo Medio (dias)</div></div>
@@ -58,6 +64,7 @@
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="inteligencia">Inteligencia RH</button>
       <button class="tab-btn" data-tab="lista">Lista Desligamentos</button>
       <button class="tab-btn" data-tab="cruzada">Analise Cruzada</button>
       <button class="tab-btn" data-tab="registrar">+ Registrar</button>
@@ -102,6 +109,13 @@
       <div class="card" id="plano-box" style="display:none;">
         <div class="card-title" style="font-size:16px;margin-bottom:16px;">Plano de Acao Sugerido</div>
         <div id="plano-content"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Inteligencia RH -->
+    <div class="tab-content" id="tab-inteligencia">
+      <div id="intel-content">
+        <div class="loading-state"><div class="loading-spinner"></div> Gerando analise...</div>
       </div>
     </div>
 
@@ -292,15 +306,50 @@
     dataInicio.setMonth(dataInicio.getMonth() - periodoMeses);
     const isoInicio = dataInicio.toISOString().split('T')[0];
 
-    const [_resColabs, _resDesligs, _resOcorrs] = await Promise.all([
+    const [_resColabs, _resDesligs, _resOcorrs, _resFuncDeslig] = await Promise.all([
       API.get('rh_colaboradores?select=id,nome,cargo,setor,data_admissao,status,salario_base'),
       API.get('rh_desligamentos?select=*&order=data_desligamento.desc'),
       API.get('rh_ocorrencias?select=colaborador_id,tipo,dias,data_inicio&tipo=eq.atestado'),
+      // Buscar tambem funcionarios marcados como desligados (fonte principal)
+      API.get('rh_funcionarios?status=eq.desligado&data_desligamento=gte.' + isoInicio + '&select=id,nome_completo,data_admissao,data_desligamento,cargo_id,setor_id,salario_base&order=data_desligamento.desc'),
     ]);
 
     colaboradores = _resColabs.ok ? _resColabs.data : [];
-    desligamentos = (_resDesligs.ok ? _resDesligs.data : []).filter(d => d.data_desligamento >= isoInicio);
     ocorrencias = _resOcorrs.ok ? _resOcorrs.data : [];
+
+    // Merge: rh_desligamentos + rh_funcionarios desligados
+    const desligTabela = (_resDesligs.ok ? _resDesligs.data : []).filter(d => d.data_desligamento >= isoInicio);
+    const funcDeslig = _resFuncDeslig.ok ? _resFuncDeslig.data : [];
+
+    // Criar mapa de IDs que ja estao em rh_desligamentos
+    const idsDeslig = new Set(desligTabela.map(d => d.colaborador_id).filter(Boolean));
+
+    // Adicionar funcionarios desligados que NAO estao em rh_desligamentos
+    const funcExtras = funcDeslig.filter(f => !idsDeslig.has(f.id)).map(f => {
+      // Buscar nome do setor e cargo via colaboradores (view)
+      const colab = colaboradores.find(c => c.id === f.id) || {};
+      const tempoDias = f.data_admissao && f.data_desligamento
+        ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
+        : 0;
+      return {
+        colaborador_id: f.id,
+        colaborador_nome: f.nome_completo,
+        nome: f.nome_completo,
+        data_desligamento: f.data_desligamento,
+        data_admissao: f.data_admissao,
+        cargo: colab.cargo || '',
+        setor: colab.setor || '',
+        salario: f.salario_base,
+        tipo: null,  // sem classificacao
+        motivo: null,
+        tempo_empresa_dias: tempoDias,
+        _origem: 'rh_funcionarios',
+      };
+    });
+
+    desligamentos = [...desligTabela, ...funcExtras].sort((a, b) =>
+      (b.data_desligamento || '').localeCompare(a.data_desligamento || '')
+    );
 
     // Populate selects
     const selColab = document.getElementById('des-colaborador');
@@ -318,6 +367,7 @@
     renderDashboard();
     renderLista();
     renderCruzada();
+    renderInteligencia();
 
     document.getElementById('loading-state').style.display = 'none';
     document.getElementById('content').style.display = 'block';
@@ -327,8 +377,9 @@
     const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
     const totalDeslig = desligamentos.length;
     const pedidos = desligamentos.filter(d => d.tipo === 'pedido_demissao').length;
-    const empresa = desligamentos.filter(d => d.tipo === 'demissao_empresa').length;
+    const empresa = desligamentos.filter(d => d.tipo === 'demissao_empresa' || d.tipo === 'justa_causa').length;
     const termino = desligamentos.filter(d => d.tipo === 'termino_contrato').length;
+    const semTipo = desligamentos.filter(d => !d.tipo || !['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'].includes(d.tipo)).length;
     const curto = desligamentos.filter(d => (d.tempo_empresa_dias || 0) < 90).length;
     const tempoMedio = totalDeslig > 0
       ? Math.round(desligamentos.reduce((s, d) => s + (d.tempo_empresa_dias || 0), 0) / totalDeslig)
@@ -344,6 +395,17 @@
     document.getElementById('kpi-curto').textContent = turnoverCurto + '%';
     document.getElementById('kpi-tempo').textContent = tempoMedio;
     document.getElementById('kpi-ativos').textContent = totalAtivos;
+
+    // Mostrar alerta e KPI de registros sem tipo
+    if (semTipo > 0) {
+      document.getElementById('kpi-semtipo').textContent = semTipo;
+      document.getElementById('kpi-semtipo-card').style.display = '';
+      const alertEl = document.getElementById('alerta-dados');
+      alertEl.style.display = '';
+      document.getElementById('alerta-dados-msg').innerHTML =
+        semTipo + ' de ' + totalDeslig + ' desligamentos (' + ((semTipo/totalDeslig)*100).toFixed(0) + '%) estao <strong>sem tipo classificado</strong> (pedido/empresa/termino). ' +
+        'Os dados podem ter vindo do Convenia sem essa informacao. <strong>Classifique na aba "+ Registrar" ou edite diretamente no Supabase</strong> (tabela rh_desligamentos, coluna "tipo").';
+    }
   }
 
   function renderDashboard() {
@@ -896,6 +958,241 @@
         desligComAbs.slice(0, 10).map(d => '<tr><td>'+esc(d.nome||d.colaborador_nome||'')+'</td><td>'+esc(d.setor||'--')+'</td><td style="font-family:DM Mono;color:var(--warn);">'+d.totalDiasAusencia+'d</td><td>'+(d.tempo_empresa_dias||0)+'d</td></tr>').join('') +
         '</tbody></table>' +
         '<div class="insight-box" style="margin-top:12px;"><strong>Interpretacao:</strong> Alto absenteismo antes do desligamento pode indicar desmotivacao progressiva ou problemas de saude nao tratados. Cruzar com dados do Programa de Saude Mental.</div>';
+  }
+
+  // ── Inteligencia RH ──
+  async function renderInteligencia() {
+    const el = document.getElementById('intel-content');
+    const totalDeslig = desligamentos.length;
+    const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
+
+    if (totalDeslig === 0) {
+      el.innerHTML = '<div class="empty">Sem desligamentos no periodo para analisar</div>';
+      return;
+    }
+
+    // Consultas leves a outros modulos (em paralelo)
+    const [rScores, rAsos, rTreinos] = await Promise.all([
+      API.get('motor_score?select=funcionario_id,score_final,classificacao&order=periodo_referencia.desc&limit=500'),
+      API.get('rh_asos?select=colaborador_id,data_vencimento,resultado&order=data_vencimento.desc'),
+      API.get('rh_treinamentos?select=colaborador_id,data_vencimento&order=data_vencimento.desc'),
+    ]);
+
+    const scores = rScores.ok ? rScores.data : [];
+    const asos = rAsos.ok ? rAsos.data : [];
+    const treinos = rTreinos.ok ? rTreinos.data : [];
+
+    // Maps
+    const scoreMap = {};
+    scores.forEach(s => { if (!scoreMap[s.funcionario_id]) scoreMap[s.funcionario_id] = s; });
+    const asoMap = {};
+    asos.forEach(a => { if (!asoMap[a.colaborador_id]) asoMap[a.colaborador_id] = a; });
+    const treinoCount = {};
+    const hoje = new Date().toISOString().slice(0,10);
+    treinos.forEach(t => {
+      if (!treinoCount[t.colaborador_id]) treinoCount[t.colaborador_id] = { total: 0, vencidos: 0 };
+      treinoCount[t.colaborador_id].total++;
+      if (t.data_vencimento && t.data_vencimento < hoje) treinoCount[t.colaborador_id].vencidos++;
+    });
+
+    let html = '';
+
+    // ── 1. CUSTO DO TURNOVER ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128176; Custo Estimado do Turnover</div>';
+    const salarioMedio = totalDeslig > 0
+      ? desligamentos.reduce((s, d) => s + (d.salario || d.salario_base || 2000), 0) / totalDeslig
+      : 2000;
+    const custoRecrutamento = salarioMedio * 0.5;
+    const custoTreinamento = salarioMedio * 1.0;
+    const custoProdutividade = salarioMedio * 1.5;
+    const custoPorDeslig = custoRecrutamento + custoTreinamento + custoProdutividade;
+    const custoTotal = custoPorDeslig * totalDeslig;
+
+    html += '<div class="kpi-row mb-4">';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(custoTotal).toLocaleString('pt-BR') + '</div><div class="lbl">Custo Total Estimado</div></div>';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(custoPorDeslig).toLocaleString('pt-BR') + '</div><div class="lbl">Custo por Desligamento</div></div>';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(salarioMedio).toLocaleString('pt-BR') + '</div><div class="lbl">Salario Medio</div></div>';
+    html += '</div>';
+    html += '<div class="insight-box">Cada desligamento custa em media <strong>3x o salario</strong> (recrutamento 0.5x + treinamento 1x + perda de produtividade 1.5x). ';
+    html += 'No periodo, o turnover custou aproximadamente <strong>R$ ' + Math.round(custoTotal).toLocaleString('pt-BR') + '</strong> para a empresa.</div>';
+    html += '</div>';
+
+    // ── 2. PERFIL DO DESLIGADO ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128100; Perfil do Colaborador que Sai</div>';
+
+    // Por tempo de casa
+    const faixasTempo = { 'Ate 30d': 0, '31-90d': 0, '91-180d': 0, '6m-1a': 0, '1-2a': 0, '2a+': 0 };
+    desligamentos.forEach(d => {
+      const t = d.tempo_empresa_dias || 0;
+      if (t <= 30) faixasTempo['Ate 30d']++;
+      else if (t <= 90) faixasTempo['31-90d']++;
+      else if (t <= 180) faixasTempo['91-180d']++;
+      else if (t <= 365) faixasTempo['6m-1a']++;
+      else if (t <= 730) faixasTempo['1-2a']++;
+      else faixasTempo['2a+']++;
+    });
+    const faixaMax = Object.entries(faixasTempo).sort((a,b)=>b[1]-a[1])[0];
+
+    // Por setor
+    const setorDeslig = {};
+    desligamentos.forEach(d => { if (d.setor) setorDeslig[d.setor] = (setorDeslig[d.setor] || 0) + 1; });
+    const topSetores = Object.entries(setorDeslig).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+    // Por cargo
+    const cargoDeslig = {};
+    desligamentos.forEach(d => { if (d.cargo) cargoDeslig[d.cargo] = (cargoDeslig[d.cargo] || 0) + 1; });
+    const topCargos = Object.entries(cargoDeslig).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+    html += '<div class="grid-2 mb-4">';
+    html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;">Tempo de Casa ao Sair</div>';
+    html += '<table class="tbl"><tbody>';
+    Object.entries(faixasTempo).forEach(([f,n]) => {
+      const pct = ((n/totalDeslig)*100).toFixed(0);
+      const bar = '<div style="background:var(--bg-alt);border-radius:4px;height:16px;width:100%;"><div style="background:' + (f === faixaMax[0] ? 'var(--danger)' : 'var(--primary)') + ';height:100%;border-radius:4px;width:' + pct + '%;"></div></div>';
+      html += '<tr><td style="width:70px;">' + f + '</td><td>' + bar + '</td><td style="width:50px;text-align:right;font-weight:600;">' + n + ' (' + pct + '%)</td></tr>';
+    });
+    html += '</tbody></table></div>';
+
+    html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;">Setores que mais perdem</div>';
+    html += '<table class="tbl"><thead><tr><th>Setor</th><th>Saidas</th><th>% do total</th></tr></thead><tbody>';
+    topSetores.forEach(([s,n]) => {
+      html += '<tr><td>' + esc(s) + '</td><td style="font-weight:600;">' + n + '</td><td>' + ((n/totalDeslig)*100).toFixed(0) + '%</td></tr>';
+    });
+    html += '</tbody></table>';
+    if (topCargos.length > 0) {
+      html += '<div style="font-size:12px;font-weight:600;margin:12px 0 6px;">Cargos que mais perdem</div>';
+      html += topCargos.map(([c,n]) => '<span class="badge badge-gray" style="margin:2px;">' + esc(c) + ' (' + n + ')</span>').join(' ');
+    }
+    html += '</div></div>';
+
+    html += '<div class="insight-box">A maioria dos desligamentos acontece na faixa <strong>' + faixaMax[0] + '</strong> (' + faixaMax[1] + ' de ' + totalDeslig + '). ';
+    if (faixaMax[0] === 'Ate 30d' || faixaMax[0] === '31-90d') {
+      html += 'Isso indica que o problema esta <strong>no inicio do ciclo</strong> — contratacao e/ou integracao precisam de revisao urgente.';
+    } else if (faixaMax[0] === '91-180d' || faixaMax[0] === '6m-1a') {
+      html += 'Isso indica que o problema esta <strong>na gestao do dia a dia</strong> — lideranca, ambiente, reconhecimento e perspectiva de crescimento.';
+    } else {
+      html += 'Perder colaboradores antigos e caro — experiencia e conhecimento vao embora. Verificar remuneracao e oportunidades de carreira.';
+    }
+    html += '</div></div>';
+
+    // ── 3. SAZONALIDADE ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128197; Sazonalidade — Quando as saidas acontecem</div>';
+    const porMes = {};
+    for (let m = 1; m <= 12; m++) porMes[m] = 0;
+    desligamentos.forEach(d => {
+      if (d.data_desligamento) {
+        const mes = parseInt(d.data_desligamento.substring(5,7));
+        porMes[mes]++;
+      }
+    });
+    const mesesNome = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const mesMax = Object.entries(porMes).sort((a,b)=>b[1]-a[1])[0];
+    html += '<div style="display:flex;gap:4px;align-items:flex-end;height:80px;margin-bottom:8px;">';
+    const maxVal = Math.max(...Object.values(porMes), 1);
+    for (let m = 1; m <= 12; m++) {
+      const h = Math.max((porMes[m] / maxVal) * 70, 2);
+      const cor = parseInt(mesMax[0]) === m ? 'var(--danger)' : 'var(--primary-200)';
+      html += '<div style="flex:1;text-align:center;"><div style="background:'+cor+';height:'+h+'px;border-radius:3px 3px 0 0;margin:0 auto;width:80%;"></div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">'+mesesNome[m]+'</div><div style="font-size:10px;font-weight:600;">'+porMes[m]+'</div></div>';
+    }
+    html += '</div>';
+    html += '<div class="insight-box">O mes com mais saidas e <strong>' + mesesNome[parseInt(mesMax[0])] + '</strong> (' + mesMax[1] + ' desligamentos). ';
+    html += 'Antecipar acoes de retencao (pesquisa de clima, conversa 1:1) nos meses anteriores ao pico.</div></div>';
+
+    // ── 4. CRUZAMENTO COM SCORE ──
+    const desligComScore = desligamentos.filter(d => scoreMap[d.colaborador_id]);
+    if (desligComScore.length > 0) {
+      html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#127919; Score dos Desligados — Perdemos bons colaboradores?</div>';
+      const scoreMedio = desligComScore.reduce((s,d) => s + (scoreMap[d.colaborador_id].score_final || 0), 0) / desligComScore.length;
+      const bons = desligComScore.filter(d => (scoreMap[d.colaborador_id].score_final || 0) >= 70).length;
+      const ruins = desligComScore.filter(d => (scoreMap[d.colaborador_id].score_final || 0) < 50).length;
+
+      html += '<div class="kpi-row mb-4">';
+      html += '<div class="kpi-card"><div class="num">' + scoreMedio.toFixed(1) + '</div><div class="lbl">Score Medio dos Desligados</div></div>';
+      html += '<div class="kpi-card"><div class="num green">' + bons + '</div><div class="lbl">Bons (score &ge;70)</div></div>';
+      html += '<div class="kpi-card"><div class="num red">' + ruins + '</div><div class="lbl">Baixo desempenho (&lt;50)</div></div>';
+      html += '</div>';
+
+      if (bons > ruins) {
+        html += '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);"><strong>Alerta:</strong> Estamos perdendo mais colaboradores BOM do que de baixo desempenho. Isso e critico — indica falha de retencao, nao de selecao. Priorizar: pesquisa salarial, reconhecimento e plano de carreira.</div>';
+      } else if (ruins > bons) {
+        html += '<div class="insight-box"><strong>Positivo:</strong> A maioria dos desligados tinha score baixo. O processo de gestao de desempenho esta funcionando. Verificar se a selecao pode melhorar para evitar essas contratacoes.</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 5. CRUZAMENTO COM ASO ──
+    const desligSemAso = desligamentos.filter(d => {
+      const aso = asoMap[d.colaborador_id];
+      return !aso || (aso.data_vencimento && aso.data_vencimento < (d.data_desligamento || hoje));
+    }).length;
+    if (desligSemAso > 0) {
+      html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#9764; Conformidade SST dos Desligados</div>';
+      html += '<div class="insight-box">' + desligSemAso + ' de ' + totalDeslig + ' desligados (' + ((desligSemAso/totalDeslig)*100).toFixed(0) + '%) estavam com <strong>ASO vencido ou sem ASO</strong> no momento do desligamento. ';
+      html += 'Riscos: passivo trabalhista em caso de reclamacao, multa do MTE. Garantir ASO demissional em TODOS os desligamentos.</div>';
+      html += '</div>';
+    }
+
+    // ── 6. ENTREVISTA DE DESLIGAMENTO ──
+    const comEntrevista = desligamentos.filter(d => d.entrevista_p1 || d.entrevista_p2 || d.entrevista_p3 || d.entrevista_p4 || d.entrevista_p5);
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128221; Entrevistas de Desligamento</div>';
+    if (comEntrevista.length === 0) {
+      html += '<div class="insight-box" style="border-left-color:var(--warning);background:var(--warning-light);"><strong>' + totalDeslig + ' desligamentos e NENHUMA entrevista de saida registrada.</strong> ';
+      html += 'A entrevista de desligamento e a ferramenta mais importante para entender por que as pessoas saem. Sem ela, todo diagnostico e suposicao. ';
+      html += 'Acao: tornar obrigatoria para 100% dos desligamentos, usando a aba "+ Registrar".</div>';
+    } else {
+      const pctEntrevista = ((comEntrevista.length/totalDeslig)*100).toFixed(0);
+      html += '<div style="margin-bottom:8px;font-size:13px;">' + comEntrevista.length + ' de ' + totalDeslig + ' desligamentos tem entrevista (' + pctEntrevista + '%)</div>';
+
+      // Analisar P4: "Voltaria a trabalhar aqui?"
+      const voltaria = comEntrevista.filter(d => d.entrevista_p4 && d.entrevista_p4.toLowerCase().includes('sim')).length;
+      const naoVoltaria = comEntrevista.filter(d => d.entrevista_p4 && !d.entrevista_p4.toLowerCase().includes('sim')).length;
+      if (voltaria + naoVoltaria > 0) {
+        html += '<div class="insight-box"><strong>"Voce voltaria?"</strong> — ' + voltaria + ' disseram SIM, ' + naoVoltaria + ' disseram NAO. ';
+        if (voltaria > naoVoltaria) html += 'A maioria voltaria — estamos perdendo gente por motivos que poderiam ser resolvidos (salario, beneficio, flexibilidade).';
+        else html += 'A maioria NAO voltaria — indica problemas estruturais (lideranca, ambiente, cultura).';
+        html += '</div>';
+      }
+
+      // Analisar P2: "O que mais incomodava"
+      const incomodos = comEntrevista.filter(d => d.entrevista_p2).map(d => d.entrevista_p2.toLowerCase());
+      if (incomodos.length > 0) {
+        const temas = { 'salario/financeiro': 0, 'lideranca/gestor': 0, 'ambiente/colegas': 0, 'carga/horario': 0, 'transporte': 0, 'crescimento': 0 };
+        incomodos.forEach(t => {
+          if (t.match(/salari|dinheir|pagament|benefi|vale/)) temas['salario/financeiro']++;
+          if (t.match(/chefe|gestor|lider|supervisor|coordenador/)) temas['lideranca/gestor']++;
+          if (t.match(/ambient|coleg|equip|relacion|conflit/)) temas['ambiente/colegas']++;
+          if (t.match(/horar|carga|turno|hora extra|folga/)) temas['carga/horario']++;
+          if (t.match(/transport|onibu|distanc/)) temas['transporte']++;
+          if (t.match(/cresci|promoça|carreir|oportunid/)) temas['crescimento']++;
+        });
+        const temasAtivos = Object.entries(temas).filter(([,n]) => n > 0).sort((a,b) => b[1] - a[1]);
+        if (temasAtivos.length > 0) {
+          html += '<div style="font-size:12px;font-weight:600;margin:8px 0 4px;">"O que mais incomodava?" — temas recorrentes:</div>';
+          html += temasAtivos.map(([t,n]) => '<span class="badge badge-' + (n >= 3 ? 'danger' : n >= 2 ? 'warning' : 'gray') + '" style="margin:2px;">' + t + ' (' + n + ')</span>').join(' ');
+        }
+      }
+    }
+    html += '</div>';
+
+    // ── 7. QUALIDADE DA CONTRATACAO ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#127919; Qualidade da Contratacao</div>';
+    const curto90 = desligamentos.filter(d => (d.tempo_empresa_dias || 0) <= 90).length;
+    const pct90 = totalDeslig > 0 ? ((curto90/totalDeslig)*100).toFixed(0) : 0;
+    const nota = pct90 > 40 ? 'RUIM' : pct90 > 20 ? 'REGULAR' : pct90 > 10 ? 'BOA' : 'EXCELENTE';
+    const notaCor = pct90 > 40 ? 'var(--danger)' : pct90 > 20 ? 'var(--warning)' : 'var(--success)';
+    html += '<div style="font-size:24px;font-weight:800;color:'+notaCor+';margin-bottom:4px;">' + nota + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">' + pct90 + '% dos desligados saem nos primeiros 90 dias (benchmark saudavel: &lt;10%)</div>';
+    html += '<div class="insight-box">';
+    if (parseInt(pct90) > 30) {
+      html += '<strong>Mais de 30% saem em 90 dias.</strong> O processo seletivo precisa de revisao urgente: descricao de vaga realista, entrevista com gestor, teste pratico, tour pelo ambiente, programa de integracao estruturado.';
+    } else if (parseInt(pct90) > 15) {
+      html += '<strong>Taxa moderada de saidas precoces.</strong> Revisar: o candidato conhece a realidade do trabalho antes de aceitar? Existe programa de onboarding? O gestor acompanha nos primeiros 30 dias?';
+    } else {
+      html += '<strong>Boa retencao inicial.</strong> O processo seletivo parece adequado. Focar em retencao de medio/longo prazo (carreira, remuneracao, clima).';
+    }
+    html += '</div></div>';
+
+    el.innerHTML = html;
   }
 
   // ── Save Desligamento ──

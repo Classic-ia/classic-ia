@@ -392,10 +392,19 @@ function renderPage(d) {
   } else {
     html += `<div class="cost-cards mb-4">
       <div class="cost-card"><div class="cc-val">${fmtM(custos.salario)}</div><div class="cc-lbl">Salario</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.transporte_mensal)}</div><div class="cc-lbl">Transporte</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.beneficios_total)}</div><div class="cc-lbl">Beneficios</div></div>
+      <div class="cost-card" style="cursor:pointer" onclick="document.querySelector('[data-tab=\\'4\\']').click()"><div class="cc-val">${fmtM(custos.transporte_mensal)}</div><div class="cc-lbl">Transporte</div></div>
+      <div class="cost-card" style="cursor:pointer" onclick="document.querySelector('[data-tab=\\'4\\']').click()"><div class="cc-val">${fmtM(custos.beneficios_total)}</div><div class="cc-lbl">Beneficios &#8599;</div></div>
       <div class="cost-card"><div class="cc-val">${fmtM(custos.sst_12m)}</div><div class="cc-lbl">SST 12m</div></div>
     </div>`;
+    // Detalhe dos beneficios dentro da aba Custos
+    html += '<div class="card mb-4"><div class="card-header"><h3>Composicao dos Beneficios — R$ ' + (custos.beneficios_total != null ? custos.beneficios_total.toLocaleString('pt-BR',{minimumFractionDigits:2}) : '0,00') + '</h3></div><div class="card-body">';
+    html += buildTable(['Tipo','Status','Valor Mensal','Desde'], (d.beneficios||[]).map(r=>({cells:[
+      esc(fmt(r.tipo)),
+      r.status === 'ativo' ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-gray">' + esc(fmt(r.status)) + '</span>',
+      fmtM(r.valor),
+      fmtD(r.data_inicio)
+    ]})), {rightCols:[2]});
+    html += '</div></div>';
     html += '<div class="card mb-4"><div class="card-header"><h3>Historico de Custos</h3></div><div class="card-body">';
     html += buildTable(['Competencia','Custo Total'], (custos.historico||[]).map(r=>({cells:[
       esc(fmt(r.competencia)), fmtM(r.custo_total)

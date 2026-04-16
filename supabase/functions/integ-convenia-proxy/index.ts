@@ -173,6 +173,12 @@ Deno.serve(async (req) => {
       // 4. Heartbeat
       const heartbeat = conector.config_extra?.ultimo_heartbeat || null;
 
+      // 5. Afastamentos processados (convenia_leave em stg_convenia_documentos)
+      const { count: afastProcessados } = await supabase
+        .from("stg_convenia_documentos")
+        .select("*", { count: "exact", head: true })
+        .eq("origem_sistema", "convenia_leave");
+
       return jsonRes({
         success: true,
         health: {
@@ -181,9 +187,10 @@ Deno.serve(async (req) => {
           heartbeat,
           staging: {
             funcionarios: stgFunc || 0,
-            afastamentos: stgAfas || 0,
+            afastamentos_cru: stgAfas || 0,
+            afastamentos_processados: afastProcessados || 0,
             ferias: stgFer || 0,
-            documentos: stgDoc || 0,
+            documentos_total: stgDoc || 0,
           },
           ultimas_execucoes: lastExec || [],
         },
@@ -288,17 +295,24 @@ Deno.serve(async (req) => {
         page++;
       }
 
-      // ── Processar staging -> core (apenas funcionarios) ─────────────
+      // ── Processar staging -> core ─────────────────────────────────
       let processed = null;
-      if (entityKey === "funcionarios" && totalNew > 0) {
-        const { data: procResult, error: procErr } = await supabase.rpc(
-          "etl_processar_convenia_funcionarios",
-          { p_importacao_id: execId }
-        );
-        if (procErr) {
-          console.error("ETL processing error:", procErr.message);
-        } else {
-          processed = procResult;
+      if (totalNew > 0) {
+        const etlMap: Record<string, string> = {
+          funcionarios: "etl_processar_convenia_funcionarios",
+          afastamentos: "etl_processar_convenia_afastamentos",
+        };
+        const etlFn = etlMap[entityKey];
+        if (etlFn) {
+          const { data: procResult, error: procErr } = await supabase.rpc(
+            etlFn,
+            { p_importacao_id: execId }
+          );
+          if (procErr) {
+            console.error(`ETL ${etlFn} error:`, procErr.message);
+          } else {
+            processed = procResult;
+          }
         }
       }
 

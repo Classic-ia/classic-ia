@@ -76,21 +76,14 @@ const RHAuth = (function () {
     if (document.getElementById('_rh_warn')) return;
     const el = document.createElement('div');
     el.id = '_rh_warn';
+    el.className = 'rh-session-warn';
     el.innerHTML = `
-      <div style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
-        background:#0d1b2a;border:2px solid #f39c12;border-radius:12px;
-        padding:16px 22px;z-index:99999;max-width:400px;width:90%;
-        box-shadow:0 8px 32px rgba(0,0,0,.6);font-family:'DM Sans',sans-serif;
-        display:flex;align-items:center;gap:14px;">
-        <span style="font-size:28px;">&#9200;</span>
-        <div style="flex:1">
-          <div style="font-weight:700;color:#f39c12;font-size:14px;margin-bottom:3px">
-            Sessao expira em 5 minutos</div>
-          <div style="font-size:12px;color:#8bafc4">Clique em Continuar para manter o acesso.</div>
-        </div>
-        <button id="_rh_warn_btn" style="padding:9px 18px;background:#f39c12;border:none;
-          border-radius:8px;color:#111;font-weight:700;font-size:13px;cursor:pointer;">Continuar</button>
-      </div>`;
+      <span class="rh-session-warn-icon">&#9200;</span>
+      <div class="rh-session-warn-body">
+        <div class="rh-session-warn-title">Sessao expira em 5 minutos</div>
+        <div class="rh-session-warn-sub">Clique em Continuar para manter o acesso.</div>
+      </div>
+      <button id="_rh_warn_btn" class="rh-session-warn-btn">Continuar</button>`;
     document.body.appendChild(el);
     document.getElementById('_rh_warn_btn').onclick = () => { _onAtividade(); };
   }
@@ -98,18 +91,15 @@ const RHAuth = (function () {
   function _expirar() {
     _limparLocal();
     document.body.innerHTML = `
-      <div style="min-height:100vh;background:#07111c;display:flex;align-items:center;
-        justify-content:center;font-family:'DM Sans',sans-serif;padding:20px;">
-        <div style="background:#0d1b2a;border:1px solid #e74c3c;border-radius:14px;
-          padding:40px 32px;max-width:360px;width:100%;text-align:center;">
-          <div style="font-size:52px;margin-bottom:14px">&#128274;</div>
-          <div style="font-size:20px;font-weight:800;color:#e74c3c;
-            font-family:'Syne',sans-serif;margin-bottom:8px">Sessao Expirada</div>
-          <div style="font-size:13px;color:#8bafc4;line-height:1.6;margin-bottom:24px">
-            Sua sessao expirou por <strong style="color:#e8f0f5">1 hora de inatividade</strong>.<br>
-            Faca login novamente para continuar.</div>
-          <a href="login.html" style="display:block;padding:13px;background:#2E6B8A;border-radius:8px;
-            color:white;font-size:14px;font-weight:600;text-decoration:none;">Fazer Login</a>
+      <div class="rh-session-expired">
+        <div class="rh-session-expired-card">
+          <div class="rh-session-expired-icon">&#128274;</div>
+          <div class="rh-session-expired-title">Sessao Expirada</div>
+          <div class="rh-session-expired-text">
+            Sua sessao expirou por <strong>1 hora de inatividade</strong>.<br>
+            Faca login novamente para continuar.
+          </div>
+          <a href="login.html" class="rh-session-expired-btn">Fazer Login</a>
         </div>
       </div>`;
   }
@@ -118,20 +108,16 @@ const RHAuth = (function () {
     const el = document.getElementById('rh-user-chip');
     if (!el || !_user) return;
     const ini = (_user.nome || _user.email)[0].toUpperCase();
+    const nome = _user.nome || _user.email;
+    const perfil = _user.perfil || '';
     el.innerHTML = `
-      <div style="display:flex;align-items:center;gap:8px;">
-        <div style="width:28px;height:28px;border-radius:50%;background:#2E6B8A;
-          display:flex;align-items:center;justify-content:center;
-          font-weight:800;font-size:13px;color:white;flex-shrink:0;">${ini}</div>
-        <div style="line-height:1.2">
-          <div style="font-size:12px;font-weight:600;color:#e8f0f5">${_user.nome || _user.email}</div>
-          <div style="font-size:10px;color:#c8a96e;text-transform:uppercase;letter-spacing:.05em">${_user.perfil || ''}</div>
+      <div class="user-chip">
+        <div class="user-chip-avatar">${ini}</div>
+        <div class="user-chip-info">
+          <div class="user-chip-name">${nome}</div>
+          <div class="user-chip-role">${perfil}</div>
         </div>
-        <button onclick="RHAuth.logout()" title="Sair" style="background:none;border:1px solid #1e3a52;
-          border-radius:6px;color:#5d7f95;cursor:pointer;padding:4px 8px;font-size:11px;
-          transition:all .2s;margin-left:4px;"
-          onmouseover="this.style.color='#e74c3c';this.style.borderColor='#e74c3c'"
-          onmouseout="this.style.color='#5d7f95';this.style.borderColor='#1e3a52'">Sair</button>
+        <button class="user-chip-logout" onclick="RHAuth.logout()" title="Sair">Sair</button>
       </div>`;
   }
 

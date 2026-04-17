@@ -533,7 +533,7 @@ BEGIN
       'risco', CASE WHEN r.atestados_por_mes >= 3 THEN 'alto' WHEN r.atestados_por_mes >= 2 THEN 'medio' ELSE 'baixo' END,
       'funcionario', r.nome_completo, 'cargo', r.cargo, 'setor', r.setor,
       'impacto_financeiro', r.custo_empresa_total,
-      'diagnostico', r.total_atestados || ' atestados (' || r.atestados_curtos || ' curtos), ' ||
+      'diagnostico', r.total_atestados || ' atestados nos ultimos 12 meses (' || r.atestados_curtos || ' curtos), ' ||
         ROUND(r.atestados_por_mes, 1) || '/mes. Custo: R$ ' || r.custo_empresa_total,
       'causa_provavel', CASE
         WHEN r.atestados_curtos >= r.total_atestados * 0.8 THEN 'Padrao de faltas curtas recorrentes — possivel desmotivacao, problema pessoal ou condicao cronica'
@@ -567,7 +567,7 @@ BEGIN
       'risco', CASE WHEN r.total_dias >= 90 THEN 'alto' ELSE 'medio' END,
       'funcionario', r.nome_completo, 'cargo', r.cargo, 'setor', r.setor,
       'impacto_financeiro', r.custo_empresa_total,
-      'diagnostico', r.total_dias || ' dias (' || r.dias_pagos_empresa || ' empresa + ' || r.dias_pagos_inss || ' INSS)',
+      'diagnostico', r.total_dias || ' dias nos ultimos 12 meses (' || r.dias_pagos_empresa || ' empresa + ' || r.dias_pagos_inss || ' INSS)',
       'causa_provavel', 'Lesao ou doenca grave — verificar componente ergonomico ou ocupacional',
       'plano_acao', jsonb_build_array(
         jsonb_build_object('acao', 'ASO de retorno obrigatorio', 'responsavel', 'sst', 'prazo_dias', 1),
@@ -587,7 +587,7 @@ BEGIN
       'risco', CASE WHEN r.total_dias >= 500 THEN 'alto' ELSE 'medio' END,
       'setor', r.setor, 'impacto_financeiro', r.custo_estimado,
       'diagnostico', r.setor || ': ' || r.funcionarios_afetados || '/' || r.total_setor ||
-        ' afetados, ' || r.atestados || ' atestados, ' || r.total_dias || ' dias',
+        ' afetados, ' || r.atestados || ' atestados, ' || r.total_dias || ' dias (ultimos 12 meses)',
       'causa_provavel', CASE
         WHEN r.funcionarios_afetados::NUMERIC / NULLIF(r.total_setor, 0) > 0.5 THEN 'Mais de 50% afetado — possivel problema ambiental ou de gestao'
         ELSE 'Concentrado em poucos — verificar casos individuais'

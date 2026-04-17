@@ -25,6 +25,8 @@
 -- --------------------------------------------------------------------------
 -- vw_absenteismo_real
 -- Dependencia de: vw_absenteismo_recorrencia (Grupo 3)
+-- Janela: ultimos 12 meses a partir da data atual (rolling window).
+-- Para avaliar comportamento recente sem poluir metricas com historico antigo.
 -- --------------------------------------------------------------------------
 CREATE OR REPLACE VIEW public.vw_absenteismo_real AS
 SELECT f.id AS funcionario_id, f.nome_completo, c.nome AS cargo, s.nome AS setor,
@@ -46,11 +48,14 @@ FROM stg_convenia_documentos d
 JOIN rh_funcionarios f ON f.id = (d.payload_json ->> 'funcionario_id')::uuid
 JOIN rh_cargos c ON c.id = f.cargo_id
 JOIN rh_setores s ON s.id = f.setor_id
-WHERE d.origem_sistema = 'manual';
+WHERE d.origem_sistema = 'manual'
+  AND (d.payload_json ->> 'data_inicio')::date >= CURRENT_DATE - INTERVAL '12 months';
 
 -- --------------------------------------------------------------------------
 -- vw_absenteismo_por_setor
 -- Usada por: motor_decisoes()
+-- Janela: ultimos 12 meses a partir da data atual (rolling window).
+-- Mantem consistencia com vw_absenteismo_real.
 -- --------------------------------------------------------------------------
 CREATE OR REPLACE VIEW public.vw_absenteismo_por_setor AS
 SELECT s.nome AS setor,
@@ -63,6 +68,7 @@ FROM stg_convenia_documentos d
 JOIN rh_funcionarios f ON f.id = (d.payload_json ->> 'funcionario_id')::uuid
 JOIN rh_setores s ON s.id = f.setor_id
 WHERE d.origem_sistema = 'manual'
+  AND (d.payload_json ->> 'data_inicio')::date >= CURRENT_DATE - INTERVAL '12 months'
 GROUP BY s.id, s.nome
 ORDER BY sum((d.payload_json ->> 'dias')::integer) DESC;
 

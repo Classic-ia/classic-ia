@@ -13,14 +13,13 @@
 <script src="shell.js"></script>
 </head>
 <body class="page-bg">
-<div class="header">
-  <div class="header-left">
-    <a href="app.html" class="back-btn">← Voltar</a>
-    <div><div class="page-title">Motor de Decisoes</div><div class="page-sub">Deteccao automatica + diagnostico + plano de acao</div></div>
-  </div>
-  <div id="rh-user-chip"></div>
-</div>
-<div class="main">
+
+<div id="shell"></div>
+<div id="shell-content">
+
+  <div class="page-title">Motor de Decisoes</div>
+  <div class="page-sub">Deteccao automatica + diagnostico + plano de acao</div>
+
   <div class="kpi-row" id="kpis">
     <a class="kpi" href="#problems" style="text-decoration:none;color:inherit;cursor:pointer"><div class="kpi-val" id="k-problemas">—</div><div class="kpi-lbl">Problemas Detectados</div></a>
     <a class="kpi" href="alertas_rh.html" style="text-decoration:none;color:inherit;cursor:pointer"><div class="kpi-val" id="k-risco">—</div><div class="kpi-lbl">Alto Risco</div></a>
@@ -28,23 +27,28 @@
     <a class="kpi" href="relatorio_atestados.html" style="text-decoration:none;color:inherit;cursor:pointer"><div class="kpi-val" id="k-impacto">—</div><div class="kpi-lbl">Impacto Total (R$)</div></a>
   </div>
   <div class="section-title">Problemas Detectados</div>
-  <div id="problems"><div style="text-align:center;padding:40px;color:var(--muted)"><div class="spinner"></div> Analisando dados...</div></div>
-</div>
+  <div id="problems"><div class="loading-center"><div class="spinner"></div> Analisando dados...</div></div>
+
+</div><!-- /shell-content -->
+
 <script>
-const ICONS = {recorrencia:'🔄',afastamento_prolongado:'🏥',setor_critico:'🏭',sst_epi:'🛡️'};
+const ICONS = {recorrencia:'&#128259;',afastamento_prolongado:'&#127973;',setor_critico:'&#127981;',sst_epi:'&#128737;&#65039;'};
 const RISK_LABELS = {alto:'Alto Risco',medio:'Medio',baixo:'Baixo'};
 const RESP_LABELS = {rh:'RH',sst:'SST',gestor:'Gestor',sistema:'Sistema',administrador:'Admin'};
 
-document.addEventListener('DOMContentLoaded', async () => {
-  await RHAuth.init();
+(async () => {
+  const user = await Shell.init({ page: 'motor_decisoes', title: 'Motor de Decisoes', breadcrumb: 'Gestao > Motor Decisao' });
+  if (!user) return;
+  if (typeof API !== 'undefined' && API.setPerfil) API.setPerfil(user.perfil);
+
   try {
     const res = await API.rpc('motor_decisoes', {});
     if (!res.ok) throw new Error(res.error || 'Erro ao carregar dados');
     render(res.data);
   } catch(e) {
-    document.getElementById('problems').innerHTML = `<div style="color:var(--err);text-align:center;padding:40px">Erro: ${API.esc(e.message)}</div>`;
+    document.getElementById('problems').innerHTML = `<div class="problems-error">Erro: ${API.esc(e.message)}</div>`;
   }
-});
+})();
 
 function render(d) {
   document.getElementById('k-problemas').textContent = d.total_problemas;
@@ -55,12 +59,12 @@ function render(d) {
 
   const el = document.getElementById('problems');
   if (!d.problemas || d.problemas.length === 0) {
-    el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--ok);font-size:16px">Nenhum problema detectado</div>';
+    el.innerHTML = '<div class="problems-empty">Nenhum problema detectado</div>';
     return;
   }
 
   el.innerHTML = d.problemas.map((p, i) => {
-    const icon = ICONS[p.tipo] || '⚠️';
+    const icon = ICONS[p.tipo] || '&#9888;&#65039;';
     const riskClass = 'risk-' + (p.risco || 'baixo');
     const riskTag = p.risco === 'alto' ? 'tag-red' : p.risco === 'medio' ? 'tag-yellow' : 'tag-blue';
     const title = p.funcionario ? p.funcionario : (p.setor || p.tipo);
@@ -70,9 +74,9 @@ function render(d) {
     <div class="problem-card ${riskClass}" id="card-${i}">
       <div class="problem-header" onclick="document.getElementById('card-${i}').classList.toggle('open')">
         <div class="problem-icon">${icon}</div>
-        <div style="flex:1">
+        <div class="problem-main">
           <div class="problem-title">${title}</div>
-          ${subtitle ? `<div style="font-size:12px;color:var(--muted)">${subtitle}</div>` : ''}
+          ${subtitle ? `<div class="problem-subtitle">${subtitle}</div>` : ''}
           <div class="problem-diag">${p.diagnostico}</div>
           <div class="problem-causa">${p.causa_provavel || ''}</div>
           <div class="problem-meta">
@@ -85,11 +89,11 @@ function render(d) {
         <div class="problem-arrow">&#9660;</div>
       </div>
       <div class="problem-body">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Plano de Acao</div>
+        <div class="plano-label">Plano de Acao</div>
         <ul class="action-list">
           ${(p.plano_acao || []).map((a, j) => `
           <li class="action-item">
-            <div class="action-check" onclick="this.classList.toggle('done');this.innerHTML=this.classList.contains('done')?'✓':''">
+            <div class="action-check" onclick="event.stopPropagation();this.classList.toggle('done');this.innerHTML=this.classList.contains('done')?'&#10003;':''">
             </div>
             <div class="action-text">${a.acao}</div>
             <span class="action-resp">${RESP_LABELS[a.responsavel] || a.responsavel}</span>

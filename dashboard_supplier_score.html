@@ -6,25 +6,19 @@
 <title>Score de Confiabilidade · Classic CQ</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="cq_auth.js"></script>
+<script src="shell.js"></script>
 </head>
 <body class="page-bg">
 
-<header class="header">
-  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
-  <div>
-    <div class="header-title">Score de Confiabilidade</div>
-    <div class="header-sub">Supplier Reliability Index · Classic CQ</div>
-  </div>
-  <div class="header-right">
-    <div class="header-user" id="userInfo"></div>
-    <div class="header-avatar" id="userAvatar"></div>
-    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
-    <a class="btn-sm" href="app.html">← Menu</a>
-  </div>
-</header>
+<div id="shell"></div>
+<div id="shell-content">
 
-<main class="main">
-  <div id="loadingState" class="loading"><span class="spin">⏳</span> Carregando dados...</div>
+  <div class="page-title">Score de Confiabilidade</div>
+  <div class="page-sub">Supplier Reliability Index</div>
+
+  <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando dados...</div>
   <div id="dashContent" style="display:none;">
 
     <div class="filter-bar">
@@ -64,30 +58,24 @@
     </div>
 
   </div>
-</main>
 
-<script src="config.js"></script>
+</div><!-- /shell-content -->
+
 <script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 let _data = [];
 let chartClassificacao = null, chartPiores = null;
 
 (async function(){
-  const logo = localStorage.getItem('classic_logo');
-  if (logo) document.getElementById('logoImg').src = logo;
-
-  const usuario = await CQAuth.init({
+  const usuario = await Shell.init({
+    authModule: 'cq',
+    page: 'supplier_score',
+    title: 'Score de Confiabilidade',
+    breadcrumb: 'CQ > Score Confiabilidade',
     perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
-    redirectLogin: true
   });
   if (!usuario) return;
-
-  document.getElementById('userInfo').innerHTML =
-    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
-  document.getElementById('userAvatar').textContent =
-    (usuario.nome || usuario.email).charAt(0).toUpperCase();
 
   await carregarDados();
 })();

@@ -5,23 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Quality Timeline · Classic CQ</title>
 <link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="cq_auth.js"></script>
+<script src="shell.js"></script>
 </head>
 <body class="page-bg">
-<header class="header">
-  <img id="logoImg" class="header-logo" src="assets/logo-classic-icon.png.jpg" alt="">
-  <div>
-    <div class="header-title">Quality Timeline</div>
-    <div class="header-sub">Linha do Tempo da Inspeção · Classic CQ</div>
-  </div>
-  <div class="header-right">
-    <div class="header-user" id="userInfo"></div>
-    <div class="header-avatar" id="userAvatar"></div>
-    <button class="btn-sm" onclick="CQAuth.logout()">Sair</button>
-    <a class="btn-sm" href="app.html">&#8592; Menu</a>
-  </div>
-</header>
 
-<main class="main">
+<div id="shell"></div>
+<div id="shell-content">
+
+  <div class="page-title">Quality Timeline</div>
+  <div class="page-sub">Linha do Tempo da Inspecao</div>
+
   <div id="loadingState" class="loading"><span class="spin">&#9203;</span> Carregando...</div>
   <div id="dashContent" style="display:none;">
 
@@ -45,29 +40,23 @@
     </div>
 
   </div>
-</main>
 
-<script src="config.js"></script>
+</div><!-- /shell-content -->
+
 <script src="cq_api.js"></script>
-<script src="cq_auth.js"></script>
 <script src="cq_workflow.js"></script>
 <script>
 let _data = [];
 
 (async function(){
-  const logo = localStorage.getItem('classic_logo');
-  if (logo) document.getElementById('logoImg').src = logo;
-
-  const usuario = await CQAuth.init({
+  const usuario = await Shell.init({
+    authModule: 'cq',
+    page: 'quality_timeline',
+    title: 'Quality Timeline',
+    breadcrumb: 'CQ > Timeline Inspecao',
     perfisPermitidos: ['administrador','qualidade','diretoria','financeiro'],
-    redirectLogin: true
   });
   if (!usuario) return;
-
-  document.getElementById('userInfo').innerHTML =
-    `<strong>${usuario.nome || usuario.email}</strong><br>${usuario.perfil.toUpperCase()}`;
-  document.getElementById('userAvatar').textContent =
-    (usuario.nome || usuario.email).charAt(0).toUpperCase();
 
   await carregarRecentes();
   document.getElementById('loadingState').style.display = 'none';

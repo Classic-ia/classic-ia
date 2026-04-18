@@ -37,6 +37,10 @@
     <!-- Alerta de dados -->
     <div id="alerta-dados" style="display:none;background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
       <strong>&#9888; Dados incompletos:</strong> <span id="alerta-dados-msg"></span>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-small" id="btn-classificar-auto" type="button">Classificar automaticamente</button>
+        <span id="classificar-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -1823,6 +1827,126 @@
   // ── Filters ──
   document.getElementById('filtro-tipo').addEventListener('change', renderLista);
   document.getElementById('filtro-setor').addEventListener('change', renderLista);
+
+  // ── Classificar automaticamente (popula tipo_desligamento/categoria_causa) ──
+  document.getElementById('btn-classificar-auto').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-classificar-auto');
+    const st = document.getElementById('classificar-status');
+    if (!confirm('Isso vai classificar automaticamente todos os desligamentos sem tipo, usando o texto de motivo/descricao e o tempo de empresa. Continuar?')) return;
+
+    btn.disabled = true;
+    st.textContent = 'Carregando registros...';
+
+    // Buscar registros em rh_desligamentos sem tipo_desligamento classificado
+    const resAll = await API.get('rh_desligamentos?select=id,nome,colaborador_nome,motivo,descricao,tipo,tipo_desligamento,categoria,categoria_causa,data_admissao,data_desligamento,tempo_empresa_dias');
+    if (!resAll.ok) { st.textContent = 'Erro ao carregar: ' + resAll.error; btn.disabled = false; return; }
+
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    const pendentes = resAll.data.filter(d => {
+      const t = d.tipo_desligamento || d.tipo;
+      return !t || !validos.includes(t);
+    });
+
+    if (pendentes.length === 0) {
+      st.textContent = 'Nada a classificar em rh_desligamentos.';
+      // Ainda podem existir extras em rh_funcionarios que nao estao em rh_desligamentos
+      await sincronizarFuncionariosExtras(st);
+      btn.disabled = false;
+      setTimeout(() => loadData(), 800);
+      return;
+    }
+
+    st.textContent = 'Classificando ' + pendentes.length + ' registro(s)...';
+
+    let ok = 0, err = 0;
+    for (const d of pendentes) {
+      const motivo = d.motivo || d.descricao || '';
+      const tempoDias = d.tempo_empresa_dias != null ? d.tempo_empresa_dias :
+        (d.data_admissao && d.data_desligamento
+          ? Math.ceil((new Date(d.data_desligamento) - new Date(d.data_admissao)) / 86400000)
+          : null);
+      const tipo = mapTipoValido(classificarTipo(motivo));
+      const causa = mapCausaValida(classificarCausa(motivo, '', tipo, tempoDias));
+
+      const patch = {
+        tipo_desligamento: tipo,
+        categoria_causa: causa,
+      };
+      const r = await API.patch('rh_desligamentos?id=eq.' + d.id, patch);
+      if (r.ok) ok++; else err++;
+    }
+
+    st.textContent = ok + ' classificado(s), ' + err + ' erro(s). Sincronizando funcionarios extras...';
+    await sincronizarFuncionariosExtras(st);
+
+    st.textContent = 'Concluido: ' + ok + ' classificado(s), ' + err + ' erro(s). Recarregando...';
+    btn.disabled = false;
+    setTimeout(() => loadData(), 800);
+  });
+
+  function mapTipoValido(t) {
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    if (validos.includes(t)) return t;
+    if (t === 'morte') return 'demissao_empresa';
+    return 'demissao_empresa';
+  }
+  function mapCausaValida(c) {
+    const validos = ['admissao','operacional','financeiro','pessoal'];
+    return validos.includes(c) ? c : 'pessoal';
+  }
+
+  // Sincroniza rh_funcionarios (status=desligado) que nao estao em rh_desligamentos:
+  // cria os registros faltantes ja classificados.
+  async function sincronizarFuncionariosExtras(st) {
+    const resFunc = await API.get('rh_funcionarios?status=eq.desligado&select=id,nome_completo,data_admissao,data_desligamento,cargo_id,setor_id,salario_base');
+    if (!resFunc.ok) return;
+    const resDel = await API.get('rh_desligamentos?select=nome,colaborador_nome,data_desligamento,colaborador_id,funcionario_id&limit=5000');
+    if (!resDel.ok) return;
+
+    const chavesExistentes = new Set(resDel.data.map(d =>
+      ((d.nome || d.colaborador_nome || '').toUpperCase().trim() + '|' + (d.data_desligamento || ''))
+    ));
+    const idsExistentes = new Set(resDel.data.map(d => d.colaborador_id || d.funcionario_id).filter(Boolean));
+
+    const faltantes = resFunc.data.filter(f => {
+      if (!f.data_desligamento) return false;
+      if (idsExistentes.has(f.id)) return false;
+      const chave = (f.nome_completo || '').toUpperCase().trim() + '|' + f.data_desligamento;
+      return !chavesExistentes.has(chave);
+    });
+
+    if (faltantes.length === 0) return;
+    if (st) st.textContent = 'Inserindo ' + faltantes.length + ' desligamento(s) de rh_funcionarios...';
+
+    let inseridos = 0;
+    for (const f of faltantes) {
+      const tempoDias = f.data_admissao && f.data_desligamento
+        ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
+        : null;
+      const tipo = mapTipoValido(tempoDias != null && tempoDias <= 90 ? 'termino_contrato' : 'demissao_empresa');
+      const causa = mapCausaValida(tempoDias != null && tempoDias <= 90 ? 'admissao' : 'pessoal');
+
+      const payload = {
+        nome: f.nome_completo,
+        colaborador_nome: f.nome_completo,
+        funcionario_id: f.id,
+        colaborador_id: f.id,
+        data_admissao: f.data_admissao,
+        data_desligamento: f.data_desligamento,
+        tempo_empresa_dias: tempoDias,
+        tipo: tipo,
+        tipo_desligamento: tipo,
+        categoria: causa,
+        categoria_causa: causa,
+        motivo: 'Classificado automaticamente',
+        descricao: 'Classificado automaticamente',
+        salario: f.salario_base || null,
+      };
+      const r = await API.post('rh_desligamentos', payload);
+      if (r.ok) inseridos++;
+    }
+    if (st) st.textContent = inseridos + ' desligamento(s) sincronizado(s) de rh_funcionarios.';
+  }
 
   // ── Load ──
   await loadData();

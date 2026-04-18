@@ -37,6 +37,10 @@
     <!-- Alerta de dados -->
     <div id="alerta-dados" style="display:none;background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
       <strong>&#9888; Dados incompletos:</strong> <span id="alerta-dados-msg"></span>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-small" id="btn-classificar-auto" type="button">Classificar automaticamente</button>
+        <span id="classificar-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
     </div>
 
     <!-- KPIs -->
@@ -1408,7 +1412,9 @@
     // Buscar config do Convenia
     const cfg = JSON.parse(localStorage.getItem('convenia_config') || '{}');
     if (!cfg.token) {
-      alert('Token da API Convenia nao configurado. Va em Integracoes → Convenia para configurar.');
+      if (confirm('Token da API Convenia nao configurado.\n\nDeseja abrir a pagina de configuracao agora?')) {
+        window.location.href = 'convenia_integracao.html';
+      }
       return;
     }
 
@@ -1660,12 +1666,57 @@
     btn.disabled = true;
     btn.textContent = 'Importando...';
 
+    // Helper: faz POST e devolve a mensagem de erro do PostgREST quando falha
+    async function postDeslig(payload) {
+      try {
+        const token = (() => {
+          try { return JSON.parse(localStorage.getItem('rh_sess_v2') || '{}').access_token || SB_KEY; }
+          catch { return SB_KEY; }
+        })();
+        const res = await fetch(SB_URL + '/rest/v1/rh_desligamentos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SB_KEY,
+            'Authorization': 'Bearer ' + token,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) return { ok: true };
+        let msg = 'Erro ' + res.status;
+        try {
+          const body = await res.json();
+          msg = body.message || body.details || body.hint || msg;
+        } catch {}
+        return { ok: false, error: msg, status: res.status };
+      } catch (e) { return { ok: false, error: e.message || 'Erro de rede' }; }
+    }
+
+    // CHECK constraints do rh_desligamentos:
+    //   tipo_desligamento IN (pedido_demissao, demissao_empresa, termino_contrato, justa_causa, acordo_mutuo)
+    //   categoria_causa   IN (admissao, operacional, financeiro, pessoal)
+    // Remapear valores do classificador que nao batem com o CHECK
+    const mapTipo = (t) => {
+      if (t === 'morte') return 'demissao_empresa';     // Convenia usa morte, schema nao; cai como baixa pela empresa
+      if (t === 'outros' || !t) return 'demissao_empresa';
+      return t;
+    };
+    const mapCausa = (c) => {
+      if (c && ['admissao','operacional','financeiro','pessoal'].includes(c)) return c;
+      return 'pessoal';  // default quando a deteccao nao encontra palavra-chave
+    };
+
     let ok = 0, skip = 0, err = 0;
+    const errDetails = [];
     for (const r of importRows) {
       try {
         // Check if already exists
         const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(r.nome) + '&data_desligamento=eq.' + r.data_desligamento + '&select=id&limit=1');
         if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
+
+        const tipoFinal = mapTipo(r.tipo);
+        const causaFinal = mapCausa(r.causa);
 
         // Construir payload dinamico baseado no schema detectado
         const sc = window._dbSchema || {};
@@ -1676,18 +1727,19 @@
         if (sc.temColabNome !== false) payload.colaborador_nome = r.nome;
 
         // Tipo (usar o campo correto da tabela)
-        if (sc.temTipoDeslig) { payload.tipo_desligamento = r.tipo; }
-        else if (sc.temTipo) { payload.tipo = r.tipo; }
-        else { payload.tipo = r.tipo; payload.tipo_desligamento = r.tipo; }
+        if (sc.temTipoDeslig) { payload.tipo_desligamento = tipoFinal; }
+        else if (sc.temTipo) { payload.tipo = tipoFinal; }
+        else { payload.tipo = tipoFinal; payload.tipo_desligamento = tipoFinal; }
 
         // Causa
-        if (sc.temCategoriaCausa) { payload.categoria_causa = r.causa; }
-        else if (sc.temCategoria) { payload.categoria = r.causa; }
-        else { payload.categoria = r.causa; payload.categoria_causa = r.causa; }
+        if (sc.temCategoriaCausa) { payload.categoria_causa = causaFinal; }
+        else if (sc.temCategoria) { payload.categoria = causaFinal; }
+        else { payload.categoria = causaFinal; payload.categoria_causa = causaFinal; }
 
-        // Motivo
-        if (sc.temDescricao) payload.descricao = r.motivo || 'Importado via CSV';
-        if (sc.temMotivo !== false) payload.motivo = r.motivo;
+        // Motivo / descricao (NOT NULL no schema oficial)
+        const descricao = r.motivo || r.tipo_convenia || 'Importado via CSV';
+        if (sc.temDescricao !== false) payload.descricao = descricao;
+        if (sc.temMotivo !== false) payload.motivo = descricao;
 
         // Demais campos
         payload.data_admissao = r.data_admissao;
@@ -1696,24 +1748,57 @@
         payload.salario = r.salario || null;
         payload.tempo_empresa_dias = r.tempo_empresa_dias;
 
-        let res = await API.post('rh_desligamentos', payload);
+        let res = await postDeslig(payload);
         // Fallback: se falhou, tentar sem campos opcionais
         if (!res.ok) {
-          const fallback = { nome: r.nome, data_desligamento: r.data_desligamento, motivo: r.motivo || 'CSV' };
-          if (r.tipo) fallback.tipo = r.tipo;
-          if (r.tipo) fallback.tipo_desligamento = r.tipo;
-          res = await API.post('rh_desligamentos', fallback);
+          const fallback = {
+            nome: r.nome,
+            colaborador_nome: r.nome,
+            data_desligamento: r.data_desligamento,
+            tipo: tipoFinal,
+            tipo_desligamento: tipoFinal,
+            categoria: causaFinal,
+            categoria_causa: causaFinal,
+            motivo: descricao,
+            descricao: descricao,
+          };
+          res = await postDeslig(fallback);
         }
-        if (res.ok) ok++; else err++;
-      } catch (e) { err++; }
+        if (res.ok) ok++;
+        else {
+          err++;
+          errDetails.push({ nome: r.nome, data: r.data_desligamento, motivo: res.error || 'Erro desconhecido' });
+        }
+      } catch (e) {
+        err++;
+        errDetails.push({ nome: r.nome, data: r.data_desligamento, motivo: e.message });
+      }
     }
 
     document.getElementById('import-result').style.display = '';
-    document.getElementById('import-result').innerHTML =
-      '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' +
+    const cor = err > 0 ? 'var(--warning)' : 'var(--success)';
+    const bgCor = err > 0 ? 'var(--warning-light)' : 'var(--success-light)';
+    let html = '<div class="insight-box" style="border-left-color:' + cor + ';background:' + bgCor + ';">' +
       '<strong>Importacao concluida!</strong><br>' +
-      ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)' +
-      '</div>';
+      ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)';
+    if (errDetails.length > 0) {
+      const resumo = {};
+      errDetails.forEach(e => { resumo[e.motivo] = (resumo[e.motivo] || 0) + 1; });
+      html += '<br><br><strong>Motivos dos erros:</strong><ul style="margin:4px 0 0 20px;padding:0;font-size:12px;">';
+      Object.entries(resumo).forEach(([motivo, qtd]) => {
+        html += '<li>' + esc(motivo) + ' — ' + qtd + ' registro(s)</li>';
+      });
+      html += '</ul>';
+      html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Ver registros com erro (' + errDetails.length + ')</summary>';
+      html += '<div style="max-height:200px;overflow:auto;font-size:11px;margin-top:6px;">';
+      errDetails.slice(0, 50).forEach(e => {
+        html += '<div>' + esc(e.nome) + ' (' + e.data + '): ' + esc(e.motivo) + '</div>';
+      });
+      if (errDetails.length > 50) html += '<div>...e mais ' + (errDetails.length - 50) + '</div>';
+      html += '</div></details>';
+    }
+    html += '</div>';
+    document.getElementById('import-result').innerHTML = html;
 
     btn.textContent = 'Concluido';
     setTimeout(() => loadData(), 1000);
@@ -1742,6 +1827,126 @@
   // ── Filters ──
   document.getElementById('filtro-tipo').addEventListener('change', renderLista);
   document.getElementById('filtro-setor').addEventListener('change', renderLista);
+
+  // ── Classificar automaticamente (popula tipo_desligamento/categoria_causa) ──
+  document.getElementById('btn-classificar-auto').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-classificar-auto');
+    const st = document.getElementById('classificar-status');
+    if (!confirm('Isso vai classificar automaticamente todos os desligamentos sem tipo, usando o texto de motivo/descricao e o tempo de empresa. Continuar?')) return;
+
+    btn.disabled = true;
+    st.textContent = 'Carregando registros...';
+
+    // Buscar registros em rh_desligamentos sem tipo_desligamento classificado
+    const resAll = await API.get('rh_desligamentos?select=id,nome,colaborador_nome,motivo,descricao,tipo,tipo_desligamento,categoria,categoria_causa,data_admissao,data_desligamento,tempo_empresa_dias');
+    if (!resAll.ok) { st.textContent = 'Erro ao carregar: ' + resAll.error; btn.disabled = false; return; }
+
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    const pendentes = resAll.data.filter(d => {
+      const t = d.tipo_desligamento || d.tipo;
+      return !t || !validos.includes(t);
+    });
+
+    if (pendentes.length === 0) {
+      st.textContent = 'Nada a classificar em rh_desligamentos.';
+      // Ainda podem existir extras em rh_funcionarios que nao estao em rh_desligamentos
+      await sincronizarFuncionariosExtras(st);
+      btn.disabled = false;
+      setTimeout(() => loadData(), 800);
+      return;
+    }
+
+    st.textContent = 'Classificando ' + pendentes.length + ' registro(s)...';
+
+    let ok = 0, err = 0;
+    for (const d of pendentes) {
+      const motivo = d.motivo || d.descricao || '';
+      const tempoDias = d.tempo_empresa_dias != null ? d.tempo_empresa_dias :
+        (d.data_admissao && d.data_desligamento
+          ? Math.ceil((new Date(d.data_desligamento) - new Date(d.data_admissao)) / 86400000)
+          : null);
+      const tipo = mapTipoValido(classificarTipo(motivo));
+      const causa = mapCausaValida(classificarCausa(motivo, '', tipo, tempoDias));
+
+      const patch = {
+        tipo_desligamento: tipo,
+        categoria_causa: causa,
+      };
+      const r = await API.patch('rh_desligamentos?id=eq.' + d.id, patch);
+      if (r.ok) ok++; else err++;
+    }
+
+    st.textContent = ok + ' classificado(s), ' + err + ' erro(s). Sincronizando funcionarios extras...';
+    await sincronizarFuncionariosExtras(st);
+
+    st.textContent = 'Concluido: ' + ok + ' classificado(s), ' + err + ' erro(s). Recarregando...';
+    btn.disabled = false;
+    setTimeout(() => loadData(), 800);
+  });
+
+  function mapTipoValido(t) {
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    if (validos.includes(t)) return t;
+    if (t === 'morte') return 'demissao_empresa';
+    return 'demissao_empresa';
+  }
+  function mapCausaValida(c) {
+    const validos = ['admissao','operacional','financeiro','pessoal'];
+    return validos.includes(c) ? c : 'pessoal';
+  }
+
+  // Sincroniza rh_funcionarios (status=desligado) que nao estao em rh_desligamentos:
+  // cria os registros faltantes ja classificados.
+  async function sincronizarFuncionariosExtras(st) {
+    const resFunc = await API.get('rh_funcionarios?status=eq.desligado&select=id,nome_completo,data_admissao,data_desligamento,cargo_id,setor_id,salario_base');
+    if (!resFunc.ok) return;
+    const resDel = await API.get('rh_desligamentos?select=nome,colaborador_nome,data_desligamento,colaborador_id,funcionario_id&limit=5000');
+    if (!resDel.ok) return;
+
+    const chavesExistentes = new Set(resDel.data.map(d =>
+      ((d.nome || d.colaborador_nome || '').toUpperCase().trim() + '|' + (d.data_desligamento || ''))
+    ));
+    const idsExistentes = new Set(resDel.data.map(d => d.colaborador_id || d.funcionario_id).filter(Boolean));
+
+    const faltantes = resFunc.data.filter(f => {
+      if (!f.data_desligamento) return false;
+      if (idsExistentes.has(f.id)) return false;
+      const chave = (f.nome_completo || '').toUpperCase().trim() + '|' + f.data_desligamento;
+      return !chavesExistentes.has(chave);
+    });
+
+    if (faltantes.length === 0) return;
+    if (st) st.textContent = 'Inserindo ' + faltantes.length + ' desligamento(s) de rh_funcionarios...';
+
+    let inseridos = 0;
+    for (const f of faltantes) {
+      const tempoDias = f.data_admissao && f.data_desligamento
+        ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
+        : null;
+      const tipo = mapTipoValido(tempoDias != null && tempoDias <= 90 ? 'termino_contrato' : 'demissao_empresa');
+      const causa = mapCausaValida(tempoDias != null && tempoDias <= 90 ? 'admissao' : 'pessoal');
+
+      const payload = {
+        nome: f.nome_completo,
+        colaborador_nome: f.nome_completo,
+        funcionario_id: f.id,
+        colaborador_id: f.id,
+        data_admissao: f.data_admissao,
+        data_desligamento: f.data_desligamento,
+        tempo_empresa_dias: tempoDias,
+        tipo: tipo,
+        tipo_desligamento: tipo,
+        categoria: causa,
+        categoria_causa: causa,
+        motivo: 'Classificado automaticamente',
+        descricao: 'Classificado automaticamente',
+        salario: f.salario_base || null,
+      };
+      const r = await API.post('rh_desligamentos', payload);
+      if (r.ok) inseridos++;
+    }
+    if (st) st.textContent = inseridos + ' desligamento(s) sincronizado(s) de rh_funcionarios.';
+  }
 
   // ── Load ──
   await loadData();

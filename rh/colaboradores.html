@@ -537,11 +537,14 @@
     if (!cpf || cpf.length !== 11) { toast('CPF invalido (11 digitos)', 'err'); return; }
     if (!dataAdm) { toast('Preencha a data de admissao', 'err'); return; }
 
+    const setorId = document.getElementById('f-setor').value || null;
+    const setorNome = setorId ? (allSetores.find(s => s.id === setorId)?.nome || null) : null;
+
     const payload = {
-      nome_completo: nome.toUpperCase(),
+      nome: nome.toUpperCase(),
       cpf,
       matricula: document.getElementById('f-matricula').value.trim() || null,
-      cargo_id: document.getElementById('f-cargo').value.trim() || null,
+      cargo: document.getElementById('f-cargo').value.trim() || null,
       cbo: document.getElementById('f-cbo').value.trim() || null,
       salario_base: parseFloat(document.getElementById('f-salario').value) || null,
       data_admissao: dataAdm,
@@ -551,7 +554,8 @@
       status: document.getElementById('f-status').value,
       unidade: document.getElementById('f-unidade').value,
       categoria: document.getElementById('f-categoria').value,
-      setor_id: document.getElementById('f-setor').value || null,
+      setor: setorNome,
+      setor_id: setorId,
       ghe: document.getElementById('f-ghe').value.trim() || null,
       cargo_confianca: document.getElementById('f-cargo-confianca').checked,
       jovem_aprendiz: document.getElementById('f-jovem-aprendiz').checked,
@@ -561,13 +565,13 @@
     try {
       let res;
       if (editingId) {
-        res = await API.patch(`rh_funcionarios?id=eq.${editingId}`, payload);
+        res = await API.patch(`rh_colaboradores?id=eq.${editingId}`, payload);
       } else {
-        res = await API.post('rh_funcionarios', payload);
+        res = await API.post('rh_colaboradores', payload);
       }
       if (res.ok) {
         UI.toast(editingId ? 'Colaborador atualizado' : 'Colaborador cadastrado', 'ok');
-        API.logEvent(editingId ? 'colab_update' : 'colab_create', { nome: payload.nome_completo, cpf: payload.cpf });
+        API.logEvent(editingId ? 'colab_update' : 'colab_create', { nome: payload.nome, cpf: payload.cpf });
         closeModal($modalColab);
         await loadColabs();
       } else {
@@ -647,7 +651,7 @@
 
       const estab = (idxEstab !== -1 ? cols[idxEstab] : '').toUpperCase();
       rows.push({
-        nome_completo: nome,
+        nome,
         cpf,
         matricula: idxMat !== -1 ? cols[idxMat] || null : null,
         categoria: idxCat !== -1 ? cols[idxCat] || '101' : '101',
@@ -673,21 +677,21 @@
 
     for (const row of rows) {
       try {
-        const res = await API.post('rh_funcionarios', row);
+        const res = await API.post('rh_colaboradores', row);
         if (res.ok) {
           inserted++;
         } else {
           errors++;
           const txt = res.error || '';
           if (txt.includes('duplicate') || txt.includes('unique')) {
-            errorMsgs.push(`${row.nome_completo} (CPF duplicado)`);
+            errorMsgs.push(`${row.nome} (CPF duplicado)`);
           } else {
-            errorMsgs.push(`${row.nome_completo}: ${txt.slice(0, 80)}`);
+            errorMsgs.push(`${row.nome}: ${txt.slice(0, 80)}`);
           }
         }
       } catch (e) {
         errors++;
-        errorMsgs.push(`${row.nome_completo}: ${e.message}`);
+        errorMsgs.push(`${row.nome}: ${e.message}`);
       }
     }
 

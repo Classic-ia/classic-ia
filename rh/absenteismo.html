@@ -62,6 +62,13 @@
 </div>
 <div id="syncStatus" style="font-size:12px;color:var(--text-muted);margin:-8px 0 12px 0;display:none;"></div>
 
+<!-- Banner de dados desatualizados -->
+<div id="staleBanner" style="display:none;background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:12px 16px;margin-bottom:12px;font-size:13px;color:#92400E;">
+  <strong>⚠ Dados desatualizados:</strong>
+  <span id="staleBannerText"></span>
+  Clique em <strong>"↻ Sincronizar Convenia"</strong> acima para importar os registros mais recentes.
+</div>
+
 <!-- Table -->
 <div class="card">
   <div class="data-table-wrapper"><table class="data-table" id="tblOcorrencias"><thead><tr>
@@ -231,6 +238,26 @@ async function loadAll() {
        e tabela mostrarem o mesmo conjunto e evitar "Nenhuma ocorrencia" */
     const meses = [...new Set(ocorrencias.map(o => (o.competencia || '').slice(0, 7)).filter(Boolean))].sort().reverse();
     if (meses.length) document.getElementById('fCompetencia').value = meses[0];
+
+    /* Alerta se o dado mais recente for > 3 meses atras */
+    if (meses.length) {
+      const [ano, mes] = meses[0].split('-').map(Number);
+      const maisRecente = new Date(ano, mes - 1, 1);
+      const hoje = new Date();
+      const diffMeses = (hoje.getFullYear() - maisRecente.getFullYear()) * 12 + (hoje.getMonth() - maisRecente.getMonth());
+      if (diffMeses >= 3) {
+        const banner = document.getElementById('staleBanner');
+        const txt = document.getElementById('staleBannerText');
+        const mesesNomes = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+        txt.textContent = ` ultimo registro em ${mesesNomes[mes-1]}/${ano} (${diffMeses} meses atras).`;
+        banner.style.display = 'block';
+      }
+    } else {
+      const banner = document.getElementById('staleBanner');
+      document.getElementById('staleBannerText').textContent = ' nenhum registro no banco.';
+      banner.style.display = 'block';
+    }
+
     renderKPIs();
     renderTable();
   } catch (err) {
@@ -259,9 +286,14 @@ document.getElementById('btnSyncConvenia').addEventListener('click', async () =>
   try {
     const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
     const headers = { 'api-token': cfg.token, 'Accept': 'application/json' };
+    /* Busca ultimos 24 meses para pegar atestados/afastamentos recentes */
+    const hoje24 = new Date();
+    const dataDesde = new Date(hoje24.getFullYear() - 2, hoje24.getMonth(), 1).toISOString().slice(0, 10);
     let todos = [], page = 1, totalPages = 1;
     do {
-      const res = await fetch(`${CONVENIA_BASE}/leaves?page=${page}&per_page=100`, { headers });
+      /* Tenta com filtro de data; se API ignorar, funciona mesmo assim */
+      const url = `${CONVENIA_BASE}/leaves?page=${page}&per_page=100&start_date_from=${dataDesde}`;
+      const res = await fetch(url, { headers });
       if (!res.ok) throw new Error('HTTP ' + res.status + ' (verifique o token)');
       const json = await res.json();
       const lista = json.data || json.leaves || json || [];

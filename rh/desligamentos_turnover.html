@@ -1837,12 +1837,12 @@
     btn.disabled = true;
     st.textContent = 'Carregando registros...';
 
-    // Buscar registros em rh_desligamentos sem tipo_desligamento classificado
-    const resAll = await API.get('rh_desligamentos?select=id,nome,colaborador_nome,motivo,descricao,tipo,tipo_desligamento,categoria,categoria_causa,data_admissao,data_desligamento,tempo_empresa_dias');
+    // Buscar todas as colunas (schema pode variar entre ambientes)
+    const resAll = await API.get('rh_desligamentos?select=*');
     if (!resAll.ok) { st.textContent = 'Erro ao carregar: ' + resAll.error; btn.disabled = false; return; }
 
     const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
-    const pendentes = resAll.data.filter(d => {
+    const pendentes = (resAll.data || []).filter(d => {
       const t = d.tipo_desligamento || d.tipo;
       return !t || !validos.includes(t);
     });
@@ -1858,6 +1858,14 @@
 
     st.textContent = 'Classificando ' + pendentes.length + ' registro(s)...';
 
+    // Detectar quais colunas existem a partir de um registro qualquer
+    const sample = (resAll.data && resAll.data[0]) || {};
+    const colNomes = Object.keys(sample);
+    const temTipoDeslig = colNomes.includes('tipo_desligamento');
+    const temTipo       = colNomes.includes('tipo');
+    const temCatCausa   = colNomes.includes('categoria_causa');
+    const temCategoria  = colNomes.includes('categoria');
+
     let ok = 0, err = 0;
     for (const d of pendentes) {
       const motivo = d.motivo || d.descricao || '';
@@ -1868,10 +1876,15 @@
       const tipo = mapTipoValido(classificarTipo(motivo));
       const causa = mapCausaValida(classificarCausa(motivo, '', tipo, tempoDias));
 
-      const patch = {
-        tipo_desligamento: tipo,
-        categoria_causa: causa,
-      };
+      const patch = {};
+      if (temTipoDeslig) patch.tipo_desligamento = tipo;
+      if (temTipo)       patch.tipo = tipo;
+      if (temCatCausa)   patch.categoria_causa = causa;
+      if (temCategoria)  patch.categoria = causa;
+      // Fallback: se nenhuma coluna de tipo foi detectada, tenta ambas
+      if (!temTipoDeslig && !temTipo) { patch.tipo_desligamento = tipo; patch.tipo = tipo; }
+      if (!temCatCausa && !temCategoria) { patch.categoria_causa = causa; patch.categoria = causa; }
+
       const r = await API.patch('rh_desligamentos?id=eq.' + d.id, patch);
       if (r.ok) ok++; else err++;
     }
@@ -1898,9 +1911,9 @@
   // Sincroniza rh_funcionarios (status=desligado) que nao estao em rh_desligamentos:
   // cria os registros faltantes ja classificados.
   async function sincronizarFuncionariosExtras(st) {
-    const resFunc = await API.get('rh_funcionarios?status=eq.desligado&select=id,nome_completo,data_admissao,data_desligamento,cargo_id,setor_id,salario_base');
+    const resFunc = await API.get('rh_funcionarios?status=eq.desligado&select=*');
     if (!resFunc.ok) return;
-    const resDel = await API.get('rh_desligamentos?select=nome,colaborador_nome,data_desligamento,colaborador_id,funcionario_id&limit=5000');
+    const resDel = await API.get('rh_desligamentos?select=*&limit=5000');
     if (!resDel.ok) return;
 
     const chavesExistentes = new Set(resDel.data.map(d =>
@@ -1918,15 +1931,21 @@
     if (faltantes.length === 0) return;
     if (st) st.textContent = 'Inserindo ' + faltantes.length + ' desligamento(s) de rh_funcionarios...';
 
-    let inseridos = 0;
+    // Detectar colunas existentes em rh_desligamentos
+    const sampleDel = (resDel.data && resDel.data[0]) || {};
+    const colsDel = Object.keys(sampleDel);
+    const has = (c) => colsDel.length === 0 || colsDel.includes(c);
+
+    let inseridos = 0, erros = 0;
     for (const f of faltantes) {
       const tempoDias = f.data_admissao && f.data_desligamento
         ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
         : null;
       const tipo = mapTipoValido(tempoDias != null && tempoDias <= 90 ? 'termino_contrato' : 'demissao_empresa');
       const causa = mapCausaValida(tempoDias != null && tempoDias <= 90 ? 'admissao' : 'pessoal');
+      const descricao = 'Classificado automaticamente';
 
-      const payload = {
+      const full = {
         nome: f.nome_completo,
         colaborador_nome: f.nome_completo,
         funcionario_id: f.id,
@@ -1938,14 +1957,18 @@
         tipo_desligamento: tipo,
         categoria: causa,
         categoria_causa: causa,
-        motivo: 'Classificado automaticamente',
-        descricao: 'Classificado automaticamente',
+        motivo: descricao,
+        descricao: descricao,
         salario: f.salario_base || null,
       };
+      // Filtra so as colunas que existem no schema
+      const payload = {};
+      Object.keys(full).forEach(k => { if (has(k) && full[k] != null) payload[k] = full[k]; });
+
       const r = await API.post('rh_desligamentos', payload);
-      if (r.ok) inseridos++;
+      if (r.ok) inseridos++; else erros++;
     }
-    if (st) st.textContent = inseridos + ' desligamento(s) sincronizado(s) de rh_funcionarios.';
+    if (st) st.textContent = inseridos + ' desligamento(s) sincronizado(s)' + (erros ? ' | ' + erros + ' erro(s)' : '');
   }
 
   // ── Load ──

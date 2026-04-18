@@ -9,8 +9,10 @@ import pytesseract
 
 # Config
 pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-SB_URL = "https://muiqmtnfvyffborgiwdw.supabase.co"
-SB_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXFtdG5mdnlmZmJvcmdpd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NzQ2MTAsImV4cCI6MjA4OTQ1MDYxMH0.ReerGoDWcLrxJ1WIIKflN4Sc-st4zR1b6yWagCaPq_A"
+SB_URL = os.environ.get("SUPABASE_RH_URL") or os.environ.get("SUPABASE_URL")
+SB_KEY = os.environ.get("SUPABASE_RH_KEY") or os.environ.get("SUPABASE_KEY")
+if not SB_URL or not SB_KEY:
+    raise RuntimeError("Defina SUPABASE_RH_URL e SUPABASE_RH_KEY no ambiente (ou SUPABASE_URL/SUPABASE_KEY).")
 HEADERS = {"apikey": SB_KEY, "Authorization": f"Bearer {SB_KEY}", "Content-Type": "application/json"}
 
 BASE_ATESTADOS = os.path.join(r'C:\Users\janai\OneDrive\RH e SEGURANÇA DO TRABALHO CLASSIC', 'RH_E_SEGURANCA_DO_TRABALHO_CLASSIC', 'Atestados')

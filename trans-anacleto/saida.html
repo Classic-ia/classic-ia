@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Saida de Estoque - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap:16px">
+    <!-- Scan -->
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 12px 0">1. Ler EAN do produto</h3>
+        <div class="form-field">
+          <label>Codigo de barras (EAN)</label>
+          <input type="text" id="inp-ean" placeholder="Bipe ou digite o EAN" autofocus
+            style="font-size:18px;padding:14px;font-family:ui-monospace,monospace">
+        </div>
+        <div id="produto-info" style="margin-top:12px;min-height:140px"></div>
+      </div>
+    </div>
+
+    <!-- Saida -->
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 12px 0">2. Registrar saida</h3>
+        <form id="form-saida" onsubmit="salvarSaida(event)">
+          <input type="hidden" id="f-lote-id">
+          <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+            <div class="form-field form-field-full">
+              <label>Lote sugerido (FEFO)</label>
+              <select id="f-lote-sel" onchange="atualizarSaldoSel()">
+                <option value="">&mdash; Leia um EAN &mdash;</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Quantidade *</label>
+              <input type="number" id="f-qtd" min="0.01" step="0.01" value="1" required>
+            </div>
+            <div class="form-field">
+              <label>Saldo no lote</label>
+              <input type="text" id="f-saldo-lote" readonly style="background:#f1f5f9">
+            </div>
+            <div class="form-field">
+              <label>Documento (OS/RMA)</label>
+              <input type="text" id="f-doc" placeholder="Ex: OS-123">
+            </div>
+            <div class="form-field">
+              <label>Veiculo</label>
+              <select id="f-veiculo"><option value="">&mdash;</option></select>
+            </div>
+            <div class="form-field form-field-full">
+              <label>Observacao</label>
+              <textarea id="f-obs" rows="2"></textarea>
+            </div>
+            <div class="form-field form-field-full" id="override-area" style="display:none">
+              <label style="color:#b91c1c">
+                <input type="checkbox" id="f-override"> Override bloqueio (admin) &mdash; justificativa obrigatoria
+              </label>
+              <textarea id="f-justificativa" rows="2" placeholder="Motivo do override"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button type="button" class="btn btn-outline" onclick="limparForm()">Limpar</button>
+            <button type="submit" class="btn btn-primary" id="btn-salvar" disabled>Dar saida</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historico -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-body">
+      <h3 style="margin:0 0 12px 0">Saidas desta sessao</h3>
+      <div id="hist-area"><div class="text-muted" style="font-size:13px">Nenhuma saida ainda.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _produto = null;
+let _lotes = [];
+let _veiculos = [];
+let _historico = [];
+
+PageBootstrap.init({
+  page: 'saida',
+  title: 'Saida de Estoque',
+  breadcrumb: 'Estoque / Saida',
+  perfisPermitidos: ['admin','almoxarife','gestor'],
+  loadData: async () => API.get('trans_veiculos?status=eq.ativo&order=placa&select=id,placa,modelo'),
+  render: (res, user) => {
+    _veiculos = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Saida de Estoque',
+      subtitle: 'Bipe o EAN, confirme lote sugerido (FEFO) e documento. Lote bloqueado rejeita saida (admin pode override).',
+      actions: []
+    });
+    const sel = document.getElementById('f-veiculo');
+    sel.innerHTML = '<option value="">&mdash;</option>' +
+      _veiculos.map(v => `<option value="${v.id}">${API.esc(v.placa)} &mdash; ${API.esc(v.modelo || '')}</option>`).join('');
+    bindEanScan();
+  }
+});
+
+function bindEanScan() {
+  const inp = document.getElementById('inp-ean');
+  inp.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const ean = inp.value.trim();
+      if (!ean) return;
+      await buscarEan(ean);
+    }
+  });
+}
+
+async function buscarEan(ean) {
+  const info = document.getElementById('produto-info');
+  info.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  _produto = null; _lotes = [];
+  document.getElementById('btn-salvar').disabled = true;
+
+  const res = await API.rpc('trans_buscar_produto_por_ean', { p_ean: ean });
+  if (!res.ok || !res.data) {
+    info.innerHTML = `<div class="alert alert-warning">Erro ao buscar EAN</div>`;
+    return;
+  }
+  if (!res.data.encontrado) {
+    info.innerHTML = `<div class="alert alert-warning" style="padding:12px;background:#fef3c7;border-radius:8px">EAN nao cadastrado.</div>`;
+    return;
+  }
+
+  _produto = res.data.produto;
+  _lotes = (res.data.lotes_disponiveis || []);
+
+  info.innerHTML = `
+    <div style="padding:12px;background:#ecfdf5;border-radius:8px;border:1px solid #10b981">
+      <div style="font-weight:700;font-size:15px">${API.esc(_produto.nome)}</div>
+      <div class="text-muted" style="font-size:12px;margin-top:4px">
+        SKU: <strong>${API.esc(_produto.sku)}</strong> &middot;
+        ${API.esc(_produto.categoria_nome || 'Sem categoria')}
+      </div>
+    </div>
+  `;
+
+  // Popular select de lotes (FEFO first)
+  const sel = document.getElementById('f-lote-sel');
+  if (_lotes.length === 0) {
+    sel.innerHTML = '<option value="">Sem saldo em lotes liberados</option>';
+    info.insertAdjacentHTML('beforeend', '<div class="alert alert-warning" style="margin-top:8px">Nenhum lote com saldo liberado.</div>');
+    return;
+  }
+  sel.innerHTML = _lotes.map((l, i) => `
+    <option value="${l.lote_id}" data-saldo="${l.saldo}" ${i === 0 ? 'selected' : ''}>
+      ${l.lote_interno} &middot; Validade ${l.data_validade ? API.fmtData(l.data_validade) : 'sem'} &middot; Saldo ${l.saldo}
+    </option>
+  `).join('');
+  document.getElementById('f-lote-id').value = _lotes[0].lote_id;
+  atualizarSaldoSel();
+  document.getElementById('btn-salvar').disabled = false;
+  document.getElementById('f-qtd').focus();
+  document.getElementById('f-qtd').select();
+}
+
+function atualizarSaldoSel() {
+  const sel = document.getElementById('f-lote-sel');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('f-lote-id').value = sel.value || '';
+  document.getElementById('f-saldo-lote').value = opt ? (opt.dataset.saldo || '') : '';
+}
+
+async function salvarSaida(e) {
+  e.preventDefault();
+  const loteId = document.getElementById('f-lote-id').value;
+  if (!loteId) { UI.toast('Selecione um lote', 'erro'); return; }
+
+  const qtd = Number(document.getElementById('f-qtd').value);
+  const override = document.getElementById('f-override').checked;
+  const justificativa = document.getElementById('f-justificativa').value.trim() || null;
+
+  const payload = {
+    p_lote_id: loteId,
+    p_quantidade: qtd,
+    p_documento: document.getElementById('f-doc').value.trim() || null,
+    p_veiculo_id: document.getElementById('f-veiculo').value || null,
+    p_ean_lido: document.getElementById('inp-ean').value.trim() || null,
+    p_override_bloqueio: override,
+    p_justificativa: justificativa,
+    p_observacao: document.getElementById('f-obs').value.trim() || null
+  };
+
+  const res = await API.rpc('trans_saida_estoque', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    const err = res.error || 'Erro ao dar saida';
+    UI.toast(err, 'erro');
+    // Se erro de bloqueio, oferece override (se admin)
+    if (/bloqueada|bloqueado/i.test(err) && API.getPerfil() === 'admin') {
+      document.getElementById('override-area').style.display = '';
+      UI.toast('Ative override e justifique para prosseguir', 'aviso');
+    }
+    return;
+  }
+
+  _historico.unshift({
+    data: new Date(),
+    sku: _produto.sku,
+    produto_nome: _produto.nome,
+    lote: _lotes.find(l => l.lote_id === loteId)?.lote_interno || loteId,
+    qtd,
+    saldo_restante: res.data.saldo_restante,
+    documento: payload.p_documento
+  });
+
+  UI.toast(`Saida OK — saldo restante ${res.data.saldo_restante}`, 'ok');
+  renderHistorico();
+  limparForm();
+  document.getElementById('inp-ean').focus();
+}
+
+function limparForm() {
+  document.getElementById('form-saida').reset();
+  document.getElementById('f-lote-sel').innerHTML = '<option value="">&mdash; Leia um EAN &mdash;</option>';
+  document.getElementById('f-saldo-lote').value = '';
+  document.getElementById('f-lote-id').value = '';
+  document.getElementById('f-qtd').value = 1;
+  document.getElementById('produto-info').innerHTML = '';
+  document.getElementById('inp-ean').value = '';
+  document.getElementById('btn-salvar').disabled = true;
+  document.getElementById('override-area').style.display = 'none';
+  _produto = null; _lotes = [];
+}
+
+function renderHistorico() {
+  const area = document.getElementById('hist-area');
+  if (_historico.length === 0) {
+    area.innerHTML = '<div class="text-muted" style="font-size:13px">Nenhuma saida ainda.</div>';
+    return;
+  }
+  area.innerHTML = UI.dataTable({
+    columns: [
+      { key: 'data', label: 'Horario', render: h => h.data.toLocaleTimeString('pt-BR') },
+      { key: 'sku', label: 'SKU' },
+      { key: 'produto_nome', label: 'Produto' },
+      { key: 'lote', label: 'Lote', render: h => `<strong>${API.esc(h.lote)}</strong>` },
+      { key: 'qtd', label: 'Qty', align: 'right', render: h => API.fmtNum(h.qtd) },
+      { key: 'saldo_restante', label: 'Saldo restante', align: 'right', render: h => API.fmtNum(h.saldo_restante) },
+      { key: 'documento', label: 'Documento', render: h => API.esc(h.documento || '—') }
+    ],
+    rows: _historico
+  });
+}
+</script>
+</body>
+</html>

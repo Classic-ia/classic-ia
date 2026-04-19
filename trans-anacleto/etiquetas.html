@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Etiquetas - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="labels.js"></script>
+<style>
+  .labels-print-area { background:#f1f5f9; padding:16px; border-radius:8px; max-height:70vh; overflow:auto }
+  @media print {
+    body > *:not(#print-host) { display: none !important; }
+    #print-host { padding:0; background:#fff; max-height:none; overflow:visible }
+  }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body">
+      <h3 style="margin:0 0 12px 0">Fonte dos codigos</h3>
+      <div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+        <div class="form-field">
+          <label>Tipo</label>
+          <select id="flt-tipo" onchange="aplicarFonte()">
+            <option value="lotes">Lotes de estoque</option>
+            <option value="produtos">Produtos (SKU)</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Formato</label>
+          <select id="flt-formato">
+            <option value="qr">QR Code</option>
+            <option value="barcode">CODE 128</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Layout A4</label>
+          <select id="flt-layout">
+            <option value="3x8">3 col x 8 lin (padrao 24/folha)</option>
+            <option value="2x7">2 col x 7 lin (14/folha)</option>
+            <option value="4x10">4 col x 10 lin (40/folha)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:16px">
+    <div class="card-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0">Selecionar</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="toggleAll(true)">Selecionar todos</button>
+          <button class="btn btn-ghost btn-sm" onclick="toggleAll(false)">Limpar</button>
+        </div>
+      </div>
+      <div id="seletor-area"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-body">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <h3 style="margin:0">Preview</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" onclick="gerarPreview()">Atualizar preview</button>
+          <button class="btn btn-outline" onclick="window.print()">Imprimir via browser</button>
+          <button class="btn btn-primary" onclick="baixarPDF()">Baixar PDF</button>
+        </div>
+      </div>
+      <div id="print-host" class="labels-print-area">
+        <div class="text-muted" style="font-size:13px">Selecione itens e clique em "Atualizar preview".</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _fonte = 'lotes';
+let _dados = [];
+let _selecionados = new Set();
+
+PageBootstrap.init({
+  page: 'etiquetas',
+  title: 'Etiquetas',
+  breadcrumb: 'Estoque / Etiquetas',
+  perfisPermitidos: ['admin','almoxarife','gestor'],
+  loadData: () => null,
+  render: (_, user) => {
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Etiquetas QR / Barcode',
+      subtitle: 'Gera folhas A4 para impressao. Limite 200 itens por PDF.',
+      actions: []
+    });
+    aplicarFonte();
+  }
+});
+
+async function aplicarFonte() {
+  _fonte = document.getElementById('flt-tipo').value;
+  _selecionados.clear();
+  const area = document.getElementById('seletor-area');
+  area.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+  if (_fonte === 'lotes') {
+    const res = await API.get(
+      'trans_lotes?status=eq.liberado&order=data_entrada.desc&limit=300&select=id,lote_interno,lote_fornecedor,data_validade,produto:trans_produtos(sku,nome,localizacao)'
+    );
+    _dados = (res.ok ? res.data : []).map(l => ({
+      id: l.id,
+      codigo: l.lote_interno,
+      sku: l.produto?.sku || '',
+      nome: l.produto?.nome || '',
+      localizacao: l.produto?.localizacao || '',
+      lote_interno: l.lote_interno,
+      sub: l.lote_fornecedor ? `Forn: ${l.lote_fornecedor}` : ''
+    }));
+  } else {
+    const res = await API.get(
+      'trans_produtos?ativo=eq.true&order=sku&limit=500&select=id,sku,nome,localizacao'
+    );
+    _dados = (res.ok ? res.data : []).map(p => ({
+      id: p.id,
+      codigo: p.sku,
+      sku: p.sku,
+      nome: p.nome,
+      localizacao: p.localizacao || '',
+      lote_interno: null,
+      sub: ''
+    }));
+  }
+
+  renderSeletor();
+}
+
+function renderSeletor() {
+  const area = document.getElementById('seletor-area');
+  if (_dados.length === 0) {
+    area.innerHTML = '<div class="text-muted">Nada para listar.</div>';
+    return;
+  }
+  area.innerHTML = UI.dataTable({
+    columns: [
+      { key: 'sel', label: '', render: d => `<input type="checkbox" ${_selecionados.has(d.id) ? 'checked' : ''} onchange="toggleOne('${d.id}', this.checked)">` },
+      { key: 'codigo', label: 'Codigo', render: d => `<strong>${API.esc(d.codigo)}</strong>` },
+      { key: 'sku', label: 'SKU', render: d => API.esc(d.sku) },
+      { key: 'nome', label: 'Produto', render: d => API.esc(d.nome) },
+      { key: 'localizacao', label: 'Local', render: d => API.esc(d.localizacao || '—') },
+      { key: 'sub', label: '', render: d => `<span class="text-muted" style="font-size:12px">${API.esc(d.sub)}</span>` }
+    ],
+    rows: _dados
+  });
+}
+
+function toggleOne(id, checked) {
+  if (checked) _selecionados.add(id); else _selecionados.delete(id);
+}
+function toggleAll(on) {
+  if (on) _dados.forEach(d => _selecionados.add(d.id));
+  else _selecionados.clear();
+  renderSeletor();
+}
+
+function layoutOpts() {
+  const layout = document.getElementById('flt-layout').value;
+  const [c, r] = layout.split('x').map(Number);
+  return { cols: c, rows: r, formato: document.getElementById('flt-formato').value };
+}
+
+function itensSelecionados() {
+  return _dados.filter(d => _selecionados.has(d.id));
+}
+
+function gerarPreview() {
+  const itens = itensSelecionados();
+  if (itens.length === 0) { UI.toast('Selecione pelo menos 1 item', 'aviso'); return; }
+  const host = document.getElementById('print-host');
+  host.innerHTML = '';
+  const sheet = Labels.renderSheet(itens, layoutOpts());
+  host.appendChild(sheet);
+}
+
+async function baixarPDF() {
+  const itens = itensSelecionados();
+  if (itens.length === 0) { UI.toast('Selecione pelo menos 1 item', 'aviso'); return; }
+  if (itens.length > 200) { UI.toast('Limite 200 etiquetas/PDF', 'erro'); return; }
+  try {
+    await Labels.printPDF(itens, { ...layoutOpts(), filename: `etiquetas-${Date.now()}.pdf` });
+    UI.toast('PDF gerado', 'ok');
+  } catch (e) {
+    UI.toast('Erro: ' + e.message, 'erro');
+  }
+}
+</script>
+</body>
+</html>

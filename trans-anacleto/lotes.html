@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lotes - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal detalhe/status -->
+<div id="modal-lote" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeLoteModal()"></div>
+  <div class="modal-content" style="max-width:700px">
+    <div class="modal-header">
+      <h3 id="modal-title">Detalhe do lote</h3>
+      <button class="modal-close" onclick="closeLoteModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="detalhe-area"></div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid #e2e8f0">
+      <h4 style="margin:0 0 8px 0">Alterar status</h4>
+      <form id="form-status" onsubmit="alterarStatus(event)">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field">
+            <label>Novo status *</label>
+            <select id="f-novo-status" required>
+              <option value="liberado">Liberado</option>
+              <option value="bloqueado">Bloqueado</option>
+              <option value="quarentena">Quarentena</option>
+              <option value="reprovado">Reprovado</option>
+            </select>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Motivo *</label>
+            <textarea id="f-motivo" rows="2" required></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeLoteModal()">Fechar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-status').requestSubmit()">Aplicar status</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _lotes = [];
+let _filtroStatus = '';
+let _filtroTexto = '';
+let _filtroValidade = '';
+let _loteSelecionado = null;
+
+PageBootstrap.init({
+  page: 'lotes',
+  title: 'Lotes',
+  breadcrumb: 'Estoque / Lotes',
+  perfisPermitidos: ['admin','gestor','almoxarife'],
+  loadData: async () => API.get(
+    'trans_lotes?order=data_entrada.desc&select=*,' +
+    'produto:trans_produtos(id,sku,nome),' +
+    'fornecedor:trans_fornecedores(id,razao_social),' +
+    'saldo:trans_estoque_lote(quantidade)'
+  ),
+  render: (res, user) => {
+    _lotes = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Lotes',
+      subtitle: 'Controle de lotes internos do estoque novo. Status CQ (liberado/bloqueado/quarentena/reprovado).',
+      actions: []
+    });
+    renderFilters(); renderTable();
+  }
+});
+
+function renderFilters() {
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'Lote, SKU, produto', value: _filtroTexto },
+      { id: 'flt-status', label: 'Status', type: 'select', value: _filtroStatus, options: [
+        { value: '', label: 'Todos' },
+        { value: 'liberado', label: 'Liberado' },
+        { value: 'bloqueado', label: 'Bloqueado' },
+        { value: 'quarentena', label: 'Quarentena' },
+        { value: 'reprovado', label: 'Reprovado' }
+      ]},
+      { id: 'flt-val', label: 'Validade', type: 'select', value: _filtroValidade, options: [
+        { value: '', label: 'Todos' },
+        { value: 'vencidos', label: 'Vencidos' },
+        { value: '30', label: 'Vencem em 30 dias' },
+        { value: '90', label: 'Vencem em 90 dias' }
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _filtroTexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _filtroStatus = document.getElementById('flt-status').value;
+  _filtroValidade = document.getElementById('flt-val').value;
+  renderTable();
+}
+function limparFiltros() { _filtroTexto = ''; _filtroStatus = ''; _filtroValidade = ''; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const hoje = new Date();
+  hoje.setHours(0,0,0,0);
+
+  const filt = _lotes.filter(l => {
+    if (_filtroStatus && l.status !== _filtroStatus) return false;
+    if (_filtroTexto) {
+      const hay = `${l.lote_interno} ${l.lote_fornecedor || ''} ${l.produto?.sku || ''} ${l.produto?.nome || ''}`.toLowerCase();
+      if (!hay.includes(_filtroTexto)) return false;
+    }
+    if (_filtroValidade) {
+      if (!l.data_validade) return false;
+      const dv = new Date(l.data_validade); dv.setHours(0,0,0,0);
+      const diff = (dv - hoje) / 86400000;
+      if (_filtroValidade === 'vencidos' && diff >= 0) return false;
+      if (_filtroValidade === '30' && (diff < 0 || diff > 30)) return false;
+      if (_filtroValidade === '90' && (diff < 0 || diff > 90)) return false;
+    }
+    return true;
+  });
+
+  const statusBadgeTone = (s) => ({
+    liberado: 'ativo', bloqueado: 'erro', quarentena: 'warning', reprovado: 'erro'
+  })[s] || 'muted';
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'lote_interno', label: 'Lote interno', render: l => `<strong>${API.esc(l.lote_interno)}</strong>` },
+      { key: 'produto', label: 'Produto', render: l => l.produto ? `${API.esc(l.produto.sku)} <span class="text-muted">&middot; ${API.esc(l.produto.nome)}</span>` : '—' },
+      { key: 'lote_fornecedor', label: 'Lote fornecedor', render: l => API.esc(l.lote_fornecedor || '—') },
+      { key: 'data_entrada', label: 'Entrada', render: l => API.fmtData(l.data_entrada) },
+      { key: 'data_validade', label: 'Validade', render: l => API.fmtData(l.data_validade) },
+      { key: 'saldo', label: 'Saldo', align: 'right',
+        render: l => {
+          const s = Array.isArray(l.saldo) ? (l.saldo[0]?.quantidade ?? 0) : (l.saldo?.quantidade ?? 0);
+          return API.fmtNum(s);
+        }},
+      { key: 'status', label: 'Status', render: l => UI.statusBadge(l.status, statusBadgeTone(l.status)) },
+      { key: 'acoes', label: '', render: l => `<button class="btn btn-ghost btn-sm" onclick="abrirDetalhe('${l.id}')">Detalhe</button>` }
+    ],
+    rows: filt,
+    emptyMsg: 'Nenhum lote encontrado.'
+  });
+}
+
+function abrirDetalhe(id) {
+  _loteSelecionado = _lotes.find(l => l.id === id);
+  if (!_loteSelecionado) return;
+  const l = _loteSelecionado;
+  const saldo = Array.isArray(l.saldo) ? (l.saldo[0]?.quantidade ?? 0) : (l.saldo?.quantidade ?? 0);
+
+  document.getElementById('modal-title').textContent = `Lote ${l.lote_interno}`;
+  document.getElementById('detalhe-area').innerHTML = `
+    <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:8px">
+      <div><strong>Produto:</strong> ${API.esc(l.produto?.sku || '—')} &middot; ${API.esc(l.produto?.nome || '—')}</div>
+      <div><strong>Lote fornecedor:</strong> ${API.esc(l.lote_fornecedor || '—')}</div>
+      <div><strong>Fornecedor:</strong> ${API.esc(l.fornecedor?.razao_social || '—')}</div>
+      <div><strong>Data entrada:</strong> ${API.fmtData(l.data_entrada)}</div>
+      <div><strong>Fabricacao:</strong> ${API.fmtData(l.data_fabricacao)}</div>
+      <div><strong>Validade:</strong> ${API.fmtData(l.data_validade)}</div>
+      <div><strong>Custo unitario:</strong> ${API.fmtMoeda(l.custo_unitario)}</div>
+      <div><strong>Saldo atual:</strong> ${API.fmtNum(saldo)}</div>
+      <div><strong>Status atual:</strong> ${UI.statusBadge(l.status, 'ativo')}</div>
+      ${l.status_motivo ? `<div style="grid-column:span 2"><strong>Ultimo motivo:</strong> ${API.esc(l.status_motivo)}</div>` : ''}
+      ${l.observacao ? `<div style="grid-column:span 2"><strong>Observacao:</strong> ${API.esc(l.observacao)}</div>` : ''}
+    </div>
+  `;
+  document.getElementById('f-novo-status').value = l.status;
+  document.getElementById('f-motivo').value = '';
+  document.getElementById('modal-lote').style.display = 'flex';
+}
+
+function closeLoteModal() {
+  document.getElementById('modal-lote').style.display = 'none';
+  _loteSelecionado = null;
+}
+
+async function alterarStatus(e) {
+  e.preventDefault();
+  if (!_loteSelecionado) return;
+  const payload = {
+    p_lote_id: _loteSelecionado.id,
+    p_novo_status: document.getElementById('f-novo-status').value,
+    p_motivo: document.getElementById('f-motivo').value.trim()
+  };
+  const res = await API.rpc('trans_alterar_status_lote', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro ao alterar status', 'erro');
+    return;
+  }
+  UI.toast('Status alterado', 'ok');
+  closeLoteModal();
+  // reload
+  const reload = await API.get(
+    'trans_lotes?order=data_entrada.desc&select=*,' +
+    'produto:trans_produtos(id,sku,nome),' +
+    'fornecedor:trans_fornecedores(id,razao_social),' +
+    'saldo:trans_estoque_lote(quantidade)'
+  );
+  _lotes = reload.ok ? reload.data : [];
+  renderTable();
+}
+</script>
+</body>
+</html>

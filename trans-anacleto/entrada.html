@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrada de Estoque - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="grid-2" style="grid-template-columns: 1fr 1fr; gap:16px">
+    <!-- Card: scan -->
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 12px 0">1. Ler EAN</h3>
+        <div class="form-field">
+          <label>Codigo de barras (EAN)</label>
+          <input type="text" id="inp-ean" placeholder="Bipe ou digite o EAN" autofocus
+            style="font-size:18px;padding:14px;font-family:ui-monospace,monospace">
+        </div>
+        <div id="produto-info" style="margin-top:12px;min-height:100px"></div>
+      </div>
+    </div>
+
+    <!-- Card: entrada -->
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 12px 0">2. Dados do lote</h3>
+        <form id="form-entrada" onsubmit="salvarEntrada(event)">
+          <input type="hidden" id="f-produto-id">
+          <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+            <div class="form-field form-field-full">
+              <label>Lote do fornecedor</label>
+              <input type="text" id="f-lote-forn" placeholder="Ex: F-2026-42">
+            </div>
+            <div class="form-field">
+              <label>Quantidade *</label>
+              <input type="number" id="f-qtd" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-field">
+              <label>Custo unitario</label>
+              <input type="number" id="f-custo" min="0" step="0.01">
+            </div>
+            <div class="form-field form-field-full">
+              <label>Fornecedor</label>
+              <select id="f-fornecedor"><option value="">&mdash;</option></select>
+            </div>
+            <div class="form-field">
+              <label>Data fabricacao</label>
+              <input type="date" id="f-data-fab">
+            </div>
+            <div class="form-field">
+              <label>Data validade</label>
+              <input type="date" id="f-data-val">
+            </div>
+            <div class="form-field form-field-full">
+              <label>Observacao</label>
+              <textarea id="f-obs" rows="2"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button type="button" class="btn btn-outline" onclick="limparForm()">Limpar</button>
+            <button type="submit" class="btn btn-primary" id="btn-salvar" disabled>Registrar entrada</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Ultima entrada: etiqueta -->
+  <div class="card" id="etiqueta-card" style="display:none;margin-top:16px">
+    <div class="card-body">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <h3 style="margin:0 0 4px 0">Lote criado</h3>
+          <div id="ultimo-lote-info" class="text-muted" style="font-size:13px"></div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-outline" onclick="imprimirUltimaEtiqueta()">Imprimir etiqueta</button>
+          <button class="btn btn-ghost" onclick="document.getElementById('etiqueta-card').style.display='none'">Fechar</button>
+        </div>
+      </div>
+      <div id="ultima-etiqueta-preview" style="margin-top:12px;display:flex;gap:16px;align-items:center">
+        <div id="ultimo-qr" style="width:100px;height:100px"></div>
+        <div id="ultimo-texto" style="font-family:ui-monospace,monospace"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Historico da sessao -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-body">
+      <h3 style="margin:0 0 12px 0">Entradas desta sessao</h3>
+      <div id="hist-area"><div class="text-muted" style="font-size:13px">Nenhuma entrada ainda.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _produtoAtual = null;
+let _fornecedores = [];
+let _historico = [];
+let _ultimoLote = null;
+
+PageBootstrap.init({
+  page: 'entrada',
+  title: 'Entrada de Estoque',
+  breadcrumb: 'Estoque / Entrada',
+  perfisPermitidos: ['admin','almoxarife'],
+  loadData: async () => API.get('trans_fornecedores?ativo=eq.true&order=razao_social&select=id,razao_social'),
+  render: (res, user) => {
+    _fornecedores = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Entrada de Estoque',
+      subtitle: 'Bipe o EAN, preencha o lote do fornecedor e registre. Sistema gera lote interno (L-000001) unico.',
+      actions: []
+    });
+    const sel = document.getElementById('f-fornecedor');
+    sel.innerHTML = '<option value="">&mdash;</option>' +
+      _fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+    bindEanScan();
+  }
+});
+
+function bindEanScan() {
+  const inp = document.getElementById('inp-ean');
+  inp.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const ean = inp.value.trim();
+      if (!ean) return;
+      await buscarEan(ean);
+    }
+  });
+}
+
+async function buscarEan(ean) {
+  const info = document.getElementById('produto-info');
+  info.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  document.getElementById('btn-salvar').disabled = true;
+  _produtoAtual = null;
+
+  const res = await API.rpc('trans_buscar_produto_por_ean', { p_ean: ean });
+  if (!res.ok || !res.data) {
+    info.innerHTML = `<div class="alert alert-warning">EAN sem resposta do servidor.</div>`;
+    return;
+  }
+
+  if (!res.data.encontrado) {
+    info.innerHTML = `
+      <div class="alert alert-warning" style="padding:12px;background:#fef3c7;border-radius:8px;border:1px solid #fbbf24">
+        <strong>EAN nao cadastrado.</strong><br>
+        Vincule o EAN <code>${API.esc(ean)}</code> a um produto existente em
+        <a href="produtos.html">produtos.html</a>. Nao cadastramos produtos automaticamente.
+      </div>`;
+    return;
+  }
+
+  _produtoAtual = res.data.produto;
+  document.getElementById('f-produto-id').value = _produtoAtual.id;
+  document.getElementById('btn-salvar').disabled = false;
+
+  const saldoTotal = (res.data.lotes_disponiveis || []).reduce((a, l) => a + Number(l.saldo || 0), 0);
+  const nLotes = (res.data.lotes_disponiveis || []).length;
+
+  info.innerHTML = `
+    <div style="padding:12px;background:#ecfdf5;border-radius:8px;border:1px solid #10b981">
+      <div style="font-weight:700;font-size:15px">${API.esc(_produtoAtual.nome)}</div>
+      <div class="text-muted" style="font-size:12px;margin-top:4px">
+        SKU: <strong>${API.esc(_produtoAtual.sku)}</strong> &middot;
+        ${API.esc(_produtoAtual.categoria_nome || 'Sem categoria')} &middot;
+        Unidade ${API.esc(_produtoAtual.unidade || '—')}
+      </div>
+      <div style="margin-top:8px;font-size:13px">
+        Saldo atual (novo): <strong>${API.fmtNum(saldoTotal)}</strong> em ${nLotes} lote(s)
+      </div>
+    </div>
+  `;
+
+  // foco em quantidade
+  document.getElementById('f-qtd').focus();
+}
+
+async function salvarEntrada(e) {
+  e.preventDefault();
+  if (!_produtoAtual) { UI.toast('Leia um EAN primeiro', 'erro'); return; }
+
+  const payload = {
+    p_produto_id: _produtoAtual.id,
+    p_quantidade: Number(document.getElementById('f-qtd').value),
+    p_lote_fornecedor: document.getElementById('f-lote-forn').value.trim() || null,
+    p_fornecedor_id: document.getElementById('f-fornecedor').value || null,
+    p_data_fabricacao: document.getElementById('f-data-fab').value || null,
+    p_data_validade: document.getElementById('f-data-val').value || null,
+    p_custo_unitario: Number(document.getElementById('f-custo').value) || null,
+    p_ean_lido: document.getElementById('inp-ean').value.trim() || null,
+    p_observacao: document.getElementById('f-obs').value.trim() || null
+  };
+
+  const res = await API.rpc('trans_entrada_estoque', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro ao registrar entrada', 'erro');
+    return;
+  }
+
+  _ultimoLote = {
+    lote_interno: res.data.lote_interno,
+    lote_id: res.data.lote_id,
+    produto: _produtoAtual,
+    quantidade: payload.p_quantidade,
+    ean: payload.p_ean_lido
+  };
+  _historico.unshift({ ...res.data, produto_nome: _produtoAtual.nome, sku: _produtoAtual.sku, qtd: payload.p_quantidade, data: new Date() });
+
+  UI.toast(`Entrada registrada: ${res.data.lote_interno}`, 'ok');
+  mostrarEtiqueta(_ultimoLote);
+  renderHistorico();
+  limparForm();
+  document.getElementById('inp-ean').focus();
+}
+
+function mostrarEtiqueta(l) {
+  document.getElementById('etiqueta-card').style.display = '';
+  document.getElementById('ultimo-lote-info').innerHTML =
+    `<strong>${API.esc(l.lote_interno)}</strong> &middot; ${API.esc(l.produto.nome)} &middot; SKU ${API.esc(l.produto.sku)} &middot; Qty ${API.fmtNum(l.quantidade)}`;
+
+  const qrEl = document.getElementById('ultimo-qr');
+  qrEl.innerHTML = '';
+  new QRCode(qrEl, { text: l.lote_interno, width: 100, height: 100 });
+
+  document.getElementById('ultimo-texto').innerHTML = `
+    <div style="font-weight:700;font-size:18px">${API.esc(l.lote_interno)}</div>
+    <div style="color:#475569;font-size:13px">${API.esc(l.produto.sku)}</div>
+    <div style="color:#64748b;font-size:12px">${API.esc(l.produto.nome)}</div>
+  `;
+}
+
+async function imprimirUltimaEtiqueta() {
+  if (!_ultimoLote) return;
+  if (!window.Labels) {
+    await carregarLabels();
+  }
+  const items = [{
+    codigo: _ultimoLote.lote_interno,
+    sku: _ultimoLote.produto.sku,
+    nome: _ultimoLote.produto.nome,
+    localizacao: _ultimoLote.produto.localizacao,
+    lote_interno: _ultimoLote.lote_interno
+  }];
+  try {
+    await Labels.printPDF(items, { filename: `etiqueta-${_ultimoLote.lote_interno}.pdf` });
+  } catch (e) {
+    UI.toast('Erro ao gerar PDF: ' + e.message, 'erro');
+  }
+}
+
+async function carregarLabels() {
+  // carrega libs sob demanda (JsBarcode + jsPDF + labels.js)
+  return new Promise((resolve) => {
+    let pending = 0;
+    const addScript = (src) => {
+      pending++;
+      const s = document.createElement('script');
+      s.src = src; s.onload = () => { if (--pending === 0) resolve(); };
+      document.head.appendChild(s);
+    };
+    addScript('https://cdn.jsdelivr.net/npm/jsbarcode@3.11.6/dist/JsBarcode.all.min.js');
+    addScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js');
+    addScript('labels.js');
+  });
+}
+
+function limparForm() {
+  document.getElementById('form-entrada').reset();
+  document.getElementById('f-produto-id').value = '';
+  document.getElementById('produto-info').innerHTML = '';
+  document.getElementById('inp-ean').value = '';
+  document.getElementById('btn-salvar').disabled = true;
+  _produtoAtual = null;
+}
+
+function renderHistorico() {
+  const area = document.getElementById('hist-area');
+  if (_historico.length === 0) {
+    area.innerHTML = '<div class="text-muted" style="font-size:13px">Nenhuma entrada ainda.</div>';
+    return;
+  }
+  area.innerHTML = UI.dataTable({
+    columns: [
+      { key: 'data', label: 'Horario', render: h => h.data.toLocaleTimeString('pt-BR') },
+      { key: 'lote_interno', label: 'Lote', render: h => `<strong>${API.esc(h.lote_interno)}</strong>` },
+      { key: 'sku', label: 'SKU', render: h => API.esc(h.sku) },
+      { key: 'produto_nome', label: 'Produto', render: h => API.esc(h.produto_nome) },
+      { key: 'qtd', label: 'Qty', align: 'right', render: h => API.fmtNum(h.qtd) }
+    ],
+    rows: _historico
+  });
+}
+</script>
+</body>
+</html>

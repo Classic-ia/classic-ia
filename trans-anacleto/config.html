@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuracao - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="card">
+    <div class="card-body">
+      <div id="form-area"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _configs = [];
+
+PageBootstrap.init({
+  page: 'config',
+  title: 'Configuracao',
+  breadcrumb: 'Sistema / Configuracao',
+  perfisPermitidos: ['admin'],
+  loadData: async () => API.get('trans_config?order=chave'),
+  render: (res, user) => {
+    _configs = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Configuracao do sistema',
+      subtitle: 'Parametros globais (sucata, thresholds, layout de etiquetas). Edicao apenas por admin.',
+      actions: []
+    });
+    renderForm();
+  }
+});
+
+function renderForm() {
+  const area = document.getElementById('form-area');
+  if (_configs.length === 0) {
+    area.innerHTML = '<div class="text-muted">Nenhuma configuracao encontrada.</div>';
+    return;
+  }
+
+  const opcoesSelect = {
+    sucata_modo: [
+      { v: 'baixa_direta', l: 'Baixa direta (nao entra em estoque)' },
+      { v: 'estoque_c', l: 'Estoque condicao C (entra como sucata reutilizavel)' }
+    ],
+    tms_modo: [
+      { v: 'standalone', l: 'Standalone (novo modulo master)' },
+      { v: 'master_tms', l: 'Master TMS (TMS master, novo read-only em campos master)' }
+    ]
+  };
+
+  const rows = _configs.map(c => {
+    const selOpts = opcoesSelect[c.chave];
+    let input;
+    if (selOpts) {
+      input = `<select data-chave="${c.chave}">${selOpts.map(o => `<option value="${o.v}" ${o.v === c.valor ? 'selected' : ''}>${o.l}</option>`).join('')}</select>`;
+    } else {
+      input = `<input type="text" data-chave="${c.chave}" value="${API.esc(c.valor)}">`;
+    }
+    return `
+      <div class="form-field form-field-full" style="border-bottom:1px solid #e2e8f0;padding-bottom:16px;margin-bottom:16px">
+        <label style="font-weight:600">${API.esc(c.chave)}</label>
+        <div class="text-muted" style="font-size:12px;margin-bottom:8px">${API.esc(c.descricao || '')}</div>
+        ${input}
+      </div>
+    `;
+  }).join('');
+
+  area.innerHTML = `
+    <form id="form-cfg" onsubmit="salvarConfig(event)">
+      ${rows}
+      <div style="display:flex;justify-content:flex-end;gap:8px">
+        <button type="submit" class="btn btn-primary">Salvar alteracoes</button>
+      </div>
+    </form>
+  `;
+}
+
+async function salvarConfig(e) {
+  e.preventDefault();
+  const inputs = document.querySelectorAll('[data-chave]');
+  const promises = [];
+  inputs.forEach(inp => {
+    const chave = inp.dataset.chave;
+    const valor = inp.value.trim();
+    const antes = _configs.find(c => c.chave === chave);
+    if (antes && antes.valor !== valor) {
+      promises.push(API.patch(`trans_config?chave=eq.${encodeURIComponent(chave)}`, { valor }));
+    }
+  });
+
+  if (promises.length === 0) { UI.toast('Nada para salvar', 'info'); return; }
+  const resultados = await Promise.all(promises);
+  const erros = resultados.filter(r => !r.ok);
+  if (erros.length > 0) {
+    UI.toast(`${erros.length} erro(s) ao salvar`, 'erro');
+    return;
+  }
+  UI.toast(`${resultados.length} configuracao(oes) atualizada(s)`, 'ok');
+  const reload = await API.get('trans_config?order=chave');
+  _configs = reload.ok ? reload.data : [];
+  renderForm();
+}
+</script>
+</body>
+</html>

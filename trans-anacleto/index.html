@@ -8,12 +8,41 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="ds.css">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <script src="config.js"></script>
 <script src="auth.js"></script>
 <script src="api.js"></script>
 <script src="ui_components.js"></script>
 <script src="shell.js"></script>
 <script src="page_bootstrap.js"></script>
+<style>
+.dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-top: 16px; }
+@media (max-width: 900px) { .dash-grid { grid-template-columns: 1fr; } }
+.chart-box { position: relative; height: 300px; }
+.chart-box-sm { position: relative; height: 240px; }
+.alert-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; border-radius: 8px; margin-bottom: 8px; background: #F8FAFC; border-left: 4px solid var(--border); }
+.alert-item.critico { border-left-color: var(--danger); background: var(--danger-light); }
+.alert-item.aviso { border-left-color: var(--warning); background: var(--warning-light); }
+.alert-item.info { border-left-color: var(--primary); background: var(--primary-50); }
+.alert-title { font-weight: 600; font-size: 13px; text-transform: capitalize; }
+.alert-sub { font-size: 12px; color: var(--text-muted); }
+.alert-count { font-size: 18px; font-weight: 700; }
+.rank-item { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.rank-item:last-child { border-bottom: none; }
+.rank-pos { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; background: var(--bg); color: var(--text-muted); flex-shrink: 0; }
+.rank-pos.gold { background: #FEF3C7; color: #92400E; }
+.rank-pos.silver { background: #E5E7EB; color: #374151; }
+.rank-pos.bronze { background: #FED7AA; color: #9A3412; }
+.rank-name { flex: 1; font-size: 13px; font-weight: 500; }
+.rank-score { font-weight: 700; font-size: 14px; }
+.rank-score.good { color: var(--success); }
+.rank-score.mid { color: var(--warning); }
+.rank-score.bad { color: var(--danger); }
+.mini-stat { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px dashed var(--border); }
+.mini-stat:last-child { border-bottom: none; }
+.mini-stat-label { color: var(--text-muted); }
+.mini-stat-value { font-weight: 600; }
+</style>
 </head>
 <body class="page-bg">
 
@@ -32,55 +61,287 @@
       </div>
       <div class="kpi-value" id="kpi-veiculos">&mdash;</div>
       <div class="kpi-label">Veiculos Ativos</div>
+      <div class="text-xs text-muted" id="kpi-veiculos-sub" style="margin-top:4px;">&nbsp;</div>
+    </a>
+    <a class="kpi-card" href="manutencoes_alertas.html">
+      <div class="kpi-icon red">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-manut-vencidas">&mdash;</div>
+      <div class="kpi-label">Manutencoes Vencidas</div>
+      <div class="text-xs text-muted" id="kpi-manut-sub" style="margin-top:4px;">&nbsp;</div>
     </a>
     <a class="kpi-card" href="pneus.html">
       <div class="kpi-icon amber">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="3"/></svg>
       </div>
       <div class="kpi-value" id="kpi-pneus">&mdash;</div>
-      <div class="kpi-label">Pneus em Operacao</div>
-    </a>
-    <a class="kpi-card" href="manutencoes_alertas.html">
-      <div class="kpi-icon red">
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
-      </div>
-      <div class="kpi-value" id="kpi-alertas">&mdash;</div>
-      <div class="kpi-label">Manutencoes Vencidas</div>
+      <div class="kpi-label">Pneus Instalados</div>
+      <div class="text-xs text-muted" id="kpi-pneus-sub" style="margin-top:4px;">&nbsp;</div>
     </a>
     <a class="kpi-card" href="abastecimentos.html">
       <div class="kpi-icon green">
         <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>
       </div>
       <div class="kpi-value" id="kpi-consumo">&mdash;</div>
-      <div class="kpi-label">Consumo Medio km/L</div>
+      <div class="kpi-label">Consumo Medio km/L (30d)</div>
+      <div class="text-xs text-muted" id="kpi-consumo-sub" style="margin-top:4px;">&nbsp;</div>
     </a>
   </div>
 
-  <div class="card">
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>KM rodado por dia (toda frota)</h3>
+          <p class="text-sm text-muted">Ultimos 30 dias - origem telemetria</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box"><canvas id="chartKmDiario"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div><h3>Custos ultimos 30 dias</h3></div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box"><canvas id="chartCustos"></canvas></div>
+        <div style="margin-top:12px;">
+          <div class="mini-stat"><span class="mini-stat-label">Combustivel</span><span class="mini-stat-value" id="cst-comb">R$ 0</span></div>
+          <div class="mini-stat"><span class="mini-stat-label">Manutencao</span><span class="mini-stat-value" id="cst-manut">R$ 0</span></div>
+          <div class="mini-stat"><span class="mini-stat-label">Pneus/Recap</span><span class="mini-stat-value" id="cst-pneus">R$ 0</span></div>
+          <div class="mini-stat" style="border-top:2px solid var(--primary); padding-top:8px; margin-top:4px;"><span class="mini-stat-label" style="font-weight:600;">Total</span><span class="mini-stat-value" id="cst-total" style="color:var(--primary);">R$ 0</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>Top 10 consumidores (veiculo x combustivel)</h3>
+          <p class="text-sm text-muted">Ultimos 30 dias por valor</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box"><canvas id="chartConsumoVeiculo"></canvas></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>Alertas abertos</h3>
+          <p class="text-sm text-muted">
+            <a href="manutencoes_alertas.html" style="color:var(--primary);">Ver todos &rarr;</a>
+          </p>
+        </div>
+      </div>
+      <div class="card-body" id="alertas-container">
+        <div class="text-sm text-muted">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="dash-grid">
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>Estoque de pneus</h3>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="chart-box-sm"><canvas id="chartPneus"></canvas></div>
+        <div class="text-sm text-muted" style="margin-top:8px;" id="pneus-alerta">&nbsp;</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <h3>Top 5 motoristas do mes</h3>
+          <p class="text-sm text-muted">
+            <a href="motoristas_score.html" style="color:var(--primary);">Ranking completo &rarr;</a>
+          </p>
+        </div>
+      </div>
+      <div class="card-body" id="ranking-container">
+        <div class="text-sm text-muted">Carregando...</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top:16px;">
     <div class="card-header">
       <div>
-        <h3>Bem-vindo(a) ao Trans Anacleto</h3>
-        <p class="text-sm text-muted">Modulo operacional de frota, estoque, oficina e telemetria.</p>
+        <h3>Frota por status</h3>
       </div>
     </div>
     <div class="card-body">
-      <p style="font-size:14px; line-height:1.6; color:#475569;">
-        Este e o painel inicial do sistema. Os indicadores acima serao preenchidos automaticamente
-        a partir da <strong>Fase 2</strong> (cadastros), <strong>Fase 3</strong> (estoque),
-        <strong>Fase 4</strong> (pneus), <strong>Fase 5</strong> (manutencao),
-        <strong>Fase 6</strong> (abastecimento) e <strong>Fase 6.5</strong> (telemetria Onixsat).
-      </p>
-      <p style="font-size:14px; line-height:1.6; color:#475569; margin-top:12px;">
-        Para iniciar, use a barra lateral para cadastrar veiculos, motoristas, fornecedores,
-        categorias e produtos. O modulo coexiste com o <strong>TMS Transporte Facil</strong>
-        (fiscal/financeiro) e foca apenas em <strong>operacao</strong>: pneus, manutencao,
-        abastecimento, estoque e telemetria.
-      </p>
+      <div class="kpi-row">
+        <div><div class="mini-stat-label">Ativos</div><div style="font-size:22px; font-weight:700; color:var(--success);" id="frota-ativos">0</div></div>
+        <div><div class="mini-stat-label">Parados</div><div style="font-size:22px; font-weight:700; color:var(--text-muted);" id="frota-parados">0</div></div>
+        <div><div class="mini-stat-label">Em manutencao</div><div style="font-size:22px; font-weight:700; color:var(--warning);" id="frota-manut">0</div></div>
+        <div><div class="mini-stat-label">Vendidos</div><div style="font-size:22px; font-weight:700; color:var(--danger);" id="frota-vendidos">0</div></div>
+      </div>
     </div>
   </div>
+
 </div>
 
 <script>
+const BRL = v => 'R$ ' + Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+const fmtDate = s => { const d = new Date(s + 'T00:00:00'); return (d.getDate()+'').padStart(2,'0') + '/' + (d.getMonth()+1+'').padStart(2,'0'); };
+
+function renderChartKmDiario(rows) {
+  const ctx = document.getElementById('chartKmDiario');
+  const labels = (rows || []).map(r => fmtDate(r.data));
+  const data = (rows || []).map(r => Number(r.km_total));
+  new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'KM rodado',
+        data,
+        borderColor: '#2563EB',
+        backgroundColor: 'rgba(37,99,235,0.1)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 2,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true, ticks: { callback: v => v.toLocaleString('pt-BR') } } }
+    }
+  });
+}
+
+function renderChartCustos(c) {
+  const ctx = document.getElementById('chartCustos');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Combustivel', 'Manutencao', 'Pneus/Recap'],
+      datasets: [{
+        data: [Number(c.combustivel||0), Number(c.manutencao||0), Number(c.pneus||0)],
+        backgroundColor: ['#10B981', '#F59E0B', '#6366F1'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } },
+        tooltip: { callbacks: { label: ctx => ctx.label + ': ' + BRL(ctx.parsed) } }
+      },
+      cutout: '60%',
+    }
+  });
+}
+
+function renderChartPneus(p) {
+  const ctx = document.getElementById('chartPneus');
+  new Chart(ctx, {
+    type: 'doughnut',
+    data: {
+      labels: ['Instalados', 'Em estoque', 'Recapagem', 'Sucata'],
+      datasets: [{
+        data: [p.instalados||0, p.em_estoque||0, p.recapagem||0, p.sucata||0],
+        backgroundColor: ['#10B981', '#2563EB', '#F59E0B', '#EF4444'],
+        borderWidth: 0,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } }
+      },
+      cutout: '50%',
+    }
+  });
+  if ((p.vida_util_baixa || 0) > 0) {
+    document.getElementById('pneus-alerta').innerHTML = '<strong style="color:var(--warning);">' + p.vida_util_baixa + '</strong> pneu(s) com vida util >= 90%';
+  }
+}
+
+function renderChartConsumoVeiculo(rows) {
+  const ctx = document.getElementById('chartConsumoVeiculo');
+  const labels = (rows || []).map(r => r.placa);
+  const valorLitros = (rows || []).map(r => Number(r.litros));
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Litros consumidos',
+        data: valorLitros,
+        backgroundColor: '#6366F1',
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: { x: { beginAtZero: true, ticks: { callback: v => v + ' L' } } }
+    }
+  });
+}
+
+function renderAlertas(rows) {
+  const el = document.getElementById('alertas-container');
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="text-sm text-muted" style="padding:12px 0;">Nenhum alerta aberto.</div>';
+    return;
+  }
+  const tipoLabels = {
+    manutencao_vencida: 'Manutencao vencida',
+    lote_vencendo: 'Lote proximo do vencimento',
+    pneu_vida_util: 'Pneu no fim da vida util',
+    parado_excessivo: 'Veiculo parado',
+    consumo_desvio: 'Desvio de consumo',
+  };
+  el.innerHTML = rows.slice(0, 6).map(a => `
+    <div class="alert-item ${a.severidade}">
+      <div>
+        <div class="alert-title">${tipoLabels[a.tipo] || a.tipo}</div>
+        <div class="alert-sub">${a.severidade}</div>
+      </div>
+      <div class="alert-count">${a.total}</div>
+    </div>
+  `).join('');
+}
+
+function renderRanking(rows) {
+  const el = document.getElementById('ranking-container');
+  if (!rows || !rows.length) {
+    el.innerHTML = '<div class="text-sm text-muted" style="padding:12px 0;">Ranking ainda nao calculado para este mes.</div>';
+    return;
+  }
+  el.innerHTML = rows.map(r => {
+    const score = Number(r.score_calc || 0);
+    const cls = score >= 80 ? 'good' : score >= 60 ? 'mid' : 'bad';
+    const posCls = r.posicao === 1 ? 'gold' : r.posicao === 2 ? 'silver' : r.posicao === 3 ? 'bronze' : '';
+    return `
+      <div class="rank-item">
+        <div class="rank-pos ${posCls}">${r.posicao}</div>
+        <div class="rank-name">${r.motorista_nome || '-'}</div>
+        <div class="rank-score ${cls}">${score.toFixed(0)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
 (async () => {
   const hora = new Date().getHours();
   const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
@@ -93,14 +354,63 @@
     breadcrumb: 'Inicio',
     perfisPermitidos: ['admin', 'almoxarife', 'gestor', 'motorista'],
     loadData: async () => {
-      const veiculos = await API.get('trans_veiculos?status=eq.ativo&select=id');
-      return { veiculos: veiculos.ok ? veiculos.data.length : 0 };
+      const [sum, consumo] = await Promise.all([
+        API.rpc('trans_dashboard_summary', {}),
+        API.rpc('trans_dashboard_consumo_veiculo', { p_limit: 10 }),
+      ]);
+      return {
+        summary: sum.ok ? sum.data : null,
+        consumo: consumo.ok ? consumo.data : [],
+      };
     },
     render: (data) => {
-      document.getElementById('kpi-veiculos').textContent = data.veiculos || 0;
+      const s = data.summary || {};
+      const frota = s.frota || {};
+      const manut = s.manutencoes || {};
+      const pneus = s.pneus || {};
+      const comb = s.combustivel_30d || {};
+      const custos = s.custos_30d || {};
+
+      // KPIs
+      document.getElementById('kpi-veiculos').textContent = frota.ativos || 0;
+      document.getElementById('kpi-veiculos-sub').textContent = (frota.total || 0) + ' total na frota';
+
+      document.getElementById('kpi-manut-vencidas').textContent = manut.vencidas || 0;
+      document.getElementById('kpi-manut-sub').textContent = (manut.vence_em_breve || 0) + ' vencem em breve';
+
+      document.getElementById('kpi-pneus').textContent = pneus.instalados || 0;
+      document.getElementById('kpi-pneus-sub').textContent = (pneus.em_estoque || 0) + ' em estoque';
+
+      const cm = comb.consumo_medio;
+      document.getElementById('kpi-consumo').textContent = cm ? Number(cm).toFixed(2) : '-';
+      document.getElementById('kpi-consumo-sub').textContent = (comb.abastecimentos || 0) + ' abastecimentos 30d';
+
+      // Frota status
+      document.getElementById('frota-ativos').textContent = frota.ativos || 0;
+      document.getElementById('frota-parados').textContent = frota.parados || 0;
+      document.getElementById('frota-manut').textContent = frota.manutencao || 0;
+      document.getElementById('frota-vendidos').textContent = frota.vendidos || 0;
+
+      // Custos
+      const total = Number(custos.combustivel||0) + Number(custos.manutencao||0) + Number(custos.pneus||0);
+      document.getElementById('cst-comb').textContent = BRL(custos.combustivel);
+      document.getElementById('cst-manut').textContent = BRL(custos.manutencao);
+      document.getElementById('cst-pneus').textContent = BRL(custos.pneus);
+      document.getElementById('cst-total').textContent = BRL(total);
+
+      // Charts
+      renderChartKmDiario(s.km_diario_30d);
+      renderChartCustos(custos);
+      renderChartPneus(pneus);
+      renderChartConsumoVeiculo(data.consumo);
+
+      // Listas
+      renderAlertas(s.alertas);
+      renderRanking(s.ranking_motoristas_mes);
     },
-    onError: () => {
-      document.getElementById('kpi-veiculos').textContent = '0';
+    onError: (err) => {
+      console.error('Dashboard load error:', err);
+      UI.toast('Erro ao carregar dashboard: ' + (err?.message || 'desconhecido'), 'error');
     }
   });
 })();

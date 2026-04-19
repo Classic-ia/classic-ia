@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pagamentos - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.p-table { width:100%; border-collapse:collapse; font-size:13px; }
+.p-table th, .p-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.p-table th { background:#F8FAFC; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
+.p-table tr:hover { background:#FEF3C7; }
+.p-table .right { text-align:right; font-variant-numeric:tabular-nums; }
+.p-table .num-os { font-family:ui-monospace,monospace; color:#D97706; font-weight:600; text-decoration:none; }
+.p-table .num-os:hover { text-decoration:underline; }
+.p-table .num-small { font-family:ui-monospace,monospace; font-size:12px; color:#64748B; }
+.p-table .v-money { font-weight:600; color:#065F46; }
+
+.forma-badge { padding:3px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#EFF6FF; color:#1E40AF; }
+.conc-badge { padding:3px 8px; border-radius:999px; font-size:11px; font-weight:600; }
+.conc-sim { background:#D1FAE5; color:#065F46; cursor:pointer; }
+.conc-nao { background:#FEF3C7; color:#92400E; cursor:pointer; }
+
+.filter-row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+.filter-field { display:flex; flex-direction:column; gap:4px; }
+.filter-field label { font-size:12px; font-weight:500; color:#475569; }
+.filter-field input, .filter-field select {
+  padding:8px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; min-width:140px;
+}
+.summary-row { display:flex; gap:16px; margin-bottom:18px; }
+.summary-card { flex:1; background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:14px 18px; }
+.summary-label { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+.summary-value { font-size:22px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+.empty-state { text-align:center; padding:40px; color:#64748B; }
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3>Pagamentos</h3>
+        <p class="text-sm text-muted">Recebimentos vinculados a Ordens de Servico.</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="btn-export" class="btn" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:8px;font-size:13px;cursor:pointer;">Exportar CSV</button>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-row">
+        <div class="summary-card"><div class="summary-label">Total recebido</div><div class="summary-value" id="s-total" style="color:#065F46;">—</div></div>
+        <div class="summary-card"><div class="summary-label">Pagamentos</div><div class="summary-value" id="s-count" style="color:#1E293B;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Conciliados</div><div class="summary-value" id="s-conc" style="color:#059669;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Pendentes concil.</div><div class="summary-value" id="s-pend" style="color:#D97706;">0</div></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-field">
+          <label>Buscar</label>
+          <input type="text" id="f-q" placeholder="OS, cliente, documento...">
+        </div>
+        <div class="filter-field">
+          <label>Forma</label>
+          <select id="f-forma">
+            <option value="">Todas</option>
+            <option value="pix">PIX</option>
+            <option value="transferencia">Transferencia</option>
+            <option value="boleto">Boleto</option>
+            <option value="cheque">Cheque</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="parcela_cartao">Parcela cartao</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label>Conciliado</label>
+          <select id="f-conc">
+            <option value="">Todos</option>
+            <option value="true">Sim</option>
+            <option value="false">Nao</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label>De</label>
+          <input type="date" id="f-ini">
+        </div>
+        <div class="filter-field">
+          <label>Ate</label>
+          <input type="date" id="f-fim">
+        </div>
+        <button id="btn-limpar" class="btn" style="padding:8px 14px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Limpar</button>
+      </div>
+
+      <div id="list-area">
+        <div style="padding:30px;text-align:center;color:#64748B;">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let todos = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'pagamentos',
+    title: 'Pagamentos',
+    breadcrumb: 'Operacao > Pagamentos',
+    perfisPermitidos: ['admin', 'gestor', 'financeiro'],
+    loadData: async () => {
+      const r = await API.get('v_jr_pagamentos_detalhado?select=*&order=data.desc,created_at.desc&limit=2000');
+      return { pagamentos: r.ok ? r.data : [] };
+    },
+    render: (d) => {
+      todos = d.pagamentos;
+      aplicarFiltros();
+    }
+  });
+
+  ['f-q', 'f-forma', 'f-conc', 'f-ini', 'f-fim'].forEach(id => {
+    const el = document.getElementById(id);
+    const evt = el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input';
+    el.addEventListener(evt, aplicarFiltros);
+  });
+
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    ['f-q', 'f-forma', 'f-conc', 'f-ini', 'f-fim'].forEach(id => document.getElementById(id).value = '');
+    aplicarFiltros();
+  });
+
+  document.getElementById('btn-export').addEventListener('click', exportarCsv);
+})();
+
+function aplicarFiltros() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const forma = document.getElementById('f-forma').value;
+  const conc = document.getElementById('f-conc').value;
+  const ini = document.getElementById('f-ini').value;
+  const fim = document.getElementById('f-fim').value;
+
+  let lista = todos.slice();
+  if (q) lista = lista.filter(p =>
+    (p.numero_os || '').toLowerCase().includes(q) ||
+    (p.cliente_nome || '').toLowerCase().includes(q) ||
+    (p.documento || '').toLowerCase().includes(q)
+  );
+  if (forma) lista = lista.filter(p => p.forma === forma);
+  if (conc) lista = lista.filter(p => String(p.conciliado) === conc);
+  if (ini) lista = lista.filter(p => p.data >= ini);
+  if (fim) lista = lista.filter(p => p.data <= fim);
+
+  renderResumo(lista);
+  renderTabela(lista);
+}
+
+function renderResumo(lista) {
+  const total = lista.reduce((a, p) => a + (Number(p.valor) || 0), 0);
+  const conc = lista.filter(p => p.conciliado).length;
+  document.getElementById('s-total').textContent = API.fmtMoeda(total);
+  document.getElementById('s-count').textContent = lista.length;
+  document.getElementById('s-conc').textContent = conc;
+  document.getElementById('s-pend').textContent = lista.length - conc;
+}
+
+function renderTabela(lista) {
+  const area = document.getElementById('list-area');
+  if (!lista.length) {
+    area.innerHTML = '<div class="empty-state">Nenhum pagamento encontrado.</div>';
+    return;
+  }
+  const podeConc = API.canAccess('registrar_pagamento');
+  const podeRem = ['admin', 'gestor'].includes(API.getPerfil());
+
+  let html = '<div style="overflow-x:auto;"><table class="p-table"><thead><tr>';
+  html += '<th>Data</th><th>OS</th><th>Cliente</th><th>Forma</th><th>Documento</th><th>Parcela</th>';
+  html += '<th class="right">Valor</th><th>Conciliado</th>';
+  if (podeRem) html += '<th></th>';
+  html += '</tr></thead><tbody>';
+  lista.forEach(p => {
+    const parc = (p.parcela_numero && p.parcela_total) ? `${p.parcela_numero}/${p.parcela_total}` : '—';
+    const concClass = p.conciliado ? 'conc-sim' : 'conc-nao';
+    const concLbl = p.conciliado ? 'Sim' : 'Nao';
+    html += `<tr>
+      <td>${API.fmtData(p.data)}</td>
+      <td><a href="os_ficha.html?id=${encodeURIComponent(p.os_id)}" class="num-os">${API.esc(p.numero_os || '—')}</a></td>
+      <td>${API.esc(p.cliente_nome || '—')}</td>
+      <td><span class="forma-badge">${API.esc(p.forma || '—')}</span></td>
+      <td class="num-small">${API.esc(p.documento || '—')}</td>
+      <td>${parc}</td>
+      <td class="right v-money">${API.fmtMoeda(p.valor)}</td>
+      <td><span class="conc-badge ${concClass}" ${podeConc ? `onclick="toggleConc('${p.id}', ${!p.conciliado})"` : ''}>${concLbl}</span></td>`;
+    if (podeRem) {
+      html += `<td><button onclick="removerPag('${p.id}', '${API.esc(p.numero_os||'')}' )" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:14px;" title="Remover">&times;</button></td>`;
+    }
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+async function toggleConc(id, novo) {
+  const r = await API.rpc('jr_pagamento_conciliar', { p_pagamento_id: id, p_conciliado: novo });
+  if (!r.ok) { UI.toast('Erro: ' + (r.error||''), 'err'); return; }
+  UI.toast(novo ? 'Conciliado' : 'Desmarcado', 'ok');
+  await recarregar();
+}
+
+async function removerPag(id, numeroOs) {
+  if (!confirm(`Remover pagamento da OS ${numeroOs}? Saldo a receber sera recalculado.`)) return;
+  const r = await API.rpc('jr_pagamento_remover', { p_pagamento_id: id });
+  if (!r.ok) { UI.toast('Erro: ' + (r.error||''), 'err'); return; }
+  UI.toast('Pagamento removido', 'ok');
+  await recarregar();
+}
+
+async function recarregar() {
+  const r = await API.get('v_jr_pagamentos_detalhado?select=*&order=data.desc,created_at.desc&limit=2000');
+  if (r.ok) { todos = r.data; aplicarFiltros(); }
+}
+
+function exportarCsv() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const forma = document.getElementById('f-forma').value;
+  const conc = document.getElementById('f-conc').value;
+  const ini = document.getElementById('f-ini').value;
+  const fim = document.getElementById('f-fim').value;
+
+  let lista = todos.slice();
+  if (q) lista = lista.filter(p => (p.numero_os||'').toLowerCase().includes(q) || (p.cliente_nome||'').toLowerCase().includes(q) || (p.documento||'').toLowerCase().includes(q));
+  if (forma) lista = lista.filter(p => p.forma === forma);
+  if (conc) lista = lista.filter(p => String(p.conciliado) === conc);
+  if (ini) lista = lista.filter(p => p.data >= ini);
+  if (fim) lista = lista.filter(p => p.data <= fim);
+
+  if (!lista.length) { UI.toast('Nada para exportar', 'warn'); return; }
+
+  const cols = ['data','numero_os','cliente_nome','forma','documento','parcela','valor','conciliado','observacao'];
+  const rows = lista.map(p => [
+    p.data || '',
+    p.numero_os || '',
+    p.cliente_nome || '',
+    p.forma || '',
+    p.documento || '',
+    (p.parcela_numero && p.parcela_total) ? `${p.parcela_numero}/${p.parcela_total}` : '',
+    String(Number(p.valor || 0).toFixed(2)).replace('.', ','),
+    p.conciliado ? 'sim' : 'nao',
+    (p.observacao || '').replace(/[\r\n]+/g, ' '),
+  ]);
+  const csv = [cols.join(';')].concat(rows.map(r => r.map(v => {
+    const s = String(v);
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }).join(';'))).join('\n');
+
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `pagamentos_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  UI.toast(`${lista.length} pagamentos exportados`, 'ok');
+}
+</script>
+</body>
+</html>

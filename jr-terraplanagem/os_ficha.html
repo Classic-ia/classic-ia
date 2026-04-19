@@ -256,25 +256,55 @@ function renderFicha(data) {
   html += `</div>`;
 
   // Aba Pagamentos
+  const podePag = API.canAccess('registrar_pagamento') && os.status !== 'cancelada';
+  const podeRemPag = ['admin', 'gestor'].includes(API.getPerfil());
   html += `<div class="tab-panel" id="t-pagamentos">`;
+  if (podePag) {
+    const saldoAtual = Number(os.saldo_receber || 0);
+    html += `<div class="form-inline" style="background:#ECFDF5;border-color:#A7F3D0;">
+      <div><label style="color:#065F46;">Data *</label><input type="date" id="pag-data" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div><label style="color:#065F46;">Valor * <span style="color:#059669;font-weight:500;">(saldo: ${API.fmtMoeda(saldoAtual)})</span></label><input type="number" step="0.01" id="pag-valor" placeholder="0,00"></div>
+      <div><label style="color:#065F46;">Forma *</label>
+        <select id="pag-forma">
+          <option value="pix">PIX</option>
+          <option value="transferencia">Transferencia</option>
+          <option value="boleto">Boleto</option>
+          <option value="cheque">Cheque</option>
+          <option value="dinheiro">Dinheiro</option>
+          <option value="parcela_cartao">Parcela cartao</option>
+          <option value="outro">Outro</option>
+        </select>
+      </div>
+      <div><label style="color:#065F46;">Documento</label><input type="text" id="pag-doc" placeholder="NF, cheque n..."></div>
+      <div><label style="color:#065F46;">Parcela</label><input type="number" step="1" id="pag-parc-num" placeholder="n"></div>
+      <div><label style="color:#065F46;">de</label><input type="number" step="1" id="pag-parc-tot" placeholder="total"></div>
+      <div><button class="btn-action btn-primary" onclick="registrarPagamento()" id="btn-pag">Registrar</button></div>
+    </div>`;
+  } else if (os.status === 'cancelada') {
+    html += `<div class="empty-inline">OS cancelada - pagamentos bloqueados.</div>`;
+  }
   if (pagamentos.length) {
     html += `<table class="t-list"><thead><tr>
-      <th>Data</th><th>Forma</th><th>Documento</th><th>Parcela</th><th class="right">Valor</th><th>Obs</th>
+      <th>Data</th><th>Forma</th><th>Documento</th><th>Parcela</th><th class="right">Valor</th><th>Concil.</th>${podeRemPag ? '<th></th>' : ''}
     </tr></thead><tbody>`;
     pagamentos.forEach(p => {
       const parc = (p.parcela_numero && p.parcela_total) ? `${p.parcela_numero}/${p.parcela_total}` : '—';
+      const conc = p.conciliado
+        ? '<span style="background:#D1FAE5;color:#065F46;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;">Sim</span>'
+        : '<span style="background:#FEF3C7;color:#92400E;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:600;">Nao</span>';
       html += `<tr>
         <td>${API.fmtData(p.data)}</td>
         <td>${API.esc(p.forma || '—')}</td>
         <td class="num-small">${API.esc(p.documento || '—')}</td>
         <td>${parc}</td>
-        <td class="right" style="font-weight:600;">${API.fmtMoeda(p.valor)}</td>
-        <td>${API.esc(p.observacao || '')}</td>
+        <td class="right" style="font-weight:600;color:#065F46;">${API.fmtMoeda(p.valor)}</td>
+        <td>${conc}</td>
+        ${podeRemPag ? `<td><button onclick="removerPagamento('${p.id}')" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:14px;" title="Remover">&times;</button></td>` : ''}
       </tr>`;
     });
     html += `</tbody></table>`;
-  } else {
-    html += `<div class="empty-inline">Nenhum pagamento registrado. Use a pagina Pagamentos para lancar (J3).</div>`;
+  } else if (!podePag) {
+    html += `<div class="empty-inline">Nenhum pagamento registrado.</div>`;
   }
   html += `</div>`;
 
@@ -366,6 +396,54 @@ async function removerPeriodo(id) {
   if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
   UI.toast('Periodo removido', 'ok');
   await recarregar();
+}
+
+async function registrarPagamento() {
+  const data = document.getElementById('pag-data').value;
+  const valor = parseFloat(document.getElementById('pag-valor').value);
+  const forma = document.getElementById('pag-forma').value;
+  const doc = document.getElementById('pag-doc').value.trim();
+  const pn = document.getElementById('pag-parc-num').value;
+  const pt = document.getElementById('pag-parc-tot').value;
+
+  if (!data) { UI.toast('Data obrigatoria', 'err'); return; }
+  if (isNaN(valor) || valor <= 0) { UI.toast('Valor invalido', 'err'); return; }
+
+  const btn = document.getElementById('btn-pag');
+  btn.disabled = true; btn.textContent = '...';
+
+  const r = await API.rpc('jr_pagamento_registrar', {
+    p_os_id: osId,
+    p_valor: valor,
+    p_forma: forma,
+    p_data: data,
+    p_parcela_numero: pn ? parseInt(pn, 10) : null,
+    p_parcela_total: pt ? parseInt(pt, 10) : null,
+    p_documento: doc || null,
+    p_observacao: null,
+  });
+
+  btn.disabled = false; btn.textContent = 'Registrar';
+
+  if (!r.ok) {
+    UI.toast('Erro: ' + (r.error || ''), 'err');
+    return;
+  }
+  UI.toast('Pagamento registrado', 'ok');
+  await recarregar();
+  // Mantem aba pagamentos ativa
+  const t = [...document.querySelectorAll('.tab')].find(el => el.textContent.startsWith('Pagamentos'));
+  if (t) trocarTab(t, 't-pagamentos');
+}
+
+async function removerPagamento(id) {
+  if (!confirm('Remover este pagamento? Saldo a receber sera recalculado.')) return;
+  const r = await API.rpc('jr_pagamento_remover', { p_pagamento_id: id });
+  if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+  UI.toast('Pagamento removido', 'ok');
+  await recarregar();
+  const t = [...document.querySelectorAll('.tab')].find(el => el.textContent.startsWith('Pagamentos'));
+  if (t) trocarTab(t, 't-pagamentos');
 }
 
 async function recarregar() {

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Login - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family:'Inter',system-ui,sans-serif;
+  background:#F1F5F9;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  padding:20px;
+}
+.login-card {
+  background:#fff;
+  border:1px solid #E2E8F0;
+  border-radius:16px;
+  box-shadow:0 4px 24px rgba(0,0,0,0.06);
+  padding:40px 36px;
+  max-width:400px;
+  width:100%;
+}
+.logo { text-align:center; margin-bottom:28px; }
+.logo-icon {
+  width:56px; height:56px; border-radius:14px;
+  background:#D97706; color:#fff;
+  display:flex; align-items:center; justify-content:center;
+  margin:0 auto 12px;
+}
+.logo h1 { font-size:20px; font-weight:700; color:#1E293B; }
+.logo p { font-size:13px; color:#64748B; margin-top:2px; }
+.form-group { margin-bottom:18px; }
+.form-group label {
+  display:block; font-size:13px; font-weight:600;
+  color:#1E293B; margin-bottom:6px;
+}
+.form-group input {
+  width:100%; padding:11px 14px; font-size:14px;
+  font-family:inherit; border:1px solid #E2E8F0;
+  border-radius:8px; background:#F8FAFC; color:#1E293B;
+  transition:border-color 0.15s;
+}
+.form-group input:focus {
+  outline:none; border-color:#D97706;
+  box-shadow:0 0 0 3px rgba(217,119,6,0.1);
+  background:#fff;
+}
+.btn-login {
+  width:100%; padding:12px; font-size:14px; font-weight:600;
+  font-family:inherit; color:#fff; background:#D97706;
+  border:none; border-radius:8px; cursor:pointer;
+  transition:background 0.15s;
+}
+.btn-login:hover { background:#B45309; }
+.btn-login:disabled { background:#94A3B8; cursor:not-allowed; }
+.erro {
+  display:none; margin-top:14px; padding:10px 14px;
+  background:#FEE2E2; color:#991B1B; border-radius:8px;
+  font-size:13px; text-align:center;
+}
+.versao {
+  text-align:center; margin-top:20px;
+  font-size:11px; color:#94A3B8;
+}
+.mobile-link {
+  text-align:center; margin-top:14px;
+  font-size:12px;
+}
+.mobile-link a { color:#D97706; text-decoration:none; font-weight:500; }
+.mobile-link a:hover { text-decoration:underline; }
+</style>
+</head>
+<body>
+<div class="login-card">
+  <div class="logo">
+    <div class="logo-icon">
+      <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/>
+      </svg>
+    </div>
+    <h1>JR Terraplanagem</h1>
+    <p>Gestao de Obras e Maquinario</p>
+  </div>
+
+  <form id="form-login" onsubmit="doLogin(event)">
+    <div class="form-group">
+      <label>E-mail</label>
+      <input type="email" id="f-email" placeholder="seu@email.com" required autocomplete="email">
+    </div>
+    <div class="form-group">
+      <label>Senha</label>
+      <input type="password" id="f-senha" placeholder="********" required autocomplete="current-password">
+    </div>
+    <button type="submit" class="btn-login" id="btn-login">Entrar</button>
+  </form>
+
+  <div class="erro" id="erro"></div>
+  <div class="mobile-link"><a href="m/m_login.html">Acessar versao mobile &rarr;</a></div>
+  <div class="versao">JR Terraplanagem v2026.04</div>
+</div>
+
+<script>
+async function doLogin(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-login');
+  const erro = document.getElementById('erro');
+  erro.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Autenticando...';
+
+  try {
+    const email = document.getElementById('f-email').value.trim();
+    const senha = document.getElementById('f-senha').value;
+    await JrAuth.login(email, senha);
+    const ua = navigator.userAgent || '';
+    const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+    window.location.href = isMobile ? 'm/m_home.html' : 'index.html';
+  } catch(err) {
+    erro.textContent = err.message;
+    erro.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="welcome-section">
+    <div class="welcome-greeting" id="welcomeMsg">Bom dia</div>
+    <div class="welcome-date" id="welcomeDate"></div>
+  </div>
+
+  <div class="kpi-row mb-6">
+    <a class="kpi-card" href="maquinas.html">
+      <div class="kpi-icon amber">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="3" width="15" height="13"/><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-maquinas">&mdash;</div>
+      <div class="kpi-label">Maquinas Ativas</div>
+    </a>
+    <a class="kpi-card" href="ordens_servico.html">
+      <div class="kpi-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-os-abertas">&mdash;</div>
+      <div class="kpi-label">OS em Execucao</div>
+    </a>
+    <a class="kpi-card" href="clientes.html">
+      <div class="kpi-icon green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-clientes">&mdash;</div>
+      <div class="kpi-label">Clientes Ativos</div>
+    </a>
+    <a class="kpi-card" href="manutencoes_alertas.html">
+      <div class="kpi-icon red">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-alertas">&mdash;</div>
+      <div class="kpi-label">Manutencoes Vencidas</div>
+    </a>
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3>Bem-vindo(a) ao JR Terraplanagem</h3>
+        <p class="text-sm text-muted">Gestao de obras, maquinario, manutencao e financeiro.</p>
+      </div>
+    </div>
+    <div class="card-body">
+      <p style="font-size:14px; line-height:1.6; color:#475569;">
+        Este e o painel inicial do sistema. Os indicadores e graficos serao preenchidos
+        conforme as fases <strong>J2</strong> (OS nucleo), <strong>J3</strong> (pagamentos),
+        <strong>J4</strong> (despesas/deslocamentos), <strong>J5</strong> (estoque),
+        <strong>J6</strong> (manutencao/abastecimento) e <strong>J8</strong> (relatorios/DRE) avancem.
+      </p>
+      <p style="font-size:14px; line-height:1.6; color:#475569; margin-top:12px;">
+        Para comecar, importe o JSON exportado do sistema legado (localStorage) em
+        <a href="importar_localstorage.html" style="color:#D97706; font-weight:600;">Importar Legacy</a>
+        para trazer maquinas, OS, despesas e deslocamentos existentes.
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const hora = new Date().getHours();
+  const saud = hora < 12 ? 'Bom dia' : hora < 18 ? 'Boa tarde' : 'Boa noite';
+  document.getElementById('welcomeMsg').textContent = saud + '!';
+  document.getElementById('welcomeDate').textContent = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+
+  await PageBootstrap.init({
+    page: 'home',
+    title: 'Painel',
+    breadcrumb: 'Inicio',
+    perfisPermitidos: ['admin', 'gestor', 'operador', 'financeiro'],
+    loadData: async () => {
+      const [maquinas, clientes] = await Promise.all([
+        API.get('jr_maquinas?status=eq.ativa&select=id'),
+        API.get('jr_clientes?ativo=eq.true&select=id'),
+      ]);
+      return {
+        maquinas: maquinas.ok ? maquinas.data.length : 0,
+        clientes: clientes.ok ? clientes.data.length : 0,
+      };
+    },
+    render: (data) => {
+      document.getElementById('kpi-maquinas').textContent = data.maquinas || 0;
+      document.getElementById('kpi-clientes').textContent = data.clientes || 0;
+      document.getElementById('kpi-os-abertas').textContent = '0';
+      document.getElementById('kpi-alertas').textContent = '0';
+    },
+    onError: () => {
+      ['kpi-maquinas','kpi-os-abertas','kpi-clientes','kpi-alertas'].forEach(id =>
+        document.getElementById(id).textContent = '0');
+    }
+  });
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Importar Legacy - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.drop-zone {
+  border:2px dashed #CBD5E1;
+  border-radius:12px;
+  padding:32px;
+  text-align:center;
+  background:#F8FAFC;
+  cursor:pointer;
+  transition:all 0.15s;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color:#D97706;
+  background:#FEF3C7;
+}
+.drop-zone-icon {
+  width:48px; height:48px; margin:0 auto 12px;
+  color:#D97706;
+}
+.drop-zone-label {
+  font-size:15px; font-weight:600; color:#1E293B;
+}
+.drop-zone-hint {
+  font-size:13px; color:#64748B; margin-top:4px;
+}
+.preview-table {
+  width:100%; border-collapse:collapse; margin-top:16px;
+  font-size:13px;
+}
+.preview-table th, .preview-table td {
+  padding:10px 12px; text-align:left;
+  border-bottom:1px solid #E2E8F0;
+}
+.preview-table th {
+  background:#F8FAFC; font-weight:600; color:#475569;
+  font-size:12px; text-transform:uppercase; letter-spacing:0.04em;
+}
+.preview-table .count {
+  font-weight:700; color:#1E293B; text-align:right;
+  font-variant-numeric:tabular-nums;
+}
+.result-ok {
+  background:#D1FAE5; color:#065F46; border-left:4px solid #059669;
+  padding:14px 18px; border-radius:8px; margin-top:16px;
+}
+.result-err {
+  background:#FEE2E2; color:#991B1B; border-left:4px solid #DC2626;
+  padding:14px 18px; border-radius:8px; margin-top:16px;
+}
+.erro-list {
+  max-height:240px; overflow-y:auto; margin-top:10px;
+  background:#FFF; border:1px solid #FECACA; border-radius:6px; padding:8px;
+}
+.erro-item {
+  font-size:12px; padding:6px 8px; border-bottom:1px solid #FEE2E2;
+  color:#7F1D1D; font-family:ui-monospace,monospace;
+}
+.erro-item:last-child { border-bottom:none; }
+.btn-reset {
+  background:transparent; color:#DC2626; border:1px solid #FCA5A5;
+  padding:8px 14px; border-radius:8px; font-size:13px; font-weight:500;
+  cursor:pointer; margin-left:8px;
+}
+.btn-reset:hover { background:#FEE2E2; }
+.info-box {
+  background:#EFF6FF; border-left:4px solid #3B82F6;
+  padding:14px 18px; border-radius:8px; margin-bottom:16px;
+  font-size:13px; color:#1E3A8A; line-height:1.6;
+}
+.info-box code {
+  background:#DBEAFE; padding:2px 6px; border-radius:4px;
+  font-family:ui-monospace,monospace; font-size:12px;
+}
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <div>
+        <h3>Importar dados do sistema legado</h3>
+        <p class="text-sm text-muted">
+          Traga maquinas, OS, pagamentos, despesas e deslocamentos do sistema antigo (localStorage).
+          Operacao idempotente e protegida por flag em <code>jr_config.importacao_executada</code>.
+        </p>
+      </div>
+      <div id="status-badge"></div>
+    </div>
+    <div class="card-body">
+
+      <div class="info-box">
+        <strong>Como exportar do sistema legado:</strong><br>
+        1. No sistema antigo, abra o console (F12 &rarr; Console).<br>
+        2. Execute: <code>copy(JSON.stringify({ clientes: JSON.parse(localStorage.getItem('jr_clientes')||'[]'), maquinas: JSON.parse(localStorage.getItem('jr_maquinas')||'[]'), veiculos: JSON.parse(localStorage.getItem('jr_veiculos')||'[]'), fornecedores: JSON.parse(localStorage.getItem('jr_fornecedores')||'[]'), ordens_servico: JSON.parse(localStorage.getItem('jr_ordens_servico')||'[]'), pagamentos: JSON.parse(localStorage.getItem('jr_pagamentos')||'[]'), despesas: JSON.parse(localStorage.getItem('jr_despesas')||'[]'), deslocamentos: JSON.parse(localStorage.getItem('jr_deslocamentos')||'[]') }))</code><br>
+        3. Cole em um arquivo <code>.json</code> e faca upload aqui.
+      </div>
+
+      <div class="drop-zone" id="drop-zone">
+        <svg class="drop-zone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+          <polyline points="17 8 12 3 7 8"/>
+          <line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        <div class="drop-zone-label" id="drop-label">Clique ou arraste o arquivo JSON</div>
+        <div class="drop-zone-hint">Apenas arquivos .json exportados do sistema legado</div>
+        <input type="file" id="file-input" accept=".json,application/json" style="display:none">
+      </div>
+
+      <div id="preview-area" style="display:none; margin-top:20px;">
+        <h4 style="margin-bottom:10px;">Resumo do arquivo</h4>
+        <table class="preview-table">
+          <thead><tr><th>Entidade</th><th style="text-align:right;">Registros</th></tr></thead>
+          <tbody id="preview-tbody"></tbody>
+        </table>
+        <div style="margin-top:18px; display:flex; gap:10px;">
+          <button class="btn btn-primary" id="btn-importar" style="background:#D97706;">
+            Executar importacao
+          </button>
+          <button class="btn btn-reset" id="btn-reset" style="display:none;">
+            Re-habilitar importacao (admin)
+          </button>
+        </div>
+      </div>
+
+      <div id="result-area"></div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  let jsonPayload = null;
+
+  await PageBootstrap.init({
+    page: 'importar_legacy',
+    title: 'Importar Legacy',
+    breadcrumb: 'Sistema > Importar Legacy',
+    perfisPermitidos: ['admin'],
+    loadData: async () => {
+      const r = await API.get('jr_config?chave=eq.importacao_executada&select=valor');
+      return { executada: r.ok && r.data[0] && r.data[0].valor === 'true' };
+    },
+    render: (data) => {
+      const badge = document.getElementById('status-badge');
+      const btnReset = document.getElementById('btn-reset');
+      if (data.executada) {
+        badge.innerHTML = '<span style="background:#FEE2E2;color:#991B1B;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;">Ja executada</span>';
+        btnReset.style.display = 'inline-block';
+      } else {
+        badge.innerHTML = '<span style="background:#D1FAE5;color:#065F46;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;">Pendente</span>';
+      }
+    }
+  });
+
+  const dz = document.getElementById('drop-zone');
+  const fi = document.getElementById('file-input');
+  const label = document.getElementById('drop-label');
+
+  dz.addEventListener('click', () => fi.click());
+  dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+  dz.addEventListener('drop', (e) => {
+    e.preventDefault();
+    dz.classList.remove('drag-over');
+    if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+  });
+  fi.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  function handleFile(file) {
+    if (!file.name.endsWith('.json')) {
+      UI.toast('Arquivo deve ser .json', 'err');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        jsonPayload = JSON.parse(e.target.result);
+        label.textContent = file.name + ' carregado';
+        renderPreview(jsonPayload);
+      } catch (err) {
+        UI.toast('JSON invalido: ' + err.message, 'err');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  function renderPreview(p) {
+    const entities = [
+      ['Clientes', 'clientes'],
+      ['Fornecedores', 'fornecedores'],
+      ['Maquinas', 'maquinas'],
+      ['Veiculos', 'veiculos'],
+      ['Ordens de Servico', 'ordens_servico'],
+      ['Pagamentos', 'pagamentos'],
+      ['Despesas', 'despesas'],
+      ['Deslocamentos', 'deslocamentos'],
+    ];
+    const tbody = document.getElementById('preview-tbody');
+    tbody.innerHTML = entities.map(([label, key]) => {
+      const n = Array.isArray(p[key]) ? p[key].length : 0;
+      let sub = '';
+      if (key === 'ordens_servico' && Array.isArray(p[key])) {
+        const tot = p[key].reduce((a, os) => a + (Array.isArray(os.periodos) ? os.periodos.length : 0), 0);
+        if (tot > 0) sub = ` <span style="color:#64748B;font-size:11px;">(+ ${tot} periodos)</span>`;
+      }
+      return `<tr><td>${label}${sub}</td><td class="count">${n}</td></tr>`;
+    }).join('');
+    document.getElementById('preview-area').style.display = 'block';
+    document.getElementById('result-area').innerHTML = '';
+  }
+
+  document.getElementById('btn-importar').addEventListener('click', async () => {
+    if (!jsonPayload) return;
+    if (!confirm('Executar importacao? Esta operacao ira inserir/atualizar registros no banco.')) return;
+
+    const btn = document.getElementById('btn-importar');
+    btn.disabled = true; btn.textContent = 'Importando...';
+
+    const r = await API.rpc('jr_importar_localstorage', { p_payload: jsonPayload });
+    btn.disabled = false; btn.textContent = 'Executar importacao';
+
+    const area = document.getElementById('result-area');
+    if (!r.ok) {
+      area.innerHTML = `<div class="result-err"><strong>Falha na importacao</strong><br>${escapeHtml(r.error || 'Erro desconhecido')}</div>`;
+      return;
+    }
+
+    const d = r.data || {};
+    const total = (d.clientes||0) + (d.fornecedores||0) + (d.maquinas||0) + (d.veiculos||0) +
+                  (d.ordens_servico||0) + (d.periodos||0) + (d.pagamentos||0) + (d.despesas||0) + (d.deslocamentos||0);
+    const errosCount = d.erros_count || (Array.isArray(d.erros) ? d.erros.length : 0);
+
+    let html = '<div class="result-ok">';
+    html += `<strong>Importacao concluida</strong> &mdash; ${total} registros processados`;
+    if (errosCount > 0) html += ` (${errosCount} erros)`;
+    html += '<table class="preview-table" style="margin-top:12px;">';
+    html += '<thead><tr><th>Entidade</th><th style="text-align:right;">Inseridos/Atualizados</th></tr></thead><tbody>';
+    html += row('Clientes', d.clientes);
+    html += row('Fornecedores', d.fornecedores);
+    html += row('Maquinas', d.maquinas);
+    html += row('Veiculos', d.veiculos);
+    html += row('Ordens de Servico', d.ordens_servico);
+    html += row('Periodos de OS', d.periodos);
+    html += row('Pagamentos', d.pagamentos);
+    html += row('Despesas', d.despesas);
+    html += row('Deslocamentos', d.deslocamentos);
+    html += '</tbody></table></div>';
+
+    if (errosCount > 0 && Array.isArray(d.erros)) {
+      html += '<div class="result-err" style="margin-top:12px;"><strong>Erros registrados (' + errosCount + ')</strong><div class="erro-list">';
+      d.erros.slice(0, 100).forEach(e => {
+        html += `<div class="erro-item">[${escapeHtml(e.entidade)}] ${escapeHtml(e.erro)}</div>`;
+      });
+      if (d.erros.length > 100) html += `<div class="erro-item">... mais ${d.erros.length - 100} erros omitidos</div>`;
+      html += '</div></div>';
+    }
+
+    area.innerHTML = html;
+    document.getElementById('status-badge').innerHTML = '<span style="background:#FEE2E2;color:#991B1B;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;">Ja executada</span>';
+    document.getElementById('btn-reset').style.display = 'inline-block';
+    UI.toast('Importacao concluida', errosCount > 0 ? 'warn' : 'ok');
+  });
+
+  document.getElementById('btn-reset').addEventListener('click', async () => {
+    if (!confirm('Re-habilitar importacao?\\nEsta acao destrava a flag mas nao apaga os dados ja importados. Uma nova importacao ira fazer upsert (atualizar registros existentes).')) return;
+    const r = await API.rpc('jr_importar_reset', {});
+    if (!r.ok) { UI.toast('Erro: ' + (r.error||''), 'err'); return; }
+    UI.toast('Flag resetada. Nova importacao liberada.', 'ok');
+    document.getElementById('status-badge').innerHTML = '<span style="background:#D1FAE5;color:#065F46;padding:4px 12px;border-radius:999px;font-size:12px;font-weight:600;">Pendente</span>';
+    document.getElementById('btn-reset').style.display = 'none';
+  });
+
+  function row(label, n) {
+    return `<tr><td>${label}</td><td class="count">${n || 0}</td></tr>`;
+  }
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+})();
+</script>
+</body>
+</html>

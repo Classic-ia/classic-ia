@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrada por NFe - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <!-- Step 1: upload -->
+  <div class="card" id="card-upload">
+    <div class="card-body">
+      <h3 style="margin:0 0 8px 0">1. Selecione o XML da NFe</h3>
+      <div class="text-muted" style="font-size:13px;margin-bottom:12px">
+        Parser nativo no navegador &mdash; nenhum XML sai do seu computador antes da confirmacao.
+        Aceita NFe 4.00 (procNFe ou nfeProc ou NFe direto).
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+        <input type="file" id="inp-xml" accept=".xml,text/xml" style="flex:1">
+        <button class="btn btn-primary" onclick="processarXml()">Processar</button>
+      </div>
+      <div id="parse-erro" style="margin-top:12px"></div>
+    </div>
+  </div>
+
+  <!-- Step 2: revisao -->
+  <div id="card-revisao" style="display:none;margin-top:16px">
+    <!-- Cabecalho -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <h3 style="margin:0 0 12px 0">2. Cabecalho da NFe</h3>
+        <div id="cab-info"></div>
+      </div>
+    </div>
+
+    <!-- Itens -->
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 4px 0">3. Itens &mdash; revise e confirme</h3>
+        <div class="text-muted" style="font-size:13px;margin-bottom:12px">
+          Itens com EAN reconhecido ja vem pre-selecionados. Caso contrario, escolha o produto
+          manualmente ou deixe em branco &mdash; os itens sem produto ficam como referencia na
+          nota mas nao geram lote de estoque.
+        </div>
+        <div id="itens-area"></div>
+        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+          <button class="btn btn-outline" onclick="cancelar()">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmar()" id="btn-confirmar">Importar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Step 3: resultado -->
+  <div id="card-resultado" style="display:none;margin-top:16px"></div>
+
+  <!-- Historico recente -->
+  <div class="card" style="margin-top:16px">
+    <div class="card-body">
+      <h3 style="margin:0 0 12px 0">NFes importadas recentemente</h3>
+      <div id="hist-area"><div class="loading-center"><div class="spinner"></div></div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _produtos = [];
+let _xmlCabecalho = null;
+let _xmlItens = [];
+
+PageBootstrap.init({
+  page: 'entrada_nfe',
+  title: 'Entrada por NFe',
+  breadcrumb: 'Estoque / Entrada por NFe',
+  perfisPermitidos: ['admin','almoxarife'],
+  loadData: async () => {
+    const [prodsRes, histRes] = await Promise.all([
+      API.get('trans_produtos?order=sku&select=id,sku,nome,unidade'),
+      API.get('v_trans_notas_fiscais?order=created_at.desc&limit=10')
+    ]);
+    return {
+      produtos: prodsRes.ok ? prodsRes.data : [],
+      historico: histRes.ok ? histRes.data : []
+    };
+  },
+  render: (data, user) => {
+    _produtos = data.produtos;
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Entrada por NFe',
+      subtitle: 'Upload XML NFe 4.00. Parser local, match por EAN, geracao automatica de lotes internos.',
+      actions: []
+    });
+    renderHistorico(data.historico);
+  }
+});
+
+// ============================================================
+// Parser XML
+// ============================================================
+function processarXml() {
+  const inp = document.getElementById('inp-xml');
+  const erroEl = document.getElementById('parse-erro');
+  erroEl.innerHTML = '';
+
+  if (!inp.files || inp.files.length === 0) {
+    erroEl.innerHTML = '<div class="alert alert-error">Selecione um arquivo XML.</div>';
+    return;
+  }
+
+  const file = inp.files[0];
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const xml = e.target.result;
+      const doc = new DOMParser().parseFromString(xml, 'application/xml');
+      const perr = doc.querySelector('parsererror');
+      if (perr) throw new Error('XML invalido');
+
+      // Localiza infNFe (pode estar em nfeProc > NFe > infNFe ou NFe > infNFe)
+      const infNFe = doc.querySelector('infNFe');
+      if (!infNFe) throw new Error('Nao encontrou <infNFe> no XML.');
+
+      _xmlCabecalho = extrairCabecalho(infNFe, xml);
+      _xmlItens = extrairItens(infNFe);
+
+      renderRevisao();
+    } catch (err) {
+      erroEl.innerHTML = `<div class="alert alert-error">Erro ao processar XML: ${API.esc(err.message)}</div>`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+function extrairCabecalho(infNFe, xmlRaw) {
+  const id = infNFe.getAttribute('Id') || '';
+  const chave = id.replace(/^NFe/, '') || null;
+
+  const ide = infNFe.querySelector('ide');
+  const emit = infNFe.querySelector('emit');
+  const total = infNFe.querySelector('total > ICMSTot');
+
+  return {
+    chave: chave && chave.length === 44 ? chave : null,
+    numero: txt(ide, 'nNF'),
+    serie: txt(ide, 'serie'),
+    data_emissao: txt(ide, 'dhEmi') || txt(ide, 'dEmi'),
+    fornecedor: {
+      cnpj: txt(emit, 'CNPJ') || txt(emit, 'CPF'),
+      razao_social: txt(emit, 'xNome'),
+      nome_fantasia: txt(emit, 'xFant')
+    },
+    valor_total: parseFloat(txt(total, 'vNF') || '0'),
+    xml_raw: xmlRaw
+  };
+}
+
+function extrairItens(infNFe) {
+  const dets = infNFe.querySelectorAll('det');
+  const itens = [];
+  dets.forEach(det => {
+    const prod = det.querySelector('prod');
+    if (!prod) return;
+    const ean = (txt(prod, 'cEAN') || '').trim();
+    const eanValido = ean && ean !== 'SEM GTIN' && /^\d{8,14}$/.test(ean) ? ean : null;
+
+    // rastro (lote/validade)
+    const rastro = prod.querySelector('rastro');
+    let lote_fornecedor = null, data_fab = null, data_val = null;
+    if (rastro) {
+      lote_fornecedor = txt(rastro, 'nLote') || null;
+      data_fab = txt(rastro, 'dFab') || null;
+      data_val = txt(rastro, 'dVal') || null;
+    }
+
+    itens.push({
+      nItem: det.getAttribute('nItem'),
+      codigo_ean: eanValido,
+      codigo_produto_nfe: txt(prod, 'cProd'),
+      descricao_nfe: txt(prod, 'xProd'),
+      ncm: txt(prod, 'NCM'),
+      cfop: txt(prod, 'CFOP'),
+      quantidade: parseFloat(txt(prod, 'qCom') || '0'),
+      unidade: txt(prod, 'uCom'),
+      valor_unitario: parseFloat(txt(prod, 'vUnCom') || '0'),
+      valor_total: parseFloat(txt(prod, 'vProd') || '0'),
+      lote_fornecedor_nfe: lote_fornecedor,
+      data_fabricacao_nfe: data_fab,
+      data_validade_nfe: data_val,
+      produto_id: null,          // preenchido em renderRevisao()
+      produto_match: null
+    });
+  });
+  return itens;
+}
+
+function txt(parent, tagName) {
+  if (!parent) return null;
+  const el = parent.querySelector(tagName);
+  return el ? el.textContent.trim() : null;
+}
+
+// ============================================================
+// Revisao
+// ============================================================
+async function renderRevisao() {
+  // Tenta match por EAN para cada item
+  const eans = _xmlItens.map(i => i.codigo_ean).filter(Boolean);
+  const matchMap = {};
+  if (eans.length) {
+    const eanList = eans.map(e => `"${e.replace(/"/g,'')}"`).join(',');
+    const res = await API.get(`trans_produtos_ean?ean=in.(${eanList})&select=ean,produto_id,produto:trans_produtos(id,sku,nome,unidade)`);
+    if (res.ok) {
+      res.data.forEach(r => { matchMap[r.ean] = r; });
+    }
+  }
+
+  _xmlItens.forEach(it => {
+    if (it.codigo_ean && matchMap[it.codigo_ean]) {
+      it.produto_id = matchMap[it.codigo_ean].produto.id;
+      it.produto_match = matchMap[it.codigo_ean].produto;
+    }
+  });
+
+  // Cabecalho
+  const c = _xmlCabecalho;
+  document.getElementById('cab-info').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:12px;font-size:13px">
+      <div><strong>Chave</strong><br><span style="font-family:ui-monospace,monospace;font-size:11px">${API.esc(c.chave || '&mdash; (sem chave)')}</span></div>
+      <div><strong>Numero/Serie</strong><br>${API.esc(c.numero || '?')} / ${API.esc(c.serie || '?')}</div>
+      <div><strong>Emissao</strong><br>${API.esc(c.data_emissao || '?')}</div>
+      <div><strong>Valor total</strong><br>R$ ${API.fmtNum(c.valor_total)}</div>
+      <div style="grid-column:1/-1"><strong>Fornecedor</strong><br>
+        ${API.esc(c.fornecedor.razao_social || '?')} &middot;
+        CNPJ ${API.esc(c.fornecedor.cnpj || '?')}
+      </div>
+    </div>
+  `;
+
+  // Itens
+  renderItens();
+  document.getElementById('card-revisao').style.display = '';
+  document.getElementById('card-upload').style.display = 'none';
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function renderItens() {
+  const produtoOpts = _produtos.map(p =>
+    `<option value="${p.id}">${API.esc(p.sku)} &middot; ${API.esc(p.nome)}</option>`
+  ).join('');
+
+  const matched = _xmlItens.filter(i => i.produto_id).length;
+  const total = _xmlItens.length;
+
+  const rows = _xmlItens.map((it, idx) => {
+    const matchBadge = it.produto_id
+      ? '<span class="badge" style="background:#dcfce7;color:#166534">OK</span>'
+      : '<span class="badge" style="background:#fef3c7;color:#92400e">Sem match</span>';
+    return `
+      <tr>
+        <td>${it.nItem}</td>
+        <td><code style="font-size:11px">${API.esc(it.codigo_ean || '&mdash;')}</code></td>
+        <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"
+            title="${API.esc(it.descricao_nfe || '')}">${API.esc(it.descricao_nfe || '')}</td>
+        <td align="right">${API.fmtNum(it.quantidade)} ${API.esc(it.unidade || '')}</td>
+        <td align="right">R$ ${API.fmtNum(it.valor_unitario)}</td>
+        <td>${API.esc(it.lote_fornecedor_nfe || '&mdash;')}</td>
+        <td>${API.esc(it.data_validade_nfe || '&mdash;')}</td>
+        <td>${matchBadge}</td>
+        <td>
+          <select class="item-prod-sel" data-idx="${idx}" style="min-width:220px">
+            <option value="">&mdash; sem produto (so referencia) &mdash;</option>
+            ${produtoOpts}
+          </select>
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  document.getElementById('itens-area').innerHTML = `
+    <div style="margin-bottom:8px;font-size:13px">
+      <strong>${matched}</strong> de <strong>${total}</strong> itens com produto reconhecido por EAN
+    </div>
+    <div style="overflow-x:auto">
+      <table class="data-table" style="width:100%;font-size:13px">
+        <thead>
+          <tr>
+            <th>#</th><th>EAN</th><th>Descricao NFe</th>
+            <th style="text-align:right">Qty</th>
+            <th style="text-align:right">V.Unit</th>
+            <th>Lote forn</th><th>Validade</th>
+            <th>Match</th><th>Produto</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  `;
+
+  // sincroniza selects com estado atual
+  document.querySelectorAll('.item-prod-sel').forEach(sel => {
+    const idx = Number(sel.dataset.idx);
+    if (_xmlItens[idx].produto_id) sel.value = _xmlItens[idx].produto_id;
+    sel.addEventListener('change', e => {
+      _xmlItens[idx].produto_id = e.target.value || null;
+    });
+  });
+}
+
+function cancelar() {
+  _xmlCabecalho = null;
+  _xmlItens = [];
+  document.getElementById('card-revisao').style.display = 'none';
+  document.getElementById('card-upload').style.display = '';
+  document.getElementById('inp-xml').value = '';
+}
+
+async function confirmar() {
+  const btn = document.getElementById('btn-confirmar');
+  btn.disabled = true;
+  btn.textContent = 'Importando...';
+
+  const payload = {
+    p_chave: _xmlCabecalho.chave,
+    p_dados: {
+      numero: _xmlCabecalho.numero,
+      serie: _xmlCabecalho.serie,
+      data_emissao: _xmlCabecalho.data_emissao,
+      valor_total: _xmlCabecalho.valor_total,
+      xml_raw: _xmlCabecalho.xml_raw,
+      tipo: 'entrada',
+      fornecedor: _xmlCabecalho.fornecedor
+    },
+    p_itens: _xmlItens.map(it => ({
+      produto_id: it.produto_id || null,
+      codigo_ean: it.codigo_ean,
+      codigo_produto_nfe: it.codigo_produto_nfe,
+      descricao_nfe: it.descricao_nfe,
+      ncm: it.ncm,
+      cfop: it.cfop,
+      quantidade: it.quantidade,
+      unidade: it.unidade,
+      valor_unitario: it.valor_unitario,
+      valor_total: it.valor_total,
+      lote_fornecedor_nfe: it.lote_fornecedor_nfe,
+      data_fabricacao_nfe: it.data_fabricacao_nfe,
+      data_validade_nfe: it.data_validade_nfe
+    }))
+  };
+
+  const res = await API.rpc('trans_importar_nfe', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro ao importar NFe', 'erro');
+    btn.disabled = false;
+    btn.textContent = 'Importar';
+    return;
+  }
+
+  UI.toast(`NFe importada: ${res.data.itens_criados} lote(s) criado(s)`, 'ok');
+  mostrarResultado(res.data);
+  // atualiza historico
+  const histRes = await API.get('v_trans_notas_fiscais?order=created_at.desc&limit=10');
+  renderHistorico(histRes.ok ? histRes.data : []);
+}
+
+function mostrarResultado(data) {
+  const area = document.getElementById('card-resultado');
+  const lotesRows = (data.lotes || []).map(l => `
+    <tr>
+      <td><strong>${API.esc(l.lote_interno)}</strong></td>
+      <td align="right">${API.fmtNum(l.quantidade)}</td>
+    </tr>
+  `).join('');
+
+  area.innerHTML = `
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 8px 0;color:#059669">NFe importada com sucesso</h3>
+        <div style="font-size:13px">
+          <div><strong>${data.itens_criados}</strong> lote(s) criado(s) &middot;
+          <strong>${data.itens_sem_produto}</strong> item(ns) sem produto casado</div>
+        </div>
+        ${lotesRows ? `
+          <table class="data-table" style="margin-top:12px;width:auto;font-size:13px">
+            <thead><tr><th>Lote interno</th><th style="text-align:right">Quantidade</th></tr></thead>
+            <tbody>${lotesRows}</tbody>
+          </table>
+        ` : ''}
+        <div style="margin-top:12px">
+          <a href="lotes.html" class="btn btn-outline btn-sm">Ver lotes</a>
+          <button class="btn btn-primary btn-sm" onclick="novaNfe()">Importar outra NFe</button>
+        </div>
+      </div>
+    </div>
+  `;
+  area.style.display = '';
+  document.getElementById('card-revisao').style.display = 'none';
+}
+
+function novaNfe() {
+  _xmlCabecalho = null;
+  _xmlItens = [];
+  document.getElementById('card-resultado').style.display = 'none';
+  document.getElementById('card-upload').style.display = '';
+  document.getElementById('inp-xml').value = '';
+  document.getElementById('parse-erro').innerHTML = '';
+}
+
+function renderHistorico(rows) {
+  const area = document.getElementById('hist-area');
+  if (!rows || rows.length === 0) {
+    area.innerHTML = '<div class="text-muted" style="font-size:13px">Nenhuma NFe importada ainda.</div>';
+    return;
+  }
+  area.innerHTML = UI.dataTable({
+    columns: [
+      { key: 'numero', label: 'Numero', render: n => `<strong>${API.esc(n.numero)}</strong>${n.serie ? '/' + API.esc(n.serie) : ''}` },
+      { key: 'fornecedor_razao', label: 'Fornecedor', render: n => API.esc(n.fornecedor_razao || '&mdash;') },
+      { key: 'data_emissao', label: 'Emissao', render: n => API.fmtData(n.data_emissao) },
+      { key: 'valor_total', label: 'Total', align: 'right', render: n => 'R$ ' + API.fmtNum(n.valor_total) },
+      { key: 'itens_count', label: 'Itens', align: 'right', render: n => n.itens_count },
+      { key: 'lotes_count', label: 'Lotes', align: 'right', render: n => n.lotes_count },
+      { key: 'created_at', label: 'Importada', render: n => API.fmtData(n.created_at) }
+    ],
+    rows,
+    emptyMsg: 'Nenhuma NFe.'
+  });
+}
+</script>
+</body>
+</html>

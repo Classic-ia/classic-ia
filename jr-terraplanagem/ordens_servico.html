@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ordens de Servico - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.os-table { width:100%; border-collapse:collapse; font-size:13px; }
+.os-table th, .os-table td { padding:11px 14px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.os-table th {
+  background:#F8FAFC; font-weight:600; color:#475569; font-size:12px;
+  text-transform:uppercase; letter-spacing:0.03em; cursor:pointer;
+}
+.os-table tbody tr { transition:background 0.1s; cursor:pointer; }
+.os-table tbody tr:hover { background:#FEF3C7; }
+.os-table .num-os { font-family:ui-monospace,monospace; color:#D97706; font-weight:600; }
+.os-table .right { text-align:right; font-variant-numeric:tabular-nums; }
+.status-badge { padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; display:inline-block; }
+.st-aberta      { background:#DBEAFE; color:#1E40AF; }
+.st-em_execucao { background:#FEF3C7; color:#92400E; }
+.st-concluida   { background:#D1FAE5; color:#065F46; }
+.st-cancelada   { background:#F3F4F6; color:#6B7280; }
+.filter-row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+.filter-field { display:flex; flex-direction:column; gap:4px; }
+.filter-field label { font-size:12px; font-weight:500; color:#475569; }
+.filter-field input, .filter-field select {
+  padding:8px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; min-width:160px;
+}
+.summary-row { display:flex; gap:16px; margin-bottom:18px; }
+.summary-card { flex:1; background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:14px 18px; }
+.summary-label { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+.summary-value { font-size:22px; font-weight:700; color:#1E293B; margin-top:4px; font-variant-numeric:tabular-nums; }
+.empty-state { text-align:center; padding:40px; color:#64748B; }
+.modal-form .form-row { margin-bottom:14px; }
+.modal-form label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; }
+.modal-form input, .modal-form select, .modal-form textarea {
+  width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; box-sizing:border-box;
+}
+.modal-form textarea { min-height:60px; resize:vertical; }
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3>Ordens de Servico</h3>
+        <p class="text-sm text-muted">Nucleo operacional JR - periodos, pagamentos e saldo por OS.</p>
+      </div>
+      <button id="btn-nova-os" class="btn" style="background:#D97706;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;font-size:13px;border:none;cursor:pointer;">
+        + Nova OS
+      </button>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-row">
+        <div class="summary-card"><div class="summary-label">Total de OS</div><div class="summary-value" id="s-total">0</div></div>
+        <div class="summary-card"><div class="summary-label">Em execucao</div><div class="summary-value" id="s-exec" style="color:#92400E;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Concluidas</div><div class="summary-value" id="s-conc" style="color:#065F46;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Saldo a receber</div><div class="summary-value" id="s-saldo" style="color:#D97706;">—</div></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-field">
+          <label>Buscar</label>
+          <input type="text" id="f-q" placeholder="numero OS, cliente, obra...">
+        </div>
+        <div class="filter-field">
+          <label>Status</label>
+          <select id="f-status">
+            <option value="">Todos</option>
+            <option value="aberta">Aberta</option>
+            <option value="em_execucao">Em execucao</option>
+            <option value="concluida">Concluida</option>
+            <option value="cancelada">Cancelada</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label>De</label>
+          <input type="date" id="f-ini">
+        </div>
+        <div class="filter-field">
+          <label>Ate</label>
+          <input type="date" id="f-fim">
+        </div>
+        <button id="btn-limpar" class="btn" style="padding:8px 14px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Limpar</button>
+      </div>
+
+      <div id="list-area">
+        <div style="padding:30px;text-align:center;color:#64748B;">Carregando...</div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nova OS -->
+<div id="modal-nova" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;max-width:520px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:16px 22px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:16px;font-weight:600;color:#1E293B;">Nova Ordem de Servico</h3>
+      <button onclick="fecharNovaOs()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748B;">&times;</button>
+    </div>
+    <div class="modal-form" style="padding:20px 22px;">
+      <div class="form-row">
+        <label>Cliente <span style="color:#DC2626;">*</span></label>
+        <select id="nova-cliente" required></select>
+      </div>
+      <div class="form-row">
+        <label>Data abertura</label>
+        <input type="date" id="nova-data">
+      </div>
+      <div class="form-row">
+        <label>Obra / Local</label>
+        <input type="text" id="nova-obra" placeholder="Ex: Loteamento Horizonte, quadra 5">
+      </div>
+      <div class="form-row">
+        <label>Descricao do servico</label>
+        <textarea id="nova-descricao" placeholder="Ex: Terraplanagem e compactacao de 2500m2"></textarea>
+      </div>
+      <div class="form-row">
+        <label>Observacao</label>
+        <textarea id="nova-obs" placeholder="Anotacoes internas (opcional)"></textarea>
+      </div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="fecharNovaOs()" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Cancelar</button>
+      <button id="btn-salvar-os" onclick="criarOs()" style="padding:9px 20px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Criar OS</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let todasOs = [];
+let clientes = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'ordens_servico',
+    title: 'Ordens de Servico',
+    breadcrumb: 'Operacao > Ordens de Servico',
+    perfisPermitidos: ['admin', 'gestor', 'operador', 'financeiro'],
+    loadData: async () => {
+      const [rOs, rCli] = await Promise.all([
+        API.get('v_jr_os_resumo?select=*&order=data_abertura.desc&limit=500'),
+        API.get('jr_clientes?ativo=eq.true&select=id,razao_social&order=razao_social&limit=500'),
+      ]);
+      return {
+        os: rOs.ok ? rOs.data : [],
+        clientes: rCli.ok ? rCli.data : [],
+      };
+    },
+    render: (data) => {
+      todasOs = data.os;
+      clientes = data.clientes;
+      preencherClientesSelect();
+      aplicarFiltros();
+    }
+  });
+
+  document.getElementById('f-q').addEventListener('input', aplicarFiltros);
+  document.getElementById('f-status').addEventListener('change', aplicarFiltros);
+  document.getElementById('f-ini').addEventListener('change', aplicarFiltros);
+  document.getElementById('f-fim').addEventListener('change', aplicarFiltros);
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    document.getElementById('f-q').value = '';
+    document.getElementById('f-status').value = '';
+    document.getElementById('f-ini').value = '';
+    document.getElementById('f-fim').value = '';
+    aplicarFiltros();
+  });
+
+  document.getElementById('btn-nova-os').addEventListener('click', abrirNovaOs);
+})();
+
+function preencherClientesSelect() {
+  const sel = document.getElementById('nova-cliente');
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    clientes.map(c => `<option value="${c.id}">${API.esc(c.razao_social)}</option>`).join('');
+}
+
+function aplicarFiltros() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const s = document.getElementById('f-status').value;
+  const ini = document.getElementById('f-ini').value;
+  const fim = document.getElementById('f-fim').value;
+
+  let lista = todasOs.slice();
+  if (q) lista = lista.filter(o =>
+    (o.numero_os||'').toLowerCase().includes(q) ||
+    (o.cliente_nome||'').toLowerCase().includes(q) ||
+    (o.obra_local||'').toLowerCase().includes(q) ||
+    (o.descricao_servico||'').toLowerCase().includes(q)
+  );
+  if (s) lista = lista.filter(o => o.status === s);
+  if (ini) lista = lista.filter(o => o.data_abertura >= ini);
+  if (fim) lista = lista.filter(o => o.data_abertura <= fim);
+
+  renderResumo(lista);
+  renderTabela(lista);
+}
+
+function renderResumo(lista) {
+  const exec = lista.filter(o => o.status === 'em_execucao').length;
+  const conc = lista.filter(o => o.status === 'concluida').length;
+  const saldo = lista.reduce((a, o) => a + (Number(o.saldo_receber) || 0), 0);
+  document.getElementById('s-total').textContent = lista.length;
+  document.getElementById('s-exec').textContent = exec;
+  document.getElementById('s-conc').textContent = conc;
+  document.getElementById('s-saldo').textContent = API.fmtMoeda(saldo);
+}
+
+function renderTabela(lista) {
+  const area = document.getElementById('list-area');
+  if (!lista.length) {
+    area.innerHTML = '<div class="empty-state">Nenhuma OS encontrada com os filtros atuais.</div>';
+    return;
+  }
+  let html = '<div style="overflow-x:auto;"><table class="os-table"><thead><tr>';
+  html += '<th>Numero</th><th>Data</th><th>Cliente</th><th>Obra</th><th>Status</th>';
+  html += '<th class="right">Horas</th><th class="right">Valor</th><th class="right">Pago</th><th class="right">Saldo</th>';
+  html += '</tr></thead><tbody>';
+  lista.forEach(o => {
+    html += `<tr onclick="abrirFicha('${o.id}')">`;
+    html += `<td class="num-os">${API.esc(o.numero_os)}</td>`;
+    html += `<td>${API.fmtData(o.data_abertura)}</td>`;
+    html += `<td>${API.esc(o.cliente_nome || '—')}</td>`;
+    html += `<td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${API.esc(o.obra_local || '—')}</td>`;
+    html += `<td><span class="status-badge st-${o.status}">${o.status.replace('_',' ')}</span></td>`;
+    html += `<td class="right">${API.fmtHorimetro(o.horas_total)}</td>`;
+    html += `<td class="right">${API.fmtMoeda(o.valor_total)}</td>`;
+    html += `<td class="right">${API.fmtMoeda(o.total_pago)}</td>`;
+    html += `<td class="right" style="color:${o.saldo_receber > 0 ? '#D97706' : '#059669'};font-weight:600;">${API.fmtMoeda(o.saldo_receber)}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+function abrirFicha(id) {
+  window.location.href = 'os_ficha.html?id=' + encodeURIComponent(id);
+}
+
+function abrirNovaOs() {
+  if (!API.canAccess('abrir_os')) {
+    UI.toast('Sem permissao para abrir OS', 'err');
+    return;
+  }
+  document.getElementById('nova-data').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('nova-cliente').value = '';
+  document.getElementById('nova-obra').value = '';
+  document.getElementById('nova-descricao').value = '';
+  document.getElementById('nova-obs').value = '';
+  document.getElementById('modal-nova').style.display = 'flex';
+}
+
+function fecharNovaOs() {
+  document.getElementById('modal-nova').style.display = 'none';
+}
+
+async function criarOs() {
+  const cliente = document.getElementById('nova-cliente').value;
+  const data = document.getElementById('nova-data').value;
+  const obra = document.getElementById('nova-obra').value.trim();
+  const desc = document.getElementById('nova-descricao').value.trim();
+  const obs = document.getElementById('nova-obs').value.trim();
+
+  if (!cliente) { UI.toast('Selecione o cliente', 'err'); return; }
+
+  const btn = document.getElementById('btn-salvar-os');
+  btn.disabled = true; btn.textContent = 'Criando...';
+
+  const r = await API.rpc('jr_os_abrir', {
+    p_cliente_id: cliente,
+    p_obra_local: obra || null,
+    p_descricao_servico: desc || null,
+    p_data_abertura: data || null,
+    p_observacao: obs || null,
+  });
+
+  btn.disabled = false; btn.textContent = 'Criar OS';
+
+  if (!r.ok) {
+    UI.toast('Erro: ' + (r.error || 'falha ao criar OS'), 'err');
+    return;
+  }
+
+  UI.toast('OS ' + (r.data.numero_os || '') + ' criada', 'ok');
+  fecharNovaOs();
+  if (r.data.id) {
+    window.location.href = 'os_ficha.html?id=' + encodeURIComponent(r.data.id);
+  }
+}
+</script>
+</body>
+</html>

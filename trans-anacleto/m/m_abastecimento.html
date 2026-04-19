@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Abastecimento — Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <form id="form-abast" class="m-card" onsubmit="confirmar(event)" style="display:none">
+      <div class="m-card-title">Registrar abastecimento</div>
+
+      <div class="m-field">
+        <label>Veiculo *</label>
+        <select id="f-veic" required onchange="onVeicChange()"></select>
+        <span class="m-small m-muted" id="f-veic-hint"></span>
+      </div>
+
+      <div class="m-field">
+        <label>Origem *</label>
+        <div class="m-radio-group">
+          <label class="m-radio-card">
+            <input type="radio" name="origem" value="tanque_proprio" checked onchange="onOrigemChange()">
+            <span><strong>Tanque proprio</strong><br><span class="m-small m-muted">Base da empresa</span></span>
+          </label>
+          <label class="m-radio-card">
+            <input type="radio" name="origem" value="posto" onchange="onOrigemChange()">
+            <span><strong>Posto externo</strong><br><span class="m-small m-muted">Na estrada</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div id="grupo-tanque" class="m-field">
+        <label>Tanque *</label>
+        <select id="f-tanque"></select>
+      </div>
+
+      <div id="grupo-posto" style="display:none">
+        <div class="m-field">
+          <label>Posto *</label>
+          <input id="f-posto" placeholder="Nome do posto">
+        </div>
+        <div class="m-field">
+          <label>NF / cupom</label>
+          <input id="f-nf">
+        </div>
+      </div>
+
+      <div class="m-field">
+        <label>KM odometro *</label>
+        <input type="number" step="1" id="f-km" required>
+        <span class="m-small m-muted" id="f-km-hint"></span>
+      </div>
+
+      <div class="m-field">
+        <label>Litros *</label>
+        <input type="number" step="0.01" min="0.01" id="f-litros" required oninput="calcularValor()">
+      </div>
+
+      <div class="m-field">
+        <label>Valor unit. (R$/L)</label>
+        <input type="number" step="0.001" min="0" id="f-unit" oninput="calcularValor()">
+      </div>
+
+      <div class="m-field">
+        <label>Valor total (R$) *</label>
+        <input type="number" step="0.01" min="0.01" id="f-total" required>
+      </div>
+
+      <div class="m-field">
+        <label>Foto da bomba / cupom</label>
+        <input type="file" accept="image/*" capture="environment" id="f-foto" onchange="onFotoChange()">
+        <span class="m-small m-muted" id="f-foto-hint">Opcional - sera anexada ao registro.</span>
+      </div>
+
+      <div class="m-field">
+        <label>Observacao</label>
+        <textarea id="f-obs" rows="2"></textarea>
+      </div>
+
+      <button type="submit" class="m-btn m-btn-primary" id="btn-submit">Registrar</button>
+      <a href="m_home.html" class="m-btn m-btn-outline">Voltar</a>
+    </form>
+
+    <div id="box-loading" class="m-card"><div class="m-loading"><div class="m-spinner"></div></div></div>
+
+  </main>
+</div>
+
+<script>
+const _d = { veiculos: [], tanques: [], user: null, fotoDataUrl: null };
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  _d.user = u;
+  MShell.render({ title: 'Abastecimento', back: 'm_home.html', currentNav: 'home' });
+
+  const [rv, rt] = await Promise.all([
+    API.get('trans_veiculos?select=id,placa,modelo,km_atual,status&order=placa&status=eq.ativo'),
+    API.get('trans_tanque?select=id,nome,combustivel_tipo,saldo_atual_litros&ativo=eq.true&order=nome')
+  ]);
+  _d.veiculos = rv.ok ? rv.data : [];
+  _d.tanques = rt.ok ? rt.data : [];
+
+  document.getElementById('f-veic').innerHTML = '<option value="">-- Selecione --</option>' +
+    _d.veiculos.map(v => `<option value="${v.id}">${API.esc(v.placa)} - ${API.esc(v.modelo||'')}</option>`).join('');
+  document.getElementById('f-tanque').innerHTML = '<option value="">-- Selecione --</option>' +
+    _d.tanques.map(t => `<option value="${t.id}">${API.esc(t.nome)} (${t.combustivel_tipo}) - ${API.fmtNum(t.saldo_atual_litros,0)} L</option>`).join('');
+
+  document.getElementById('box-loading').style.display = 'none';
+  document.getElementById('form-abast').style.display = '';
+})();
+
+function onVeicChange() {
+  const id = document.getElementById('f-veic').value;
+  const v = _d.veiculos.find(x => x.id === id);
+  const hint = document.getElementById('f-veic-hint');
+  const km = document.getElementById('f-km');
+  const kmHint = document.getElementById('f-km-hint');
+  if (!v) { hint.textContent = ''; km.value = ''; kmHint.textContent = ''; return; }
+  hint.textContent = `KM atual: ${API.fmtNum(v.km_atual||0,0)}`;
+  km.value = v.km_atual || 0;
+  kmHint.textContent = `Nao pode ser menor que ${API.fmtNum(v.km_atual||0,0)}.`;
+}
+
+function onOrigemChange() {
+  const o = document.querySelector('input[name="origem"]:checked').value;
+  document.getElementById('grupo-tanque').style.display = o === 'tanque_proprio' ? '' : 'none';
+  document.getElementById('grupo-posto').style.display = o === 'posto' ? '' : 'none';
+}
+
+function calcularValor() {
+  const l = parseFloat(document.getElementById('f-litros').value) || 0;
+  const u = parseFloat(document.getElementById('f-unit').value) || 0;
+  if (l > 0 && u > 0) document.getElementById('f-total').value = (l * u).toFixed(2);
+}
+
+function onFotoChange() {
+  const f = document.getElementById('f-foto').files[0];
+  const hint = document.getElementById('f-foto-hint');
+  if (!f) { _d.fotoDataUrl = null; hint.textContent = 'Opcional - sera anexada ao registro.'; return; }
+  if (f.size > 2 * 1024 * 1024) {
+    MShell.toast('Foto muito grande (max 2MB)', 'erro');
+    document.getElementById('f-foto').value = '';
+    _d.fotoDataUrl = null;
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => { _d.fotoDataUrl = ev.target.result; hint.textContent = `Foto anexada (${Math.round(f.size/1024)} KB)`; };
+  reader.readAsDataURL(f);
+}
+
+async function confirmar(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Registrando...';
+
+  const origem = document.querySelector('input[name="origem"]:checked').value;
+  const veicId = document.getElementById('f-veic').value;
+  if (!veicId) { MShell.toast('Selecione o veiculo', 'erro'); btn.disabled = false; btn.textContent = 'Registrar'; return; }
+
+  const payload = {
+    p_veiculo_id: veicId,
+    p_origem: origem,
+    p_litros: parseFloat(document.getElementById('f-litros').value),
+    p_valor_total: parseFloat(document.getElementById('f-total').value),
+    p_km_odometro: parseFloat(document.getElementById('f-km').value),
+    p_motorista_id: _d.user?.id || null,
+    p_valor_unitario: parseFloat(document.getElementById('f-unit').value) || null,
+    p_observacao: document.getElementById('f-obs').value.trim() || null,
+    p_anexo_url: _d.fotoDataUrl
+  };
+
+  if (origem === 'tanque_proprio') {
+    const tid = document.getElementById('f-tanque').value;
+    if (!tid) { MShell.toast('Selecione o tanque', 'erro'); btn.disabled = false; btn.textContent = 'Registrar'; return; }
+    payload.p_tanque_id = tid;
+  } else {
+    const p = document.getElementById('f-posto').value.trim();
+    if (!p) { MShell.toast('Informe o posto', 'erro'); btn.disabled = false; btn.textContent = 'Registrar'; return; }
+    payload.p_posto_nome = p;
+    payload.p_nf_numero = document.getElementById('f-nf').value.trim() || null;
+  }
+
+  const r = await API.rpc('trans_abastecimento_registrar', payload);
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao registrar', 'erro');
+    btn.disabled = false; btn.textContent = 'Registrar';
+    return;
+  }
+
+  MShell.toast('Abastecimento registrado', 'ok');
+  setTimeout(() => { window.location.href = 'm_home.html'; }, 800);
+}
+</script>
+</body>
+</html>

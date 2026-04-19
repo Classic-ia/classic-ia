@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Servicos Externos (NFS-e) - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal novo servico -->
+<div id="modal-novo" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeNovo()"></div>
+  <div class="modal-content" style="max-width:720px">
+    <div class="modal-header">
+      <h3>Registrar servico (NFS-e)</h3>
+      <button class="modal-close" onclick="closeNovo()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-novo" onsubmit="confirmarNovo(event)">
+        <div class="alert alert-info" style="font-size:13px">
+          <strong>Recapagem</strong> cria automatica de registro em trans_pneus_recapagem
+          (status=retornado) e, se o pneu estava em recapagem, o devolve ao estoque.
+          <strong>Consumo de peca</strong> dispara saida FEFO do estoque vinculada ao veiculo.
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px">
+          <div class="form-field">
+            <label>Tipo *</label>
+            <select id="n-tipo" required onchange="onTipoChange()">
+              <option value="">Selecione...</option>
+              <option value="recapagem">Recapagem</option>
+              <option value="troca_oleo">Troca de oleo</option>
+              <option value="borracharia">Borracharia</option>
+              <option value="funilaria">Funilaria</option>
+              <option value="revisao">Revisao</option>
+              <option value="alinhamento">Alinhamento</option>
+              <option value="balanceamento">Balanceamento</option>
+              <option value="lavagem">Lavagem</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Data *</label>
+            <input type="date" id="n-data" required>
+          </div>
+          <div class="form-field">
+            <label>Veiculo *</label>
+            <select id="n-veiculo" required></select>
+          </div>
+          <div class="form-field">
+            <label>Fornecedor</label>
+            <select id="n-fornecedor">
+              <option value="">--</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Valor R$ *</label>
+            <input type="number" step="0.01" min="0" id="n-valor" required>
+          </div>
+          <div class="form-field">
+            <label>KM no momento</label>
+            <input type="number" step="1" id="n-km">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Descricao</label>
+            <input id="n-desc" placeholder="Detalhes do servico">
+          </div>
+
+          <!-- Campos condicionais PNEU (recapagem/borracharia) -->
+          <div id="grupo-pneu" class="form-field form-field-full" style="display:none">
+            <fieldset style="border:1px solid #e2e8f0;padding:12px;border-radius:8px">
+              <legend style="font-size:13px;font-weight:600;padding:0 6px">Dados do pneu</legend>
+              <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px">
+                <div class="form-field">
+                  <label>Codigo interno</label>
+                  <input id="n-pneu-cod" placeholder="P-00001" oninput="this.value=this.value.toUpperCase()">
+                  <span class="muted" style="font-size:12px">Busca pelo codigo para vincular.</span>
+                </div>
+                <div class="form-field">
+                  <label>Sulco pos-servico (mm)</label>
+                  <input type="number" step="0.1" id="n-sulco">
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <!-- Campos condicionais PRODUTO (troca_oleo/revisao/outro) -->
+          <div id="grupo-produto" class="form-field form-field-full" style="display:none">
+            <fieldset style="border:1px solid #e2e8f0;padding:12px;border-radius:8px">
+              <legend style="font-size:13px;font-weight:600;padding:0 6px">Peca consumida (opcional)</legend>
+              <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px">
+                <div class="form-field">
+                  <label>EAN ou SKU</label>
+                  <input id="n-prod-ean" placeholder="Bipa ou digita EAN" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProduto();}">
+                </div>
+                <div class="form-field">
+                  <label>Quantidade</label>
+                  <input type="number" step="0.01" min="0" id="n-prod-qtd">
+                </div>
+                <div class="form-field form-field-full">
+                  <div id="n-prod-info" class="muted" style="font-size:12px"></div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="form-field">
+            <label>URL anexo (PDF NFS-e)</label>
+            <input id="n-anexo" placeholder="https://...">
+          </div>
+          <div class="form-field">
+            <label>Manutencao vinculada</label>
+            <select id="n-manut">
+              <option value="">--</option>
+            </select>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <textarea id="n-obs" rows="2"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeNovo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-novo').requestSubmit()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const _s = {
+  servicos: [],
+  veiculos: [],
+  fornecedores: [],
+  manutencoes: [],
+  filtros: { tipo: '', veiculo: '', periodo: 'mes' },
+  page: 1,
+  pageSize: 50,
+  produtoSelecionado: null
+};
+
+PageBootstrap.init({
+  page: 'servicos',
+  title: 'Servicos Externos',
+  breadcrumb: 'Oficina / Servicos',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const [s, v, f, m] = await Promise.all([
+      API.get('v_trans_servicos_full?select=*&order=data.desc&limit=500'),
+      API.get('trans_veiculos?select=id,placa,modelo&order=placa'),
+      API.get('trans_fornecedores?select=id,razao_social,tipo&order=razao_social'),
+      API.get('trans_manutencoes?select=id,servico,data_abertura,status,veiculo_id&status=in.(aberta,em_andamento,concluida)&order=data_abertura.desc&limit=200')
+    ]);
+    return { s, v, f, m };
+  },
+  render: (res) => {
+    _s.servicos = res.s.ok ? res.s.data : [];
+    _s.veiculos = res.v.ok ? res.v.data : [];
+    _s.fornecedores = res.f.ok ? res.f.data : [];
+    _s.manutencoes = res.m.ok ? res.m.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Servicos Externos (NFS-e)',
+      subtitle: 'Registro de servicos de oficina externa com integracao automatica em pneus e estoque.',
+      actions: [{ label: 'Novo servico', onclick: 'abrirNovo()', class: 'btn-primary' }]
+    });
+    renderFilters(); renderKpis(); renderTable();
+  }
+});
+
+function renderFilters() {
+  const veicOpts = [{ value:'', label:'Todos' }].concat(
+    _s.veiculos.map(v => ({ value: v.id, label: `${v.placa} - ${v.modelo||''}`.trim() }))
+  );
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    id: 'fb-serv',
+    filters: [
+      { id: 'fb-tipo', label: 'Tipo', type: 'select', options: [
+        { value:'', label:'Todos' },
+        { value:'recapagem', label:'Recapagem' },
+        { value:'troca_oleo', label:'Troca oleo' },
+        { value:'borracharia', label:'Borracharia' },
+        { value:'funilaria', label:'Funilaria' },
+        { value:'revisao', label:'Revisao' },
+        { value:'alinhamento', label:'Alinhamento' },
+        { value:'balanceamento', label:'Balanceamento' },
+        { value:'lavagem', label:'Lavagem' },
+        { value:'outro', label:'Outro' }
+      ], value: _s.filtros.tipo },
+      { id: 'fb-veic', label: 'Veiculo', type: 'select', options: veicOpts, value: _s.filtros.veiculo },
+      { id: 'fb-per', label: 'Periodo', type: 'select', options: [
+        { value:'mes', label:'Ultimos 30 dias' },
+        { value:'trimestre', label:'Ultimos 90 dias' },
+        { value:'ano', label:'Ultimos 12 meses' },
+        { value:'tudo', label:'Tudo' }
+      ], value: _s.filtros.periodo }
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _s.filtros.tipo = document.getElementById('fb-tipo').value;
+  _s.filtros.veiculo = document.getElementById('fb-veic').value;
+  _s.filtros.periodo = document.getElementById('fb-per').value;
+  _s.page = 1;
+  renderKpis(); renderTable();
+}
+function limparFiltros() {
+  _s.filtros = { tipo:'', veiculo:'', periodo:'mes' };
+  _s.page = 1;
+  renderFilters(); renderKpis(); renderTable();
+}
+
+function servicosFiltrados() {
+  const hoje = new Date();
+  let limite = null;
+  if (_s.filtros.periodo === 'mes') limite = new Date(hoje.getTime() - 30*86400000);
+  else if (_s.filtros.periodo === 'trimestre') limite = new Date(hoje.getTime() - 90*86400000);
+  else if (_s.filtros.periodo === 'ano') limite = new Date(hoje.getTime() - 365*86400000);
+  return _s.servicos.filter(s => {
+    if (_s.filtros.tipo && s.tipo !== _s.filtros.tipo) return false;
+    if (_s.filtros.veiculo && s.veiculo_id !== _s.filtros.veiculo) return false;
+    if (limite && new Date(s.data) < limite) return false;
+    return true;
+  });
+}
+
+function renderKpis() {
+  const filt = servicosFiltrados();
+  const validos = filt.filter(s => s.status !== 'cancelado');
+  const total = validos.length;
+  const custo = validos.reduce((a,s) => a + Number(s.valor||0), 0);
+  const recap = validos.filter(s => s.tipo === 'recapagem').length;
+  const comPeca = validos.filter(s => s.produto_id).length;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Servicos', value: total, color: '#2563eb' },
+    { label: 'Custo periodo', value: 'R$ '+API.fmtNum(custo,2), color: '#0f172a' },
+    { label: 'Recapagens', value: recap, color: '#d97706' },
+    { label: 'Com consumo', value: comPeca, color: '#059669' }
+  ]);
+}
+
+function tipoBadge(t) {
+  const cores = {
+    recapagem: 'badge-warning', borracharia: 'badge-warning',
+    troca_oleo: 'badge-info', revisao: 'badge-info',
+    alinhamento: 'badge-info', balanceamento: 'badge-info',
+    funilaria: 'badge-muted', lavagem: 'badge-muted', outro: 'badge-muted'
+  };
+  return `<span class="badge ${cores[t]||'badge-muted'}">${t}</span>`;
+}
+
+function renderTable() {
+  const filt = servicosFiltrados();
+  const total = filt.length;
+  const start = (_s.page - 1) * _s.pageSize;
+  const pageRows = filt.slice(start, start + _s.pageSize);
+
+  if (pageRows.length === 0) {
+    document.getElementById('table-area').innerHTML =
+      '<p class="muted" style="padding:20px;text-align:center">Nenhum servico encontrado.</p>';
+    return;
+  }
+
+  const rows = pageRows.map(s => [
+    API.fmtData(s.data),
+    `<strong>${API.esc(s.placa||'-')}</strong>`,
+    tipoBadge(s.tipo),
+    API.esc(s.fornecedor_nome||'-'),
+    s.pneu_codigo ? `Pneu <strong>${API.esc(s.pneu_codigo)}</strong>` : (s.produto_sku ? `Peca <strong>${API.esc(s.produto_sku)}</strong>` : '-'),
+    'R$ ' + API.fmtNum(s.valor||0, 2),
+    s.status === 'cancelado'
+      ? '<span class="badge badge-muted">Cancelado</span>'
+      : '<span class="badge badge-success">OK</span>',
+    s.anexo_url ? `<a href="${API.esc(s.anexo_url)}" target="_blank" rel="noopener">PDF</a>` : '-'
+  ]);
+
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Data', 'Veiculo', 'Tipo', 'Fornecedor', 'Ref', 'Valor', 'Status', 'Anexo'],
+    rows, empty: 'Nenhum.'
+  });
+
+  if (total > _s.pageSize) {
+    const totalPages = Math.ceil(total / _s.pageSize);
+    document.getElementById('table-area').insertAdjacentHTML('beforeend',
+      UI.pagination({ currentPage: _s.page, totalPages, totalRows: total, pageSize: _s.pageSize, onChange: 'mudarPagina' }));
+  }
+}
+function mudarPagina(p) { _s.page = p; renderTable(); window.scrollTo({top:0,behavior:'smooth'}); }
+
+// -----------------------------------------------------------------
+// Novo servico
+// -----------------------------------------------------------------
+function abrirNovo() {
+  _s.produtoSelecionado = null;
+  document.getElementById('form-novo').reset();
+  document.getElementById('n-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('n-veiculo').innerHTML = '<option value="">Selecione...</option>' +
+    _s.veiculos.map(v => `<option value="${v.id}">${API.esc(v.placa)} - ${API.esc(v.modelo||'')}</option>`).join('');
+  document.getElementById('n-fornecedor').innerHTML = '<option value="">--</option>' +
+    _s.fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+  document.getElementById('n-manut').innerHTML = '<option value="">--</option>' +
+    _s.manutencoes.map(m => `<option value="${m.id}">${API.fmtData(m.data_abertura)} - ${API.esc(m.servico||'')}</option>`).join('');
+  document.getElementById('grupo-pneu').style.display = 'none';
+  document.getElementById('grupo-produto').style.display = 'none';
+  document.getElementById('n-prod-info').innerHTML = '';
+  UI.openModal('modal-novo');
+}
+function closeNovo() { UI.closeModal('modal-novo'); }
+
+function onTipoChange() {
+  const t = document.getElementById('n-tipo').value;
+  const mostraPneu = ['recapagem','borracharia'].includes(t);
+  const mostraProd = ['troca_oleo','revisao','outro','funilaria'].includes(t);
+  document.getElementById('grupo-pneu').style.display = mostraPneu ? '' : 'none';
+  document.getElementById('grupo-produto').style.display = mostraProd ? '' : 'none';
+}
+
+async function buscarProduto() {
+  const ean = document.getElementById('n-prod-ean').value.trim();
+  if (!ean) return;
+  const r = await API.rpc('trans_buscar_produto_por_ean', { p_ean: ean });
+  const info = document.getElementById('n-prod-info');
+  if (!r.ok || !r.data || !r.data.encontrado) {
+    _s.produtoSelecionado = null;
+    info.innerHTML = '<span style="color:#dc2626">EAN nao cadastrado.</span>';
+    return;
+  }
+  _s.produtoSelecionado = r.data.produto;
+  const saldoTotal = (r.data.lotes_disponiveis||[]).reduce((a,l) => a + Number(l.saldo||0), 0);
+  info.innerHTML = `<strong>${API.esc(r.data.produto.sku)}</strong> - ${API.esc(r.data.produto.nome)} | Saldo: ${API.fmtNum(saldoTotal,2)} ${API.esc(r.data.produto.unidade||'')}`;
+}
+
+async function confirmarNovo(e) {
+  e.preventDefault();
+  const tipo = document.getElementById('n-tipo').value;
+  const veic = document.getElementById('n-veiculo').value;
+  const valor = parseFloat(document.getElementById('n-valor').value);
+  if (!tipo || !veic) { UI.toast('Preencha os obrigatorios', 'erro'); return; }
+
+  let pneuId = null;
+  const codPneu = document.getElementById('n-pneu-cod').value.trim();
+  if (codPneu) {
+    const rp = await API.get(`trans_pneus?codigo_interno=eq.${encodeURIComponent(codPneu)}&select=id`);
+    if (!rp.ok || rp.data.length === 0) { UI.toast('Pneu nao encontrado: '+codPneu, 'erro'); return; }
+    pneuId = rp.data[0].id;
+  }
+
+  const prodQtd = parseFloat(document.getElementById('n-prod-qtd').value);
+  const prodId = _s.produtoSelecionado?.id || null;
+  if (prodId && (!prodQtd || prodQtd <= 0)) { UI.toast('Informe a quantidade do produto', 'erro'); return; }
+
+  const payload = {
+    p_tipo: tipo,
+    p_veiculo_id: veic,
+    p_valor: valor || 0,
+    p_data: document.getElementById('n-data').value || null,
+    p_fornecedor_id: document.getElementById('n-fornecedor').value || null,
+    p_descricao: document.getElementById('n-desc').value.trim() || null,
+    p_km_ocorrencia: parseFloat(document.getElementById('n-km').value) || null,
+    p_pneu_id: pneuId,
+    p_sulco_pos_mm: parseFloat(document.getElementById('n-sulco').value) || null,
+    p_produto_id: prodId,
+    p_quantidade_produto: prodId ? prodQtd : null,
+    p_manutencao_id: document.getElementById('n-manut').value || null,
+    p_nota_fiscal_id: null,
+    p_anexo_url: document.getElementById('n-anexo').value.trim() || null,
+    p_observacao: document.getElementById('n-obs').value.trim() || null
+  };
+
+  const r = await API.rpc('trans_servico_registrar', payload);
+  if (!r.ok) { UI.toast(r.error || 'Erro ao registrar', 'erro'); return; }
+  UI.toast('Servico registrado', 'ok');
+  closeNovo();
+  const refresh = await API.get('v_trans_servicos_full?select=*&order=data.desc&limit=500');
+  _s.servicos = refresh.ok ? refresh.data : _s.servicos;
+  renderKpis(); renderTable();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+-- ============================================================
+-- Seed de desenvolvimento — Trans Anacleto
+-- Executado pelo `supabase db reset` após todas as migrations.
+--
+-- Para testar localmente:
+-- 1. `supabase start` — sobe o Postgres/Auth local
+-- 2. Abrir Studio em http://127.0.0.1:54323 → Auth → criar usuário
+--    com email `admin@transanacleto.local` (anote o UUID gerado)
+-- 3. Executar `INSERT INTO trans_usuarios ...` abaixo substituindo
+--    o auth_user_id pelo UUID real
+-- ============================================================
+
+-- Exemplo (comentado). Descomentar após criar auth.user no Studio:
+-- INSERT INTO public.trans_usuarios (auth_user_id, email, nome, perfil)
+-- VALUES ('00000000-0000-0000-0000-000000000000', 'admin@transanacleto.local', 'Administrador', 'admin');

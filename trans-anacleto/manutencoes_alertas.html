@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alertas de Manutencao - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<script>
+const _al = {
+  alertas: [],
+  veiculos: [],
+  filtros: { veiculo: '', situacao: '' }
+};
+
+PageBootstrap.init({
+  page: 'alertas_manut',
+  title: 'Alertas de Manutencao',
+  breadcrumb: 'Oficina / Alertas',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const [v, a] = await Promise.all([
+      API.get('trans_veiculos?select=id,placa,modelo&order=placa'),
+      API.rpc('trans_manutencoes_alertas', { p_veiculo_id: null, p_somente_pendentes: false })
+    ]);
+    return { v, a };
+  },
+  render: (res) => {
+    _al.veiculos = res.v.ok ? res.v.data : [];
+    _al.alertas = (res.a.ok && Array.isArray(res.a.data)) ? res.a.data
+                 : (res.a.ok && res.a.data ? [res.a.data] : []);
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Alertas de Manutencao',
+      subtitle: 'Planos vencidos e vencendo em breve. Dados em tempo real via view v_trans_manutencoes_pendentes.',
+      actions: [
+        { label: 'Nova manutencao', onclick: "window.location.href='manutencoes.html'", class: 'btn-primary' },
+        { label: 'Planos', onclick: "window.location.href='planos_manutencao.html'", class: 'btn-outline' }
+      ]
+    });
+    renderFilters(); renderKpis(); renderTable();
+  }
+});
+
+function renderFilters() {
+  const veicOpts = [{ value: '', label: 'Todos os veiculos' }]
+    .concat(_al.veiculos.map(v => ({ value: v.id, label: `${v.placa} - ${v.modelo||''}`.trim() })));
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    id: 'fb-al',
+    filters: [
+      { id: 'fb-veic', label: 'Veiculo', type: 'select', options: veicOpts, value: _al.filtros.veiculo },
+      { id: 'fb-sit', label: 'Situacao', type: 'select', options: [
+        { value:'', label:'Todas' },
+        { value:'vencida', label:'Vencidas' },
+        { value:'vence_em_breve', label:'Vencem em breve' },
+        { value:'em_dia', label:'Em dia' }
+      ], value: _al.filtros.situacao }
+    ],
+    onApply: 'aplicarFiltros()', onClear: 'limparFiltros()'
+  });
+}
+function aplicarFiltros() {
+  _al.filtros.veiculo = document.getElementById('fb-veic').value;
+  _al.filtros.situacao = document.getElementById('fb-sit').value;
+  renderKpis(); renderTable();
+}
+function limparFiltros() {
+  _al.filtros = { veiculo:'', situacao:'' };
+  renderFilters(); renderKpis(); renderTable();
+}
+
+function alertasFiltrados() {
+  return _al.alertas.filter(a => {
+    if (_al.filtros.veiculo && a.veiculo_id !== _al.filtros.veiculo) return false;
+    if (_al.filtros.situacao && a.situacao !== _al.filtros.situacao) return false;
+    return true;
+  });
+}
+
+function renderKpis() {
+  const filt = alertasFiltrados();
+  const venc = filt.filter(a => a.situacao === 'vencida').length;
+  const breve = filt.filter(a => a.situacao === 'vence_em_breve').length;
+  const ok = filt.filter(a => a.situacao === 'em_dia').length;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Vencidas', value: venc, color: '#dc2626' },
+    { label: 'Vencem em breve', value: breve, color: '#d97706' },
+    { label: 'Em dia', value: ok, color: '#059669' },
+    { label: 'Total monitorado', value: filt.length, color: '#0f172a' }
+  ]);
+}
+
+function situacaoBadge(s) {
+  if (s === 'vencida') return '<span class="badge badge-danger">Vencida</span>';
+  if (s === 'vence_em_breve') return '<span class="badge badge-warning">Vence em breve</span>';
+  return '<span class="badge badge-success">Em dia</span>';
+}
+
+function saldoTxt(saldo_km, saldo_dias) {
+  const partes = [];
+  if (saldo_km !== null && saldo_km !== undefined) {
+    if (saldo_km < 0) partes.push(`<span style="color:#dc2626">${API.fmtNum(Math.abs(saldo_km),0)} km atrasado</span>`);
+    else partes.push(`${API.fmtNum(saldo_km,0)} km restantes`);
+  }
+  if (saldo_dias !== null && saldo_dias !== undefined) {
+    if (saldo_dias < 0) partes.push(`<span style="color:#dc2626">${Math.abs(saldo_dias)} dias atrasado</span>`);
+    else partes.push(`${saldo_dias} dias restantes`);
+  }
+  return partes.join('<br>') || '-';
+}
+
+function renderTable() {
+  const filt = alertasFiltrados();
+  if (filt.length === 0) {
+    document.getElementById('table-area').innerHTML =
+      '<p class="muted" style="padding:20px;text-align:center">Nenhum alerta encontrado. Tudo em dia.</p>';
+    return;
+  }
+  const rows = filt.map(a => [
+    situacaoBadge(a.situacao),
+    `<strong>${API.esc(a.placa||'-')}</strong><br><span class="muted" style="font-size:12px">${API.esc(a.veiculo_modelo||'')}</span>`,
+    API.esc(a.plano_nome||'-'),
+    API.esc(a.tipo_servico||'-'),
+    a.ultima_execucao_km ? API.fmtNum(a.ultima_execucao_km,0)+' km' : '-',
+    a.ultima_execucao_data ? API.fmtData(a.ultima_execucao_data) : '-',
+    a.proximo_km ? API.fmtNum(a.proximo_km,0)+' km' : '-',
+    a.proxima_data ? API.fmtData(a.proxima_data) : '-',
+    saldoTxt(a.saldo_km, a.saldo_dias),
+    `<button class="btn btn-sm btn-primary" onclick="abrirManutencaoVeiculo('${a.veiculo_id}','${API.esc(a.tipo_servico||a.plano_nome||'')}')">Registrar</button>`
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Situacao','Veiculo','Plano','Tipo','Ultimo KM','Ultima data','Proximo KM','Proxima data','Saldo','Acao'],
+    rows, empty: 'Nenhum alerta.'
+  });
+}
+
+function abrirManutencaoVeiculo(veicId, servico) {
+  window.location.href = `manutencoes.html?veiculo=${veicId}&servico=${encodeURIComponent(servico)}`;
+}
+</script>
+</body>
+</html>

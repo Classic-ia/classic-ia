@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha de Manutencao - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+
+  <div class="tabs" style="margin-bottom:16px">
+    <button class="tab active" data-tab="geral" onclick="mudarAba('geral')">Geral</button>
+    <button class="tab" data-tab="itens" onclick="mudarAba('itens')">Itens <span id="tab-itens-count" class="badge badge-muted" style="margin-left:6px">0</span></button>
+    <button class="tab" data-tab="pneus" onclick="mudarAba('pneus')">Pneus <span id="tab-pneus-count" class="badge badge-muted" style="margin-left:6px">0</span></button>
+    <button class="tab" data-tab="anexos" onclick="mudarAba('anexos')">Anexos <span id="tab-anexos-count" class="badge badge-muted" style="margin-left:6px">0</span></button>
+  </div>
+
+  <div id="tab-geral" class="tab-content"><div class="loading-center"><div class="spinner"></div></div></div>
+  <div id="tab-itens" class="tab-content" style="display:none"></div>
+  <div id="tab-pneus" class="tab-content" style="display:none"></div>
+  <div id="tab-anexos" class="tab-content" style="display:none"></div>
+</div>
+
+<!-- Placeholders para modais (preenchidos nas partes 2 e 3) -->
+<div id="modal-slots"></div>
+
+<script>
+const _ficha = {
+  id: null,
+  manutencao: null,
+  itens: [],
+  pneus: [],
+  anexos: [],
+  veiculo: null,
+  produtoAtual: null
+};
+
+PageBootstrap.init({
+  page: 'manutencao_ficha',
+  title: 'Ficha de Manutencao',
+  breadcrumb: 'Oficina / Manutencao',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const url = new URL(window.location.href);
+    _ficha.id = url.searchParams.get('id');
+    if (!_ficha.id) return { erro: 'ID nao informado' };
+    const [m, it, pn, an] = await Promise.all([
+      API.get(`v_trans_manutencoes_full?id=eq.${_ficha.id}&select=*`),
+      API.get(`trans_manutencao_itens?manutencao_id=eq.${_ficha.id}&select=*,produto:trans_produtos(sku,nome,unidade),lote:trans_lotes(lote_interno)&order=created_at.desc`),
+      API.get(`trans_manutencao_pneus?manutencao_id=eq.${_ficha.id}&select=*,pneu:trans_pneus(codigo_interno,marca,modelo,medida,status)&order=created_at.desc`),
+      API.get(`trans_manutencao_anexos?manutencao_id=eq.${_ficha.id}&select=*&order=capturada_em.desc`)
+    ]);
+    return { m, it, pn, an };
+  },
+  render: (res) => {
+    if (res.erro) {
+      document.getElementById('tab-geral').innerHTML = '<div class="alert alert-danger">'+res.erro+'</div>';
+      return;
+    }
+    _ficha.manutencao = (res.m.ok && res.m.data.length > 0) ? res.m.data[0] : null;
+    _ficha.itens = res.it.ok ? res.it.data : [];
+    _ficha.pneus = res.pn.ok ? res.pn.data : [];
+    _ficha.anexos = res.an.ok ? res.an.data : [];
+    if (!_ficha.manutencao) {
+      document.getElementById('tab-geral').innerHTML = '<div class="alert alert-danger">Manutencao nao encontrada.</div>';
+      return;
+    }
+    renderHeader();
+    renderKpis();
+    renderAbaGeral();
+    renderAbaItens();
+    renderAbaPneus();
+    renderAbaAnexos();
+    atualizarContadoresAbas();
+  }
+});
+
+function renderHeader() {
+  const m = _ficha.manutencao;
+  const user = TransAuth.getUser();
+  const isAdmin = user && user.perfil === 'admin';
+  const status = m.status;
+  const podeEditar = (status === 'aberta' || status === 'em_andamento');
+
+  const actions = [{ label: '<- Voltar', onclick: "window.location.href='manutencoes.html'", class: 'btn-outline' }];
+  if (podeEditar) {
+    actions.push({ label: 'Finalizar', onclick: 'abrirFinalizar()', class: 'btn-success' });
+  }
+  if (podeEditar && isAdmin) {
+    actions.push({ label: 'Cancelar', onclick: 'abrirCancelar()', class: 'btn-danger' });
+  }
+
+  document.getElementById('header-area').innerHTML = UI.pageHeader({
+    title: `${m.placa || 'Veiculo'} - ${m.servico || 'Manutencao'}`,
+    subtitle: `Ordem #${String(m.id).substring(0,8)} - ${m.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'} - aberta em ${API.fmtData(m.data_abertura)}`,
+    actions
+  });
+}
+
+function statusBadge(s) {
+  const map = {
+    'aberta': { txt:'Aberta', cls:'badge-info' },
+    'em_andamento': { txt:'Em andamento', cls:'badge-warning' },
+    'concluida': { txt:'Concluida', cls:'badge-success' },
+    'cancelada': { txt:'Cancelada', cls:'badge-muted' }
+  };
+  const x = map[s] || { txt: s, cls: 'badge-muted' };
+  return `<span class="badge ${x.cls}">${x.txt}</span>`;
+}
+
+function renderKpis() {
+  const m = _ficha.manutencao;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Status', value: statusBadge(m.status), color: '#2563eb' },
+    { label: 'KM abertura', value: API.fmtNum(m.km_abertura,0), color: '#0f172a' },
+    { label: 'Itens consumidos', value: m.itens_count || 0, color: '#d97706' },
+    { label: 'Custo total', value: 'R$ ' + API.fmtNum(m.custo_total_calc||0, 2), color: '#059669' }
+  ]);
+}
+
+function mudarAba(tab) {
+  document.querySelectorAll('.tab').forEach(el => el.classList.toggle('active', el.dataset.tab === tab));
+  document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+  document.getElementById('tab-'+tab).style.display = 'block';
+}
+
+function atualizarContadoresAbas() {
+  document.getElementById('tab-itens-count').textContent = _ficha.itens.length;
+  document.getElementById('tab-pneus-count').textContent = _ficha.pneus.length;
+  document.getElementById('tab-anexos-count').textContent = _ficha.anexos.length;
+}
+
+// -----------------------------------------------------------------
+// ABA GERAL
+// -----------------------------------------------------------------
+function renderAbaGeral() {
+  const m = _ficha.manutencao;
+  const campos = [
+    ['Veiculo', `${API.esc(m.placa||'-')} - ${API.esc(m.veiculo_modelo||'')}`],
+    ['Tipo', m.tipo === 'preventiva' ? 'Preventiva' : 'Corretiva'],
+    ['Servico', API.esc(m.servico||'-')],
+    ['Status', statusBadge(m.status)],
+    ['KM abertura', API.fmtNum(m.km_abertura, 0)],
+    ['KM execucao', m.km_execucao ? API.fmtNum(m.km_execucao, 0) : '-'],
+    ['Data abertura', API.fmtData(m.data_abertura)],
+    ['Data execucao', m.data_execucao ? API.fmtData(m.data_execucao) : '-'],
+    ['Data encerramento', m.data_encerramento ? API.fmtData(m.data_encerramento) : '-'],
+    ['Oficina', API.esc(m.oficina || '-')],
+    ['Executado por', API.esc(m.executado_por || '-')],
+    ['Proximo KM', m.proximo_km ? API.fmtNum(m.proximo_km, 0) : '-'],
+    ['Proxima data', m.proxima_data ? API.fmtData(m.proxima_data) : '-'],
+    ['Custo total', 'R$ ' + API.fmtNum(m.custo_total_calc||0, 2)]
+  ];
+  const gridItems = campos.map(([k,v]) => `
+    <div class="form-field">
+      <label class="muted" style="font-size:12px">${k}</label>
+      <div style="font-weight:500">${v}</div>
+    </div>
+  `).join('');
+
+  const obs = m.observacao ? `
+    <div class="form-field form-field-full" style="margin-top:16px">
+      <label class="muted" style="font-size:12px">Observacao</label>
+      <div style="white-space:pre-wrap">${API.esc(m.observacao)}</div>
+    </div>` : '';
+
+  document.getElementById('tab-geral').innerHTML = `
+    <div class="card"><div class="card-body">
+      <div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:16px">
+        ${gridItems}
+      </div>
+      ${obs}
+    </div></div>
+  `;
+}
+
+// -----------------------------------------------------------------
+// ABA ITENS
+// -----------------------------------------------------------------
+function renderAbaItens() {
+  const podeEditar = ['aberta','em_andamento'].includes(_ficha.manutencao.status);
+  const headerHtml = `
+    <div class="action-bar" style="margin-bottom:12px">
+      <div><strong>${_ficha.itens.length}</strong> itens consumidos - <strong>R$ ${API.fmtNum(somaCustoItens(),2)}</strong></div>
+      ${podeEditar ? '<button class="btn btn-primary" onclick="abrirAdicionarItem()">Adicionar item</button>' : ''}
+    </div>`;
+
+  if (_ficha.itens.length === 0) {
+    document.getElementById('tab-itens').innerHTML = headerHtml +
+      '<div class="card"><div class="card-body"><p class="muted" style="text-align:center">Nenhum item consumido.</p></div></div>';
+    return;
+  }
+
+  const rows = _ficha.itens.map(it => [
+    `<strong>${API.esc(it.produto?.sku||'-')}</strong><br><span class="muted" style="font-size:12px">${API.esc(it.produto?.nome||'')}</span>`,
+    it.modalidade === 'novo'
+      ? `<span class="badge badge-info">Novo</span><br><span class="muted" style="font-size:12px">${API.esc(it.lote?.lote_interno||'')}</span>`
+      : `<span class="badge badge-warning">Usado ${API.esc(it.condicao||'')}</span>`,
+    API.fmtNum(it.quantidade, 2) + ' ' + (it.produto?.unidade||''),
+    'R$ ' + API.fmtNum(it.custo_unitario||0, 2),
+    'R$ ' + API.fmtNum(it.custo_total||0, 2),
+    API.esc(it.observacao||'-')
+  ]);
+
+  document.getElementById('tab-itens').innerHTML = headerHtml +
+    '<div class="card"><div class="card-body">' +
+    UI.table({
+      columns: ['Produto', 'Modalidade / Lote', 'Qtd', 'Custo unit.', 'Custo total', 'Observacao'],
+      rows, empty: 'Nenhum item.'
+    }) +
+    '</div></div>';
+}
+
+function somaCustoItens() {
+  return _ficha.itens.reduce((s,it) => s + Number(it.custo_total||0), 0);
+}
+
+// Modal adicionar item
+function abrirAdicionarItem() {
+  _ficha.produtoAtual = null;
+  const html = `
+    <div id="modal-add-item" class="modal">
+      <div class="modal-overlay" onclick="fecharAdicionarItem()"></div>
+      <div class="modal-content" style="max-width:640px">
+        <div class="modal-header">
+          <h3>Adicionar item</h3>
+          <button class="modal-close" onclick="fecharAdicionarItem()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label>EAN (bipar ou digitar) *</label>
+            <input id="ai-ean" autofocus placeholder="Bipa o codigo de barras" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarProdutoEan();}">
+            <span class="muted" style="font-size:12px">Pressione Enter para buscar.</span>
+          </div>
+          <div id="ai-produto-area" style="margin-top:16px"></div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="fecharAdicionarItem()">Cancelar</button>
+          <button id="ai-confirmar" class="btn btn-primary" onclick="confirmarAdicionarItem()" disabled>Confirmar baixa</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-slots').innerHTML = html;
+  setTimeout(() => document.getElementById('ai-ean')?.focus(), 100);
+}
+function fecharAdicionarItem() {
+  document.getElementById('modal-slots').innerHTML = '';
+  _ficha.produtoAtual = null;
+}
+
+async function buscarProdutoEan() {
+  const ean = document.getElementById('ai-ean').value.trim();
+  if (!ean) return;
+  const r = await API.rpc('trans_buscar_produto_por_ean', { p_ean: ean });
+  if (!r.ok) { UI.toast(r.error || 'Erro ao buscar', 'erro'); return; }
+  if (!r.data || !r.data.encontrado) {
+    document.getElementById('ai-produto-area').innerHTML =
+      '<div class="alert alert-warning">EAN nao cadastrado. Cadastre o produto ou vincule o EAN em produtos.html.</div>';
+    document.getElementById('ai-confirmar').disabled = true;
+    return;
+  }
+  _ficha.produtoAtual = r.data;
+  renderProdutoArea();
+}
+
+function renderProdutoArea() {
+  const p = _ficha.produtoAtual;
+  const lotes = p.lotes_disponiveis || [];
+  const usados = p.saldos_usado || [];
+
+  const lotesOpts = lotes.length > 0
+    ? lotes.map(l => {
+        const venc = l.data_validade ? ` - Val ${API.fmtData(l.data_validade)}` : '';
+        const bloq = l.status !== 'liberado' ? ` [${l.status.toUpperCase()}]` : '';
+        return `<option value="${l.lote_id}" data-saldo="${l.saldo}" data-custo="${l.custo_unitario||0}">${l.lote_interno} - saldo ${API.fmtNum(l.saldo,2)}${venc}${bloq}</option>`;
+      }).join('')
+    : '';
+
+  const usadosOpts = ['A','B','C'].map(c => {
+    const row = usados.find(u => u.condicao === c);
+    const saldo = row ? Number(row.quantidade) : 0;
+    return `<option value="${c}" data-saldo="${saldo}">Condicao ${c} - saldo ${API.fmtNum(saldo,2)}</option>`;
+  }).join('');
+
+  document.getElementById('ai-produto-area').innerHTML = `
+    <div class="card" style="background:#f8fafc"><div class="card-body">
+      <div><strong>${API.esc(p.produto.sku)}</strong> - ${API.esc(p.produto.nome)}</div>
+      <div class="muted" style="font-size:12px">Unidade: ${API.esc(p.produto.unidade||'-')}</div>
+    </div></div>
+    <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px;margin-top:12px">
+      <div class="form-field form-field-full">
+        <label>Modalidade *</label>
+        <div>
+          <label style="margin-right:16px"><input type="radio" name="ai-modalidade" value="novo" checked onchange="atualizarModalidade()"> Novo (com lote)</label>
+          <label><input type="radio" name="ai-modalidade" value="usado" onchange="atualizarModalidade()"> Usado (com condicao)</label>
+        </div>
+      </div>
+
+      <div class="form-field form-field-full" id="ai-lote-field">
+        <label>Lote (FEFO sugerido automaticamente se em branco)</label>
+        <select id="ai-lote" onchange="atualizarCusto()">
+          <option value="">-- FEFO automatico --</option>
+          ${lotesOpts}
+        </select>
+      </div>
+
+      <div class="form-field form-field-full" id="ai-cond-field" style="display:none">
+        <label>Condicao *</label>
+        <select id="ai-cond">
+          ${usadosOpts}
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Quantidade *</label>
+        <input type="number" step="0.01" min="0.01" id="ai-qtd" value="1">
+      </div>
+      <div class="form-field">
+        <label>Custo unit. (R$)</label>
+        <input type="number" step="0.01" min="0" id="ai-custo" value="0">
+      </div>
+      <div class="form-field form-field-full">
+        <label>Observacao</label>
+        <input id="ai-obs">
+      </div>
+    </div>
+  `;
+  document.getElementById('ai-confirmar').disabled = false;
+}
+
+function atualizarModalidade() {
+  const mod = document.querySelector('input[name="ai-modalidade"]:checked').value;
+  document.getElementById('ai-lote-field').style.display = mod === 'novo' ? '' : 'none';
+  document.getElementById('ai-cond-field').style.display = mod === 'usado' ? '' : 'none';
+}
+function atualizarCusto() {
+  const sel = document.getElementById('ai-lote');
+  const custo = sel.selectedOptions[0]?.dataset.custo;
+  if (custo) document.getElementById('ai-custo').value = custo;
+}
+
+async function confirmarAdicionarItem() {
+  const p = _ficha.produtoAtual;
+  if (!p) return;
+  const mod = document.querySelector('input[name="ai-modalidade"]:checked').value;
+  const qtd = parseFloat(document.getElementById('ai-qtd').value);
+  const custo = parseFloat(document.getElementById('ai-custo').value) || 0;
+  const obs = document.getElementById('ai-obs').value.trim() || null;
+  const ean = document.getElementById('ai-ean').value.trim();
+  if (!qtd || qtd <= 0) { UI.toast('Quantidade invalida', 'erro'); return; }
+
+  const payload = {
+    p_manutencao_id: _ficha.id,
+    p_produto_id: p.produto.id,
+    p_quantidade: qtd,
+    p_modalidade: mod,
+    p_lote_id: mod === 'novo' ? (document.getElementById('ai-lote').value || null) : null,
+    p_condicao: mod === 'usado' ? document.getElementById('ai-cond').value : null,
+    p_custo_unitario: custo,
+    p_ean_lido: ean,
+    p_observacao: obs
+  };
+  document.getElementById('ai-confirmar').disabled = true;
+  const r = await API.rpc('trans_manutencao_adicionar_item', payload);
+  if (!r.ok) {
+    UI.toast(r.error || 'Erro ao adicionar item', 'erro');
+    document.getElementById('ai-confirmar').disabled = false;
+    return;
+  }
+  UI.toast('Item adicionado', 'ok');
+  fecharAdicionarItem();
+  await recarregarDados();
+}
+
+async function recarregarDados() {
+  const [m, it, pn, an] = await Promise.all([
+    API.get(`v_trans_manutencoes_full?id=eq.${_ficha.id}&select=*`),
+    API.get(`trans_manutencao_itens?manutencao_id=eq.${_ficha.id}&select=*,produto:trans_produtos(sku,nome,unidade),lote:trans_lotes(lote_interno)&order=created_at.desc`),
+    API.get(`trans_manutencao_pneus?manutencao_id=eq.${_ficha.id}&select=*,pneu:trans_pneus(codigo_interno,marca,modelo,medida,status)&order=created_at.desc`),
+    API.get(`trans_manutencao_anexos?manutencao_id=eq.${_ficha.id}&select=*&order=capturada_em.desc`)
+  ]);
+  _ficha.manutencao = (m.ok && m.data.length > 0) ? m.data[0] : _ficha.manutencao;
+  _ficha.itens = it.ok ? it.data : [];
+  _ficha.pneus = pn.ok ? pn.data : [];
+  _ficha.anexos = an.ok ? an.data : [];
+  renderHeader(); renderKpis();
+  renderAbaGeral(); renderAbaItens(); renderAbaPneus(); renderAbaAnexos();
+  atualizarContadoresAbas();
+}
+
+// -----------------------------------------------------------------
+// ABA PNEUS
+// -----------------------------------------------------------------
+function renderAbaPneus() {
+  const podeEditar = ['aberta','em_andamento'].includes(_ficha.manutencao.status);
+  const headerHtml = `
+    <div class="action-bar" style="margin-bottom:12px">
+      <div><strong>${_ficha.pneus.length}</strong> acoes em pneus</div>
+      ${podeEditar ? '<button class="btn btn-primary" onclick="abrirVincularPneu()">Vincular acao</button>' : ''}
+    </div>`;
+
+  if (_ficha.pneus.length === 0) {
+    document.getElementById('tab-pneus').innerHTML = headerHtml +
+      '<div class="card"><div class="card-body"><p class="muted" style="text-align:center">Nenhuma acao em pneu registrada.</p></div></div>';
+    return;
+  }
+
+  const acaoBadge = (a) => {
+    const map = {
+      'instalar': 'badge-info', 'retirar': 'badge-warning',
+      'rodizio': 'badge-info', 'enviar_recap': 'badge-warning',
+      'retornar_recap': 'badge-success', 'sucata': 'badge-muted'
+    };
+    return `<span class="badge ${map[a]||'badge-muted'}">${a}</span>`;
+  };
+
+  const rows = _ficha.pneus.map(p => [
+    `<strong>${API.esc(p.pneu?.codigo_interno||'-')}</strong>`,
+    `${API.esc(p.pneu?.marca||'-')} ${API.esc(p.pneu?.modelo||'')}<br><span class="muted" style="font-size:12px">${API.esc(p.pneu?.medida||'')}</span>`,
+    acaoBadge(p.acao),
+    `<span class="badge badge-muted">${API.esc(p.pneu?.status||'-')}</span>`,
+    API.esc(p.observacao||'-')
+  ]);
+
+  document.getElementById('tab-pneus').innerHTML = headerHtml +
+    '<div class="card"><div class="card-body">' +
+    UI.table({
+      columns: ['Codigo', 'Pneu', 'Acao', 'Status atual', 'Obs'],
+      rows, empty: 'Nenhum pneu.'
+    }) +
+    '</div></div>';
+}
+
+function abrirVincularPneu() {
+  const html = `
+    <div id="modal-pneu" class="modal">
+      <div class="modal-overlay" onclick="fecharVincularPneu()"></div>
+      <div class="modal-content" style="max-width:520px">
+        <div class="modal-header">
+          <h3>Vincular acao em pneu</h3>
+          <button class="modal-close" onclick="fecharVincularPneu()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info" style="font-size:13px">
+            Use o app mobile (<code>m/m_pneus_scan.html</code>) para executar a acao.
+            Aqui vinculamos uma acao <strong>ja executada</strong> a esta manutencao
+            (informativo). A movimentacao real do pneu deve ter sido feita no fluxo mobile.
+          </div>
+          <div class="form-field">
+            <label>Codigo interno do pneu *</label>
+            <input id="vp-codigo" placeholder="P-00001" autofocus>
+          </div>
+          <div class="form-field">
+            <label>Acao *</label>
+            <select id="vp-acao">
+              <option value="instalar">Instalar</option>
+              <option value="retirar">Retirar</option>
+              <option value="rodizio">Rodizio</option>
+              <option value="enviar_recap">Enviar p/ recapagem</option>
+              <option value="retornar_recap">Retorno de recapagem</option>
+              <option value="sucata">Sucata</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Observacao</label>
+            <input id="vp-obs">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="fecharVincularPneu()">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmarVincularPneu()">Vincular</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-slots').innerHTML = html;
+  setTimeout(() => document.getElementById('vp-codigo')?.focus(), 100);
+}
+function fecharVincularPneu() { document.getElementById('modal-slots').innerHTML = ''; }
+
+async function confirmarVincularPneu() {
+  const codigo = document.getElementById('vp-codigo').value.trim();
+  const acao = document.getElementById('vp-acao').value;
+  const obs = document.getElementById('vp-obs').value.trim() || null;
+  if (!codigo) { UI.toast('Informe o codigo do pneu', 'erro'); return; }
+
+  const rp = await API.get(`trans_pneus?codigo_interno=eq.${encodeURIComponent(codigo)}&select=id,status,codigo_interno`);
+  if (!rp.ok || rp.data.length === 0) { UI.toast('Pneu nao encontrado', 'erro'); return; }
+  const pneu = rp.data[0];
+
+  const r = await API.rpc('trans_manutencao_vincular_pneu', {
+    p_manutencao_id: _ficha.id,
+    p_pneu_id: pneu.id,
+    p_acao: acao,
+    p_movimentacao_pneu_id: null,
+    p_observacao: obs
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro ao vincular', 'erro'); return; }
+  UI.toast('Pneu vinculado', 'ok');
+  fecharVincularPneu();
+  await recarregarDados();
+}
+
+// -----------------------------------------------------------------
+// ABA ANEXOS
+// -----------------------------------------------------------------
+function renderAbaAnexos() {
+  const podeEditar = ['aberta','em_andamento','concluida'].includes(_ficha.manutencao.status);
+  const headerHtml = `
+    <div class="action-bar" style="margin-bottom:12px">
+      <div><strong>${_ficha.anexos.length}</strong> anexos</div>
+      ${podeEditar ? '<button class="btn btn-primary" onclick="abrirAnexo()">Adicionar anexo</button>' : ''}
+    </div>`;
+
+  if (_ficha.anexos.length === 0) {
+    document.getElementById('tab-anexos').innerHTML = headerHtml +
+      '<div class="card"><div class="card-body"><p class="muted" style="text-align:center">Nenhum anexo.</p></div></div>';
+    return;
+  }
+
+  const rows = _ficha.anexos.map(a => [
+    `<span class="badge badge-muted">${API.esc(a.tipo||'outro')}</span>`,
+    `<a href="${API.esc(a.url)}" target="_blank" rel="noopener">${API.esc(a.url)}</a>`,
+    API.fmtDataHora(a.capturada_em || a.created_at),
+    `<button class="btn btn-sm btn-danger" onclick="removerAnexo('${a.id}')">Remover</button>`
+  ]);
+  document.getElementById('tab-anexos').innerHTML = headerHtml +
+    '<div class="card"><div class="card-body">' +
+    UI.table({ columns: ['Tipo', 'URL', 'Capturado em', ''], rows, empty: '-' }) +
+    '</div></div>';
+}
+
+function abrirAnexo() {
+  const html = `
+    <div id="modal-anexo" class="modal">
+      <div class="modal-overlay" onclick="fecharAnexo()"></div>
+      <div class="modal-content" style="max-width:520px">
+        <div class="modal-header">
+          <h3>Adicionar anexo</h3>
+          <button class="modal-close" onclick="fecharAnexo()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-field">
+            <label>Tipo *</label>
+            <select id="an-tipo">
+              <option value="foto">Foto</option>
+              <option value="nota">Nota fiscal</option>
+              <option value="laudo">Laudo</option>
+              <option value="comprovante">Comprovante</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>URL do anexo *</label>
+            <input id="an-url" placeholder="https://..." autofocus>
+            <span class="muted" style="font-size:12px">Cole a URL publica do arquivo (Supabase Storage ou outro).</span>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="fecharAnexo()">Cancelar</button>
+          <button class="btn btn-primary" onclick="confirmarAnexo()">Salvar</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-slots').innerHTML = html;
+  setTimeout(() => document.getElementById('an-url')?.focus(), 100);
+}
+function fecharAnexo() { document.getElementById('modal-slots').innerHTML = ''; }
+
+async function confirmarAnexo() {
+  const tipo = document.getElementById('an-tipo').value;
+  const url = document.getElementById('an-url').value.trim();
+  if (!url) { UI.toast('Informe a URL', 'erro'); return; }
+  const user = TransAuth.getUser();
+  const r = await API.post('trans_manutencao_anexos', {
+    manutencao_id: _ficha.id,
+    tipo, url,
+    capturada_em: new Date().toISOString(),
+    usuario_id: user?.id || null
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro ao salvar anexo', 'erro'); return; }
+  UI.toast('Anexo salvo', 'ok');
+  fecharAnexo();
+  await recarregarDados();
+}
+
+async function removerAnexo(id) {
+  if (!confirm('Remover este anexo?')) return;
+  const r = await API.del(`trans_manutencao_anexos?id=eq.${id}`);
+  if (!r.ok) { UI.toast(r.error || 'Erro ao remover', 'erro'); return; }
+  UI.toast('Anexo removido', 'ok');
+  await recarregarDados();
+}
+
+// -----------------------------------------------------------------
+// FINALIZAR
+// -----------------------------------------------------------------
+function abrirFinalizar() {
+  const m = _ficha.manutencao;
+  const html = `
+    <div id="modal-fin" class="modal">
+      <div class="modal-overlay" onclick="fecharFinalizar()"></div>
+      <div class="modal-content" style="max-width:520px">
+        <div class="modal-header">
+          <h3>Finalizar manutencao</h3>
+          <button class="modal-close" onclick="fecharFinalizar()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-info" style="font-size:13px">
+            Ao finalizar, o sistema calcula <strong>proximo_km</strong> e <strong>proxima_data</strong>
+            baseado nos planos vinculados ao veiculo que casam com o servico desta OS.
+            Os itens consumidos e baixas de estoque ja estao registrados.
+          </div>
+          <div class="form-field">
+            <label>KM de conclusao *</label>
+            <input type="number" step="1" id="fn-km" value="${m.km_abertura||0}">
+            <span class="muted" style="font-size:12px">Nao pode ser menor que ${API.fmtNum(m.km_abertura,0)} (abertura).</span>
+          </div>
+          <div class="form-field">
+            <label>Data execucao</label>
+            <input type="date" id="fn-data" value="${new Date().toISOString().slice(0,10)}">
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="fecharFinalizar()">Cancelar</button>
+          <button class="btn btn-success" onclick="confirmarFinalizar()">Finalizar</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-slots').innerHTML = html;
+}
+function fecharFinalizar() { document.getElementById('modal-slots').innerHTML = ''; }
+
+async function confirmarFinalizar() {
+  const km = parseFloat(document.getElementById('fn-km').value);
+  const data = document.getElementById('fn-data').value || null;
+  if (!km || km <= 0) { UI.toast('KM invalido', 'erro'); return; }
+  const r = await API.rpc('trans_manutencao_finalizar', {
+    p_manutencao_id: _ficha.id,
+    p_km_conclusao: km,
+    p_data_execucao: data
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro ao finalizar', 'erro'); return; }
+  UI.toast('Manutencao finalizada', 'ok');
+  fecharFinalizar();
+  await recarregarDados();
+}
+
+// -----------------------------------------------------------------
+// CANCELAR (admin)
+// -----------------------------------------------------------------
+function abrirCancelar() {
+  const html = `
+    <div id="modal-cnc" class="modal">
+      <div class="modal-overlay" onclick="fecharCancelar()"></div>
+      <div class="modal-content" style="max-width:520px">
+        <div class="modal-header">
+          <h3>Cancelar manutencao</h3>
+          <button class="modal-close" onclick="fecharCancelar()">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="alert alert-warning" style="font-size:13px">
+            O cancelamento cria <strong>movimentacoes compensatorias</strong> (entradas) para cada
+            item consumido, restaurando o saldo de estoque. A OS fica com status <code>cancelada</code>
+            e nao pode receber novos itens. Apenas administradores podem cancelar.
+          </div>
+          <div class="form-field">
+            <label>Motivo *</label>
+            <textarea id="cn-motivo" rows="3" placeholder="Descreva o motivo do cancelamento" autofocus></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="fecharCancelar()">Voltar</button>
+          <button class="btn btn-danger" onclick="confirmarCancelar()">Cancelar OS</button>
+        </div>
+      </div>
+    </div>`;
+  document.getElementById('modal-slots').innerHTML = html;
+  setTimeout(() => document.getElementById('cn-motivo')?.focus(), 100);
+}
+function fecharCancelar() { document.getElementById('modal-slots').innerHTML = ''; }
+
+async function confirmarCancelar() {
+  const motivo = document.getElementById('cn-motivo').value.trim();
+  if (!motivo) { UI.toast('Informe o motivo', 'erro'); return; }
+  const r = await API.rpc('trans_manutencao_cancelar', {
+    p_manutencao_id: _ficha.id,
+    p_motivo: motivo
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro ao cancelar', 'erro'); return; }
+  UI.toast('Manutencao cancelada', 'ok');
+  fecharCancelar();
+  await recarregarDados();
+}
+</script>
+</body>
+</html>

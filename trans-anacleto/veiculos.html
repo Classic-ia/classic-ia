@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Veiculos - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filters-area"></div>
+  <div class="card">
+    <div class="card-body" id="table-area">
+      <div class="loading-center"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de edicao -->
+<div id="modal-veiculo" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeVeiculoModal()"></div>
+  <div class="modal-content" style="max-width:640px">
+    <div class="modal-header">
+      <h3 id="modal-title">Novo veiculo</h3>
+      <button class="modal-close" onclick="closeVeiculoModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-veiculo" onsubmit="saveVeiculo(event)">
+        <input type="hidden" id="f-id">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field">
+            <label>Placa *</label>
+            <input type="text" id="f-placa" required maxlength="8" style="text-transform:uppercase">
+          </div>
+          <div class="form-field">
+            <label>Tipo *</label>
+            <select id="f-tipo" required>
+              <option value="cavalo">Cavalo mecanico</option>
+              <option value="truck">Truck</option>
+              <option value="toco">Toco</option>
+              <option value="carreta">Carreta / semi-reboque</option>
+              <option value="utilitario">Utilitario</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Modelo *</label>
+            <input type="text" id="f-modelo" required placeholder="Ex: Volvo FH 460">
+          </div>
+          <div class="form-field">
+            <label>Marca</label>
+            <input type="text" id="f-marca" placeholder="Ex: Volvo">
+          </div>
+          <div class="form-field">
+            <label>Ano</label>
+            <input type="number" id="f-ano" min="1950" max="2100" step="1">
+          </div>
+          <div class="form-field">
+            <label>KM atual</label>
+            <input type="number" id="f-km" min="0" step="1">
+          </div>
+          <div class="form-field">
+            <label>Capacidade tanque (L)</label>
+            <input type="number" id="f-tanque" min="0" step="1">
+          </div>
+          <div class="form-field">
+            <label>Motorista atual</label>
+            <select id="f-motorista"><option value="">&mdash;</option></select>
+          </div>
+          <div class="form-field">
+            <label>Status *</label>
+            <select id="f-status" required>
+              <option value="ativo">Ativo</option>
+              <option value="parado">Parado</option>
+              <option value="manutencao">Em manutencao</option>
+              <option value="vendido">Vendido</option>
+              <option value="inativo">Inativo</option>
+            </select>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <textarea id="f-obs" rows="2"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeVeiculoModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-veiculo').requestSubmit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _veiculos = [];
+let _motoristas = [];
+let _filtroStatus = '';
+let _filtroTexto = '';
+
+PageBootstrap.init({
+  page: 'veiculos',
+  title: 'Veiculos',
+  breadcrumb: 'Frota / Veiculos',
+  perfisPermitidos: ['admin','gestor','almoxarife','motorista'],
+  loadData: async () => {
+    const [veiculos, motoristas] = await Promise.all([
+      API.get('trans_veiculos?order=placa'),
+      API.get('trans_motoristas?ativo=eq.true&order=nome&select=id,nome')
+    ]);
+    return {
+      veiculos: veiculos.ok ? veiculos.data : [],
+      motoristas: motoristas.ok ? motoristas.data : []
+    };
+  },
+  render: (data, user) => {
+    _veiculos = data.veiculos;
+    _motoristas = data.motoristas;
+    renderHeader(user);
+    renderFilters();
+    renderTable();
+  }
+});
+
+function renderHeader(user) {
+  const canCreate = ['admin','gestor'].includes(user.perfil);
+  document.getElementById('header-area').innerHTML = UI.pageHeader({
+    title: 'Veiculos',
+    subtitle: 'Frota ativa da Trans Anacleto. Campos master (placa, modelo) vem do TMS; operacionais (km, status) sao editaveis aqui.',
+    actions: canCreate ? [{ label: 'Novo veiculo', class: 'btn-primary', onclick: 'openVeiculoModal()' }] : []
+  });
+}
+
+function renderFilters() {
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'Placa ou modelo', value: _filtroTexto },
+      { id: 'flt-status', label: 'Status', type: 'select', value: _filtroStatus, options: [
+        { value: '', label: 'Todos' },
+        { value: 'ativo', label: 'Ativo' },
+        { value: 'parado', label: 'Parado' },
+        { value: 'manutencao', label: 'Em manutencao' },
+        { value: 'vendido', label: 'Vendido' },
+        { value: 'inativo', label: 'Inativo' }
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _filtroTexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _filtroStatus = document.getElementById('flt-status').value;
+  renderTable();
+}
+function limparFiltros() {
+  _filtroTexto = ''; _filtroStatus = '';
+  renderFilters(); renderTable();
+}
+
+function renderTable() {
+  const motMap = {};
+  _motoristas.forEach(m => motMap[m.id] = m.nome);
+  const filtrados = _veiculos.filter(v => {
+    if (_filtroStatus && v.status !== _filtroStatus) return false;
+    if (_filtroTexto && !(v.placa || '').toLowerCase().includes(_filtroTexto)
+      && !(v.modelo || '').toLowerCase().includes(_filtroTexto)) return false;
+    return true;
+  });
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'placa', label: 'Placa', render: v => `<strong>${API.esc(v.placa)}</strong>` },
+      { key: 'modelo', label: 'Modelo', render: v => API.esc(`${v.marca || ''} ${v.modelo}`.trim()) },
+      { key: 'tipo', label: 'Tipo', render: v => API.esc(v.tipo) },
+      { key: 'ano', label: 'Ano', align: 'right', render: v => v.ano || '&mdash;' },
+      { key: 'km_atual', label: 'KM', align: 'right', render: v => API.fmtKm(v.km_atual) },
+      { key: 'motorista', label: 'Motorista', render: v => API.esc(motMap[v.motorista_atual_id] || '&mdash;') },
+      { key: 'status', label: 'Status', render: v => UI.statusBadge(v.status, v.status === 'ativo' ? 'ativo' : v.status === 'manutencao' ? 'warning' : 'muted') },
+      { key: 'acoes', label: '', render: v => `<button class="btn btn-ghost btn-sm" onclick="openVeiculoModal('${v.id}')">Editar</button>` }
+    ],
+    rows: filtrados,
+    emptyMsg: 'Nenhum veiculo cadastrado. Clique em "Novo veiculo" para comecar.'
+  });
+}
+
+function openVeiculoModal(id) {
+  document.getElementById('modal-title').textContent = id ? 'Editar veiculo' : 'Novo veiculo';
+  document.getElementById('f-id').value = id || '';
+  document.getElementById('modal-veiculo').style.display = 'flex';
+
+  const motSel = document.getElementById('f-motorista');
+  motSel.innerHTML = '<option value="">&mdash;</option>' +
+    _motoristas.map(m => `<option value="${m.id}">${API.esc(m.nome)}</option>`).join('');
+
+  if (id) {
+    const v = _veiculos.find(x => x.id === id);
+    if (v) {
+      document.getElementById('f-placa').value = v.placa || '';
+      document.getElementById('f-modelo').value = v.modelo || '';
+      document.getElementById('f-marca').value = v.marca || '';
+      document.getElementById('f-tipo').value = v.tipo || 'cavalo';
+      document.getElementById('f-ano').value = v.ano || '';
+      document.getElementById('f-km').value = v.km_atual || 0;
+      document.getElementById('f-tanque').value = v.capacidade_tanque_l || 0;
+      document.getElementById('f-motorista').value = v.motorista_atual_id || '';
+      document.getElementById('f-status').value = v.status || 'ativo';
+      document.getElementById('f-obs').value = v.observacao || '';
+    }
+  } else {
+    document.getElementById('form-veiculo').reset();
+    document.getElementById('f-status').value = 'ativo';
+    document.getElementById('f-km').value = 0;
+  }
+}
+
+function closeVeiculoModal() {
+  document.getElementById('modal-veiculo').style.display = 'none';
+}
+
+async function saveVeiculo(e) {
+  e.preventDefault();
+  const id = document.getElementById('f-id').value;
+  const payload = {
+    placa: document.getElementById('f-placa').value.trim().toUpperCase(),
+    modelo: document.getElementById('f-modelo').value.trim(),
+    marca: document.getElementById('f-marca').value.trim() || null,
+    tipo: document.getElementById('f-tipo').value,
+    ano: parseInt(document.getElementById('f-ano').value) || null,
+    km_atual: parseFloat(document.getElementById('f-km').value) || 0,
+    capacidade_tanque_l: parseFloat(document.getElementById('f-tanque').value) || 0,
+    motorista_atual_id: document.getElementById('f-motorista').value || null,
+    status: document.getElementById('f-status').value,
+    observacao: document.getElementById('f-obs').value.trim() || null
+  };
+  let res;
+  if (id) res = await API.patch(`trans_veiculos?id=eq.${id}`, payload);
+  else res = await API.post('trans_veiculos', payload);
+  if (!res.ok) { UI.toast(res.error || 'Erro ao salvar', 'erro'); return; }
+  UI.toast(id ? 'Veiculo atualizado' : 'Veiculo criado', 'ok');
+  closeVeiculoModal();
+  const reload = await API.get('trans_veiculos?order=placa');
+  _veiculos = reload.ok ? reload.data : [];
+  renderTable();
+}
+</script>
+</body>
+</html>

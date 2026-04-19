@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Categorias - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<div id="modal-cat" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeCatModal()"></div>
+  <div class="modal-content" style="max-width:540px">
+    <div class="modal-header">
+      <h3 id="modal-title">Nova categoria</h3>
+      <button class="modal-close" onclick="closeCatModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-cat" onsubmit="saveCat(event)">
+        <input type="hidden" id="f-id">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field form-field-full"><label>Nome *</label><input type="text" id="f-nome" required></div>
+          <div class="form-field"><label>Tipo *</label>
+            <select id="f-tipo" required>
+              <option value="pneu">Pneu</option>
+              <option value="peca">Peca</option>
+              <option value="acessorio">Acessorio</option>
+              <option value="combustivel">Combustivel</option>
+              <option value="lubrificante">Lubrificante</option>
+              <option value="filtro">Filtro</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-field"><label>Ativo</label>
+            <select id="f-ativo"><option value="true">Sim</option><option value="false">Nao</option></select>
+          </div>
+          <div class="form-field form-field-full"><label>Descricao</label><textarea id="f-desc" rows="2"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCatModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-cat').requestSubmit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _cats = [];
+
+PageBootstrap.init({
+  page: 'categorias',
+  title: 'Categorias de Produto',
+  breadcrumb: 'Cadastros / Categorias',
+  perfisPermitidos: ['admin','almoxarife'],
+  loadData: async () => API.get('trans_categorias_produto?order=tipo,nome'),
+  render: (res, user) => {
+    _cats = res.ok ? res.data : [];
+    renderHeader(user); renderTable();
+  }
+});
+
+function renderHeader(user) {
+  document.getElementById('header-area').innerHTML = UI.pageHeader({
+    title: 'Categorias de Produto',
+    subtitle: 'Organizam o catalogo (pneu / peca / filtro / lubrificante / combustivel / outro).',
+    actions: [{ label: 'Nova categoria', class: 'btn-primary', onclick: 'openCatModal()' }]
+  });
+}
+
+function renderTable() {
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'nome', label: 'Nome', render: c => `<strong>${API.esc(c.nome)}</strong>` },
+      { key: 'tipo', label: 'Tipo', render: c => `<span class="badge badge-default">${API.esc(c.tipo)}</span>` },
+      { key: 'descricao', label: 'Descricao', render: c => API.esc(c.descricao || '&mdash;') },
+      { key: 'status', label: 'Status', render: c => UI.statusBadge(c.ativo ? 'ativo' : 'inativo', c.ativo ? 'ativo' : 'muted') },
+      { key: 'acoes', label: '', render: c => `<button class="btn btn-ghost btn-sm" onclick="openCatModal('${c.id}')">Editar</button>` }
+    ],
+    rows: _cats,
+    emptyMsg: 'Nenhuma categoria. As categorias padrao foram aplicadas pelo seed.'
+  });
+}
+
+function openCatModal(id) {
+  document.getElementById('modal-title').textContent = id ? 'Editar categoria' : 'Nova categoria';
+  document.getElementById('f-id').value = id || '';
+  document.getElementById('modal-cat').style.display = 'flex';
+  if (id) {
+    const c = _cats.find(x => x.id === id);
+    if (c) {
+      document.getElementById('f-nome').value = c.nome;
+      document.getElementById('f-tipo').value = c.tipo;
+      document.getElementById('f-ativo').value = String(c.ativo);
+      document.getElementById('f-desc').value = c.descricao || '';
+    }
+  } else {
+    document.getElementById('form-cat').reset();
+    document.getElementById('f-ativo').value = 'true';
+    document.getElementById('f-tipo').value = 'peca';
+  }
+}
+
+function closeCatModal() { document.getElementById('modal-cat').style.display = 'none'; }
+
+async function saveCat(e) {
+  e.preventDefault();
+  const id = document.getElementById('f-id').value;
+  const payload = {
+    nome: document.getElementById('f-nome').value.trim(),
+    tipo: document.getElementById('f-tipo').value,
+    ativo: document.getElementById('f-ativo').value === 'true',
+    descricao: document.getElementById('f-desc').value.trim() || null
+  };
+  let res;
+  if (id) res = await API.patch(`trans_categorias_produto?id=eq.${id}`, payload);
+  else res = await API.post('trans_categorias_produto', payload);
+  if (!res.ok) { UI.toast(res.error || 'Erro ao salvar', 'erro'); return; }
+  UI.toast(id ? 'Categoria atualizada' : 'Categoria criada', 'ok');
+  closeCatModal();
+  const reload = await API.get('trans_categorias_produto?order=tipo,nome');
+  _cats = reload.ok ? reload.data : [];
+  renderTable();
+}
+</script>
+</body>
+</html>

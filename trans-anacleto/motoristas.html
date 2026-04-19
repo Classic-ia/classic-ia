@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Motoristas - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<div id="modal-motorista" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeMotoristaModal()"></div>
+  <div class="modal-content" style="max-width:640px">
+    <div class="modal-header">
+      <h3 id="modal-title">Novo motorista</h3>
+      <button class="modal-close" onclick="closeMotoristaModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-motorista" onsubmit="saveMotorista(event)">
+        <input type="hidden" id="f-id">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field form-field-full"><label>Nome *</label><input type="text" id="f-nome" required></div>
+          <div class="form-field"><label>CPF</label><input type="text" id="f-cpf" maxlength="14"></div>
+          <div class="form-field"><label>CNH</label><input type="text" id="f-cnh"></div>
+          <div class="form-field"><label>Categoria CNH</label>
+            <select id="f-categoria_cnh">
+              <option value="">&mdash;</option>
+              <option value="B">B</option><option value="C">C</option>
+              <option value="D">D</option><option value="E">E</option>
+              <option value="AB">AB</option><option value="AC">AC</option>
+              <option value="AD">AD</option><option value="AE">AE</option>
+            </select>
+          </div>
+          <div class="form-field"><label>Validade CNH</label><input type="date" id="f-validade_cnh"></div>
+          <div class="form-field"><label>Telefone</label><input type="text" id="f-telefone"></div>
+          <div class="form-field"><label>Email</label><input type="email" id="f-email"></div>
+          <div class="form-field"><label>Ativo</label>
+            <select id="f-ativo"><option value="true">Sim</option><option value="false">Nao</option></select>
+          </div>
+          <div class="form-field form-field-full"><label>Observacao</label><textarea id="f-obs" rows="2"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeMotoristaModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-motorista').requestSubmit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _motoristas = [];
+let _filtroTexto = '';
+let _filtroAtivo = 'true';
+
+PageBootstrap.init({
+  page: 'motoristas',
+  title: 'Motoristas',
+  breadcrumb: 'Frota / Motoristas',
+  perfisPermitidos: ['admin','gestor','almoxarife','motorista'],
+  loadData: async () => API.get('trans_motoristas?order=nome'),
+  render: (res, user) => {
+    _motoristas = res.ok ? res.data : [];
+    renderHeader(user); renderFilters(); renderTable();
+  }
+});
+
+function renderHeader(user) {
+  const canCreate = ['admin','gestor'].includes(user.perfil);
+  document.getElementById('header-area').innerHTML = UI.pageHeader({
+    title: 'Motoristas',
+    subtitle: 'Master no TMS; sync upsert por CPF. Campos operacionais editaveis aqui.',
+    actions: canCreate ? [{ label: 'Novo motorista', class: 'btn-primary', onclick: 'openMotoristaModal()' }] : []
+  });
+}
+
+function renderFilters() {
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'Nome ou CPF', value: _filtroTexto },
+      { id: 'flt-ativo', label: 'Status', type: 'select', value: _filtroAtivo, options: [
+        { value: 'true', label: 'Ativos' }, { value: 'false', label: 'Inativos' }, { value: '', label: 'Todos' }
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _filtroTexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _filtroAtivo = document.getElementById('flt-ativo').value;
+  renderTable();
+}
+function limparFiltros() { _filtroTexto = ''; _filtroAtivo = ''; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const filtrados = _motoristas.filter(m => {
+    if (_filtroAtivo !== '' && String(m.ativo) !== _filtroAtivo) return false;
+    if (_filtroTexto) {
+      const hay = `${m.nome || ''} ${m.cpf || ''}`.toLowerCase();
+      if (!hay.includes(_filtroTexto)) return false;
+    }
+    return true;
+  });
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'nome', label: 'Nome', render: m => `<strong>${API.esc(m.nome)}</strong>` },
+      { key: 'cpf', label: 'CPF', render: m => API.esc(m.cpf || '&mdash;') },
+      { key: 'cnh', label: 'CNH', render: m => API.esc(m.cnh || '&mdash;') + (m.categoria_cnh ? ` <span class="badge badge-default">${m.categoria_cnh}</span>` : '') },
+      { key: 'validade', label: 'Validade', render: m => API.fmtData(m.validade_cnh) },
+      { key: 'telefone', label: 'Telefone', render: m => API.esc(m.telefone || '&mdash;') },
+      { key: 'status', label: 'Status', render: m => UI.statusBadge(m.ativo ? 'ativo' : 'inativo', m.ativo ? 'ativo' : 'muted') },
+      { key: 'acoes', label: '', render: m => `<button class="btn btn-ghost btn-sm" onclick="openMotoristaModal('${m.id}')">Editar</button>` }
+    ],
+    rows: filtrados,
+    emptyMsg: 'Nenhum motorista cadastrado.'
+  });
+}
+
+function openMotoristaModal(id) {
+  document.getElementById('modal-title').textContent = id ? 'Editar motorista' : 'Novo motorista';
+  document.getElementById('f-id').value = id || '';
+  document.getElementById('modal-motorista').style.display = 'flex';
+  if (id) {
+    const m = _motoristas.find(x => x.id === id);
+    if (m) {
+      document.getElementById('f-nome').value = m.nome || '';
+      document.getElementById('f-cpf').value = m.cpf || '';
+      document.getElementById('f-cnh').value = m.cnh || '';
+      document.getElementById('f-categoria_cnh').value = m.categoria_cnh || '';
+      document.getElementById('f-validade_cnh').value = m.validade_cnh || '';
+      document.getElementById('f-telefone').value = m.telefone || '';
+      document.getElementById('f-email').value = m.email || '';
+      document.getElementById('f-ativo').value = String(m.ativo);
+      document.getElementById('f-obs').value = m.observacao || '';
+    }
+  } else {
+    document.getElementById('form-motorista').reset();
+    document.getElementById('f-ativo').value = 'true';
+  }
+}
+
+function closeMotoristaModal() { document.getElementById('modal-motorista').style.display = 'none'; }
+
+async function saveMotorista(e) {
+  e.preventDefault();
+  const id = document.getElementById('f-id').value;
+  const payload = {
+    nome: document.getElementById('f-nome').value.trim(),
+    cpf: document.getElementById('f-cpf').value.trim() || null,
+    cnh: document.getElementById('f-cnh').value.trim() || null,
+    categoria_cnh: document.getElementById('f-categoria_cnh').value || null,
+    validade_cnh: document.getElementById('f-validade_cnh').value || null,
+    telefone: document.getElementById('f-telefone').value.trim() || null,
+    email: document.getElementById('f-email').value.trim() || null,
+    ativo: document.getElementById('f-ativo').value === 'true',
+    observacao: document.getElementById('f-obs').value.trim() || null
+  };
+  let res;
+  if (id) res = await API.patch(`trans_motoristas?id=eq.${id}`, payload);
+  else res = await API.post('trans_motoristas', payload);
+  if (!res.ok) { UI.toast(res.error || 'Erro ao salvar', 'erro'); return; }
+  UI.toast(id ? 'Motorista atualizado' : 'Motorista criado', 'ok');
+  closeMotoristaModal();
+  const reload = await API.get('trans_motoristas?order=nome');
+  _motoristas = reload.ok ? reload.data : [];
+  renderTable();
+}
+</script>
+</body>
+</html>

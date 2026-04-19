@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pneus - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal cadastro -->
+<div id="modal-cad" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalCad()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Cadastrar pneu</h3>
+      <button class="modal-close" onclick="closeModalCad()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-cad" onsubmit="salvarCadastro(event)">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field"><label>Marca *</label><input id="c-marca" required></div>
+          <div class="form-field"><label>Modelo</label><input id="c-modelo"></div>
+          <div class="form-field"><label>Medida *</label><input id="c-medida" placeholder="295/80R22.5" required></div>
+          <div class="form-field"><label>DOT</label><input id="c-dot"></div>
+          <div class="form-field"><label>Fornecedor</label><select id="c-forn"><option value="">&mdash;</option></select></div>
+          <div class="form-field"><label>Data fabricacao</label><input type="date" id="c-fab"></div>
+          <div class="form-field"><label>Sulco inicial (mm)</label><input type="number" step="0.01" id="c-sulco"></div>
+          <div class="form-field"><label>Vida util (km)</label><input type="number" id="c-vida"></div>
+          <div class="form-field"><label>Custo (R$)</label><input type="number" step="0.01" id="c-custo"></div>
+          <div class="form-field form-field-full"><label>Observacao</label><textarea id="c-obs" rows="2"></textarea></div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalCad()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-cad').requestSubmit()">Cadastrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal acao (instalar/retirar/recap/sucata) -->
+<div id="modal-acao" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalAcao()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="acao-titulo">Acao</h3>
+      <button class="modal-close" onclick="closeModalAcao()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="acao-pneu-info" style="background:#f1f5f9;padding:10px;border-radius:6px;margin-bottom:12px;font-size:13px"></div>
+      <form id="form-acao" onsubmit="salvarAcao(event)">
+        <input type="hidden" id="a-tipo">
+        <input type="hidden" id="a-pneu-id">
+        <div id="acao-campos"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalAcao()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-acao').requestSubmit()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal historico -->
+<div id="modal-hist" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalHist()"></div>
+  <div class="modal-content" style="max-width:720px">
+    <div class="modal-header">
+      <h3 id="hist-titulo">Historico</h3>
+      <button class="modal-close" onclick="closeModalHist()">&times;</button>
+    </div>
+    <div class="modal-body" id="hist-body"></div>
+  </div>
+</div>
+
+<script>
+let _pneus = [];
+let _veiculos = [];
+let _fornecedores = [];
+let _recapadoras = [];
+let _fstatus = '';
+let _fmedida = '';
+let _ftexto = '';
+
+PageBootstrap.init({
+  page: 'pneus',
+  title: 'Pneus',
+  breadcrumb: 'Frota / Pneus',
+  perfisPermitidos: ['admin','gestor','almoxarife','motorista'],
+  loadData: async () => {
+    const [pRes, vRes, fRes] = await Promise.all([
+      API.get('v_trans_pneus_full?order=codigo_interno'),
+      API.get('trans_veiculos?status=in.(ativo,parado,manutencao)&order=placa&select=id,placa,modelo,km_atual'),
+      API.get('trans_fornecedores?ativo=eq.true&order=razao_social&select=id,razao_social,tipo')
+    ]);
+    return {
+      pneus: pRes.ok ? pRes.data : [],
+      veiculos: vRes.ok ? vRes.data : [],
+      fornecedores: fRes.ok ? fRes.data : []
+    };
+  },
+  render: (data, user) => {
+    _pneus = data.pneus;
+    _veiculos = data.veiculos;
+    _fornecedores = data.fornecedores;
+    _recapadoras = data.fornecedores.filter(f => f.tipo === 'recapadora');
+
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Pneus',
+      subtitle: 'Controle individual por codigo interno. Historico completo de posicoes, recapagens e descartes.',
+      actions: [
+        { label: '+ Cadastrar pneu', onClick: 'openModalCad()', variant: 'primary' }
+      ]
+    });
+
+    // popula selects do modal cadastro
+    const selC = document.getElementById('c-forn');
+    selC.innerHTML = '<option value="">&mdash;</option>' +
+      _fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+
+    renderKpis(); renderFilters(); renderTable();
+  }
+});
+
+function renderKpis() {
+  const emEstoque = _pneus.filter(p => p.status === 'estoque').length;
+  const instalados = _pneus.filter(p => p.status === 'instalado').length;
+  const emRecap = _pneus.filter(p => p.status === 'recapagem').length;
+  const sucata = _pneus.filter(p => p.status === 'sucata').length;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Em estoque', value: emEstoque },
+    { label: 'Instalados', value: instalados, tone: 'ok' },
+    { label: 'Em recapagem', value: emRecap, tone: 'warning' },
+    { label: 'Sucata', value: sucata, tone: 'muted' }
+  ]);
+}
+
+function renderFilters() {
+  const medidas = Array.from(new Set(_pneus.map(p => p.medida).filter(Boolean))).sort();
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'Codigo, marca, modelo...', value: _ftexto },
+      { id: 'flt-status', label: 'Status', type: 'select', value: _fstatus, options: [
+        { value: '', label: 'Todos' },
+        { value: 'estoque', label: 'Em estoque' },
+        { value: 'instalado', label: 'Instalado' },
+        { value: 'recapagem', label: 'Em recapagem' },
+        { value: 'sucata', label: 'Sucata' },
+        { value: 'reserva', label: 'Reserva' }
+      ]},
+      { id: 'flt-medida', label: 'Medida', type: 'select', value: _fmedida, options: [
+        { value: '', label: 'Todas' },
+        ...medidas.map(m => ({ value: m, label: m }))
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _ftexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _fstatus = document.getElementById('flt-status').value;
+  _fmedida = document.getElementById('flt-medida').value;
+  renderTable();
+}
+function limparFiltros() { _ftexto=_fstatus=_fmedida=''; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const filt = _pneus.filter(p => {
+    if (_ftexto) {
+      const t = `${p.codigo_interno} ${p.marca||''} ${p.modelo||''} ${p.medida||''} ${p.veiculo_placa||''}`.toLowerCase();
+      if (!t.includes(_ftexto)) return false;
+    }
+    if (_fstatus && p.status !== _fstatus) return false;
+    if (_fmedida && p.medida !== _fmedida) return false;
+    return true;
+  });
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'codigo_interno', label: 'Codigo', render: p => `<strong>${API.esc(p.codigo_interno)}</strong>` },
+      { key: 'marca', label: 'Marca/Modelo', render: p => `${API.esc(p.marca||'')} ${API.esc(p.modelo||'')}` },
+      { key: 'medida', label: 'Medida', render: p => API.esc(p.medida || '—') },
+      { key: 'status', label: 'Status', render: p => statusBadge(p.status) },
+      { key: 'localizacao_atual', label: 'Localizacao', render: p => API.esc(p.localizacao_atual || '—') },
+      { key: 'posicao_atual', label: 'Posicao', render: p => p.posicao_atual
+          ? `<strong>${API.esc(p.posicao_atual)}</strong> <span class="text-muted" style="font-size:11px">em ${API.esc(p.veiculo_placa||'')}</span>`
+          : '<span class="text-muted">—</span>' },
+      { key: 'km', label: 'KM rodado', align: 'right', render: p => API.fmtNum(Number(p.km_rodado_calc || 0)) },
+      { key: 'recaps', label: 'Recaps', align: 'right', render: p => p.numero_recapagens || 0 },
+      { key: 'acoes', label: '', render: p => acoesBtns(p) }
+    ],
+    rows: filt,
+    emptyMsg: 'Nenhum pneu encontrado.'
+  });
+}
+
+function statusBadge(s) {
+  const map = {
+    estoque: { bg:'#dbeafe', fg:'#1e40af' },
+    instalado: { bg:'#dcfce7', fg:'#166534' },
+    recapagem: { bg:'#fef3c7', fg:'#92400e' },
+    sucata: { bg:'#fee2e2', fg:'#991b1b' },
+    reserva: { bg:'#ede9fe', fg:'#5b21b6' }
+  };
+  const c = map[s] || { bg:'#f1f5f9', fg:'#475569' };
+  return `<span class="badge" style="background:${c.bg};color:${c.fg}">${s}</span>`;
+}
+
+function acoesBtns(p) {
+  const btns = [`<button class="btn btn-ghost btn-sm" onclick="verHistorico('${p.id}','${API.esc(p.codigo_interno)}')">Historico</button>`];
+  if (p.status === 'estoque' || p.status === 'reserva') {
+    btns.push(`<button class="btn btn-outline btn-sm" onclick="abrirAcao('instalar','${p.id}','${API.esc(p.codigo_interno)}')">Instalar</button>`);
+    btns.push(`<button class="btn btn-outline btn-sm" onclick="abrirAcao('recap','${p.id}','${API.esc(p.codigo_interno)}')">Recapar</button>`);
+  }
+  if (p.status === 'instalado') {
+    btns.push(`<button class="btn btn-outline btn-sm" onclick="abrirAcao('retirar','${p.id}','${API.esc(p.codigo_interno)}')">Retirar</button>`);
+  }
+  if (p.status === 'recapagem') {
+    btns.push(`<button class="btn btn-outline btn-sm" onclick="abrirAcao('retorno','${p.id}','${API.esc(p.codigo_interno)}')">Retorno recap</button>`);
+  }
+  if (p.status !== 'sucata' && p.status !== 'instalado') {
+    btns.push(`<button class="btn btn-ghost btn-sm" style="color:#b91c1c" onclick="abrirAcao('sucata','${p.id}','${API.esc(p.codigo_interno)}')">Sucata</button>`);
+  }
+  return btns.join(' ');
+}
+
+// ============================================================
+// Cadastro
+// ============================================================
+function openModalCad() {
+  document.getElementById('form-cad').reset();
+  document.getElementById('modal-cad').style.display = 'flex';
+}
+function closeModalCad() { document.getElementById('modal-cad').style.display = 'none'; }
+
+async function salvarCadastro(e) {
+  e.preventDefault();
+  const payload = {
+    p_marca: document.getElementById('c-marca').value.trim(),
+    p_modelo: document.getElementById('c-modelo').value.trim() || null,
+    p_medida: document.getElementById('c-medida').value.trim(),
+    p_fornecedor_id: document.getElementById('c-forn').value || null,
+    p_dot: document.getElementById('c-dot').value.trim() || null,
+    p_data_fabricacao: document.getElementById('c-fab').value || null,
+    p_sulco_inicial_mm: Number(document.getElementById('c-sulco').value) || null,
+    p_vida_util_km: Number(document.getElementById('c-vida').value) || null,
+    p_custo_aquisicao: Number(document.getElementById('c-custo').value) || null,
+    p_observacao: document.getElementById('c-obs').value.trim() || null
+  };
+  const res = await API.rpc('trans_pneu_cadastrar', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro ao cadastrar', 'erro');
+    return;
+  }
+  UI.toast('Pneu cadastrado: ' + res.data.codigo_interno, 'ok');
+  closeModalCad();
+  await recarregar();
+}
+
+// ============================================================
+// Acoes
+// ============================================================
+function abrirAcao(tipo, pneuId, codigo) {
+  document.getElementById('a-tipo').value = tipo;
+  document.getElementById('a-pneu-id').value = pneuId;
+  const pneu = _pneus.find(p => p.id === pneuId);
+  document.getElementById('acao-pneu-info').innerHTML = `
+    <strong>${API.esc(codigo)}</strong> &middot; ${API.esc(pneu.marca||'')} ${API.esc(pneu.medida||'')}<br>
+    Status atual: ${statusBadge(pneu.status)} &middot; ${API.esc(pneu.localizacao_atual||'')}
+  `;
+
+  const titulos = { instalar:'Instalar pneu', retirar:'Retirar pneu', recap:'Enviar para recapagem',
+                    retorno:'Retorno da recapagem', sucata:'Descartar como sucata' };
+  document.getElementById('acao-titulo').textContent = titulos[tipo];
+
+  const area = document.getElementById('acao-campos');
+  if (tipo === 'instalar') {
+    const vopts = _veiculos.map(v => `<option value="${v.id}" data-km="${v.km_atual||0}">${API.esc(v.placa)} &middot; ${API.esc(v.modelo||'')}</option>`).join('');
+    const posOpts = ['DE','DD','TE','TD','3EE','3EI','3DE','3DI','4EE','4EI','4DE','4DI','estepe']
+      .map(p => `<option value="${p}">${p}</option>`).join('');
+    area.innerHTML = `
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="form-field form-field-full"><label>Veiculo *</label>
+          <select id="ai-veic" required onchange="ai_veicChange()"><option value="">&mdash;</option>${vopts}</select></div>
+        <div class="form-field"><label>Posicao *</label><select id="ai-pos" required>${posOpts}</select></div>
+        <div class="form-field"><label>KM veiculo *</label><input type="number" id="ai-km" step="0.01" required></div>
+        <div class="form-field form-field-full"><label>Observacao</label><textarea id="ai-obs" rows="2"></textarea></div>
+      </div>
+    `;
+  } else if (tipo === 'retirar') {
+    area.innerHTML = `
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="form-field"><label>KM veiculo *</label><input type="number" id="ar-km" step="0.01" required></div>
+        <div class="form-field"><label>Destino *</label>
+          <select id="ar-destino" required>
+            <option value="estoque">Estoque</option>
+            <option value="recapagem">Recapagem</option>
+            <option value="sucata">Sucata</option>
+            <option value="troca_direta">Troca direta</option>
+          </select></div>
+        <div class="form-field form-field-full"><label>Motivo *</label><input id="ar-motivo" required placeholder="Ex: desgaste, furo, preventiva..."></div>
+        <div class="form-field form-field-full"><label>Observacao</label><textarea id="ar-obs" rows="2"></textarea></div>
+      </div>
+    `;
+  } else if (tipo === 'recap') {
+    const ropts = _recapadoras.length
+      ? _recapadoras.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('')
+      : _fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+    area.innerHTML = `
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="form-field form-field-full"><label>Recapadora *</label>
+          <select id="arc-forn" required><option value="">&mdash;</option>${ropts}</select></div>
+        <div class="form-field"><label>Sulco pre (mm)</label><input type="number" step="0.01" id="arc-sulco"></div>
+        <div class="form-field form-field-full"><label>Observacao</label><textarea id="arc-obs" rows="2"></textarea></div>
+      </div>
+    `;
+  } else if (tipo === 'retorno') {
+    area.innerHTML = `
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="form-field"><label>Sulco pos (mm)</label><input type="number" step="0.01" id="art-sulco"></div>
+        <div class="form-field"><label>Custo (R$)</label><input type="number" step="0.01" id="art-custo"></div>
+        <div class="form-field form-field-full"><label>Aprovado?</label>
+          <select id="art-aprov">
+            <option value="true">Sim &mdash; volta para estoque</option>
+            <option value="false">Nao &mdash; vira sucata</option>
+          </select></div>
+        <div class="form-field form-field-full"><label>Observacao</label><textarea id="art-obs" rows="2"></textarea></div>
+      </div>
+    `;
+  } else if (tipo === 'sucata') {
+    area.innerHTML = `
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+        <div class="form-field form-field-full"><label>Motivo *</label><input id="as-motivo" required></div>
+        <div class="form-field form-field-full"><label>URL da foto *</label>
+          <input id="as-foto" required placeholder="https://... (obrigatoria)"></div>
+        <div class="form-field form-field-full"><label>Observacao</label><textarea id="as-obs" rows="2"></textarea></div>
+      </div>
+    `;
+  }
+
+  document.getElementById('modal-acao').style.display = 'flex';
+}
+
+function ai_veicChange() {
+  const sel = document.getElementById('ai-veic');
+  const opt = sel.options[sel.selectedIndex];
+  if (opt) document.getElementById('ai-km').value = opt.dataset.km || '';
+}
+
+function closeModalAcao() { document.getElementById('modal-acao').style.display = 'none'; }
+
+async function salvarAcao(e) {
+  e.preventDefault();
+  const tipo = document.getElementById('a-tipo').value;
+  const pneuId = document.getElementById('a-pneu-id').value;
+  let res;
+
+  if (tipo === 'instalar') {
+    res = await API.rpc('trans_pneu_instalar', {
+      p_pneu_id: pneuId,
+      p_veiculo_id: document.getElementById('ai-veic').value,
+      p_posicao: document.getElementById('ai-pos').value,
+      p_km_veiculo: Number(document.getElementById('ai-km').value),
+      p_observacao: document.getElementById('ai-obs').value.trim() || null
+    });
+  } else if (tipo === 'retirar') {
+    res = await API.rpc('trans_pneu_retirar', {
+      p_pneu_id: pneuId,
+      p_km_veiculo: Number(document.getElementById('ar-km').value),
+      p_destino: document.getElementById('ar-destino').value,
+      p_motivo: document.getElementById('ar-motivo').value.trim(),
+      p_observacao: document.getElementById('ar-obs').value.trim() || null
+    });
+  } else if (tipo === 'recap') {
+    res = await API.rpc('trans_pneu_enviar_recapagem', {
+      p_pneu_id: pneuId,
+      p_fornecedor_id: document.getElementById('arc-forn').value,
+      p_sulco_pre_mm: Number(document.getElementById('arc-sulco').value) || null,
+      p_observacao: document.getElementById('arc-obs').value.trim() || null
+    });
+  } else if (tipo === 'retorno') {
+    res = await API.rpc('trans_pneu_retornar_recapagem', {
+      p_pneu_id: pneuId,
+      p_sulco_pos_mm: Number(document.getElementById('art-sulco').value) || null,
+      p_custo: Number(document.getElementById('art-custo').value) || null,
+      p_aprovado: document.getElementById('art-aprov').value === 'true',
+      p_observacao: document.getElementById('art-obs').value.trim() || null
+    });
+  } else if (tipo === 'sucata') {
+    res = await API.rpc('trans_pneu_sucatar', {
+      p_pneu_id: pneuId,
+      p_motivo: document.getElementById('as-motivo').value.trim(),
+      p_foto_url: document.getElementById('as-foto').value.trim(),
+      p_observacao: document.getElementById('as-obs').value.trim() || null
+    });
+  }
+
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro na acao', 'erro');
+    return;
+  }
+  UI.toast('Acao aplicada', 'ok');
+  closeModalAcao();
+  await recarregar();
+}
+
+async function recarregar() {
+  const res = await API.get('v_trans_pneus_full?order=codigo_interno');
+  _pneus = res.ok ? res.data : [];
+  renderKpis(); renderTable();
+}
+
+// ============================================================
+// Historico
+// ============================================================
+async function verHistorico(pneuId, codigo) {
+  document.getElementById('hist-titulo').textContent = 'Historico de ' + codigo;
+  document.getElementById('hist-body').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  document.getElementById('modal-hist').style.display = 'flex';
+
+  const pneu = _pneus.find(p => p.id === pneuId);
+  const res = await API.rpc('trans_pneu_buscar_por_codigo', { p_codigo: pneu.codigo_interno });
+  if (!res.ok || !res.data || !res.data.encontrado) {
+    document.getElementById('hist-body').innerHTML = '<div class="alert alert-error">Erro ao carregar historico</div>';
+    return;
+  }
+
+  const hist = res.data.historico || [];
+  const recaps = res.data.recapagens || [];
+
+  const histHtml = hist.length === 0
+    ? '<div class="text-muted">Sem movimentacoes.</div>'
+    : hist.map(h => `
+        <div style="border-left:3px solid #cbd5e1;padding-left:12px;margin-bottom:10px">
+          <div style="display:flex;justify-content:space-between;font-size:12px">
+            <strong>${API.esc(h.tipo)}</strong>
+            <span class="text-muted">${API.fmtDataHora(h.data_hora)}</span>
+          </div>
+          <div style="font-size:13px;margin-top:2px">${API.esc(h.motivo || '')}</div>
+          ${h.veiculo_placa ? `<div class="text-muted" style="font-size:11px">veiculo ${API.esc(h.veiculo_placa)} ${h.posicao ? '&middot; '+API.esc(h.posicao) : ''} ${h.km_veiculo ? '&middot; km '+API.fmtNum(h.km_veiculo) : ''}</div>` : ''}
+          ${h.destino ? `<div class="text-muted" style="font-size:11px">destino: ${API.esc(h.destino)}</div>` : ''}
+          ${h.fornecedor_razao ? `<div class="text-muted" style="font-size:11px">fornecedor: ${API.esc(h.fornecedor_razao)}</div>` : ''}
+          ${h.observacao ? `<div style="font-size:11px;color:#64748b;margin-top:2px">${API.esc(h.observacao)}</div>` : ''}
+        </div>
+      `).join('');
+
+  const recapHtml = recaps.length === 0
+    ? ''
+    : `<h4 style="margin:16px 0 8px 0">Recapagens</h4>` +
+      `<table class="data-table" style="width:100%;font-size:12px">
+        <thead><tr><th>#</th><th>Fornecedor</th><th>Envio</th><th>Retorno</th><th>Sulco pos</th><th>Custo</th><th>Status</th></tr></thead>
+        <tbody>${recaps.map(r => `
+          <tr>
+            <td>${r.numero_recapagem}</td>
+            <td>${API.esc(r.fornecedor_razao || '—')}</td>
+            <td>${API.fmtData(r.data_envio)}</td>
+            <td>${r.data_retorno ? API.fmtData(r.data_retorno) : '—'}</td>
+            <td>${r.sulco_pos_mm || '—'}</td>
+            <td>${r.custo ? 'R$ '+API.fmtNum(r.custo) : '—'}</td>
+            <td>${API.esc(r.status)}</td>
+          </tr>
+        `).join('')}</tbody>
+      </table>`;
+
+  document.getElementById('hist-body').innerHTML = histHtml + recapHtml;
+}
+
+function closeModalHist() { document.getElementById('modal-hist').style.display = 'none'; }
+</script>
+</body>
+</html>

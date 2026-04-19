@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deslocamentos - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.d-table { width:100%; border-collapse:collapse; font-size:13px; }
+.d-table th, .d-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.d-table th { background:#F8FAFC; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
+.d-table tr:hover { background:#FEF3C7; }
+.d-table .right { text-align:right; font-variant-numeric:tabular-nums; }
+.d-table .num-os { font-family:ui-monospace,monospace; color:#D97706; font-weight:600; text-decoration:none; }
+.d-table .num-small { font-family:ui-monospace,monospace; font-size:12px; color:#64748B; }
+.d-table .v-money { font-weight:600; color:#059669; }
+.d-table .km { font-family:ui-monospace,monospace; }
+.placa { padding:3px 8px; border-radius:4px; background:#F1F5F9; color:#1E293B; font-weight:600; font-family:ui-monospace,monospace; font-size:12px; letter-spacing:0.05em; }
+
+.filter-row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+.filter-field { display:flex; flex-direction:column; gap:4px; }
+.filter-field label { font-size:12px; font-weight:500; color:#475569; }
+.filter-field input, .filter-field select {
+  padding:8px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; min-width:140px;
+}
+.summary-row { display:flex; gap:16px; margin-bottom:18px; }
+.summary-card { flex:1; background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:14px 18px; }
+.summary-label { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.05em; font-weight:600; }
+.summary-value { font-size:22px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+.empty-state { text-align:center; padding:40px; color:#64748B; }
+.modal-form .fr { margin-bottom:14px; }
+.modal-form .fr-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.modal-form label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; }
+.modal-form input, .modal-form select, .modal-form textarea {
+  width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; box-sizing:border-box;
+}
+.modal-form textarea { min-height:60px; resize:vertical; }
+.preview-box { background:#FEF3C7; border:1px solid #FDE68A; border-radius:6px; padding:10px 14px; font-size:13px; color:#78350F; margin-bottom:14px; }
+.preview-box b { color:#92400E; }
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3>Deslocamentos</h3>
+        <p class="text-sm text-muted">Transporte de maquinas entre obras e deslocamentos operacionais.</p>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button id="btn-export" class="btn" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:8px;font-size:13px;cursor:pointer;">Exportar CSV</button>
+        <button id="btn-novo" class="btn" style="background:#D97706;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;font-size:13px;border:none;cursor:pointer;">+ Novo Deslocamento</button>
+      </div>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-row">
+        <div class="summary-card"><div class="summary-label">Valor total</div><div class="summary-value" id="s-total" style="color:#059669;">—</div></div>
+        <div class="summary-card"><div class="summary-label">Lancamentos</div><div class="summary-value" id="s-count" style="color:#1E293B;">0</div></div>
+        <div class="summary-card"><div class="summary-label">KM rodados</div><div class="summary-value" id="s-km" style="color:#D97706;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Vinculados a OS</div><div class="summary-value" id="s-os" style="color:#64748B;">0</div></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-field"><label>Buscar</label><input type="text" id="f-q" placeholder="motivo, OS, motorista..."></div>
+        <div class="filter-field"><label>Veiculo</label><select id="f-veiculo"><option value="">Todos</option></select></div>
+        <div class="filter-field"><label>Maquina</label><select id="f-maquina"><option value="">Todas</option></select></div>
+        <div class="filter-field"><label>De</label><input type="date" id="f-ini"></div>
+        <div class="filter-field"><label>Ate</label><input type="date" id="f-fim"></div>
+        <button id="btn-limpar" class="btn" style="padding:8px 14px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Limpar</button>
+      </div>
+
+      <div id="list-area">
+        <div style="padding:30px;text-align:center;color:#64748B;">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Deslocamento -->
+<div id="modal-novo" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;max-width:600px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:16px 22px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:16px;font-weight:600;color:#1E293B;">Novo Deslocamento</h3>
+      <button onclick="fecharNovo()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748B;">&times;</button>
+    </div>
+    <div class="modal-form" style="padding:20px 22px;">
+      <div class="fr-2">
+        <div><label>Data *</label><input type="date" id="n-data"></div>
+        <div><label>Veiculo *</label><select id="n-veiculo"><option value="">Selecione...</option></select></div>
+      </div>
+      <div class="fr-2">
+        <div><label>KM inicial *</label><input type="number" step="0.1" id="n-kmi" placeholder="0"></div>
+        <div><label>KM final *</label><input type="number" step="0.1" id="n-kmf" placeholder="0"></div>
+      </div>
+      <div class="preview-box" id="n-preview" style="display:none;">
+        <div>KM rodado: <b id="p-km">—</b></div>
+        <div>Valor calc.: <b id="p-valor">—</b> <span style="color:#92400E;font-size:11px;">(R$ <span id="p-vkm">—</span>/km)</span></div>
+      </div>
+      <div class="fr-2">
+        <div><label>OS (vincular)</label><select id="n-os"><option value="">—</option></select></div>
+        <div><label>Maquina transportada</label><select id="n-maquina"><option value="">—</option></select></div>
+      </div>
+      <div class="fr"><label>Motorista</label><input type="text" id="n-motorista" placeholder="Nome do motorista"></div>
+      <div class="fr"><label>Motivo</label><textarea id="n-motivo" placeholder="Ex: transporte escavadeira obra fazenda sul"></textarea></div>
+      <div class="fr"><label>Observacao</label><textarea id="n-obs"></textarea></div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="fecharNovo()" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Cancelar</button>
+      <button id="btn-salvar" onclick="salvar()" style="padding:9px 20px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let todos = [];
+let veiculos = [];
+let maquinas = [];
+let osList = [];
+let valorKm = 0;
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'deslocamentos',
+    title: 'Deslocamentos',
+    breadcrumb: 'Operacao > Deslocamentos',
+    perfisPermitidos: ['admin', 'gestor', 'financeiro', 'operador'],
+    loadData: async () => {
+      const [rD, rV, rM, rO, rC] = await Promise.all([
+        API.get('v_jr_deslocamentos_detalhado?select=*&order=data.desc,created_at.desc&limit=2000'),
+        API.get('jr_veiculos?select=id,placa,descricao&order=placa'),
+        API.get('jr_maquinas?select=id,codigo,descricao&order=codigo'),
+        API.get('jr_ordens_servico?select=id,numero_os&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=500'),
+        API.get('jr_config?select=valor&chave=eq.valor_km_deslocamento'),
+      ]);
+      return {
+        deslocamentos: rD.ok ? rD.data : [],
+        veiculos: rV.ok ? rV.data : [],
+        maquinas: rM.ok ? rM.data : [],
+        os: rO.ok ? rO.data : [],
+        valorKm: rC.ok && rC.data[0] ? Number(rC.data[0].valor) || 0 : 0,
+      };
+    },
+    render: (d) => {
+      todos = d.deslocamentos;
+      veiculos = d.veiculos;
+      maquinas = d.maquinas;
+      osList = d.os;
+      valorKm = d.valorKm;
+      preencherSelects();
+      aplicarFiltros();
+    }
+  });
+
+  ['f-q','f-veiculo','f-maquina','f-ini','f-fim'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener(el.tagName === 'SELECT' || el.type === 'date' ? 'change' : 'input', aplicarFiltros);
+  });
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    ['f-q','f-veiculo','f-maquina','f-ini','f-fim'].forEach(id => document.getElementById(id).value = '');
+    aplicarFiltros();
+  });
+  document.getElementById('btn-novo').addEventListener('click', abrirNovo);
+  document.getElementById('btn-export').addEventListener('click', exportarCsv);
+
+  ['n-kmi','n-kmf'].forEach(id => document.getElementById(id).addEventListener('input', atualizarPreview));
+})();
+
+function preencherSelects() {
+  const optV = '<option value="">Selecione...</option>' + veiculos.map(v => `<option value="${v.id}">${API.esc(v.placa)}${v.descricao ? ' - ' + API.esc(v.descricao) : ''}</option>`).join('');
+  document.getElementById('n-veiculo').innerHTML = optV;
+  document.getElementById('f-veiculo').innerHTML = '<option value="">Todos</option>' + veiculos.map(v => `<option value="${v.id}">${API.esc(v.placa)}</option>`).join('');
+
+  const optM = '<option value="">—</option>' + maquinas.map(m => `<option value="${m.id}">${API.esc(m.codigo)} - ${API.esc(m.descricao)}</option>`).join('');
+  document.getElementById('n-maquina').innerHTML = optM;
+  document.getElementById('f-maquina').innerHTML = '<option value="">Todas</option>' + maquinas.map(m => `<option value="${m.id}">${API.esc(m.codigo)}</option>`).join('');
+
+  document.getElementById('n-os').innerHTML = '<option value="">—</option>' + osList.map(o => `<option value="${o.id}">${API.esc(o.numero_os)}</option>`).join('');
+}
+
+function aplicarFiltros() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const vei = document.getElementById('f-veiculo').value;
+  const maq = document.getElementById('f-maquina').value;
+  const ini = document.getElementById('f-ini').value;
+  const fim = document.getElementById('f-fim').value;
+
+  let lista = todos.slice();
+  if (q) lista = lista.filter(d =>
+    (d.motivo || '').toLowerCase().includes(q) ||
+    (d.numero_os || '').toLowerCase().includes(q) ||
+    (d.motorista_nome || '').toLowerCase().includes(q) ||
+    (d.veiculo_placa || '').toLowerCase().includes(q) ||
+    (d.maquina_codigo || '').toLowerCase().includes(q)
+  );
+  if (vei) lista = lista.filter(d => d.veiculo_id === vei);
+  if (maq) lista = lista.filter(d => d.maquina_id === maq);
+  if (ini) lista = lista.filter(d => d.data >= ini);
+  if (fim) lista = lista.filter(d => d.data <= fim);
+
+  renderResumo(lista);
+  renderTabela(lista);
+}
+
+function renderResumo(lista) {
+  const total = lista.reduce((a,d) => a + (Number(d.valor_calc) || 0), 0);
+  const km = lista.reduce((a,d) => a + (Number(d.km_rodado) || 0), 0);
+  const comOs = lista.filter(d => d.os_id).length;
+  document.getElementById('s-total').textContent = API.fmtMoeda(total);
+  document.getElementById('s-count').textContent = lista.length;
+  document.getElementById('s-km').textContent = API.fmtNum ? API.fmtNum(km) : km.toLocaleString('pt-BR');
+  document.getElementById('s-os').textContent = comOs;
+}
+
+function renderTabela(lista) {
+  const area = document.getElementById('list-area');
+  if (!lista.length) { area.innerHTML = '<div class="empty-state">Nenhum deslocamento encontrado.</div>'; return; }
+  const podeRem = ['admin','gestor'].includes(API.getPerfil());
+
+  let html = '<div style="overflow-x:auto;"><table class="d-table"><thead><tr>';
+  html += '<th>Data</th><th>Veiculo</th><th>KM inicial</th><th>KM final</th><th class="right">KM</th><th>Motivo</th><th>OS</th><th>Maquina</th><th>Motorista</th><th class="right">Valor</th>';
+  if (podeRem) html += '<th></th>';
+  html += '</tr></thead><tbody>';
+  lista.forEach(d => {
+    html += `<tr>
+      <td>${API.fmtData(d.data)}</td>
+      <td><span class="placa">${API.esc(d.veiculo_placa || '—')}</span></td>
+      <td class="km right">${Number(d.km_inicial || 0).toLocaleString('pt-BR')}</td>
+      <td class="km right">${Number(d.km_final || 0).toLocaleString('pt-BR')}</td>
+      <td class="right"><b>${Number(d.km_rodado || 0).toLocaleString('pt-BR')}</b></td>
+      <td style="max-width:220px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${API.esc(d.motivo || '—')}</td>
+      <td>${d.numero_os ? `<a href="os_ficha.html?id=${encodeURIComponent(d.os_id)}" class="num-os">${API.esc(d.numero_os)}</a>` : '—'}</td>
+      <td class="num-small">${API.esc(d.maquina_codigo || '—')}</td>
+      <td>${API.esc(d.motorista_nome || '—')}</td>
+      <td class="right v-money">${API.fmtMoeda(d.valor_calc)}</td>`;
+    if (podeRem) html += `<td><button onclick="remover('${d.id}')" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:14px;">&times;</button></td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+function abrirNovo() {
+  if (!API.canAccess('registrar_despesa')) { UI.toast('Sem permissao', 'err'); return; }
+  document.getElementById('n-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('n-veiculo').value = '';
+  document.getElementById('n-kmi').value = '';
+  document.getElementById('n-kmf').value = '';
+  document.getElementById('n-os').value = '';
+  document.getElementById('n-maquina').value = '';
+  document.getElementById('n-motorista').value = '';
+  document.getElementById('n-motivo').value = '';
+  document.getElementById('n-obs').value = '';
+  atualizarPreview();
+  document.getElementById('modal-novo').style.display = 'flex';
+}
+
+function fecharNovo() { document.getElementById('modal-novo').style.display = 'none'; }
+
+function atualizarPreview() {
+  const kmi = parseFloat(document.getElementById('n-kmi').value);
+  const kmf = parseFloat(document.getElementById('n-kmf').value);
+  const box = document.getElementById('n-preview');
+  if (isNaN(kmi) || isNaN(kmf) || kmf < kmi) { box.style.display = 'none'; return; }
+  const km = kmf - kmi;
+  const v = km * valorKm;
+  document.getElementById('p-km').textContent = km.toLocaleString('pt-BR') + ' km';
+  document.getElementById('p-valor').textContent = API.fmtMoeda(v);
+  document.getElementById('p-vkm').textContent = valorKm.toFixed(2).replace('.', ',');
+  box.style.display = 'block';
+}
+
+async function salvar() {
+  const data = document.getElementById('n-data').value;
+  const veiculoId = document.getElementById('n-veiculo').value;
+  const kmi = parseFloat(document.getElementById('n-kmi').value);
+  const kmf = parseFloat(document.getElementById('n-kmf').value);
+  if (!data) { UI.toast('Data obrigatoria', 'err'); return; }
+  if (!veiculoId) { UI.toast('Veiculo obrigatorio', 'err'); return; }
+  if (isNaN(kmi) || isNaN(kmf)) { UI.toast('KM inicial e final obrigatorios', 'err'); return; }
+  if (kmf < kmi) { UI.toast('KM final nao pode ser menor que inicial', 'err'); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = '...';
+
+  const r = await API.rpc('jr_deslocamento_registrar', {
+    p_data: data,
+    p_veiculo_id: veiculoId,
+    p_km_inicial: kmi,
+    p_km_final: kmf,
+    p_motivo: document.getElementById('n-motivo').value.trim() || null,
+    p_os_id: document.getElementById('n-os').value || null,
+    p_maquina_id: document.getElementById('n-maquina').value || null,
+    p_motorista_nome: document.getElementById('n-motorista').value.trim() || null,
+    p_observacao: document.getElementById('n-obs').value.trim() || null,
+  });
+
+  btn.disabled = false; btn.textContent = 'Salvar';
+
+  if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+  UI.toast('Deslocamento registrado', 'ok');
+  fecharNovo();
+  await recarregar();
+}
+
+async function remover(id) {
+  if (!confirm('Remover este deslocamento?')) return;
+  const r = await API.rpc('jr_deslocamento_remover', { p_deslocamento_id: id });
+  if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+  UI.toast('Deslocamento removido', 'ok');
+  await recarregar();
+}
+
+async function recarregar() {
+  const r = await API.get('v_jr_deslocamentos_detalhado?select=*&order=data.desc,created_at.desc&limit=2000');
+  if (r.ok) { todos = r.data; aplicarFiltros(); }
+}
+
+function exportarCsv() {
+  const lista = filtrarAtual();
+  if (!lista.length) { UI.toast('Nada para exportar', 'warn'); return; }
+  const cols = ['data','veiculo','km_inicial','km_final','km_rodado','motivo','os','maquina','motorista','valor'];
+  const rows = lista.map(d => [
+    d.data || '',
+    d.veiculo_placa || '',
+    d.km_inicial || 0,
+    d.km_final || 0,
+    d.km_rodado || 0,
+    (d.motivo || '').replace(/[\r\n]+/g, ' '),
+    d.numero_os || '',
+    d.maquina_codigo || '',
+    d.motorista_nome || '',
+    String(Number(d.valor_calc || 0).toFixed(2)).replace('.', ','),
+  ]);
+  baixarCsv('deslocamentos', cols, rows);
+}
+
+function filtrarAtual() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const vei = document.getElementById('f-veiculo').value;
+  const maq = document.getElementById('f-maquina').value;
+  const ini = document.getElementById('f-ini').value;
+  const fim = document.getElementById('f-fim').value;
+  let lista = todos.slice();
+  if (q) lista = lista.filter(d => (d.motivo || '').toLowerCase().includes(q) || (d.numero_os || '').toLowerCase().includes(q) || (d.motorista_nome || '').toLowerCase().includes(q) || (d.veiculo_placa || '').toLowerCase().includes(q) || (d.maquina_codigo || '').toLowerCase().includes(q));
+  if (vei) lista = lista.filter(d => d.veiculo_id === vei);
+  if (maq) lista = lista.filter(d => d.maquina_id === maq);
+  if (ini) lista = lista.filter(d => d.data >= ini);
+  if (fim) lista = lista.filter(d => d.data <= fim);
+  return lista;
+}
+
+function baixarCsv(nome, cols, rows) {
+  const csv = [cols.join(';')].concat(rows.map(r => r.map(v => {
+    const s = String(v);
+    return /[;"\n]/.test(s) ? `"${s.replace(/"/g,'""')}"` : s;
+  }).join(';'))).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type:'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${nome}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  UI.toast(`${rows.length} registros exportados`, 'ok');
+}
+</script>
+</body>
+</html>

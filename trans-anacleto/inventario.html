@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Inventario - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="tabs" style="margin-bottom:16px">
+    <button class="tab active" data-tab="novo" onclick="switchTab('novo')">Inventario NOVO (por lote)</button>
+    <button class="tab" data-tab="usado" onclick="switchTab('usado')">Inventario USADO (SKU+condicao)</button>
+  </div>
+
+  <!-- Novo: bipa EAN, mostra lotes, usuario conta cada lote -->
+  <div id="tab-novo" class="tab-content">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-body">
+        <div style="display:flex;gap:12px;align-items:flex-end">
+          <div class="form-field" style="flex:1">
+            <label>Localizacao (filtra produtos)</label>
+            <input type="text" id="flt-loc" placeholder="Ex: almoxarifado / oficina" value="">
+          </div>
+          <button class="btn btn-primary" onclick="carregarInventarioNovo()">Carregar lotes</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-body" id="area-novo">
+        <div class="text-muted" style="font-size:13px">Defina uma localizacao e clique em "Carregar lotes".</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Usado: lista SKUs com saldo, operador digita contagem por condicao -->
+  <div id="tab-usado" class="tab-content" style="display:none">
+    <div class="card">
+      <div class="card-body" id="area-usado">
+        <div class="loading-center"><div class="spinner"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _lotesInv = [];
+let _consolidado = [];
+
+PageBootstrap.init({
+  page: 'inventario',
+  title: 'Inventario',
+  breadcrumb: 'Estoque / Inventario',
+  perfisPermitidos: ['admin','gestor','almoxarife'],
+  loadData: async () => API.get('v_trans_estoque_consolidado?order=sku'),
+  render: (res, user) => {
+    _consolidado = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Inventario',
+      subtitle: 'Contagem fisica e geracao de ajustes. Novo: por lote (FEFO). Usado: por SKU x condicao.',
+      actions: []
+    });
+    renderUsado();
+  }
+});
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + id ? '' : 'none');
+}
+
+// ============================================================
+// NOVO (por lote)
+// ============================================================
+async function carregarInventarioNovo() {
+  const loc = document.getElementById('flt-loc').value.trim();
+  const area = document.getElementById('area-novo');
+  area.innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+
+  let query = 'trans_lotes?order=lote_interno&select=id,lote_interno,lote_fornecedor,data_validade,status,produto:trans_produtos!inner(id,sku,nome,localizacao),saldo:trans_estoque_lote(quantidade)';
+  if (loc) {
+    query += `&produto.localizacao=ilike.*${encodeURIComponent(loc)}*`;
+  }
+  const res = await API.get(query);
+  if (!res.ok) { area.innerHTML = '<div class="alert alert-error">Erro ao carregar lotes</div>'; return; }
+
+  _lotesInv = (res.data || []).map(l => ({
+    ...l,
+    saldo_atual: Array.isArray(l.saldo) ? (l.saldo[0]?.quantidade ?? 0) : (l.saldo?.quantidade ?? 0),
+    contado: null
+  }));
+
+  if (_lotesInv.length === 0) {
+    area.innerHTML = '<div class="text-muted">Nenhum lote encontrado para a localizacao.</div>';
+    return;
+  }
+
+  renderListaNovo();
+}
+
+function renderListaNovo() {
+  const area = document.getElementById('area-novo');
+  const rows = _lotesInv.map(l => `
+    <tr data-id="${l.id}">
+      <td><strong>${API.esc(l.lote_interno)}</strong></td>
+      <td>${API.esc(l.produto.sku)} &middot; <span class="text-muted">${API.esc(l.produto.nome)}</span></td>
+      <td>${API.fmtData(l.data_validade)}</td>
+      <td align="right">${API.fmtNum(l.saldo_atual)}</td>
+      <td><input type="number" min="0" step="0.01" class="inv-input" data-id="${l.id}" value="${l.contado == null ? '' : l.contado}" style="width:100px"></td>
+      <td align="right" id="delta-${l.id}" class="text-muted">&mdash;</td>
+      <td><button class="btn btn-ghost btn-sm" onclick="ajustarLote('${l.id}')">Ajustar</button></td>
+    </tr>
+  `).join('');
+
+  area.innerHTML = `
+    <table class="data-table" style="width:100%">
+      <thead>
+        <tr>
+          <th>Lote</th><th>Produto</th><th>Validade</th>
+          <th style="text-align:right">Saldo sistema</th>
+          <th>Contado</th>
+          <th style="text-align:right">Delta</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+
+  area.querySelectorAll('.inv-input').forEach(inp => {
+    inp.addEventListener('input', e => {
+      const id = e.target.dataset.id;
+      const v = e.target.value === '' ? null : Number(e.target.value);
+      const l = _lotesInv.find(x => x.id === id);
+      if (l) l.contado = v;
+      const d = document.getElementById('delta-' + id);
+      if (v == null) { d.textContent = '—'; d.className = 'text-muted'; return; }
+      const delta = v - Number(l.saldo_atual);
+      d.textContent = (delta > 0 ? '+' : '') + API.fmtNum(delta);
+      d.className = delta === 0 ? 'text-muted' : (delta > 0 ? 'text-success' : 'text-error');
+      d.style.color = delta === 0 ? '' : (delta > 0 ? '#059669' : '#b91c1c');
+    });
+  });
+}
+
+async function ajustarLote(id) {
+  const l = _lotesInv.find(x => x.id === id);
+  if (!l || l.contado == null) { UI.toast('Informe a quantidade contada', 'aviso'); return; }
+  const motivo = prompt('Motivo do ajuste:');
+  if (!motivo || motivo.trim() === '') return;
+
+  const res = await API.rpc('trans_ajuste_inventario', {
+    p_lote_id: id,
+    p_quantidade_contada: l.contado,
+    p_motivo: motivo.trim()
+  });
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro no ajuste', 'erro');
+    return;
+  }
+  UI.toast(`Ajuste aplicado (delta ${res.data.delta})`, 'ok');
+  // Recarrega dados
+  await carregarInventarioNovo();
+}
+
+// ============================================================
+// USADO (por SKU+condicao)
+// ============================================================
+function renderUsado() {
+  const area = document.getElementById('area-usado');
+  const comUsado = _consolidado.filter(p =>
+    Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c) > 0
+  );
+
+  if (comUsado.length === 0) {
+    area.innerHTML = '<div class="text-muted">Nenhum produto com saldo usado.</div>';
+    return;
+  }
+
+  const rows = comUsado.map(p => `
+    <tr data-id="${p.produto_id}">
+      <td><strong>${API.esc(p.sku)}</strong></td>
+      <td>${API.esc(p.nome)}</td>
+      ${['A','B','C'].map(c => `
+        <td>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span class="text-muted" style="font-size:11px;min-width:30px">${API.fmtNum(p['saldo_usado_' + c.toLowerCase()])}</span>
+            <input type="number" min="0" step="0.01" class="inv-u" data-pid="${p.produto_id}" data-cond="${c}" style="width:70px" placeholder="cont">
+            <button class="btn btn-ghost btn-sm" onclick="ajustarUsado('${p.produto_id}','${c}')">ok</button>
+          </div>
+        </td>
+      `).join('')}
+    </tr>
+  `).join('');
+
+  area.innerHTML = `
+    <table class="data-table" style="width:100%">
+      <thead>
+        <tr>
+          <th>SKU</th><th>Produto</th>
+          <th>Cond A (sist / cont)</th>
+          <th>Cond B (sist / cont)</th>
+          <th>Cond C (sist / cont)</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+async function ajustarUsado(produtoId, condicao) {
+  const inp = document.querySelector(`.inv-u[data-pid="${produtoId}"][data-cond="${condicao}"]`);
+  if (!inp || inp.value === '') { UI.toast('Informe a contagem', 'aviso'); return; }
+  const motivo = prompt('Motivo do ajuste:');
+  if (!motivo || motivo.trim() === '') return;
+
+  const res = await API.rpc('trans_ajuste_inventario_usado', {
+    p_produto_id: produtoId,
+    p_condicao: condicao,
+    p_quantidade_contada: Number(inp.value),
+    p_motivo: motivo.trim()
+  });
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro', 'erro');
+    return;
+  }
+  UI.toast(`Ajuste ${condicao} aplicado (delta ${res.data.delta})`, 'ok');
+  const reload = await API.get('v_trans_estoque_consolidado?order=sku');
+  _consolidado = reload.ok ? reload.data : [];
+  renderUsado();
+}
+</script>
+</body>
+</html>

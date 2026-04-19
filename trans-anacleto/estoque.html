@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estoque - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<script>
+let _consolidado = [];
+let _ftexto = '';
+let _ftipo = '';
+let _fstatus = 'com_saldo';
+
+PageBootstrap.init({
+  page: 'estoque',
+  title: 'Estoque consolidado',
+  breadcrumb: 'Estoque / Visao geral',
+  perfisPermitidos: ['admin','gestor','almoxarife','motorista'],
+  loadData: async () => API.get('v_trans_estoque_consolidado?order=sku'),
+  render: (res, user) => {
+    _consolidado = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Estoque consolidado',
+      subtitle: 'Saldo novo (somatorio dos lotes) + saldos usado A/B/C por SKU.',
+      actions: []
+    });
+    renderKpis(); renderFilters(); renderTable();
+  }
+});
+
+function renderKpis() {
+  const comNovo = _consolidado.filter(p => Number(p.saldo_novo) > 0).length;
+  const comUsado = _consolidado.filter(p => Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c) > 0).length;
+  const abaixoMin = _consolidado.filter(p => Number(p.estoque_min) > 0 && Number(p.saldo_novo) < Number(p.estoque_min)).length;
+  const semSaldo = _consolidado.filter(p => Number(p.saldo_novo) === 0 &&
+    Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c) === 0).length;
+
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Produtos com saldo novo', value: comNovo },
+    { label: 'Produtos com usado', value: comUsado },
+    { label: 'Abaixo do minimo', value: abaixoMin, tone: abaixoMin > 0 ? 'warning' : 'ok' },
+    { label: 'Sem saldo', value: semSaldo, tone: 'muted' }
+  ]);
+}
+
+function renderFilters() {
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'SKU ou nome', value: _ftexto },
+      { id: 'flt-tipo', label: 'Tipo', type: 'select', value: _ftipo, options: [
+        { value: '', label: 'Todos' },
+        { value: 'peca', label: 'Peca' },
+        { value: 'pneu', label: 'Pneu' },
+        { value: 'acessorio', label: 'Acessorio' },
+        { value: 'filtro', label: 'Filtro' },
+        { value: 'lubrificante', label: 'Lubrificante' },
+        { value: 'combustivel', label: 'Combustivel' },
+        { value: 'outro', label: 'Outro' }
+      ]},
+      { id: 'flt-status', label: 'Situacao', type: 'select', value: _fstatus, options: [
+        { value: '', label: 'Todos' },
+        { value: 'com_saldo', label: 'Com saldo' },
+        { value: 'abaixo_min', label: 'Abaixo do minimo' },
+        { value: 'sem_saldo', label: 'Sem saldo' }
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _ftexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _ftipo = document.getElementById('flt-tipo').value;
+  _fstatus = document.getElementById('flt-status').value;
+  renderTable();
+}
+function limparFiltros() { _ftexto=''; _ftipo=''; _fstatus=''; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const filt = _consolidado.filter(p => {
+    if (_ftexto && !`${p.sku} ${p.nome}`.toLowerCase().includes(_ftexto)) return false;
+    if (_ftipo && p.categoria_tipo !== _ftipo) return false;
+    const totalUsado = Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c);
+    const temSaldo = Number(p.saldo_novo) > 0 || totalUsado > 0;
+    if (_fstatus === 'com_saldo' && !temSaldo) return false;
+    if (_fstatus === 'sem_saldo' && temSaldo) return false;
+    if (_fstatus === 'abaixo_min' && !(Number(p.estoque_min) > 0 && Number(p.saldo_novo) < Number(p.estoque_min))) return false;
+    return true;
+  });
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'sku', label: 'SKU', render: p => `<strong>${API.esc(p.sku)}</strong>` },
+      { key: 'nome', label: 'Produto', render: p => `${API.esc(p.nome)}<br><span class="text-muted" style="font-size:11px">${API.esc(p.categoria_nome || '')}</span>` },
+      { key: 'unidade', label: 'Un', render: p => API.esc(p.unidade || '—') },
+      { key: 'saldo_novo', label: 'Novo', align: 'right', render: p => saldoCel(p.saldo_novo, p.estoque_min) },
+      { key: 'A', label: 'A', align: 'right', render: p => API.fmtNum(p.saldo_usado_a) },
+      { key: 'B', label: 'B', align: 'right', render: p => API.fmtNum(p.saldo_usado_b) },
+      { key: 'C', label: 'C', align: 'right', render: p => API.fmtNum(p.saldo_usado_c) },
+      { key: 'local', label: 'Local', render: p => API.esc(p.localizacao || '—') },
+      { key: 'min', label: 'Min', align: 'right', render: p => API.fmtNum(p.estoque_min) }
+    ],
+    rows: filt,
+    emptyMsg: 'Nenhum produto corresponde aos filtros.'
+  });
+}
+
+function saldoCel(saldo, min) {
+  const s = Number(saldo);
+  const m = Number(min || 0);
+  if (m > 0 && s < m) return `<strong style="color:#b91c1c">${API.fmtNum(s)}</strong>`;
+  if (s > 0) return `<strong>${API.fmtNum(s)}</strong>`;
+  return `<span class="text-muted">0</span>`;
+}
+</script>
+</body>
+</html>

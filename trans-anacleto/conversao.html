@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Conversao - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="tabs" style="margin-bottom:16px">
+    <button class="tab active" data-tab="novo-usado" onclick="switchTab('novo-usado')">Novo &rarr; Usado</button>
+    <button class="tab" data-tab="usado-sucata" onclick="switchTab('usado-sucata')">Usado &rarr; Sucata</button>
+  </div>
+
+  <!-- Tab 1: Novo -> Usado -->
+  <div id="tab-novo-usado" class="tab-content">
+    <div class="card">
+      <div class="card-body">
+        <h3 style="margin:0 0 8px 0">Converter lote novo em estoque usado</h3>
+        <div class="text-muted" style="font-size:13px;margin-bottom:16px">
+          Baixa do lote novo + entrada em estoque_usado com condicao A/B/C. Operacao atomica.
+        </div>
+        <form id="form-nu" onsubmit="converterNovoUsado(event)">
+          <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+            <div class="form-field form-field-full">
+              <label>Lote de origem *</label>
+              <select id="nu-lote" required onchange="atualizarSaldoNu()">
+                <option value="">&mdash; Selecione &mdash;</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Saldo lote</label>
+              <input type="text" id="nu-saldo" readonly style="background:#f1f5f9">
+            </div>
+            <div class="form-field">
+              <label>Quantidade *</label>
+              <input type="number" id="nu-qtd" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-field">
+              <label>Condicao destino *</label>
+              <select id="nu-condicao" required>
+                <option value="A">A &mdash; Revisado</option>
+                <option value="B" selected>B &mdash; Funcional</option>
+                <option value="C">C &mdash; Sucata/limitado</option>
+              </select>
+            </div>
+            <div class="form-field form-field-full">
+              <label>Motivo *</label>
+              <textarea id="nu-motivo" rows="2" required placeholder="Ex: item devolvido de manutencao, desmonte de veiculo, etc."></textarea>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+            <button type="submit" class="btn btn-primary">Converter</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tab 2: Usado -> Sucata -->
+  <div id="tab-usado-sucata" class="tab-content" style="display:none">
+    <div class="card">
+      <div class="card-body">
+        <div id="sucata-modo-info" class="alert" style="padding:10px;background:#eff6ff;border-radius:6px;border:1px solid #bfdbfe;margin-bottom:16px;font-size:13px"></div>
+        <h3 style="margin:0 0 8px 0">Descartar estoque usado como sucata</h3>
+        <div class="text-muted" style="font-size:13px;margin-bottom:16px">
+          Respeita trans_config.sucata_modo: <strong>baixa_direta</strong> (sai sem saldo residual) ou <strong>estoque_c</strong> (entra como condicao C).
+        </div>
+        <form id="form-us" onsubmit="converterUsadoSucata(event)">
+          <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+            <div class="form-field form-field-full">
+              <label>Produto *</label>
+              <select id="us-produto" required onchange="atualizarSaldosUs()">
+                <option value="">&mdash; Selecione &mdash;</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Condicao origem *</label>
+              <select id="us-condicao" required onchange="atualizarSaldosUs()">
+                <option value="A">A</option>
+                <option value="B" selected>B</option>
+                <option value="C">C</option>
+              </select>
+            </div>
+            <div class="form-field">
+              <label>Saldo disponivel</label>
+              <input type="text" id="us-saldo" readonly style="background:#f1f5f9">
+            </div>
+            <div class="form-field">
+              <label>Quantidade *</label>
+              <input type="number" id="us-qtd" min="0.01" step="0.01" required>
+            </div>
+            <div class="form-field form-field-full">
+              <label>Motivo *</label>
+              <textarea id="us-motivo" rows="2" required placeholder="Ex: item quebrado, sem reuso possivel"></textarea>
+            </div>
+          </div>
+          <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px">
+            <button type="submit" class="btn btn-primary">Descartar</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let _lotes = [];
+let _produtosUsado = [];
+let _sucataModo = 'baixa_direta';
+
+PageBootstrap.init({
+  page: 'conversao',
+  title: 'Conversao de Estoque',
+  breadcrumb: 'Estoque / Conversao',
+  perfisPermitidos: ['admin','almoxarife'],
+  loadData: async () => {
+    const [lotesRes, prodsRes, cfgRes] = await Promise.all([
+      API.get('v_trans_lotes_disponiveis?order=data_validade'),
+      API.get('v_trans_estoque_consolidado?order=sku'),
+      API.get('trans_config?chave=eq.sucata_modo')
+    ]);
+    return {
+      lotes: lotesRes.ok ? lotesRes.data : [],
+      produtos: prodsRes.ok ? prodsRes.data : [],
+      cfg: cfgRes.ok && cfgRes.data.length ? cfgRes.data[0].valor : 'baixa_direta'
+    };
+  },
+  render: (data, user) => {
+    _lotes = data.lotes;
+    _produtosUsado = data.produtos.filter(p =>
+      Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c) > 0
+    );
+    _sucataModo = data.cfg;
+
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Conversao de Estoque',
+      subtitle: 'Novo &rarr; Usado (desmonte/devolucao) ou Usado &rarr; Sucata (descarte).',
+      actions: []
+    });
+    popularLotesNu();
+    popularProdutosUs();
+    document.getElementById('sucata-modo-info').innerHTML =
+      `Modo sucata atual: <strong>${API.esc(_sucataModo)}</strong> ` +
+      (_sucataModo === 'baixa_direta' ? '(nao entra em estoque)' : '(entra como condicao C)') +
+      ' &mdash; alteravel em <a href="config.html">Configuracao</a>';
+  }
+});
+
+function switchTab(id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === id));
+  document.querySelectorAll('.tab-content').forEach(c => c.style.display = c.id === 'tab-' + id ? '' : 'none');
+}
+
+function popularLotesNu() {
+  const sel = document.getElementById('nu-lote');
+  sel.innerHTML = '<option value="">&mdash; Selecione &mdash;</option>' +
+    _lotes.map(l => `
+      <option value="${l.lote_id}" data-saldo="${l.saldo}">
+        ${API.esc(l.lote_interno)} &middot; ${API.esc(l.lote_fornecedor || '')} &middot; saldo ${l.saldo}
+      </option>
+    `).join('');
+}
+
+function atualizarSaldoNu() {
+  const sel = document.getElementById('nu-lote');
+  const opt = sel.options[sel.selectedIndex];
+  document.getElementById('nu-saldo').value = opt ? (opt.dataset.saldo || '') : '';
+}
+
+function popularProdutosUs() {
+  const sel = document.getElementById('us-produto');
+  sel.innerHTML = '<option value="">&mdash; Selecione &mdash;</option>' +
+    _produtosUsado.map(p => `
+      <option value="${p.produto_id}">
+        ${API.esc(p.sku)} &middot; ${API.esc(p.nome)} (A=${p.saldo_usado_a} B=${p.saldo_usado_b} C=${p.saldo_usado_c})
+      </option>
+    `).join('');
+}
+
+function atualizarSaldosUs() {
+  const pid = document.getElementById('us-produto').value;
+  const cond = document.getElementById('us-condicao').value;
+  const p = _produtosUsado.find(x => x.produto_id === pid);
+  if (!p) { document.getElementById('us-saldo').value = ''; return; }
+  const saldos = { A: p.saldo_usado_a, B: p.saldo_usado_b, C: p.saldo_usado_c };
+  document.getElementById('us-saldo').value = API.fmtNum(saldos[cond] || 0);
+}
+
+async function converterNovoUsado(e) {
+  e.preventDefault();
+  const payload = {
+    p_lote_id: document.getElementById('nu-lote').value,
+    p_quantidade: Number(document.getElementById('nu-qtd').value),
+    p_condicao_destino: document.getElementById('nu-condicao').value,
+    p_motivo: document.getElementById('nu-motivo').value.trim()
+  };
+  const res = await API.rpc('trans_converter_novo_usado', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro na conversao', 'erro');
+    return;
+  }
+  UI.toast('Conversao novo->usado OK', 'ok');
+  document.getElementById('form-nu').reset();
+  await recarregar();
+}
+
+async function converterUsadoSucata(e) {
+  e.preventDefault();
+  const payload = {
+    p_produto_id: document.getElementById('us-produto').value,
+    p_condicao_origem: document.getElementById('us-condicao').value,
+    p_quantidade: Number(document.getElementById('us-qtd').value),
+    p_motivo: document.getElementById('us-motivo').value.trim()
+  };
+  const res = await API.rpc('trans_converter_usado_sucata', payload);
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro no descarte', 'erro');
+    return;
+  }
+  UI.toast(`Descarte OK (modo ${res.data.modo})`, 'ok');
+  document.getElementById('form-us').reset();
+  await recarregar();
+}
+
+async function recarregar() {
+  const [lotesRes, prodsRes] = await Promise.all([
+    API.get('v_trans_lotes_disponiveis?order=data_validade'),
+    API.get('v_trans_estoque_consolidado?order=sku')
+  ]);
+  _lotes = lotesRes.ok ? lotesRes.data : [];
+  _produtosUsado = (prodsRes.ok ? prodsRes.data : []).filter(p =>
+    Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c) > 0
+  );
+  popularLotesNu();
+  popularProdutosUs();
+}
+</script>
+</body>
+</html>

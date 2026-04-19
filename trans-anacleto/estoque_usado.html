@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Estoque Usado - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal mov -->
+<div id="modal-mov" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeMovModal()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="modal-title">Movimentacao de usado</h3>
+      <button class="modal-close" onclick="closeMovModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-mov" onsubmit="salvarMov(event)">
+        <input type="hidden" id="f-tipo"><!-- entrada/saida -->
+        <input type="hidden" id="f-produto-id">
+        <div id="produto-info" style="background:#f1f5f9;padding:10px;border-radius:6px;margin-bottom:12px"></div>
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field">
+            <label>Condicao *</label>
+            <select id="f-condicao" required>
+              <option value="A">A &mdash; Revisado reutilizavel</option>
+              <option value="B">B &mdash; Usado funcional</option>
+              <option value="C">C &mdash; Sucata / uso limitado</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Quantidade *</label>
+            <input type="number" id="f-qtd" min="0.01" step="0.01" required>
+          </div>
+          <div class="form-field form-field-full" id="campo-origem" style="display:none">
+            <label>Origem</label>
+            <input type="text" id="f-origem" placeholder="Ex: manutencao truck XYZ / desmonte">
+          </div>
+          <div class="form-field form-field-full" id="campo-doc" style="display:none">
+            <label>Documento (OS/RMA)</label>
+            <input type="text" id="f-doc">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <textarea id="f-obs" rows="2"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeMovModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-mov').requestSubmit()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _consolidado = [];
+let _ftexto = '';
+let _fcondicao = '';
+let _ftipo = '';
+
+PageBootstrap.init({
+  page: 'estoque_usado',
+  title: 'Estoque Usado',
+  breadcrumb: 'Estoque / Usado',
+  perfisPermitidos: ['admin','gestor','almoxarife'],
+  loadData: async () => API.get('v_trans_estoque_consolidado?order=sku'),
+  render: (res, user) => {
+    _consolidado = res.ok ? res.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Estoque Usado',
+      subtitle: 'Saldos por SKU x condicao (A / B / C). Sem lote.',
+      actions: []
+    });
+    renderFilters(); renderTable();
+  }
+});
+
+function renderFilters() {
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    filters: [
+      { id: 'flt-texto', label: 'Buscar', type: 'text', placeholder: 'SKU ou nome', value: _ftexto },
+      { id: 'flt-cond', label: 'Condicao', type: 'select', value: _fcondicao, options: [
+        { value: '', label: 'Todas' },
+        { value: 'A', label: 'A com saldo' },
+        { value: 'B', label: 'B com saldo' },
+        { value: 'C', label: 'C com saldo' }
+      ]},
+      { id: 'flt-tipo', label: 'Tipo produto', type: 'select', value: _ftipo, options: [
+        { value: '', label: 'Todos' },
+        { value: 'peca', label: 'Pecas' },
+        { value: 'acessorio', label: 'Acessorios' },
+        { value: 'filtro', label: 'Filtros' },
+        { value: 'lubrificante', label: 'Lubrificantes' },
+        { value: 'outro', label: 'Outro' }
+      ]}
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _ftexto = document.getElementById('flt-texto').value.trim().toLowerCase();
+  _fcondicao = document.getElementById('flt-cond').value;
+  _ftipo = document.getElementById('flt-tipo').value;
+  renderTable();
+}
+function limparFiltros() { _ftexto = ''; _fcondicao = ''; _ftipo = ''; renderFilters(); renderTable(); }
+
+function renderTable() {
+  const filt = _consolidado.filter(p => {
+    if (_ftexto && !`${p.sku} ${p.nome}`.toLowerCase().includes(_ftexto)) return false;
+    if (_ftipo && p.categoria_tipo !== _ftipo) return false;
+    if (_fcondicao === 'A' && Number(p.saldo_usado_a) <= 0) return false;
+    if (_fcondicao === 'B' && Number(p.saldo_usado_b) <= 0) return false;
+    if (_fcondicao === 'C' && Number(p.saldo_usado_c) <= 0) return false;
+    return true;
+  });
+
+  document.getElementById('table-area').innerHTML = UI.dataTable({
+    columns: [
+      { key: 'sku', label: 'SKU', render: p => `<strong>${API.esc(p.sku)}</strong>` },
+      { key: 'nome', label: 'Produto', render: p => API.esc(p.nome) },
+      { key: 'cat', label: 'Categoria', render: p => API.esc(p.categoria_nome || '—') },
+      { key: 'saldo_a', label: 'Cond A', align: 'right', render: p => badgeSaldo(p.saldo_usado_a) },
+      { key: 'saldo_b', label: 'Cond B', align: 'right', render: p => badgeSaldo(p.saldo_usado_b) },
+      { key: 'saldo_c', label: 'Cond C', align: 'right', render: p => badgeSaldo(p.saldo_usado_c) },
+      { key: 'total_usado', label: 'Total usado', align: 'right', render: p => API.fmtNum(Number(p.saldo_usado_a) + Number(p.saldo_usado_b) + Number(p.saldo_usado_c)) },
+      { key: 'acoes', label: '', render: p => `
+        <button class="btn btn-outline btn-sm" onclick="abrirMov('${p.produto_id}','entrada')">Entrada</button>
+        <button class="btn btn-ghost btn-sm" onclick="abrirMov('${p.produto_id}','saida')">Saida</button>
+      ` }
+    ],
+    rows: filt,
+    emptyMsg: 'Nenhum produto encontrado.'
+  });
+}
+
+function badgeSaldo(v) {
+  const n = Number(v);
+  if (n > 0) return `<strong>${API.fmtNum(n)}</strong>`;
+  return `<span class="text-muted">0</span>`;
+}
+
+function abrirMov(produtoId, tipo) {
+  const p = _consolidado.find(x => x.produto_id === produtoId);
+  if (!p) return;
+  document.getElementById('f-tipo').value = tipo;
+  document.getElementById('f-produto-id').value = produtoId;
+  document.getElementById('modal-title').textContent = tipo === 'entrada' ? 'Entrada de usado' : 'Saida de usado';
+  document.getElementById('produto-info').innerHTML = `
+    <strong>${API.esc(p.sku)}</strong> &middot; ${API.esc(p.nome)}
+    <div class="text-muted" style="font-size:12px;margin-top:4px">
+      A=${API.fmtNum(p.saldo_usado_a)} &middot; B=${API.fmtNum(p.saldo_usado_b)} &middot; C=${API.fmtNum(p.saldo_usado_c)}
+    </div>
+  `;
+  document.getElementById('f-condicao').value = 'B';
+  document.getElementById('f-qtd').value = 1;
+  document.getElementById('f-origem').value = '';
+  document.getElementById('f-doc').value = '';
+  document.getElementById('f-obs').value = '';
+  document.getElementById('campo-origem').style.display = tipo === 'entrada' ? '' : 'none';
+  document.getElementById('campo-doc').style.display = tipo === 'saida' ? '' : 'none';
+  document.getElementById('modal-mov').style.display = 'flex';
+}
+
+function closeMovModal() { document.getElementById('modal-mov').style.display = 'none'; }
+
+async function salvarMov(e) {
+  e.preventDefault();
+  const tipo = document.getElementById('f-tipo').value;
+  const payload = {
+    p_produto_id: document.getElementById('f-produto-id').value,
+    p_condicao: document.getElementById('f-condicao').value,
+    p_quantidade: Number(document.getElementById('f-qtd').value),
+    p_observacao: document.getElementById('f-obs').value.trim() || null
+  };
+
+  let res;
+  if (tipo === 'entrada') {
+    payload.p_origem = document.getElementById('f-origem').value.trim() || null;
+    res = await API.rpc('trans_entrada_usado', payload);
+  } else {
+    payload.p_documento = document.getElementById('f-doc').value.trim() || null;
+    res = await API.rpc('trans_saida_usado', payload);
+  }
+
+  if (!res.ok || !res.data || res.data.ok === false) {
+    UI.toast(res.error || 'Erro na movimentacao', 'erro');
+    return;
+  }
+  UI.toast('Movimentacao registrada', 'ok');
+  closeMovModal();
+  const reload = await API.get('v_trans_estoque_consolidado?order=sku');
+  _consolidado = reload.ok ? reload.data : [];
+  renderTable();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha OS - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.ficha-header { display:flex; justify-content:space-between; align-items:start; gap:20px; flex-wrap:wrap; margin-bottom:18px; }
+.ficha-title { font-family:ui-monospace,monospace; color:#D97706; font-size:22px; font-weight:700; }
+.ficha-sub { font-size:13px; color:#64748B; margin-top:2px; }
+.status-badge { padding:4px 12px; border-radius:999px; font-size:11px; font-weight:600; display:inline-block; }
+.st-aberta      { background:#DBEAFE; color:#1E40AF; }
+.st-em_execucao { background:#FEF3C7; color:#92400E; }
+.st-concluida   { background:#D1FAE5; color:#065F46; }
+.st-cancelada   { background:#F3F4F6; color:#6B7280; }
+
+.resumo-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; margin-bottom:20px; }
+.resumo-card { background:#F8FAFC; border:1px solid #E2E8F0; border-radius:10px; padding:12px 16px; }
+.resumo-label { font-size:11px; color:#64748B; text-transform:uppercase; letter-spacing:0.04em; font-weight:600; }
+.resumo-value { font-size:18px; font-weight:700; color:#1E293B; margin-top:4px; font-variant-numeric:tabular-nums; }
+
+.tabs { display:flex; gap:4px; border-bottom:2px solid #E2E8F0; margin-bottom:18px; }
+.tab { padding:10px 20px; border:none; background:none; font-size:14px; font-weight:500; color:#64748B; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-2px; transition:all 0.15s; }
+.tab:hover { color:#D97706; }
+.tab.active { color:#D97706; border-bottom-color:#D97706; font-weight:600; }
+.tab-panel { display:none; }
+.tab-panel.active { display:block; }
+
+.info-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; }
+.info-item { }
+.info-label { font-size:12px; color:#64748B; font-weight:500; margin-bottom:2px; }
+.info-value { font-size:14px; color:#1E293B; }
+.info-value.money { font-variant-numeric:tabular-nums; font-weight:600; }
+
+.t-list { width:100%; border-collapse:collapse; font-size:13px; }
+.t-list th, .t-list td { padding:10px 12px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.t-list th { background:#F8FAFC; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; letter-spacing:0.03em; }
+.t-list .right { text-align:right; font-variant-numeric:tabular-nums; }
+.t-list .num-small { font-family:ui-monospace,monospace; font-size:12px; color:#64748B; }
+
+.form-inline { display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; align-items:end; margin-bottom:14px; padding:14px; background:#FEF3C7; border-radius:10px; border:1px solid #FDE68A; }
+.form-inline label { display:block; font-size:11px; font-weight:600; color:#78350F; margin-bottom:3px; }
+.form-inline input, .form-inline select, .form-inline textarea {
+  width:100%; padding:8px 10px; border:1px solid #FDE68A; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; box-sizing:border-box;
+}
+
+.actions-bar { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+.btn-action { padding:8px 16px; border-radius:6px; font-size:13px; font-weight:500; cursor:pointer; border:1px solid; }
+.btn-primary { background:#D97706; color:#fff; border-color:#D97706; }
+.btn-primary:hover { background:#B45309; }
+.btn-outline { background:#fff; color:#475569; border-color:#CBD5E1; }
+.btn-outline:hover { background:#F8FAFC; }
+.btn-danger { background:#fff; color:#DC2626; border-color:#FCA5A5; }
+.btn-danger:hover { background:#FEE2E2; }
+.btn-primary:disabled, .btn-outline:disabled { opacity:0.5; cursor:not-allowed; }
+
+.empty-inline { padding:24px; text-align:center; color:#94A3B8; font-size:13px; }
+.obs-box { margin-top:14px; padding:12px 14px; background:#F8FAFC; border-radius:8px; font-size:13px; color:#475569; white-space:pre-wrap; border-left:3px solid #CBD5E1; }
+</style>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div id="ficha-area">
+    <div style="padding:40px;text-align:center;color:#64748B;">Carregando OS...</div>
+  </div>
+
+</div>
+
+<!-- Modal de confirmacao (finalizar/cancelar/reabrir) -->
+<div id="modal-conf" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;max-width:440px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:16px 22px;border-bottom:1px solid #E2E8F0;">
+      <h3 id="conf-titulo" style="margin:0;font-size:16px;font-weight:600;color:#1E293B;">Confirmar</h3>
+    </div>
+    <div style="padding:20px 22px;">
+      <p id="conf-msg" style="font-size:14px;color:#475569;margin:0 0 14px 0;"></p>
+      <div id="conf-extra-field" style="display:none;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">Motivo <span style="color:#DC2626;">*</span></label>
+        <textarea id="conf-motivo" style="width:100%;padding:9px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;font-family:inherit;min-height:60px;box-sizing:border-box;"></textarea>
+      </div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="fecharConf()" class="btn-action btn-outline">Cancelar</button>
+      <button id="btn-conf-ok" onclick="executarConf()" class="btn-action btn-primary">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let osId = null;
+let osData = null;
+let maquinas = [];
+let periodos = [];
+let pagamentos = [];
+let despesas = [];
+let confAcao = null;
+
+(async () => {
+  const params = new URLSearchParams(window.location.search);
+  osId = params.get('id');
+  if (!osId) {
+    document.getElementById('ficha-area').innerHTML = '<div class="card"><div class="card-body">OS nao especificada. <a href="ordens_servico.html" style="color:#D97706;">Voltar</a></div></div>';
+    return;
+  }
+
+  await PageBootstrap.init({
+    page: 'os_ficha',
+    title: 'Ficha OS',
+    breadcrumb: 'Operacao > Ordens de Servico > Ficha',
+    perfisPermitidos: ['admin', 'gestor', 'operador', 'financeiro'],
+    loadData: carregarOs,
+    render: renderFicha,
+    onError: () => {
+      document.getElementById('ficha-area').innerHTML = '<div class="card"><div class="card-body">Erro ao carregar OS. <a href="ordens_servico.html" style="color:#D97706;">Voltar</a></div></div>';
+    }
+  });
+})();
+
+async function carregarOs() {
+  const [rOs, rPer, rPag, rDesp, rMaq] = await Promise.all([
+    API.get(`v_jr_os_resumo?id=eq.${osId}&select=*`),
+    API.get(`jr_os_periodos?os_id=eq.${osId}&select=*,maquina:jr_maquinas(id,codigo,descricao)&order=data.desc,created_at.desc`),
+    API.get(`jr_pagamentos?os_id=eq.${osId}&select=*&order=data.desc`),
+    API.get(`jr_despesas?os_id=eq.${osId}&select=*,fornecedor:jr_fornecedores(razao_social)&order=data.desc`),
+    API.get('jr_maquinas?status=eq.ativa&select=id,codigo,descricao,valor_hora,horimetro_atual&order=codigo'),
+  ]);
+  if (!rOs.ok || !rOs.data.length) throw new Error('OS nao encontrada');
+  return {
+    os: rOs.data[0],
+    periodos: rPer.ok ? rPer.data : [],
+    pagamentos: rPag.ok ? rPag.data : [],
+    despesas: rDesp.ok ? rDesp.data : [],
+    maquinas: rMaq.ok ? rMaq.data : [],
+  };
+}
+
+function renderFicha(data) {
+  osData = data.os;
+  periodos = data.periodos;
+  pagamentos = data.pagamentos;
+  despesas = data.despesas;
+  maquinas = data.maquinas;
+
+  const os = osData;
+  const bloqueada = os.status === 'concluida' || os.status === 'cancelada';
+  const podeOperar = API.canAccess('registrar_periodo') && !bloqueada;
+  const podeFinalizar = API.canAccess('finalizar_os') && os.status !== 'concluida' && os.status !== 'cancelada';
+  const podeReabrir = API.getPerfil() === 'admin' && os.status === 'concluida';
+  const podeCancelar = API.canAccess('finalizar_os') && os.status !== 'cancelada' && os.status !== 'concluida';
+
+  let html = '<div class="card"><div class="card-body">';
+
+  html += `<div class="ficha-header">
+    <div>
+      <div class="ficha-title">${API.esc(os.numero_os)}</div>
+      <div class="ficha-sub">${API.esc(os.cliente_nome || 'Sem cliente')} &middot; Abertura ${API.fmtData(os.data_abertura)}</div>
+    </div>
+    <div>
+      <span class="status-badge st-${os.status}">${os.status.replace('_', ' ')}</span>
+      <a href="ordens_servico.html" style="margin-left:12px;color:#64748B;font-size:13px;text-decoration:none;">&larr; Voltar</a>
+    </div>
+  </div>`;
+
+  html += `<div class="actions-bar">`;
+  if (podeFinalizar) html += `<button class="btn-action btn-primary" onclick="abrirConfFinalizar()">Finalizar OS</button>`;
+  if (podeReabrir) html += `<button class="btn-action btn-outline" onclick="abrirConfReabrir()">Reabrir OS</button>`;
+  if (podeCancelar) html += `<button class="btn-action btn-danger" onclick="abrirConfCancelar()">Cancelar OS</button>`;
+  html += `</div>`;
+
+  html += `<div class="resumo-grid">
+    <div class="resumo-card"><div class="resumo-label">Horas totais</div><div class="resumo-value">${API.fmtHorimetro(os.horas_total || 0)}</div></div>
+    <div class="resumo-card"><div class="resumo-label">Periodos</div><div class="resumo-value">${os.periodos_count || 0}</div></div>
+    <div class="resumo-card"><div class="resumo-label">Valor total</div><div class="resumo-value">${API.fmtMoeda(os.valor_total || 0)}</div></div>
+    <div class="resumo-card"><div class="resumo-label">Pago</div><div class="resumo-value" style="color:#065F46;">${API.fmtMoeda(os.total_pago || 0)}</div></div>
+    <div class="resumo-card"><div class="resumo-label">Saldo</div><div class="resumo-value" style="color:${(os.saldo_receber||0) > 0 ? '#D97706' : '#059669'};">${API.fmtMoeda(os.saldo_receber || 0)}</div></div>
+  </div>`;
+
+  html += `<div class="tabs">
+    <button class="tab active" onclick="trocarTab(this,'t-geral')">Geral</button>
+    <button class="tab" onclick="trocarTab(this,'t-periodos')">Periodos (${periodos.length})</button>
+    <button class="tab" onclick="trocarTab(this,'t-pagamentos')">Pagamentos (${pagamentos.length})</button>
+    <button class="tab" onclick="trocarTab(this,'t-despesas')">Despesas (${despesas.length})</button>
+  </div>`;
+
+  // Aba Geral
+  html += `<div class="tab-panel active" id="t-geral">
+    <div class="info-grid">
+      <div class="info-item"><div class="info-label">Cliente</div><div class="info-value">${API.esc(os.cliente_nome || '—')}</div></div>
+      <div class="info-item"><div class="info-label">Obra / Local</div><div class="info-value">${API.esc(os.obra_local || '—')}</div></div>
+      <div class="info-item"><div class="info-label">Data abertura</div><div class="info-value">${API.fmtData(os.data_abertura)}</div></div>
+      <div class="info-item"><div class="info-label">Data inicio</div><div class="info-value">${API.fmtData(os.data_inicio)}</div></div>
+      <div class="info-item"><div class="info-label">Data fim</div><div class="info-value">${API.fmtData(os.data_fim)}</div></div>
+      <div class="info-item"><div class="info-label">Valor total</div><div class="info-value money">${API.fmtMoeda(os.valor_total || 0)}</div></div>
+    </div>
+    ${os.descricao_servico ? `<div class="info-item" style="margin-top:14px;"><div class="info-label">Descricao do servico</div><div class="info-value">${API.esc(os.descricao_servico)}</div></div>` : ''}
+    ${os.observacao ? `<div class="obs-box">${API.esc(os.observacao)}</div>` : ''}
+  </div>`;
+
+  // Aba Periodos
+  html += `<div class="tab-panel" id="t-periodos">`;
+  if (podeOperar) {
+    html += `<div class="form-inline">
+      <div><label>Maquina *</label>
+        <select id="per-maq">
+          <option value="">Selecione...</option>
+          ${maquinas.map(m => `<option value="${m.id}" data-vh="${m.valor_hora}" data-hm="${m.horimetro_atual||0}">${API.esc(m.codigo)} - ${API.esc(m.descricao)}</option>`).join('')}
+        </select>
+      </div>
+      <div><label>Data *</label><input type="date" id="per-data" value="${new Date().toISOString().slice(0,10)}"></div>
+      <div><label>Horim. inicial *</label><input type="number" step="0.1" id="per-hi" placeholder="0.0"></div>
+      <div><label>Horim. final *</label><input type="number" step="0.1" id="per-hf" placeholder="0.0"></div>
+      <div><label>Operador</label><input type="text" id="per-op" placeholder="Nome"></div>
+      <div><label>Valor/hora (opc)</label><input type="number" step="0.01" id="per-vh" placeholder="snapshot"></div>
+      <div><button class="btn-action btn-primary" onclick="registrarPeriodo()" id="btn-per">Registrar</button></div>
+    </div>`;
+  } else if (bloqueada) {
+    html += `<div class="empty-inline">OS ${os.status} - novos periodos nao permitidos.</div>`;
+  }
+  if (periodos.length) {
+    html += `<table class="t-list"><thead><tr>
+      <th>Data</th><th>Maquina</th><th class="right">Horim. inicial</th><th class="right">Horim. final</th>
+      <th class="right">Horas</th><th class="right">R$/h</th><th class="right">Valor</th><th>Operador</th>${podeOperar ? '<th></th>' : ''}
+    </tr></thead><tbody>`;
+    periodos.forEach(p => {
+      const mq = p.maquina ? `${p.maquina.codigo} - ${p.maquina.descricao}` : '—';
+      html += `<tr>
+        <td>${API.fmtData(p.data)}</td>
+        <td>${API.esc(mq)}</td>
+        <td class="right">${API.fmtNum(p.horimetro_inicial, 1)}</td>
+        <td class="right">${API.fmtNum(p.horimetro_final, 1)}</td>
+        <td class="right">${API.fmtNum(p.horas, 1)}</td>
+        <td class="right">${API.fmtMoeda(p.valor_hora_snapshot)}</td>
+        <td class="right" style="font-weight:600;">${API.fmtMoeda(p.valor_calc)}</td>
+        <td>${API.esc(p.operador_nome || '—')}</td>
+        ${podeOperar ? `<td><button onclick="removerPeriodo('${p.id}')" style="background:none;border:none;color:#DC2626;cursor:pointer;font-size:14px;">&times;</button></td>` : ''}
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<div class="empty-inline">Nenhum periodo registrado.</div>`;
+  }
+  html += `</div>`;
+
+  // Aba Pagamentos
+  html += `<div class="tab-panel" id="t-pagamentos">`;
+  if (pagamentos.length) {
+    html += `<table class="t-list"><thead><tr>
+      <th>Data</th><th>Forma</th><th>Documento</th><th>Parcela</th><th class="right">Valor</th><th>Obs</th>
+    </tr></thead><tbody>`;
+    pagamentos.forEach(p => {
+      const parc = (p.parcela_numero && p.parcela_total) ? `${p.parcela_numero}/${p.parcela_total}` : '—';
+      html += `<tr>
+        <td>${API.fmtData(p.data)}</td>
+        <td>${API.esc(p.forma || '—')}</td>
+        <td class="num-small">${API.esc(p.documento || '—')}</td>
+        <td>${parc}</td>
+        <td class="right" style="font-weight:600;">${API.fmtMoeda(p.valor)}</td>
+        <td>${API.esc(p.observacao || '')}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<div class="empty-inline">Nenhum pagamento registrado. Use a pagina Pagamentos para lancar (J3).</div>`;
+  }
+  html += `</div>`;
+
+  // Aba Despesas
+  html += `<div class="tab-panel" id="t-despesas">`;
+  if (despesas.length) {
+    html += `<table class="t-list"><thead><tr>
+      <th>Data</th><th>Tipo</th><th>Fornecedor</th><th>Descricao</th><th class="right">Valor</th>
+    </tr></thead><tbody>`;
+    despesas.forEach(d => {
+      html += `<tr>
+        <td>${API.fmtData(d.data)}</td>
+        <td>${API.esc(d.tipo)}</td>
+        <td>${API.esc(d.fornecedor?.razao_social || '—')}</td>
+        <td>${API.esc(d.descricao || '—')}</td>
+        <td class="right" style="font-weight:600;color:#DC2626;">${API.fmtMoeda(d.valor)}</td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+  } else {
+    html += `<div class="empty-inline">Nenhuma despesa vinculada. Use a pagina Despesas (J4).</div>`;
+  }
+  html += `</div>`;
+
+  html += '</div></div>';
+
+  document.getElementById('ficha-area').innerHTML = html;
+
+  // Auto-preenche horim_inicial ao escolher maquina
+  const selMaq = document.getElementById('per-maq');
+  if (selMaq) {
+    selMaq.addEventListener('change', () => {
+      const opt = selMaq.options[selMaq.selectedIndex];
+      if (opt && opt.dataset.hm) {
+        document.getElementById('per-hi').value = opt.dataset.hm;
+        document.getElementById('per-hi').focus();
+      }
+    });
+  }
+}
+
+function trocarTab(btn, id) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(id).classList.add('active');
+}
+
+async function registrarPeriodo() {
+  const maqId = document.getElementById('per-maq').value;
+  const data = document.getElementById('per-data').value;
+  const hi = parseFloat(document.getElementById('per-hi').value);
+  const hf = parseFloat(document.getElementById('per-hf').value);
+  const op = document.getElementById('per-op').value.trim();
+  const vhInput = document.getElementById('per-vh').value;
+  const vh = vhInput ? parseFloat(vhInput) : null;
+
+  if (!maqId) { UI.toast('Selecione a maquina', 'err'); return; }
+  if (!data) { UI.toast('Data obrigatoria', 'err'); return; }
+  if (isNaN(hi) || isNaN(hf)) { UI.toast('Horimetros invalidos', 'err'); return; }
+  if (hf <= hi) { UI.toast('Horimetro final deve ser maior que inicial', 'err'); return; }
+
+  const btn = document.getElementById('btn-per');
+  btn.disabled = true; btn.textContent = '...';
+
+  const r = await API.rpc('jr_os_periodo_registrar', {
+    p_os_id: osId,
+    p_maquina_id: maqId,
+    p_data: data,
+    p_horimetro_inicial: hi,
+    p_horimetro_final: hf,
+    p_operador_nome: op || null,
+    p_valor_hora_snapshot: vh,
+  });
+
+  btn.disabled = false; btn.textContent = 'Registrar';
+
+  if (!r.ok) {
+    UI.toast('Erro: ' + (r.error || ''), 'err');
+    return;
+  }
+  UI.toast('Periodo registrado', 'ok');
+  await recarregar();
+}
+
+async function removerPeriodo(id) {
+  if (!confirm('Remover este periodo? Valor total da OS sera recalculado.')) return;
+  const r = await API.rpc('jr_os_periodo_remover', { p_periodo_id: id });
+  if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+  UI.toast('Periodo removido', 'ok');
+  await recarregar();
+}
+
+async function recarregar() {
+  try {
+    const data = await carregarOs();
+    renderFicha(data);
+  } catch (e) {
+    UI.toast('Erro ao recarregar: ' + e.message, 'err');
+  }
+}
+
+// ============ ACOES DE STATUS ============
+function abrirConfFinalizar() {
+  confAcao = 'finalizar';
+  document.getElementById('conf-titulo').textContent = 'Finalizar OS';
+  document.getElementById('conf-msg').textContent = 'Apos finalizar, a OS nao aceita novos periodos (exceto reabertura por admin). Confirmar?';
+  document.getElementById('conf-extra-field').style.display = 'none';
+  document.getElementById('btn-conf-ok').textContent = 'Finalizar';
+  document.getElementById('btn-conf-ok').className = 'btn-action btn-primary';
+  document.getElementById('modal-conf').style.display = 'flex';
+}
+
+function abrirConfCancelar() {
+  confAcao = 'cancelar';
+  document.getElementById('conf-titulo').textContent = 'Cancelar OS';
+  document.getElementById('conf-msg').textContent = 'Cancelar uma OS e acao reversivel apenas por admin. Informe o motivo:';
+  document.getElementById('conf-extra-field').style.display = 'block';
+  document.getElementById('conf-motivo').value = '';
+  document.getElementById('btn-conf-ok').textContent = 'Cancelar OS';
+  document.getElementById('btn-conf-ok').className = 'btn-action btn-danger';
+  document.getElementById('modal-conf').style.display = 'flex';
+}
+
+function abrirConfReabrir() {
+  confAcao = 'reabrir';
+  document.getElementById('conf-titulo').textContent = 'Reabrir OS';
+  document.getElementById('conf-msg').textContent = 'Reabrir a OS ira permitir novos periodos. Informe o motivo (fica em observacao):';
+  document.getElementById('conf-extra-field').style.display = 'block';
+  document.getElementById('conf-motivo').value = '';
+  document.getElementById('btn-conf-ok').textContent = 'Reabrir';
+  document.getElementById('btn-conf-ok').className = 'btn-action btn-primary';
+  document.getElementById('modal-conf').style.display = 'flex';
+}
+
+function fecharConf() {
+  document.getElementById('modal-conf').style.display = 'none';
+  confAcao = null;
+}
+
+async function executarConf() {
+  if (!confAcao) return;
+  const motivo = document.getElementById('conf-motivo').value.trim();
+
+  let rpc, params;
+  if (confAcao === 'finalizar') {
+    rpc = 'jr_os_finalizar';
+    params = { p_os_id: osId, p_data_fim: new Date().toISOString().slice(0,10) };
+  } else if (confAcao === 'cancelar') {
+    if (!motivo) { UI.toast('Motivo obrigatorio', 'err'); return; }
+    rpc = 'jr_os_cancelar';
+    params = { p_os_id: osId, p_motivo: motivo };
+  } else if (confAcao === 'reabrir') {
+    if (!motivo) { UI.toast('Motivo obrigatorio', 'err'); return; }
+    rpc = 'jr_os_reabrir';
+    params = { p_os_id: osId, p_motivo: motivo };
+  }
+
+  const btn = document.getElementById('btn-conf-ok');
+  btn.disabled = true;
+
+  const r = await API.rpc(rpc, params);
+
+  btn.disabled = false;
+
+  if (!r.ok) {
+    UI.toast('Erro: ' + (r.error || ''), 'err');
+    return;
+  }
+  UI.toast('Operacao concluida', 'ok');
+  fecharConf();
+  await recarregar();
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Manutencao — Buscar Veiculo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <div class="m-card">
+      <div class="m-card-title">Buscar veiculo</div>
+      <div class="m-card-subtitle">Informe a placa ou leia o QR do adesivo</div>
+
+      <button class="m-btn m-btn-primary" onclick="abrirScan()">Abrir camera (QR do veiculo)</button>
+
+      <div class="m-field">
+        <label>Placa</label>
+        <input id="f-placa" placeholder="AAA-0000" autocomplete="off" inputmode="text" oninput="this.value=this.value.toUpperCase();filtrar()">
+      </div>
+    </div>
+
+    <div class="m-card" id="box-lista">
+      <div class="m-card-title">Frota ativa</div>
+      <div id="lista-veiculos"><div class="m-loading"><div class="m-spinner"></div></div></div>
+    </div>
+
+    <div id="box-abertas" style="display:none">
+      <div class="m-card">
+        <div class="m-card-title">Manutencoes em aberto</div>
+        <div id="lista-abertas"></div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let _veiculos = [];
+let _abertas = [];
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  MShell.render({ title: 'Nova manutencao', back: 'm_home.html', currentNav: 'manut' });
+  const [v, a] = await Promise.all([
+    API.get('trans_veiculos?select=id,placa,modelo,tipo,km_atual,status&status=neq.vendido&order=placa&limit=500'),
+    API.get('v_trans_manutencoes_full?select=id,veiculo_id,placa,veiculo_modelo,servico,status,data_abertura&status=in.(aberta,em_andamento)&order=data_abertura.desc&limit=100')
+  ]);
+  _veiculos = v.ok ? v.data : [];
+  _abertas = a.ok ? a.data : [];
+  renderLista();
+  renderAbertas();
+})();
+
+function abrirScan() {
+  MScan.openCamera({
+    prompt: 'Aponte para o QR do veiculo (placa ou id)',
+    onFound: (codigo) => {
+      document.getElementById('f-placa').value = codigo;
+      filtrar();
+      const achado = _veiculos.find(v => v.placa === codigo || v.id === codigo);
+      if (achado) selecionarVeiculo(achado.id);
+    },
+    onCancel: () => {}
+  });
+}
+
+function filtrar() {
+  const q = (document.getElementById('f-placa').value || '').trim().toUpperCase();
+  const filt = q ? _veiculos.filter(v => (v.placa||'').includes(q) || (v.modelo||'').toUpperCase().includes(q)) : _veiculos;
+  document.getElementById('lista-veiculos').innerHTML = renderVeiculos(filt);
+}
+
+function renderLista() {
+  document.getElementById('lista-veiculos').innerHTML = renderVeiculos(_veiculos);
+}
+
+function renderVeiculos(lista) {
+  if (lista.length === 0) return '<p class="m-muted m-small">Nenhum veiculo encontrado.</p>';
+  return lista.slice(0, 50).map(v => `
+    <a href="#" onclick="selecionarVeiculo('${v.id}');return false" class="m-list-item">
+      <div>
+        <div><strong>${API.esc(v.placa||'-')}</strong></div>
+        <div class="m-small m-muted">${API.esc(v.modelo||'')} ${v.tipo ? '• '+API.esc(v.tipo) : ''}</div>
+      </div>
+      <div class="m-small m-muted">${API.fmtKm(v.km_atual||0)}</div>
+    </a>
+  `).join('');
+}
+
+function renderAbertas() {
+  if (_abertas.length === 0) return;
+  document.getElementById('box-abertas').style.display = '';
+  document.getElementById('lista-abertas').innerHTML = _abertas.map(m => `
+    <a href="m_manutencao_itens.html?id=${m.id}" class="m-list-item">
+      <div>
+        <div><strong>${API.esc(m.placa||'-')}</strong> <span class="m-badge" style="background:#fef3c7;color:#92400e">${m.status}</span></div>
+        <div class="m-small m-muted">${API.esc(m.servico||'')} - ${API.fmtData(m.data_abertura)}</div>
+      </div>
+      <div class="m-small">&rarr;</div>
+    </a>
+  `).join('');
+}
+
+function selecionarVeiculo(id) {
+  window.location.href = `m_manutencao_abrir.html?veiculo_id=${id}`;
+}
+</script>
+</body>
+</html>

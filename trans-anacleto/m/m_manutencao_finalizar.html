@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Manutencao — Finalizar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <div id="box-header" class="m-card"><div class="m-loading"><div class="m-spinner"></div></div></div>
+
+    <form id="form-fim" class="m-card" onsubmit="confirmar(event)" style="display:none">
+      <div class="m-card-title">Encerrar OS</div>
+
+      <div class="m-field">
+        <label>KM de conclusao *</label>
+        <input type="number" step="1" id="f-km" required>
+        <span class="m-small m-muted" id="f-km-hint"></span>
+      </div>
+
+      <div class="m-field">
+        <label>Data de execucao</label>
+        <input type="date" id="f-data">
+      </div>
+
+      <div class="m-field">
+        <label>Foto (opcional - obrigatoria em corretiva)</label>
+        <input type="file" id="f-foto" accept="image/*" capture="environment">
+        <span class="m-small m-muted">Anexo manual: cole URL no desktop se precisar anexar agora.</span>
+      </div>
+
+      <button type="submit" class="m-btn m-btn-success" id="btn-submit">Finalizar</button>
+      <a id="btn-voltar" href="#" class="m-btn m-btn-outline">Voltar aos itens</a>
+    </form>
+
+    <div id="box-resultado"></div>
+
+  </main>
+</div>
+
+<script>
+let _id = null;
+let _manut = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  const url = new URL(window.location.href);
+  _id = url.searchParams.get('id');
+  MShell.render({ title: 'Finalizar OS', back: `m_manutencao_itens.html?id=${_id}`, currentNav: 'manut' });
+  document.getElementById('btn-voltar').href = `m_manutencao_itens.html?id=${_id}`;
+  if (!_id) { document.getElementById('box-header').innerHTML = '<p class="m-muted">ID nao informado.</p>'; return; }
+
+  const r = await API.get(`v_trans_manutencoes_full?id=eq.${_id}&select=*`);
+  _manut = (r.ok && r.data.length > 0) ? r.data[0] : null;
+  if (!_manut) { document.getElementById('box-header').innerHTML = '<p class="m-muted">Nao encontrada.</p>'; return; }
+
+  if (['concluida','cancelada'].includes(_manut.status)) {
+    document.getElementById('box-header').innerHTML = `
+      <div class="m-card-title">OS ja ${_manut.status}</div>
+      <div class="m-small m-muted">${API.esc(_manut.placa||'')} - ${API.esc(_manut.servico||'')}</div>
+      ${_manut.proximo_km ? `<div class="m-small" style="margin-top:8px">Proximo KM: <strong>${API.fmtNum(_manut.proximo_km,0)}</strong></div>` : ''}
+      ${_manut.proxima_data ? `<div class="m-small">Proxima data: <strong>${API.fmtData(_manut.proxima_data)}</strong></div>` : ''}
+    `;
+    return;
+  }
+
+  renderHeader();
+  document.getElementById('form-fim').style.display = '';
+  document.getElementById('f-km').value = _manut.km_abertura || 0;
+  document.getElementById('f-km-hint').textContent = `Abertura: ${API.fmtNum(_manut.km_abertura||0,0)}. Nao pode ser menor.`;
+  document.getElementById('f-data').value = new Date().toISOString().slice(0,10);
+})();
+
+function renderHeader() {
+  const m = _manut;
+  document.getElementById('box-header').innerHTML = `
+    <div class="m-card-title">${API.esc(m.placa||'-')}</div>
+    <div class="m-small m-muted">${API.esc(m.servico||'')} • ${m.tipo}</div>
+    <div class="m-small" style="margin-top:8px">
+      Itens: <strong>${m.itens_count||0}</strong> •
+      Pneus: <strong>${m.pneus_count||0}</strong> •
+      Custo: <strong>R$ ${API.fmtNum(m.custo_total_calc||0,2)}</strong>
+    </div>
+    ${m.tipo === 'corretiva' ? '<div class="m-small m-muted" style="margin-top:8px;color:#d97706">Corretiva: foto do reparo recomendada.</div>' : ''}
+  `;
+}
+
+async function confirmar(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Finalizando...';
+  const km = parseFloat(document.getElementById('f-km').value);
+  const data = document.getElementById('f-data').value || null;
+
+  const r = await API.rpc('trans_manutencao_finalizar', {
+    p_manutencao_id: _id,
+    p_km_conclusao: km,
+    p_data_execucao: data
+  });
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao finalizar', 'erro');
+    btn.disabled = false; btn.textContent = 'Finalizar';
+    return;
+  }
+  MShell.toast('OS finalizada', 'ok');
+  document.getElementById('form-fim').style.display = 'none';
+
+  // Recarrega para mostrar proximo vencimento calculado
+  const nv = await API.get(`v_trans_manutencoes_full?id=eq.${_id}&select=*`);
+  const atualizada = (nv.ok && nv.data.length > 0) ? nv.data[0] : null;
+  const proxKm = atualizada?.proximo_km;
+  const proxData = atualizada?.proxima_data;
+
+  document.getElementById('box-resultado').innerHTML = `
+    <div class="m-card" style="background:#dcfce7;border-left:4px solid #059669">
+      <div class="m-card-title">OS concluida</div>
+      ${proxKm ? `<div class="m-small">Proxima manutencao deste servico em: <strong>${API.fmtNum(proxKm,0)} km</strong></div>` : ''}
+      ${proxData ? `<div class="m-small">Ou ate: <strong>${API.fmtData(proxData)}</strong></div>` : ''}
+      ${!proxKm && !proxData ? '<div class="m-small m-muted">Nenhum plano do tipo vinculado a este veiculo para recalcular proximo vencimento.</div>' : ''}
+    </div>
+    <a href="m_manutencao_buscar.html" class="m-btn m-btn-primary">Nova manutencao</a>
+    <a href="m_home.html" class="m-btn m-btn-outline">Ir para home</a>
+  `;
+}
+</script>
+</body>
+</html>

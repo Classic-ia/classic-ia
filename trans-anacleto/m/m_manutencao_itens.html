@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Manutencao — Itens</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <div id="box-header" class="m-card"><div class="m-loading"><div class="m-spinner"></div></div></div>
+
+    <div class="m-card">
+      <div class="m-card-title">Adicionar item</div>
+      <button class="m-btn m-btn-primary" onclick="abrirScan()">Bipar EAN</button>
+      <div class="m-field">
+        <label>EAN manual</label>
+        <input id="f-ean" placeholder="7891234567890" inputmode="numeric" onkeydown="if(event.key==='Enter'){event.preventDefault();buscarEan();}">
+      </div>
+      <button class="m-btn m-btn-outline" onclick="buscarEan()">Buscar</button>
+      <div id="box-produto"></div>
+    </div>
+
+    <div class="m-card">
+      <div class="m-card-title">Itens desta OS (<span id="count">0</span>)</div>
+      <div id="lista-itens"></div>
+    </div>
+
+    <div class="m-card">
+      <a href="#" onclick="acaoPneu();return false" class="m-btn m-btn-outline">Acao em pneu</a>
+      <a href="#" onclick="irFinalizar();return false" class="m-btn m-btn-success">Finalizar OS</a>
+      <a href="m_manutencao_buscar.html" class="m-btn m-btn-ghost">Nova OS</a>
+    </div>
+
+  </main>
+</div>
+
+<script>
+let _id = null;
+let _manut = null;
+let _itens = [];
+let _produto = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  const url = new URL(window.location.href);
+  _id = url.searchParams.get('id');
+  MShell.render({ title: 'Itens da OS', back: 'm_manutencao_buscar.html', currentNav: 'manut' });
+  if (!_id) { document.getElementById('box-header').innerHTML = '<p class="m-muted">ID nao informado.</p>'; return; }
+  await carregar();
+})();
+
+async function carregar() {
+  const [m, it] = await Promise.all([
+    API.get(`v_trans_manutencoes_full?id=eq.${_id}&select=*`),
+    API.get(`trans_manutencao_itens?manutencao_id=eq.${_id}&select=*,produto:trans_produtos(sku,nome,unidade),lote:trans_lotes(lote_interno)&order=created_at.desc`)
+  ]);
+  _manut = (m.ok && m.data.length > 0) ? m.data[0] : null;
+  _itens = it.ok ? it.data : [];
+  renderHeader();
+  renderItens();
+}
+
+function renderHeader() {
+  if (!_manut) { document.getElementById('box-header').innerHTML = '<p class="m-muted">Nao encontrada.</p>'; return; }
+  const m = _manut;
+  const statusMap = {
+    aberta: { bg:'#dbeafe', fg:'#1e40af' },
+    em_andamento: { bg:'#fef3c7', fg:'#92400e' },
+    concluida: { bg:'#dcfce7', fg:'#166534' },
+    cancelada: { bg:'#e2e8f0', fg:'#334155' }
+  };
+  const c = statusMap[m.status] || { bg:'#e2e8f0', fg:'#334155' };
+  const bloqueada = ['concluida','cancelada'].includes(m.status);
+  document.getElementById('box-header').innerHTML = `
+    <div class="m-card-title">${API.esc(m.placa||'-')}</div>
+    <div class="m-small m-muted">${API.esc(m.servico||'')} • ${m.tipo}</div>
+    <div style="margin-top:8px"><span class="m-badge" style="background:${c.bg};color:${c.fg}">${m.status}</span></div>
+    <div class="m-small" style="margin-top:8px">KM: <strong>${API.fmtNum(m.km_abertura||0,0)}</strong> • Custo: <strong>R$ ${API.fmtNum(m.custo_total_calc||0,2)}</strong></div>
+    ${bloqueada ? '<div class="m-small m-muted" style="margin-top:8px;color:#dc2626">OS '+m.status+' - nao aceita alteracoes.</div>' : ''}
+  `;
+}
+
+function renderItens() {
+  document.getElementById('count').textContent = _itens.length;
+  const box = document.getElementById('lista-itens');
+  if (_itens.length === 0) {
+    box.innerHTML = '<p class="m-muted m-small">Nenhum item adicionado.</p>';
+    return;
+  }
+  box.innerHTML = _itens.map(it => `
+    <div class="m-list-item" style="display:block">
+      <div><strong>${API.esc(it.produto?.sku||'-')}</strong> - ${API.esc(it.produto?.nome||'')}</div>
+      <div class="m-small m-muted">
+        ${it.modalidade === 'novo'
+          ? 'Novo • '+API.esc(it.lote?.lote_interno||'-')
+          : 'Usado '+API.esc(it.condicao||'')}
+        • ${API.fmtNum(it.quantidade,2)} ${API.esc(it.produto?.unidade||'')}
+        • R$ ${API.fmtNum(it.custo_total||0,2)}
+      </div>
+    </div>
+  `).join('');
+}
+
+function abrirScan() {
+  MScan.openCamera({
+    prompt: 'Bipa o EAN da peca',
+    onFound: (codigo) => {
+      document.getElementById('f-ean').value = codigo;
+      buscarEan();
+    },
+    onCancel: () => {}
+  });
+}
+
+async function buscarEan() {
+  if (_manut && ['concluida','cancelada'].includes(_manut.status)) {
+    MShell.toast('OS '+_manut.status, 'erro'); return;
+  }
+  const ean = document.getElementById('f-ean').value.trim();
+  if (!ean) { MShell.toast('Informe o EAN', 'aviso'); return; }
+  const box = document.getElementById('box-produto');
+  box.innerHTML = '<div class="m-loading m-small"><div class="m-spinner"></div>Consultando...</div>';
+  const r = await API.rpc('trans_buscar_produto_por_ean', { p_ean: ean });
+  if (!r.ok) { box.innerHTML = '<p class="m-small" style="color:#dc2626">'+API.esc(r.error||'Erro')+'</p>'; return; }
+  if (!r.data || !r.data.encontrado) {
+    box.innerHTML = '<p class="m-small m-muted">EAN nao cadastrado. Cadastre no desktop antes.</p>';
+    return;
+  }
+  _produto = r.data;
+  renderFormItem();
+}
+
+function renderFormItem() {
+  const p = _produto;
+  const lotes = p.lotes_disponiveis || [];
+  const usados = p.saldos_usado || [];
+
+  const lotesOpts = lotes.length > 0
+    ? lotes.map(l => {
+        const venc = l.data_validade ? ' - Val '+API.fmtData(l.data_validade) : '';
+        const bloq = l.status !== 'liberado' ? ' ['+l.status.toUpperCase()+']' : '';
+        return `<option value="${l.lote_id}" data-custo="${l.custo_unitario||0}">${l.lote_interno} - saldo ${API.fmtNum(l.saldo,2)}${venc}${bloq}</option>`;
+      }).join('')
+    : '';
+
+  const usadosOpts = ['A','B','C'].map(c => {
+    const row = usados.find(u => u.condicao === c);
+    const saldo = row ? Number(row.quantidade) : 0;
+    return `<option value="${c}">Cond. ${c} - saldo ${API.fmtNum(saldo,2)}</option>`;
+  }).join('');
+
+  document.getElementById('box-produto').innerHTML = `
+    <div class="m-card" style="background:#f1f5f9;padding:12px;margin-top:8px">
+      <div><strong>${API.esc(p.produto.sku)}</strong></div>
+      <div class="m-small m-muted">${API.esc(p.produto.nome)} (${API.esc(p.produto.unidade||'-')})</div>
+    </div>
+    <div class="m-field">
+      <label>Modalidade</label>
+      <div class="m-radio-group">
+        <label class="m-radio-card"><input type="radio" name="mod" value="novo" checked onchange="atualizarMod()"><span>Novo (lote)</span></label>
+        <label class="m-radio-card"><input type="radio" name="mod" value="usado" onchange="atualizarMod()"><span>Usado (cond.)</span></label>
+      </div>
+    </div>
+    <div class="m-field" id="box-lote">
+      <label>Lote (em branco = FEFO)</label>
+      <select id="f-lote" onchange="atualizarCusto()">
+        <option value="">-- FEFO automatico --</option>
+        ${lotesOpts}
+      </select>
+    </div>
+    <div class="m-field" id="box-cond" style="display:none">
+      <label>Condicao</label>
+      <select id="f-cond">${usadosOpts}</select>
+    </div>
+    <div class="m-field">
+      <label>Quantidade</label>
+      <input type="number" step="0.01" min="0.01" id="f-qtd" value="1">
+    </div>
+    <div class="m-field">
+      <label>Custo unit. (R$)</label>
+      <input type="number" step="0.01" min="0" id="f-custo" value="0">
+    </div>
+    <button class="m-btn m-btn-primary" onclick="confirmarItem()">Confirmar baixa</button>
+    <button class="m-btn m-btn-ghost" onclick="cancelarItem()">Cancelar</button>
+  `;
+}
+
+function atualizarMod() {
+  const mod = document.querySelector('input[name="mod"]:checked').value;
+  document.getElementById('box-lote').style.display = mod === 'novo' ? '' : 'none';
+  document.getElementById('box-cond').style.display = mod === 'usado' ? '' : 'none';
+}
+function atualizarCusto() {
+  const c = document.getElementById('f-lote').selectedOptions[0]?.dataset.custo;
+  if (c) document.getElementById('f-custo').value = c;
+}
+function cancelarItem() {
+  _produto = null;
+  document.getElementById('box-produto').innerHTML = '';
+  document.getElementById('f-ean').value = '';
+}
+
+async function confirmarItem() {
+  const mod = document.querySelector('input[name="mod"]:checked').value;
+  const qtd = parseFloat(document.getElementById('f-qtd').value);
+  const custo = parseFloat(document.getElementById('f-custo').value) || 0;
+  if (!qtd || qtd <= 0) { MShell.toast('Qtd invalida', 'erro'); return; }
+
+  const r = await API.rpc('trans_manutencao_adicionar_item', {
+    p_manutencao_id: _id,
+    p_produto_id: _produto.produto.id,
+    p_quantidade: qtd,
+    p_modalidade: mod,
+    p_lote_id: mod === 'novo' ? (document.getElementById('f-lote').value || null) : null,
+    p_condicao: mod === 'usado' ? document.getElementById('f-cond').value : null,
+    p_custo_unitario: custo,
+    p_ean_lido: document.getElementById('f-ean').value.trim(),
+    p_observacao: null
+  });
+  if (!r.ok) { MShell.toast(r.error || 'Erro', 'erro'); return; }
+  MShell.toast('Item adicionado', 'ok');
+  cancelarItem();
+  await carregar();
+}
+
+function acaoPneu() {
+  window.location.href = `m_pneus_scan.html?manutencao_id=${_id}`;
+}
+function irFinalizar() {
+  window.location.href = `m_manutencao_finalizar.html?id=${_id}`;
+}
+</script>
+</body>
+</html>

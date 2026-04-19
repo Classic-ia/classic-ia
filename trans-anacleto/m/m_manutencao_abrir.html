@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Manutencao — Abrir</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <div id="box-veiculo" class="m-card"><div class="m-loading"><div class="m-spinner"></div></div></div>
+
+    <form id="form-abrir" class="m-card" onsubmit="confirmar(event)" style="display:none">
+      <div class="m-card-title">Dados da OS</div>
+
+      <div class="m-field">
+        <label>Tipo *</label>
+        <div class="m-radio-group">
+          <label class="m-radio-card">
+            <input type="radio" name="tipo" value="preventiva" checked>
+            <span><strong>Preventiva</strong><br><span class="m-small m-muted">Por plano (KM/data)</span></span>
+          </label>
+          <label class="m-radio-card">
+            <input type="radio" name="tipo" value="corretiva">
+            <span><strong>Corretiva</strong><br><span class="m-small m-muted">Ocorrencia/avaria</span></span>
+          </label>
+        </div>
+      </div>
+
+      <div class="m-field">
+        <label>KM atual *</label>
+        <input type="number" step="1" id="f-km" required>
+        <span class="m-small m-muted" id="f-km-hint"></span>
+      </div>
+
+      <div class="m-field">
+        <label>Servico *</label>
+        <select id="f-servico-select" onchange="onServicoChange()">
+          <option value="">-- Selecione ou digite abaixo --</option>
+          <option value="Troca de oleo motor">Troca de oleo motor</option>
+          <option value="Filtro de oleo">Filtro de oleo</option>
+          <option value="Filtro de combustivel">Filtro de combustivel</option>
+          <option value="Filtro de ar">Filtro de ar</option>
+          <option value="Revisao geral">Revisao geral</option>
+          <option value="Alinhamento">Alinhamento</option>
+          <option value="Balanceamento">Balanceamento</option>
+          <option value="Lubrificacao">Lubrificacao</option>
+          <option value="__outro__">Outro (digitar)</option>
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label>Descricao do servico *</label>
+        <input id="f-servico" required placeholder="ex: Troca de oleo motor">
+      </div>
+
+      <div class="m-field">
+        <label>Oficina</label>
+        <input id="f-oficina" placeholder="Interna / externa">
+      </div>
+
+      <div class="m-field">
+        <label>Executado por</label>
+        <input id="f-executor">
+      </div>
+
+      <div class="m-field">
+        <label>Observacao</label>
+        <textarea id="f-obs" rows="3"></textarea>
+      </div>
+
+      <button type="submit" class="m-btn m-btn-primary" id="btn-submit">Abrir manutencao</button>
+      <a href="m_manutencao_buscar.html" class="m-btn m-btn-outline">Voltar</a>
+    </form>
+
+  </main>
+</div>
+
+<script>
+let _veiculo = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  const url = new URL(window.location.href);
+  const veicId = url.searchParams.get('veiculo_id');
+  MShell.render({ title: 'Nova manutencao', back: 'm_manutencao_buscar.html', currentNav: 'manut' });
+  if (!veicId) { document.getElementById('box-veiculo').innerHTML = '<p class="m-muted">Veiculo nao informado.</p>'; return; }
+
+  const r = await API.get(`trans_veiculos?id=eq.${veicId}&select=id,placa,modelo,tipo,km_atual,status`);
+  if (!r.ok || r.data.length === 0) {
+    document.getElementById('box-veiculo').innerHTML = '<p class="m-muted">Veiculo nao encontrado.</p>';
+    return;
+  }
+  _veiculo = r.data[0];
+  renderVeiculo();
+  document.getElementById('form-abrir').style.display = '';
+  document.getElementById('f-km').value = _veiculo.km_atual || 0;
+  document.getElementById('f-km-hint').textContent = `KM atual: ${API.fmtNum(_veiculo.km_atual||0,0)}. Nao pode retroceder.`;
+})();
+
+function renderVeiculo() {
+  const v = _veiculo;
+  document.getElementById('box-veiculo').innerHTML = `
+    <div class="m-card-title">${API.esc(v.placa)}</div>
+    <div class="m-small m-muted">${API.esc(v.modelo||'')} ${v.tipo ? '• '+API.esc(v.tipo) : ''}</div>
+    <div class="m-small" style="margin-top:8px">KM atual: <strong>${API.fmtNum(v.km_atual||0,0)}</strong></div>
+  `;
+}
+
+function onServicoChange() {
+  const val = document.getElementById('f-servico-select').value;
+  if (val === '__outro__' || val === '') {
+    document.getElementById('f-servico').value = '';
+    document.getElementById('f-servico').focus();
+  } else {
+    document.getElementById('f-servico').value = val;
+  }
+}
+
+async function confirmar(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-submit');
+  btn.disabled = true; btn.textContent = 'Abrindo...';
+  const tipo = document.querySelector('input[name="tipo"]:checked').value;
+  const km = parseFloat(document.getElementById('f-km').value);
+  const servico = document.getElementById('f-servico').value.trim();
+  if (!servico) { MShell.toast('Informe o servico', 'erro'); btn.disabled = false; btn.textContent = 'Abrir manutencao'; return; }
+
+  const r = await API.rpc('trans_manutencao_abrir', {
+    p_veiculo_id: _veiculo.id,
+    p_tipo: tipo,
+    p_km_atual: km,
+    p_servico: servico,
+    p_oficina: document.getElementById('f-oficina').value.trim() || null,
+    p_executado_por: document.getElementById('f-executor').value.trim() || null,
+    p_observacao: document.getElementById('f-obs').value.trim() || null
+  });
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao abrir', 'erro');
+    btn.disabled = false; btn.textContent = 'Abrir manutencao';
+    return;
+  }
+  MShell.toast('Manutencao aberta', 'ok');
+  window.location.href = `m_manutencao_itens.html?id=${r.data.manutencao_id || r.data.id || r.data}`;
+}
+</script>
+</body>
+</html>

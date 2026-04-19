@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tanques - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="tanques-area"></div>
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Ultimas movimentacoes</h4>
+    <div id="mov-area"><div class="loading-center"><div class="spinner"></div></div></div>
+  </div></div>
+</div>
+
+<!-- Modal novo tanque -->
+<div id="modal-tanque" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeTanque()"></div>
+  <div class="modal-content" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Novo tanque</h3>
+      <button class="modal-close" onclick="closeTanque()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-tanque" onsubmit="confirmarTanque(event)">
+        <div class="form-field">
+          <label>Nome *</label>
+          <input id="t-nome" required>
+        </div>
+        <div class="form-field">
+          <label>Combustivel *</label>
+          <select id="t-comb" required>
+            <option value="diesel">Diesel</option>
+            <option value="s10">S10</option>
+            <option value="arla">Arla 32</option>
+            <option value="gasolina">Gasolina</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Capacidade (L) *</label>
+          <input type="number" step="1" min="1" id="t-cap" required>
+        </div>
+        <div class="form-field">
+          <label>Saldo inicial (L)</label>
+          <input type="number" step="0.01" min="0" id="t-saldo" value="0">
+        </div>
+        <div class="form-field">
+          <label>Observacao</label>
+          <input id="t-obs">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeTanque()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-tanque').requestSubmit()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal entrada -->
+<div id="modal-entrada" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeEntrada()"></div>
+  <div class="modal-content" style="max-width:520px">
+    <div class="modal-header">
+      <h3>Entrada de combustivel</h3>
+      <button class="modal-close" onclick="closeEntrada()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-ent" onsubmit="confirmarEntrada(event)">
+        <div class="form-field">
+          <label>Tanque *</label>
+          <div id="e-tanque-info" class="muted" style="font-size:13px"></div>
+          <input type="hidden" id="e-tanque">
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px">
+          <div class="form-field">
+            <label>Litros *</label>
+            <input type="number" step="0.01" min="0.01" id="e-litros" required>
+          </div>
+          <div class="form-field">
+            <label>Valor unit. (R$/L)</label>
+            <input type="number" step="0.001" min="0" id="e-unit">
+          </div>
+          <div class="form-field">
+            <label>Fornecedor</label>
+            <select id="e-forn"><option value="">--</option></select>
+          </div>
+          <div class="form-field">
+            <label>NF</label>
+            <input id="e-nf">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <input id="e-obs">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeEntrada()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-ent').requestSubmit()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const _t = { tanques: [], fornecedores: [], movs: [] };
+
+PageBootstrap.init({
+  page: 'tanque',
+  title: 'Tanques',
+  breadcrumb: 'Combustivel / Tanques',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const [t, f, m] = await Promise.all([
+      API.get('trans_tanque?select=*&order=nome'),
+      API.get('trans_fornecedores?select=id,razao_social&order=razao_social'),
+      API.get('trans_tanque_movimentacao?select=*,tanque:trans_tanque(nome,combustivel_tipo),fornecedor:trans_fornecedores(razao_social)&order=data_hora.desc&limit=100')
+    ]);
+    return { t, f, m };
+  },
+  render: (res) => {
+    _t.tanques = res.t.ok ? res.t.data : [];
+    _t.fornecedores = res.f.ok ? res.f.data : [];
+    _t.movs = res.m.ok ? res.m.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Tanques de combustivel',
+      subtitle: 'Tanques proprios (diesel, s10, arla). Saldo atualizado em tempo real a cada movimentacao.',
+      actions: [{ label: 'Novo tanque', onclick: 'abrirTanque()', class: 'btn-primary' }]
+    });
+    renderTanques(); renderMovs();
+  }
+});
+
+function pctCor(pct) {
+  if (pct < 20) return '#dc2626';
+  if (pct < 50) return '#d97706';
+  return '#059669';
+}
+
+function renderTanques() {
+  const area = document.getElementById('tanques-area');
+  if (_t.tanques.length === 0) {
+    area.innerHTML = '<div class="card"><div class="card-body"><p class="muted" style="text-align:center">Nenhum tanque cadastrado.</p></div></div>';
+    return;
+  }
+  const cols = _t.tanques.map(t => {
+    const pct = t.capacidade_litros > 0 ? (Number(t.saldo_atual_litros) / Number(t.capacidade_litros)) * 100 : 0;
+    const cor = pctCor(pct);
+    return `
+      <div class="card"><div class="card-body">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <strong>${API.esc(t.nome)}</strong>
+            <span class="badge badge-muted" style="margin-left:8px">${t.combustivel_tipo}</span>
+          </div>
+          ${t.ativo ? '' : '<span class="badge badge-muted">Inativo</span>'}
+        </div>
+        <div style="font-size:28px;font-weight:700;margin-top:12px">
+          ${API.fmtNum(t.saldo_atual_litros,0)} <span style="font-size:14px;color:#64748b;font-weight:400">/ ${API.fmtNum(t.capacidade_litros,0)} L</span>
+        </div>
+        <div style="background:#e2e8f0;height:8px;border-radius:4px;overflow:hidden;margin-top:8px">
+          <div style="width:${Math.min(100,pct)}%;height:100%;background:${cor};"></div>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:4px">${API.fmtNum(pct,1)}% ocupado</div>
+        <div style="margin-top:12px">
+          <button class="btn btn-sm btn-primary" onclick="abrirEntrada('${t.id}','${API.esc(t.nome)}','${t.combustivel_tipo}')">+ Entrada</button>
+        </div>
+      </div></div>`;
+  }).join('');
+  area.innerHTML = `<div class="grid-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px">${cols}</div>`;
+}
+
+function renderMovs() {
+  if (_t.movs.length === 0) {
+    document.getElementById('mov-area').innerHTML = '<p class="muted" style="text-align:center">Sem movimentacoes.</p>';
+    return;
+  }
+  const rows = _t.movs.map(m => [
+    API.fmtDataHora(m.data_hora),
+    API.esc(m.tanque?.nome||'-'),
+    m.tipo === 'entrada'
+      ? '<span class="badge badge-success">Entrada</span>'
+      : (m.tipo === 'saida' ? '<span class="badge badge-warning">Saida</span>' : '<span class="badge badge-muted">Ajuste</span>'),
+    API.fmtNum(m.litros,2) + ' L',
+    m.valor_total ? 'R$ ' + API.fmtNum(m.valor_total,2) : '-',
+    API.esc(m.fornecedor?.razao_social||m.observacao||'-')
+  ]);
+  document.getElementById('mov-area').innerHTML = UI.table({
+    columns: ['Data', 'Tanque', 'Tipo', 'Litros', 'Valor', 'Origem/Obs'],
+    rows, empty: '-'
+  });
+}
+
+// Novo tanque
+function abrirTanque() {
+  document.getElementById('form-tanque').reset();
+  UI.openModal('modal-tanque');
+}
+function closeTanque() { UI.closeModal('modal-tanque'); }
+async function confirmarTanque(e) {
+  e.preventDefault();
+  const payload = {
+    nome: document.getElementById('t-nome').value.trim(),
+    combustivel_tipo: document.getElementById('t-comb').value,
+    capacidade_litros: parseFloat(document.getElementById('t-cap').value),
+    saldo_atual_litros: parseFloat(document.getElementById('t-saldo').value) || 0,
+    observacao: document.getElementById('t-obs').value.trim() || null,
+    ativo: true
+  };
+  const r = await API.post('trans_tanque', payload);
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Tanque criado', 'ok');
+  closeTanque();
+  location.reload();
+}
+
+// Entrada
+function abrirEntrada(id, nome, comb) {
+  document.getElementById('form-ent').reset();
+  document.getElementById('e-tanque').value = id;
+  document.getElementById('e-tanque-info').textContent = `${nome} (${comb})`;
+  document.getElementById('e-forn').innerHTML = '<option value="">--</option>' +
+    _t.fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+  UI.openModal('modal-entrada');
+}
+function closeEntrada() { UI.closeModal('modal-entrada'); }
+async function confirmarEntrada(e) {
+  e.preventDefault();
+  const r = await API.rpc('trans_tanque_entrada', {
+    p_tanque_id: document.getElementById('e-tanque').value,
+    p_litros: parseFloat(document.getElementById('e-litros').value),
+    p_valor_unitario: parseFloat(document.getElementById('e-unit').value) || null,
+    p_fornecedor_id: document.getElementById('e-forn').value || null,
+    p_nf_numero: document.getElementById('e-nf').value.trim() || null,
+    p_observacao: document.getElementById('e-obs').value.trim() || null
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Entrada registrada', 'ok');
+  closeEntrada();
+  location.reload();
+}
+</script>
+</body>
+</html>

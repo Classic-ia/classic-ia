@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abastecimentos - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal novo abastecimento -->
+<div id="modal-novo" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeNovo()"></div>
+  <div class="modal-content" style="max-width:640px">
+    <div class="modal-header">
+      <h3>Novo abastecimento</h3>
+      <button class="modal-close" onclick="closeNovo()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-novo" onsubmit="confirmarNovo(event)">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:12px">
+          <div class="form-field">
+            <label>Veiculo *</label>
+            <select id="n-veic" required onchange="onVeicChange()"></select>
+          </div>
+          <div class="form-field">
+            <label>Motorista</label>
+            <select id="n-motor"><option value="">--</option></select>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Origem *</label>
+            <div>
+              <label style="margin-right:16px"><input type="radio" name="origem" value="tanque_proprio" checked onchange="onOrigemChange()"> Tanque proprio</label>
+              <label><input type="radio" name="origem" value="posto" onchange="onOrigemChange()"> Posto externo</label>
+            </div>
+          </div>
+          <div class="form-field form-field-full" id="grupo-tanque">
+            <label>Tanque *</label>
+            <select id="n-tanque"></select>
+          </div>
+          <div class="form-field form-field-full" id="grupo-posto" style="display:none">
+            <label>Nome do posto *</label>
+            <input id="n-posto" placeholder="Ex: Posto Shell BR-277">
+          </div>
+          <div class="form-field">
+            <label>Data/hora</label>
+            <input type="datetime-local" id="n-data">
+          </div>
+          <div class="form-field">
+            <label>Litros *</label>
+            <input type="number" step="0.01" min="0.01" id="n-litros" required oninput="calcularTotal()">
+          </div>
+          <div class="form-field">
+            <label>Valor unit. R$/L</label>
+            <input type="number" step="0.001" min="0" id="n-unit" oninput="calcularTotal()">
+          </div>
+          <div class="form-field">
+            <label>Valor total R$ *</label>
+            <input type="number" step="0.01" min="0" id="n-total" required>
+          </div>
+          <div class="form-field">
+            <label>KM odometro *</label>
+            <input type="number" step="1" id="n-km" required>
+            <span class="muted" style="font-size:12px" id="n-km-hint"></span>
+          </div>
+          <div class="form-field">
+            <label>NF</label>
+            <input id="n-nf">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <input id="n-obs">
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeNovo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-novo').requestSubmit()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const _a = {
+  abasts: [],
+  veiculos: [],
+  motoristas: [],
+  tanques: [],
+  filtros: { veiculo: '', origem: '', periodo: 'mes' },
+  page: 1,
+  pageSize: 50
+};
+
+PageBootstrap.init({
+  page: 'abastecimentos',
+  title: 'Abastecimentos',
+  breadcrumb: 'Combustivel / Abastecimentos',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const [a, v, m, t] = await Promise.all([
+      API.get('v_trans_abastecimentos_full?select=*&order=data.desc&limit=500'),
+      API.get('trans_veiculos?select=id,placa,modelo,km_atual&order=placa'),
+      API.get('trans_motoristas?select=id,nome&order=nome'),
+      API.get('trans_tanque?select=id,nome,combustivel_tipo,saldo_atual_litros&ativo=eq.true&order=nome')
+    ]);
+    return { a, v, m, t };
+  },
+  render: (res) => {
+    _a.abasts = res.a.ok ? res.a.data : [];
+    _a.veiculos = res.v.ok ? res.v.data : [];
+    _a.motoristas = res.m.ok ? res.m.data : [];
+    _a.tanques = res.t.ok ? res.t.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Abastecimentos',
+      subtitle: 'Registro de abastecimento (tanque proprio ou posto) com consumo km/L automatico.',
+      actions: [{ label: 'Novo abastecimento', onclick: 'abrirNovo()', class: 'btn-primary' }]
+    });
+    renderFilters(); renderKpis(); renderTable();
+  }
+});
+
+function renderFilters() {
+  const veicOpts = [{ value:'', label:'Todos' }].concat(
+    _a.veiculos.map(v => ({ value: v.id, label: `${v.placa} - ${v.modelo||''}`.trim() }))
+  );
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    id: 'fb-ab',
+    filters: [
+      { id: 'fb-veic', label: 'Veiculo', type: 'select', options: veicOpts, value: _a.filtros.veiculo },
+      { id: 'fb-or', label: 'Origem', type: 'select', options: [
+        { value:'', label:'Todas' },
+        { value:'tanque_proprio', label:'Tanque proprio' },
+        { value:'posto', label:'Posto' }
+      ], value: _a.filtros.origem },
+      { id: 'fb-per', label: 'Periodo', type: 'select', options: [
+        { value:'mes', label:'30 dias' },
+        { value:'trimestre', label:'90 dias' },
+        { value:'ano', label:'12 meses' },
+        { value:'tudo', label:'Tudo' }
+      ], value: _a.filtros.periodo }
+    ],
+    onApply: 'aplicarFiltros()', onClear: 'limparFiltros()'
+  });
+}
+function aplicarFiltros() {
+  _a.filtros.veiculo = document.getElementById('fb-veic').value;
+  _a.filtros.origem = document.getElementById('fb-or').value;
+  _a.filtros.periodo = document.getElementById('fb-per').value;
+  _a.page = 1; renderKpis(); renderTable();
+}
+function limparFiltros() {
+  _a.filtros = { veiculo:'', origem:'', periodo:'mes' };
+  _a.page = 1; renderFilters(); renderKpis(); renderTable();
+}
+function filtrados() {
+  const hoje = new Date();
+  let lim = null;
+  if (_a.filtros.periodo === 'mes') lim = new Date(hoje.getTime() - 30*86400000);
+  else if (_a.filtros.periodo === 'trimestre') lim = new Date(hoje.getTime() - 90*86400000);
+  else if (_a.filtros.periodo === 'ano') lim = new Date(hoje.getTime() - 365*86400000);
+  return _a.abasts.filter(a => {
+    if (_a.filtros.veiculo && a.veiculo_id !== _a.filtros.veiculo) return false;
+    if (_a.filtros.origem && a.origem !== _a.filtros.origem) return false;
+    if (lim && new Date(a.data) < lim) return false;
+    return true;
+  });
+}
+
+function renderKpis() {
+  const f = filtrados();
+  const total = f.length;
+  const litros = f.reduce((s,a) => s + Number(a.litros||0), 0);
+  const valor = f.reduce((s,a) => s + Number(a.valor_total||0), 0);
+  const comKm = f.filter(a => a.consumo_km_l);
+  const cons = comKm.length > 0
+    ? comKm.reduce((s,a) => s + Number(a.consumo_km_l), 0) / comKm.length
+    : 0;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Abastecimentos', value: total, color: '#2563eb' },
+    { label: 'Litros', value: API.fmtNum(litros,0), color: '#0f172a' },
+    { label: 'Custo periodo', value: 'R$ '+API.fmtNum(valor,2), color: '#d97706' },
+    { label: 'Consumo medio', value: cons > 0 ? API.fmtNum(cons,2)+' km/L' : '-', color: '#059669' }
+  ]);
+}
+
+function renderTable() {
+  const f = filtrados();
+  const start = (_a.page - 1) * _a.pageSize;
+  const rows = f.slice(start, start + _a.pageSize);
+  if (rows.length === 0) {
+    document.getElementById('table-area').innerHTML =
+      '<p class="muted" style="padding:20px;text-align:center">Nenhum registro.</p>';
+    return;
+  }
+  const tr = rows.map(a => [
+    API.fmtDataHora(a.data),
+    `<strong>${API.esc(a.placa||'-')}</strong>`,
+    a.origem === 'tanque_proprio'
+      ? `<span class="badge badge-info">Tanque</span> <span class="muted" style="font-size:12px">${API.esc(a.tanque_nome||'')}</span>`
+      : `<span class="badge badge-warning">Posto</span> <span class="muted" style="font-size:12px">${API.esc(a.posto_nome||'')}</span>`,
+    API.fmtNum(a.litros,2) + ' L',
+    'R$ ' + API.fmtNum(a.valor_total||0,2),
+    API.fmtNum(a.km_odometro,0),
+    a.km_percorrido ? API.fmtNum(a.km_percorrido,0) : '-',
+    a.consumo_km_l ? API.fmtNum(a.consumo_km_l,2) + ' km/L' : '-',
+    API.esc(a.motorista_nome||'-')
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Data','Veiculo','Origem','Litros','Valor','KM odom.','KM perc.','Consumo','Motorista'],
+    rows: tr, empty: '-'
+  });
+  if (f.length > _a.pageSize) {
+    document.getElementById('table-area').insertAdjacentHTML('beforeend',
+      UI.pagination({ currentPage: _a.page, totalPages: Math.ceil(f.length/_a.pageSize), totalRows: f.length, pageSize: _a.pageSize, onChange: 'mudarPagina' }));
+  }
+}
+function mudarPagina(p) { _a.page = p; renderTable(); window.scrollTo({top:0,behavior:'smooth'}); }
+
+// Novo
+function abrirNovo() {
+  document.getElementById('form-novo').reset();
+  document.getElementById('n-veic').innerHTML = '<option value="">Selecione...</option>' +
+    _a.veiculos.map(v => `<option value="${v.id}" data-km="${v.km_atual||0}">${API.esc(v.placa)} - ${API.esc(v.modelo||'')}</option>`).join('');
+  document.getElementById('n-motor').innerHTML = '<option value="">--</option>' +
+    _a.motoristas.map(m => `<option value="${m.id}">${API.esc(m.nome)}</option>`).join('');
+  document.getElementById('n-tanque').innerHTML = _a.tanques.map(t =>
+    `<option value="${t.id}">${API.esc(t.nome)} - ${t.combustivel_tipo} - ${API.fmtNum(t.saldo_atual_litros,0)}L</option>`
+  ).join('');
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('n-data').value = now.toISOString().slice(0,16);
+  UI.openModal('modal-novo');
+}
+function closeNovo() { UI.closeModal('modal-novo'); }
+function onOrigemChange() {
+  const o = document.querySelector('input[name="origem"]:checked').value;
+  document.getElementById('grupo-tanque').style.display = o === 'tanque_proprio' ? '' : 'none';
+  document.getElementById('grupo-posto').style.display = o === 'posto' ? '' : 'none';
+}
+function onVeicChange() {
+  const km = document.getElementById('n-veic').selectedOptions[0]?.dataset.km;
+  if (km) {
+    document.getElementById('n-km').value = km;
+    document.getElementById('n-km-hint').textContent = `KM atual: ${API.fmtNum(km,0)}. Nao pode retroceder.`;
+  }
+}
+function calcularTotal() {
+  const l = parseFloat(document.getElementById('n-litros').value);
+  const u = parseFloat(document.getElementById('n-unit').value);
+  if (l > 0 && u > 0) document.getElementById('n-total').value = (l * u).toFixed(2);
+}
+
+async function confirmarNovo(e) {
+  e.preventDefault();
+  const origem = document.querySelector('input[name="origem"]:checked').value;
+  const payload = {
+    p_veiculo_id: document.getElementById('n-veic').value,
+    p_origem: origem,
+    p_litros: parseFloat(document.getElementById('n-litros').value),
+    p_valor_total: parseFloat(document.getElementById('n-total').value),
+    p_km_odometro: parseFloat(document.getElementById('n-km').value),
+    p_motorista_id: document.getElementById('n-motor').value || null,
+    p_tanque_id: origem === 'tanque_proprio' ? document.getElementById('n-tanque').value : null,
+    p_posto_nome: origem === 'posto' ? document.getElementById('n-posto').value.trim() : null,
+    p_valor_unitario: parseFloat(document.getElementById('n-unit').value) || null,
+    p_data: document.getElementById('n-data').value ? new Date(document.getElementById('n-data').value).toISOString() : null,
+    p_nf_numero: document.getElementById('n-nf').value.trim() || null,
+    p_observacao: document.getElementById('n-obs').value.trim() || null
+  };
+  if (!payload.p_veiculo_id) { UI.toast('Selecione o veiculo', 'erro'); return; }
+
+  const r = await API.rpc('trans_abastecimento_registrar', payload);
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Abastecimento registrado' + (r.data?.consumo_km_l ? ` - consumo ${API.fmtNum(r.data.consumo_km_l,2)} km/L` : ''), 'ok');
+  closeNovo();
+  location.reload();
+}
+</script>
+</body>
+</html>

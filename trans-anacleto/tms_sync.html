@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sync TMS - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Importar do TMS</h4>
+    <p class="muted">Faca upload de CSV ou JSON com os cadastros exportados do Transporte Facil. Upsert por placa (veiculos) ou CPF/CNH (motoristas).</p>
+
+    <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:16px">
+      <div class="form-field">
+        <label><strong>Veiculos</strong> (placa, modelo, marca, ano, tipo, km_atual)</label>
+        <input type="file" id="file-veic" accept=".csv,.json,.txt">
+        <button class="btn btn-sm btn-outline" onclick="previewArq('veic')" style="margin-top:8px">Pre-visualizar</button>
+        <button class="btn btn-sm btn-primary" onclick="importar('veic')" style="margin-top:8px">Importar</button>
+      </div>
+      <div class="form-field">
+        <label><strong>Motoristas</strong> (nome, cpf, cnh, categoria_cnh, validade_cnh, telefone)</label>
+        <input type="file" id="file-motor" accept=".csv,.json,.txt">
+        <button class="btn btn-sm btn-outline" onclick="previewArq('motor')" style="margin-top:8px">Pre-visualizar</button>
+        <button class="btn btn-sm btn-primary" onclick="importar('motor')" style="margin-top:8px">Importar</button>
+      </div>
+    </div>
+
+    <div id="preview-area" style="margin-top:12px"></div>
+  </div></div>
+
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Exportar custos operacionais</h4>
+    <p class="muted">Agrega por veiculo no periodo: combustivel + manutencao + pneus. Download em CSV para alimentar o acerto financeiro no TMS.</p>
+
+    <div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+      <div class="form-field">
+        <label>Data inicial *</label>
+        <input type="date" id="exp-ini" required>
+      </div>
+      <div class="form-field">
+        <label>Data final *</label>
+        <input type="date" id="exp-fim" required>
+      </div>
+      <div class="form-field" style="display:flex;align-items:flex-end;gap:8px">
+        <button class="btn btn-primary" onclick="exportar()">Exportar CSV</button>
+        <button class="btn btn-outline" onclick="exportarPreview()">Pre-visualizar</button>
+      </div>
+    </div>
+    <div id="export-preview" style="margin-top:12px"></div>
+  </div></div>
+
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Historico de sincronizacoes</h4>
+    <div id="log-area"><div class="loading-center"><div class="spinner"></div></div></div>
+  </div></div>
+</div>
+
+<script>
+const _s = { parsedVeic: null, parsedMotor: null, exportData: null };
+
+PageBootstrap.init({
+  page: 'tms_sync',
+  title: 'Sync TMS',
+  breadcrumb: 'Sistema / Sync TMS',
+  perfisPermitidos: ['admin'],
+  loadData: async () => {
+    const l = await API.get('v_trans_tms_sync_log_full?select=*&order=executado_em.desc&limit=50');
+    return { l };
+  },
+  render: (res) => {
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Sync TMS (Transporte Facil)',
+      subtitle: 'Importar cadastros do TMS (veiculos, motoristas) e exportar custos operacionais do periodo.'
+    });
+    const hoje = new Date();
+    const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+    document.getElementById('exp-ini').value = ini.toISOString().slice(0,10);
+    document.getElementById('exp-fim').value = hoje.toISOString().slice(0,10);
+    renderLog(res.l.ok ? res.l.data : []);
+  }
+});
+
+// ---------- CSV / JSON parsing ----------
+function parseCSV(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  if (lines.length < 2) return [];
+  const headers = splitLine(lines[0]).map(h => h.trim().toLowerCase());
+  return lines.slice(1).map(l => {
+    const vals = splitLine(l);
+    const o = {};
+    headers.forEach((h,i) => { o[h] = (vals[i] ?? '').trim(); });
+    return o;
+  });
+}
+
+function splitLine(line) {
+  const sep = line.includes(';') && !line.includes(',') ? ';' : ',';
+  const out = []; let cur = ''; let inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === sep && !inQ) { out.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  out.push(cur);
+  return out;
+}
+
+function readFile(inputId, tipo) {
+  return new Promise((resolve, reject) => {
+    const f = document.getElementById(inputId).files[0];
+    if (!f) { reject(new Error('Selecione um arquivo')); return; }
+    const reader = new FileReader();
+    reader.onload = e => {
+      try {
+        const text = e.target.result;
+        let arr;
+        if (f.name.toLowerCase().endsWith('.json')) {
+          arr = JSON.parse(text);
+          if (!Array.isArray(arr)) throw new Error('JSON deve ser array');
+        } else {
+          arr = parseCSV(text);
+        }
+        resolve(arr);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+    reader.readAsText(f);
+  });
+}
+
+async function previewArq(tipo) {
+  const inputId = tipo === 'veic' ? 'file-veic' : 'file-motor';
+  try {
+    const arr = await readFile(inputId, tipo);
+    if (tipo === 'veic') _s.parsedVeic = arr; else _s.parsedMotor = arr;
+    renderPreview(arr, tipo);
+  } catch (e) {
+    UI.toast(e.message, 'erro');
+  }
+}
+
+function renderPreview(arr, tipo) {
+  const area = document.getElementById('preview-area');
+  if (!arr || arr.length === 0) { area.innerHTML = '<p class="muted">Arquivo vazio.</p>'; return; }
+  const sample = arr.slice(0, 10);
+  const cols = Object.keys(sample[0]);
+  const rows = sample.map(o => cols.map(c => API.esc(String(o[c]||''))));
+  area.innerHTML = `
+    <p><strong>${arr.length}</strong> linhas em ${tipo === 'veic' ? 'veiculos' : 'motoristas'} (mostrando 10 primeiras):</p>
+    ${UI.table({ columns: cols, rows, empty: '-' })}
+  `;
+}
+
+async function importar(tipo) {
+  const arr = tipo === 'veic' ? _s.parsedVeic : _s.parsedMotor;
+  if (!arr || arr.length === 0) {
+    const inputId = tipo === 'veic' ? 'file-veic' : 'file-motor';
+    try {
+      const parsed = await readFile(inputId, tipo);
+      if (tipo === 'veic') _s.parsedVeic = parsed; else _s.parsedMotor = parsed;
+    } catch (e) { UI.toast(e.message, 'erro'); return; }
+  }
+  const payload = tipo === 'veic' ? _s.parsedVeic : _s.parsedMotor;
+  if (!confirm(`Importar ${payload.length} ${tipo === 'veic' ? 'veiculos' : 'motoristas'}?`)) return;
+
+  const rpc = tipo === 'veic' ? 'trans_tms_importar_veiculos' : 'trans_tms_importar_motoristas';
+  const r = await API.rpc(rpc, { p_payload: payload });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+
+  UI.toast(`${r.data.ok} ok, ${r.data.erro} com erro`, r.data.erro > 0 ? 'erro' : 'ok');
+  if (r.data.erro > 0 && r.data.erros) {
+    console.error('Erros:', r.data.erros);
+  }
+  setTimeout(() => location.reload(), 1200);
+}
+
+// ---------- Export ----------
+async function exportarPreview() {
+  const ini = document.getElementById('exp-ini').value;
+  const fim = document.getElementById('exp-fim').value;
+  if (!ini || !fim) { UI.toast('Informe o periodo', 'erro'); return; }
+
+  const r = await API.rpc('trans_tms_exportar_custos_periodo', {
+    p_periodo_ini: ini, p_periodo_fim: fim
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+
+  const data = Array.isArray(r.data) ? r.data : (r.raw || []);
+  _s.exportData = data;
+
+  if (data.length === 0) {
+    document.getElementById('export-preview').innerHTML = '<p class="muted">Sem custos no periodo.</p>';
+    return;
+  }
+
+  const rows = data.map(d => [
+    API.esc(d.placa||'-'),
+    API.esc(d.modelo||'-'),
+    API.fmtNum(d.km_rodado||0,0),
+    API.fmtNum(d.litros_total||0,2),
+    'R$ ' + API.fmtNum(d.custo_combustivel||0,2),
+    'R$ ' + API.fmtNum(d.custo_manutencao||0,2),
+    'R$ ' + API.fmtNum(d.custo_pneus||0,2),
+    '<strong>R$ ' + API.fmtNum(d.custo_total||0,2) + '</strong>'
+  ]);
+  document.getElementById('export-preview').innerHTML = UI.table({
+    columns: ['Placa','Modelo','KM rodado','Litros','Combust.','Manut.','Pneus','Total'],
+    rows, empty: '-'
+  });
+}
+
+async function exportar() {
+  if (!_s.exportData) await exportarPreview();
+  if (!_s.exportData || _s.exportData.length === 0) { UI.toast('Sem dados para exportar', 'erro'); return; }
+
+  const ini = document.getElementById('exp-ini').value;
+  const fim = document.getElementById('exp-fim').value;
+
+  const headers = ['placa','modelo','km_rodado','litros_total','custo_combustivel','custo_manutencao','custo_pneus','custo_total','abastecimentos_count','manutencoes_count'];
+  const lines = [headers.join(';')];
+  _s.exportData.forEach(d => {
+    lines.push(headers.map(h => {
+      const v = d[h];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'number') return String(v).replace('.', ',');
+      return String(v).replace(/;/g, ',');
+    }).join(';'));
+  });
+
+  const csv = lines.join('\n');
+  const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `custos_tms_${ini}_${fim}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  UI.toast('CSV exportado', 'ok');
+}
+
+// ---------- Log ----------
+function renderLog(logs) {
+  if (logs.length === 0) {
+    document.getElementById('log-area').innerHTML = '<p class="muted" style="text-align:center">Nenhuma sincronizacao registrada.</p>';
+    return;
+  }
+  const rows = logs.map(l => [
+    API.fmtDataHora(l.executado_em),
+    API.esc(l.tabela),
+    l.direcao === 'in' ? '<span class="badge badge-info">Entrada</span>' : '<span class="badge badge-muted">Saida</span>',
+    API.fmtNum(l.itens_processados,0),
+    l.itens_erro > 0 ? '<span class="badge badge-warning">' + l.itens_erro + '</span>' : '0',
+    API.esc(l.executado_por_nome||'-')
+  ]);
+  document.getElementById('log-area').innerHTML = UI.table({
+    columns: ['Data/Hora', 'Tabela', 'Direcao', 'Processados', 'Erros', 'Usuario'],
+    rows, empty: '-'
+  });
+}
+</script>
+</body>
+</html>

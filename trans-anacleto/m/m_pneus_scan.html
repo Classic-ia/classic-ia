@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Ler Pneu — Trans Anacleto Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+
+    <div class="m-card" id="box-busca">
+      <div class="m-card-title">Identificar pneu</div>
+      <div class="m-card-subtitle">Use a camera ou digite o codigo (ex: P-00001)</div>
+      <button class="m-btn m-btn-primary" onclick="abrirScan()">Abrir camera</button>
+      <div class="m-field">
+        <label>Codigo manual</label>
+        <input id="f-codigo" placeholder="P-00001" autocomplete="off" inputmode="text">
+      </div>
+      <button class="m-btn m-btn-outline" onclick="buscarManual()">Buscar por codigo</button>
+    </div>
+
+    <div id="box-resultado"></div>
+
+  </main>
+</div>
+
+<script>
+let _user = null;
+let _manutencaoId = null;
+
+(async function init() {
+  _user = await MShell.init();
+  if (!_user) return;
+  const url = new URL(window.location.href);
+  _manutencaoId = url.searchParams.get('manutencao_id') || null;
+  MShell.render({ title: _manutencaoId ? 'Acao em pneu (manutencao)' : 'Ler pneu', back: _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html', currentNav: 'pneus' });
+  const cod = url.searchParams.get('codigo');
+  if (cod) { document.getElementById('f-codigo').value = cod; buscarManual(); }
+})();
+
+function abrirScan() {
+  MScan.openCamera({
+    prompt: 'Aponte a camera para o QR do pneu (P-00001)',
+    onFound: (codigo) => {
+      document.getElementById('f-codigo').value = codigo;
+      buscar(codigo);
+    },
+    onCancel: () => {}
+  });
+}
+
+function buscarManual() {
+  const c = (document.getElementById('f-codigo').value || '').trim();
+  if (!c) { MShell.toast('Informe o codigo', 'aviso'); return; }
+  buscar(c);
+}
+
+async function buscar(codigo) {
+  const box = document.getElementById('box-resultado');
+  box.innerHTML = `<div class="m-card m-loading"><div class="m-spinner"></div><div>Consultando...</div></div>`;
+  const r = await API.rpc('trans_pneu_buscar_por_codigo', { p_codigo: codigo });
+  if (!r.ok) {
+    box.innerHTML = `<div class="m-card"><div class="m-card-title">Erro</div><p>${API.esc(r.error)}</p></div>`;
+    return;
+  }
+  const res = r.data;
+  if (!res || !res.encontrado) {
+    box.innerHTML = `<div class="m-card"><div class="m-card-title">Nao encontrado</div><p class="m-muted">Codigo <span class="m-mono">${API.esc(codigo)}</span> nao esta cadastrado. Cadastre o pneu no desktop antes de operar.</p></div>`;
+    return;
+  }
+  renderPneu(res);
+}
+
+function statusBadge(s) {
+  const map = {
+    estoque: { bg:'#e0f2fe', fg:'#075985' },
+    instalado: { bg:'#dcfce7', fg:'#166534' },
+    recapagem: { bg:'#fef3c7', fg:'#92400e' },
+    sucata: { bg:'#fee2e2', fg:'#991b1b' },
+    reserva: { bg:'#ede9fe', fg:'#5b21b6' }
+  };
+  const c = map[s] || { bg:'#e2e8f0', fg:'#334155' };
+  return `<span class="m-badge" style="background:${c.bg};color:${c.fg}">${s||'-'}</span>`;
+}
+
+function acoesHtml(p) {
+  const id = p.id;
+  const status = p.status;
+  const btn = (cls, href, label) => `<a href="${href}" class="m-btn ${cls}">${label}</a>`;
+  const mParam = _manutencaoId ? `&manutencao_id=${_manutencaoId}` : '';
+  let html = '';
+  if (status === 'estoque' || status === 'reserva') {
+    html += btn('m-btn-primary', `m_pneus_instalar.html?pneu_id=${id}${mParam}`, 'Instalar em veiculo');
+    html += btn('m-btn-outline', `m_pneus_recapagem.html?pneu_id=${id}&modo=enviar${mParam}`, 'Enviar para recapagem');
+    html += btn('m-btn-danger', `m_pneus_sucata.html?pneu_id=${id}${mParam}`, 'Descartar (sucata)');
+  } else if (status === 'instalado') {
+    html += btn('m-btn-primary', `m_pneus_retirar.html?pneu_id=${id}${mParam}`, 'Retirar do veiculo');
+  } else if (status === 'recapagem') {
+    html += btn('m-btn-primary', `m_pneus_recapagem.html?pneu_id=${id}&modo=retornar${mParam}`, 'Registrar retorno');
+  } else if (status === 'sucata') {
+    html += `<p class="m-muted m-small">Pneu sucatado — apenas consulta.</p>`;
+  }
+  html += btn('m-btn-ghost', `m_pneus_historico.html?pneu_id=${id}`, 'Ver historico completo');
+  return html;
+}
+
+function ultimaLinha(p) {
+  const bits = [];
+  if (p.veiculo_placa) bits.push(`Veic: <strong>${API.esc(p.veiculo_placa)}</strong>`);
+  if (p.posicao_atual) bits.push(`Posic: <strong>${API.esc(p.posicao_atual)}</strong>`);
+  if (p.km_instalado_atual != null) bits.push(`KM instal: ${API.fmtKm(p.km_instalado_atual)}`);
+  return bits.join(' • ');
+}
+
+function renderPneu(res) {
+  const p = res.pneu || {};
+  const hist = res.historico || [];
+  const recaps = res.recapagens || [];
+  const box = document.getElementById('box-resultado');
+
+  const linhas = [
+    `<div class="m-small m-muted">Codigo</div><div class="m-big m-mono">${API.esc(p.codigo_interno)}</div>`,
+    `<div class="m-small m-muted" style="margin-top:8px">Status / Localizacao</div><div>${statusBadge(p.status)} <span class="m-muted">${API.esc(p.localizacao_atual || '-')}</span></div>`,
+    `<div class="m-small m-muted" style="margin-top:8px">Modelo</div><div><strong>${API.esc(p.marca||'-')} ${API.esc(p.modelo||'')}</strong> <span class="m-muted">${API.esc(p.medida||'')}</span></div>`
+  ];
+  if (p.dot || p.sulco_atual_mm != null) {
+    linhas.push(`<div class="m-small m-muted" style="margin-top:8px">DOT / Sulco</div><div class="m-mono">${API.esc(p.dot||'-')} — ${p.sulco_atual_mm != null ? p.sulco_atual_mm+' mm' : 's/ sulco'}</div>`);
+  }
+  linhas.push(`<div class="m-small m-muted" style="margin-top:8px">KM rodado (calc)</div><div>${API.fmtKm(p.km_rodado_calc)}</div>`);
+  if (p.numero_recapagens != null) {
+    linhas.push(`<div class="m-small m-muted" style="margin-top:8px">Recapagens</div><div>${p.numero_recapagens}x</div>`);
+  }
+  const ultLinha = ultimaLinha(p);
+  if (ultLinha) linhas.push(`<div style="margin-top:8px">${ultLinha}</div>`);
+
+  const ultimaMov = hist[0];
+  const ultimaTxt = ultimaMov
+    ? `<div class="m-small m-muted" style="margin-top:10px">Ultima movimentacao</div>
+       <div class="m-small">${API.esc(ultimaMov.tipo)} • ${API.fmtDataHora(ultimaMov.data_hora)}</div>`
+    : '';
+
+  const mBanner = _manutencaoId
+    ? `<div class="m-card" style="background:#fef3c7;border-left:4px solid #d97706">
+         <div class="m-small"><strong>Vinculado a manutencao em andamento</strong> — a acao sera registrada nesta OS.</div>
+       </div>` : '';
+
+  box.innerHTML = `
+    ${mBanner}
+    <div class="m-card">
+      ${linhas.join('')}
+      ${ultimaTxt}
+    </div>
+    <div class="m-card">
+      <div class="m-card-title">Acoes</div>
+      ${acoesHtml(p)}
+    </div>
+  `;
+}
+</script>
+</body>
+</html>

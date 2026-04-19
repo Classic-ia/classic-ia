@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Historico Pneu — Trans Anacleto Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<style>
+  .timeline { position:relative; padding-left:24px; border-left:2px solid #cbd5e1; margin-left:6px; }
+  .tl-item { position:relative; padding:10px 0 14px; }
+  .tl-dot { position:absolute; left:-31px; top:14px; width:12px; height:12px; border-radius:50%;
+    background:#2563eb; box-shadow:0 0 0 4px #f1f5f9; }
+  .tl-head { display:flex; justify-content:space-between; align-items:baseline; gap:8px; }
+  .tl-tipo { font-weight:700; font-size:14px; text-transform:capitalize; }
+  .tl-data { color:#64748b; font-size:11px; }
+  .tl-meta { font-size:12px; color:#475569; margin-top:4px; }
+  .tl-foto { margin-top:6px; max-width:120px; max-height:90px; border-radius:6px; }
+</style>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+    <div id="box-pneu" class="m-card m-loading"><div class="m-spinner"></div><div>Carregando...</div></div>
+    <div id="box-hist"></div>
+    <div id="box-recap"></div>
+  </main>
+</div>
+
+<script>
+let _pneuId = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  _pneuId = new URL(window.location.href).searchParams.get('pneu_id');
+  if (!_pneuId) { MShell.toast('Pneu nao informado', 'erro'); setTimeout(()=>history.back(), 1200); return; }
+  MShell.render({ title: 'Historico', back: 'm_pneus_scan.html', currentNav: 'pneus' });
+
+  const rp = await API.get(`v_trans_pneus_full?id=eq.${_pneuId}&select=*`);
+  if (!rp.ok || !rp.data.length) {
+    document.getElementById('box-pneu').innerHTML = `<p>Pneu nao encontrado.</p>`;
+    return;
+  }
+  const p = rp.data[0];
+  document.getElementById('box-pneu').className = 'm-card';
+  document.getElementById('box-pneu').innerHTML = `
+    <div class="m-small m-muted">Pneu</div>
+    <div class="m-big m-mono">${API.esc(p.codigo_interno)}</div>
+    <div class="m-small m-muted" style="margin-top:6px">${API.esc(p.marca||'')} ${API.esc(p.modelo||'')} ${API.esc(p.medida||'')}</div>
+    <div class="m-small m-muted" style="margin-top:6px">
+      Status: <strong>${API.esc(p.status)}</strong> • Recaps: ${p.numero_recapagens||0}x • KM: ${API.fmtKm(p.km_rodado_calc)}
+    </div>
+  `;
+
+  const rh = await API.rpc('trans_pneu_buscar_por_codigo', { p_codigo: p.codigo_interno });
+  if (!rh.ok) {
+    document.getElementById('box-hist').innerHTML = `<div class="m-card"><p>${API.esc(rh.error)}</p></div>`;
+    return;
+  }
+  const hist = (rh.data && rh.data.historico) || [];
+  const recaps = (rh.data && rh.data.recapagens) || [];
+  renderHistorico(hist);
+  renderRecapagens(recaps);
+})();
+
+function renderHistorico(hist) {
+  const box = document.getElementById('box-hist');
+  if (!hist.length) {
+    box.innerHTML = `<div class="m-card"><div class="m-muted">Sem movimentacoes.</div></div>`;
+    return;
+  }
+  const itens = hist.map(h => {
+    const bits = [];
+    if (h.veiculo_placa) bits.push(`Veic: <strong>${API.esc(h.veiculo_placa)}</strong>`);
+    if (h.posicao) bits.push(`Posic: ${API.esc(h.posicao)}`);
+    if (h.km_veiculo != null) bits.push(`KM: ${API.fmtKm(h.km_veiculo)}`);
+    if (h.fornecedor_razao) bits.push(`Forn: ${API.esc(h.fornecedor_razao)}`);
+    if (h.destino) bits.push(`Destino: ${API.esc(h.destino)}`);
+    if (h.motivo) bits.push(`Motivo: ${API.esc(h.motivo)}`);
+    const foto = h.foto_url ? `<div><img src="${API.esc(h.foto_url)}" class="tl-foto"></div>` : '';
+    const obs = h.observacao ? `<div class="m-small m-muted" style="margin-top:4px">${API.esc(h.observacao)}</div>` : '';
+    return `
+      <div class="tl-item">
+        <div class="tl-dot"></div>
+        <div class="tl-head">
+          <span class="tl-tipo">${API.esc((h.tipo||'').replace(/_/g,' '))}</span>
+          <span class="tl-data">${API.fmtDataHora(h.data_hora)}</span>
+        </div>
+        ${bits.length ? `<div class="tl-meta">${bits.join(' • ')}</div>` : ''}
+        ${obs}
+        ${foto}
+      </div>`;
+  }).join('');
+  box.innerHTML = `<div class="m-card"><div class="m-card-title">Movimentacoes (${hist.length})</div><div class="timeline">${itens}</div></div>`;
+}
+
+function renderRecapagens(recaps) {
+  const box = document.getElementById('box-recap');
+  if (!recaps.length) return;
+  const itens = recaps.map(r => `
+    <div class="m-list-item">
+      <div class="title">Recapagem #${r.numero_recapagem || '-'} — ${API.esc(r.status)}</div>
+      <div class="meta">Envio: ${API.fmtData(r.data_envio)}${r.data_retorno ? ' • Retorno: '+API.fmtData(r.data_retorno) : ''}</div>
+      <div class="meta">Forn: ${API.esc(r.fornecedor_razao||'-')}</div>
+      ${r.custo ? `<div class="meta">Custo: ${API.fmtMoeda(r.custo)}</div>` : ''}
+      ${r.sulco_pos_mm ? `<div class="meta">Sulco pos: ${r.sulco_pos_mm} mm</div>` : ''}
+    </div>
+  `).join('');
+  box.innerHTML = `<div class="m-card"><div class="m-card-title">Recapagens (${recaps.length})</div><div class="m-list">${itens}</div></div>`;
+}
+</script>
+</body>
+</html>

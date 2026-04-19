@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Sucatar Pneu — Trans Anacleto Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+    <div id="box-pneu" class="m-card m-loading"><div class="m-spinner"></div><div>Carregando...</div></div>
+
+    <form id="form-sucata" style="display:none" onsubmit="submitForm(event)">
+      <div class="m-card" style="background:#fef2f2;border-left:4px solid #dc2626">
+        <div class="m-small"><strong>Atencao:</strong> sucata e irreversivel. Foto e motivo sao obrigatorios.</div>
+      </div>
+
+      <div class="m-card">
+        <div class="m-card-title">Motivo</div>
+        <div class="m-field">
+          <select id="f-motivo-sel" required onchange="sync()">
+            <option value="">Selecione</option>
+            <option value="desgaste_total">Desgaste total (fim da vida util)</option>
+            <option value="avaria_lateral">Avaria lateral</option>
+            <option value="estouro">Estouro / rasgo</option>
+            <option value="recap_reprovado">Recapagem reprovada</option>
+            <option value="quilometragem_max">Quilometragem maxima</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="m-field">
+          <label>Descricao</label>
+          <textarea id="f-motivo" rows="2" required placeholder="Detalhes do descarte"></textarea>
+        </div>
+      </div>
+
+      <div class="m-card">
+        <div class="m-card-title">Foto do pneu descartado <span class="m-small m-muted">(obrigatoria)</span></div>
+        <input type="file" id="f-foto" accept="image/*" capture="environment" required>
+        <img id="foto-preview" class="m-foto-preview" style="display:none">
+      </div>
+
+      <div class="m-card">
+        <button type="submit" class="m-btn m-btn-danger" id="btn-ok">Confirmar sucata</button>
+        <a href="#" onclick="history.back();return false" class="m-btn m-btn-ghost">Cancelar</a>
+      </div>
+    </form>
+  </main>
+</div>
+
+<script>
+let _pneuId = null, _manutencaoId = null, _pneu = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  const url = new URL(window.location.href);
+  _pneuId = url.searchParams.get('pneu_id');
+  _manutencaoId = url.searchParams.get('manutencao_id') || null;
+  if (!_pneuId) { MShell.toast('Pneu nao informado', 'erro'); setTimeout(()=>history.back(), 1200); return; }
+  MShell.render({ title: 'Sucatar pneu', back: 'm_pneus_scan.html', currentNav: 'pneus' });
+  await carregar();
+})();
+
+async function carregar() {
+  const rp = await API.get(`v_trans_pneus_full?id=eq.${_pneuId}&select=*`);
+  if (!rp.ok || !rp.data.length) {
+    document.getElementById('box-pneu').innerHTML = `<p>Pneu nao encontrado.</p>`;
+    return;
+  }
+  _pneu = rp.data[0];
+  if (_pneu.status === 'sucata') {
+    document.getElementById('box-pneu').innerHTML =
+      `<div class="m-card-title">Ja esta sucatado</div><p class="m-muted">Nenhuma acao adicional.</p>`;
+    return;
+  }
+  if (_pneu.status === 'instalado') {
+    document.getElementById('box-pneu').innerHTML =
+      `<div class="m-card-title">Retire antes</div><p>Pneu instalado. Faca a retirada com destino=sucata.</p>`;
+    return;
+  }
+  document.getElementById('box-pneu').className = 'm-card';
+  document.getElementById('box-pneu').innerHTML = `
+    <div class="m-small m-muted">Pneu a descartar</div>
+    <div class="m-big m-mono">${API.esc(_pneu.codigo_interno)}</div>
+    <div class="m-small m-muted" style="margin-top:6px">${API.esc(_pneu.marca||'')} ${API.esc(_pneu.modelo||'')} ${API.esc(_pneu.medida||'')}</div>
+    <div class="m-small m-muted" style="margin-top:6px">KM rodado: <strong>${API.fmtKm(_pneu.km_rodado_calc)}</strong> • Recaps: <strong>${_pneu.numero_recapagens||0}x</strong></div>
+  `;
+  document.getElementById('f-foto').addEventListener('change', preview);
+  document.getElementById('form-sucata').style.display = '';
+}
+
+function sync() {
+  const sel = document.getElementById('f-motivo-sel').value;
+  const ta = document.getElementById('f-motivo');
+  if (sel && sel !== 'outro' && !ta.value.trim()) {
+    ta.value = document.querySelector(`#f-motivo-sel option[value="${sel}"]`)?.textContent || '';
+  }
+}
+
+function preview(e) {
+  const f = e.target.files[0];
+  const img = document.getElementById('foto-preview');
+  if (!f) { img.style.display = 'none'; return; }
+  img.src = URL.createObjectURL(f); img.style.display = 'block';
+}
+
+async function submitForm(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-ok');
+  const motivoSel = document.getElementById('f-motivo-sel').value;
+  const motivo = document.getElementById('f-motivo').value.trim();
+  const foto = document.getElementById('f-foto').files[0];
+  if (!motivoSel || !motivo) { MShell.toast('Motivo obrigatorio', 'aviso'); return; }
+  if (!foto) { MShell.toast('Foto obrigatoria', 'aviso'); return; }
+
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const fotoUrl = await uploadFoto();
+  if (!fotoUrl) {
+    MShell.toast('Falha no upload da foto', 'erro', 4000);
+    btn.disabled = false; btn.textContent = 'Confirmar sucata'; return;
+  }
+  const r = await API.rpc('trans_pneu_sucatar', {
+    p_pneu_id: _pneuId, p_motivo: motivo, p_foto_url: fotoUrl, p_observacao: motivoSel
+  });
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao sucatar', 'erro', 4000);
+    btn.disabled = false; btn.textContent = 'Confirmar sucata'; return;
+  }
+  if (_manutencaoId) {
+    await API.post('trans_manutencao_pneus', {
+      manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'sucata'
+    });
+  }
+  MShell.toast('Pneu sucatado.', 'ok');
+  setTimeout(() => {
+    window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
+  }, 900);
+}
+
+async function uploadFoto() {
+  const f = document.getElementById('f-foto').files[0];
+  if (!f) return null;
+  try {
+    const path = `pneus/${_pneuId}/${Date.now()}-${f.name.replace(/[^a-z0-9.]/gi,'_')}`;
+    const res = await fetch(`${SB_URL}/storage/v1/object/trans-pneus-fotos/${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': f.type || 'application/octet-stream',
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + (JSON.parse(localStorage.getItem('trans_sess_v1')||'{}').access_token || SB_KEY),
+        'x-upsert': 'true'
+      },
+      body: f
+    });
+    if (!res.ok) return null;
+    return `${SB_URL}/storage/v1/object/public/trans-pneus-fotos/${path}`;
+  } catch { return null; }
+}
+</script>
+</body>
+</html>

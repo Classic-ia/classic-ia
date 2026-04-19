@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Recapagem — Trans Anacleto Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+    <div id="box-pneu" class="m-card m-loading"><div class="m-spinner"></div><div>Carregando...</div></div>
+
+    <!-- ENVIO -->
+    <form id="form-enviar" style="display:none" onsubmit="submitEnviar(event)">
+      <div class="m-card">
+        <div class="m-card-title">Enviar para recapagem</div>
+        <div class="m-field">
+          <label>Fornecedor (recapadora)</label>
+          <select id="f-fornec" required></select>
+        </div>
+        <div class="m-field">
+          <label>Sulco atual (mm) — opcional</label>
+          <input type="number" id="f-sulco-pre" step="0.1" min="0" inputmode="decimal" placeholder="4.5">
+        </div>
+      </div>
+      <div class="m-card">
+        <div class="m-card-title">Foto (opcional)</div>
+        <input type="file" id="f-foto" accept="image/*" capture="environment">
+        <img id="foto-preview" class="m-foto-preview" style="display:none">
+      </div>
+      <div class="m-card">
+        <div class="m-field">
+          <label>Observacao</label>
+          <textarea id="f-obs" rows="2"></textarea>
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" id="btn-ok">Confirmar envio</button>
+        <a href="#" onclick="history.back();return false" class="m-btn m-btn-ghost">Cancelar</a>
+      </div>
+    </form>
+
+    <!-- RETORNO -->
+    <form id="form-retornar" style="display:none" onsubmit="submitRetornar(event)">
+      <div class="m-card">
+        <div class="m-card-title">Retorno da recapagem</div>
+        <div class="m-field">
+          <label>Sulco pos-recapagem (mm)</label>
+          <input type="number" id="f-sulco-pos" step="0.1" min="0" inputmode="decimal" placeholder="9.0">
+        </div>
+        <div class="m-field">
+          <label>Custo (R$)</label>
+          <input type="number" id="f-custo" step="0.01" min="0" inputmode="decimal" placeholder="250.00">
+        </div>
+        <div class="m-field">
+          <label>Resultado</label>
+          <select id="f-aprov" required>
+            <option value="true">Aprovado — volta para estoque</option>
+            <option value="false">Reprovado — vai para sucata</option>
+          </select>
+        </div>
+        <div class="m-field">
+          <label>Observacao</label>
+          <textarea id="f-obs-ret" rows="2"></textarea>
+        </div>
+        <button type="submit" class="m-btn m-btn-primary" id="btn-ok-ret">Confirmar retorno</button>
+        <a href="#" onclick="history.back();return false" class="m-btn m-btn-ghost">Cancelar</a>
+      </div>
+    </form>
+  </main>
+</div>
+
+<script>
+let _pneuId = null, _modo = null, _manutencaoId = null, _pneu = null;
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  const url = new URL(window.location.href);
+  _pneuId = url.searchParams.get('pneu_id');
+  _modo = url.searchParams.get('modo') || 'enviar';
+  _manutencaoId = url.searchParams.get('manutencao_id') || null;
+  if (!_pneuId) { MShell.toast('Pneu nao informado', 'erro'); setTimeout(()=>history.back(), 1200); return; }
+  MShell.render({
+    title: _modo === 'enviar' ? 'Enviar recapagem' : 'Retorno recapagem',
+    back: 'm_pneus_scan.html',
+    currentNav: 'pneus'
+  });
+  await carregar();
+})();
+
+async function carregar() {
+  const [rp, rf] = await Promise.all([
+    API.get(`v_trans_pneus_full?id=eq.${_pneuId}&select=*`),
+    API.get('trans_fornecedores?tipo=eq.recapadora&order=razao_social&select=id,razao_social')
+  ]);
+  if (!rp.ok || !rp.data.length) {
+    document.getElementById('box-pneu').innerHTML = `<p>Pneu nao encontrado.</p>`;
+    return;
+  }
+  _pneu = rp.data[0];
+
+  if (_modo === 'enviar') {
+    if (_pneu.status !== 'estoque' && _pneu.status !== 'reserva') {
+      document.getElementById('box-pneu').innerHTML =
+        `<div class="m-card-title">Status invalido</div><p>Status atual: <strong>${API.esc(_pneu.status)}</strong>. Retire o pneu primeiro.</p>`;
+      return;
+    }
+    const sel = document.getElementById('f-fornec');
+    sel.innerHTML = '<option value="">Selecione</option>' + rf.data.map(f =>
+      `<option value="${f.id}">${API.esc(f.razao_social)}</option>`
+    ).join('');
+    if (_pneu.sulco_atual_mm != null) document.getElementById('f-sulco-pre').value = _pneu.sulco_atual_mm;
+    document.getElementById('f-foto').addEventListener('change', preview);
+    document.getElementById('form-enviar').style.display = '';
+  } else {
+    if (_pneu.status !== 'recapagem') {
+      document.getElementById('box-pneu').innerHTML =
+        `<div class="m-card-title">Status invalido</div><p>Status atual: <strong>${API.esc(_pneu.status)}</strong>. So e possivel retornar pneus em recapagem.</p>`;
+      return;
+    }
+    document.getElementById('form-retornar').style.display = '';
+  }
+
+  document.getElementById('box-pneu').className = 'm-card';
+  document.getElementById('box-pneu').innerHTML = `
+    <div class="m-small m-muted">Pneu</div>
+    <div class="m-big m-mono">${API.esc(_pneu.codigo_interno)}</div>
+    <div class="m-small m-muted" style="margin-top:6px">${API.esc(_pneu.marca||'')} ${API.esc(_pneu.modelo||'')} ${API.esc(_pneu.medida||'')}</div>
+    <div class="m-small m-muted" style="margin-top:6px">Recapagens: <strong>${_pneu.numero_recapagens||0}x</strong></div>
+  `;
+}
+
+function preview(e) {
+  const f = e.target.files[0];
+  const img = document.getElementById('foto-preview');
+  if (!f) { img.style.display = 'none'; return; }
+  img.src = URL.createObjectURL(f); img.style.display = 'block';
+}
+
+async function submitEnviar(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-ok');
+  const fornec = document.getElementById('f-fornec').value;
+  const sulco = parseFloat(document.getElementById('f-sulco-pre').value) || null;
+  const obs = document.getElementById('f-obs').value.trim() || null;
+  if (!fornec) { MShell.toast('Selecione fornecedor', 'aviso'); return; }
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const fotoUrl = await uploadFotoOpcional();
+  const r = await API.rpc('trans_pneu_enviar_recapagem', {
+    p_pneu_id: _pneuId, p_fornecedor_id: fornec,
+    p_sulco_pre_mm: sulco, p_foto_url: fotoUrl, p_observacao: obs
+  });
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao enviar', 'erro', 4000);
+    btn.disabled = false; btn.textContent = 'Confirmar envio'; return;
+  }
+  if (_manutencaoId) {
+    await API.post('trans_manutencao_pneus', {
+      manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'enviar_recap'
+    });
+  }
+  MShell.toast('Enviado para recapagem.', 'ok');
+  setTimeout(() => {
+    window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
+  }, 900);
+}
+
+async function submitRetornar(e) {
+  e.preventDefault();
+  const btn = document.getElementById('btn-ok-ret');
+  const sulco = parseFloat(document.getElementById('f-sulco-pos').value) || null;
+  const custo = parseFloat(document.getElementById('f-custo').value) || null;
+  const aprov = document.getElementById('f-aprov').value === 'true';
+  const obs = document.getElementById('f-obs-ret').value.trim() || null;
+  btn.disabled = true; btn.textContent = 'Enviando...';
+  const r = await API.rpc('trans_pneu_retornar_recapagem', {
+    p_pneu_id: _pneuId, p_sulco_pos_mm: sulco, p_custo: custo,
+    p_aprovado: aprov, p_observacao: obs
+  });
+  if (!r.ok) {
+    MShell.toast(r.error || 'Erro ao registrar retorno', 'erro', 4000);
+    btn.disabled = false; btn.textContent = 'Confirmar retorno'; return;
+  }
+  if (_manutencaoId) {
+    await API.post('trans_manutencao_pneus', {
+      manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'retornar_recap'
+    });
+  }
+  MShell.toast(aprov ? 'Retorno aprovado.' : 'Reprovado (sucata).', 'ok');
+  setTimeout(() => {
+    window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
+  }, 900);
+}
+
+async function uploadFotoOpcional() {
+  const f = document.getElementById('f-foto').files[0];
+  if (!f) return null;
+  try {
+    const path = `pneus/${_pneuId}/${Date.now()}-${f.name.replace(/[^a-z0-9.]/gi,'_')}`;
+    const res = await fetch(`${SB_URL}/storage/v1/object/trans-pneus-fotos/${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': f.type || 'application/octet-stream',
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + (JSON.parse(localStorage.getItem('trans_sess_v1')||'{}').access_token || SB_KEY),
+        'x-upsert': 'true'
+      },
+      body: f
+    });
+    if (!res.ok) return null;
+    return `${SB_URL}/storage/v1/object/public/trans-pneus-fotos/${path}`;
+  } catch { return null; }
+}
+</script>
+</body>
+</html>

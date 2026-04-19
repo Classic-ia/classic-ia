@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#2563eb">
+<title>Inventario Pneus — Trans Anacleto Mobile</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="m.css">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+<style>
+  .codigo-chip { display:inline-block; padding:4px 10px; background:#e0e7ff; color:#1e40af;
+    border-radius:999px; font-size:12px; font-weight:600; margin:2px; font-family:ui-monospace,monospace; }
+  .codigo-chip .x { margin-left:6px; color:#64748b; cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="m-app">
+  <div id="m-shell"></div>
+  <main class="m-main">
+    <div class="m-card">
+      <div class="m-card-title">Inventario por localizacao</div>
+      <div class="m-field">
+        <label>Localizacao</label>
+        <input id="f-local" placeholder="almoxarifado, recapadora X..." autocomplete="off">
+        <div class="m-small m-muted" id="sug"></div>
+      </div>
+      <button class="m-btn m-btn-primary" onclick="abrirScan()">Bipar proximo pneu</button>
+      <div class="m-field">
+        <label>Codigo manual</label>
+        <input id="f-manual" placeholder="P-00001" autocomplete="off">
+        <div class="m-small m-muted">Enter para adicionar</div>
+      </div>
+    </div>
+
+    <div class="m-card">
+      <div class="m-card-title">Lidos <span class="m-muted m-small" id="contador">(0)</span></div>
+      <div id="box-lidos" class="m-muted m-small">Nenhum codigo lido.</div>
+      <button class="m-btn m-btn-success" onclick="finalizar()" id="btn-fin">Finalizar contagem</button>
+      <button class="m-btn m-btn-ghost" onclick="limpar()">Limpar</button>
+    </div>
+
+    <div id="box-result"></div>
+  </main>
+</div>
+
+<script>
+const lidos = new Set();
+
+(async function init() {
+  const u = await MShell.init();
+  if (!u) return;
+  MShell.render({ title: 'Inventario pneus', back: 'm_home.html', currentNav: 'pneus' });
+  // datalist de localizacoes conhecidas
+  const r = await API.get('trans_pneus?select=localizacao_atual&status=neq.sucata');
+  if (r.ok) {
+    const locs = Array.from(new Set(r.data.map(x => x.localizacao_atual).filter(Boolean))).sort();
+    document.getElementById('sug').innerHTML = locs.slice(0, 6).map(l =>
+      `<a href="#" onclick="setLoc('${API.esc(l)}');return false" class="m-badge" style="background:#e2e8f0;color:#334155;margin:2px">${API.esc(l)}</a>`
+    ).join(' ');
+  }
+  document.getElementById('f-manual').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); addManual(); }
+  });
+})();
+
+function setLoc(v) { document.getElementById('f-local').value = v; }
+
+function abrirScan() {
+  MScan.openCamera({
+    prompt: 'Bipa o QR de cada pneu',
+    onFound: (codigo) => {
+      if (codigo) addCodigo(codigo.trim());
+      // reabrir para continuar bipando (pequeno delay)
+      setTimeout(abrirScan, 200);
+    },
+    onCancel: () => {}
+  });
+}
+
+function addManual() {
+  const v = document.getElementById('f-manual').value.trim();
+  if (!v) return;
+  addCodigo(v);
+  document.getElementById('f-manual').value = '';
+  document.getElementById('f-manual').focus();
+}
+
+function addCodigo(c) {
+  if (!c) return;
+  if (lidos.has(c)) { MShell.toast('Ja lido: '+c, 'aviso', 1500); return; }
+  lidos.add(c);
+  renderLidos();
+}
+
+function renderLidos() {
+  document.getElementById('contador').textContent = `(${lidos.size})`;
+  const box = document.getElementById('box-lidos');
+  if (lidos.size === 0) { box.innerHTML = '<span class="m-muted m-small">Nenhum codigo lido.</span>'; return; }
+  box.innerHTML = Array.from(lidos).map(c =>
+    `<span class="codigo-chip">${API.esc(c)}<span class="x" onclick="remover('${c}')">&times;</span></span>`
+  ).join('');
+}
+
+function remover(c) { lidos.delete(c); renderLidos(); }
+function limpar() {
+  if (!confirm('Limpar lista?')) return;
+  lidos.clear(); renderLidos();
+  document.getElementById('box-result').innerHTML = '';
+}
+
+async function finalizar() {
+  const local = document.getElementById('f-local').value.trim();
+  if (!local) { MShell.toast('Informe a localizacao', 'aviso'); return; }
+  if (lidos.size === 0) { MShell.toast('Nenhum codigo lido', 'aviso'); return; }
+  const btn = document.getElementById('btn-fin');
+  btn.disabled = true; btn.textContent = 'Apurando...';
+  const r = await API.rpc('trans_pneu_inventario', {
+    p_localizacao: local,
+    p_codigos_lidos: Array.from(lidos)
+  });
+  btn.disabled = false; btn.textContent = 'Finalizar contagem';
+  if (!r.ok) { MShell.toast(r.error || 'Erro', 'erro', 4000); return; }
+  const res = r.data || {};
+  renderResultado(res);
+}
+
+function renderResultado(res) {
+  const faltantes = res.faltantes || [];
+  const extras = res.extras || [];
+  const esperados = res.esperados || [];
+  const box = document.getElementById('box-result');
+
+  const kpi = (label, val, cor) =>
+    `<div class="m-card" style="flex:1;min-width:0;padding:10px;text-align:center;border-left:4px solid ${cor}">
+       <div class="m-small m-muted">${label}</div>
+       <div class="m-big">${val}</div>
+     </div>`;
+
+  box.innerHTML = `
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      ${kpi('Esperados', esperados.length, '#2563eb')}
+      ${kpi('Lidos', lidos.size, '#059669')}
+      ${kpi('Faltantes', faltantes.length, '#dc2626')}
+      ${kpi('Extras', extras.length, '#d97706')}
+    </div>
+    ${faltantes.length ? `
+      <div class="m-card">
+        <div class="m-card-title" style="color:#dc2626">Faltantes (${faltantes.length})</div>
+        <div class="m-small m-muted">Esperados em <strong>${API.esc(res.localizacao)}</strong> mas nao foram lidos.</div>
+        <div style="margin-top:8px">${faltantes.map(c => `<span class="codigo-chip" style="background:#fee2e2;color:#991b1b">${API.esc(c)}</span>`).join('')}</div>
+      </div>` : ''}
+    ${extras.length ? `
+      <div class="m-card">
+        <div class="m-card-title" style="color:#d97706">Extras (${extras.length})</div>
+        <div class="m-small m-muted">Lidos aqui mas a localizacao oficial e outra.</div>
+        <div style="margin-top:8px">${extras.map(c => `<span class="codigo-chip" style="background:#fef3c7;color:#92400e">${API.esc(c)}</span>`).join('')}</div>
+      </div>` : ''}
+    ${!faltantes.length && !extras.length ? `
+      <div class="m-card" style="background:#dcfce7">
+        <div class="m-card-title" style="color:#166534">Inventario OK</div>
+        <div class="m-small">Sem divergencias em <strong>${API.esc(res.localizacao)}</strong>.</div>
+      </div>` : ''}
+  `;
+}
+</script>
+</body>
+</html>

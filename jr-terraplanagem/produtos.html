@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Produtos - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.d-table { width:100%; border-collapse:collapse; font-size:13px; }
+.d-table th, .d-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.d-table th { background:#F8FAFC; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; }
+.d-table tr:hover { background:#FEF3C7; }
+.d-table .right { text-align:right; font-variant-numeric:tabular-nums; }
+.sku { font-family:ui-monospace,monospace; font-weight:600; color:#D97706; }
+.ean-pill { display:inline-block; padding:2px 8px; margin:1px 2px; background:#F1F5F9; border-radius:4px; font-family:ui-monospace,monospace; font-size:11px; color:#475569; }
+.cat-badge { padding:3px 8px; border-radius:999px; font-size:11px; font-weight:600; background:#EFF6FF; color:#1E40AF; }
+.saldo-bx { display:inline-block; padding:2px 8px; border-radius:4px; font-size:11px; font-weight:600; }
+.saldo-ok { background:#ECFDF5; color:#065F46; }
+.saldo-low { background:#FEF3C7; color:#92400E; }
+.saldo-zero { background:#FEE2E2; color:#991B1B; }
+
+.filter-row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+.filter-field { display:flex; flex-direction:column; gap:4px; }
+.filter-field label { font-size:12px; font-weight:500; color:#475569; }
+.filter-field input, .filter-field select {
+  padding:8px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; font-family:inherit; background:#fff; min-width:160px;
+}
+.modal-form .fr { margin-bottom:14px; }
+.modal-form .fr-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.modal-form label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; }
+.modal-form input, .modal-form select, .modal-form textarea {
+  width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px;
+  font-size:13px; box-sizing:border-box;
+}
+.ean-list { display:flex; flex-wrap:wrap; gap:6px; align-items:center; min-height:36px; padding:6px; border:1px dashed #CBD5E1; border-radius:6px; margin-bottom:8px; }
+.ean-tag { background:#FEF3C7; color:#92400E; padding:4px 10px; border-radius:4px; font-family:ui-monospace,monospace; font-size:12px; display:inline-flex; align-items:center; gap:6px; }
+.ean-tag button { background:none;border:none;color:#92400E;cursor:pointer;font-weight:bold; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;">
+      <div>
+        <h3>Produtos</h3>
+        <p class="text-sm text-muted">SKU mestre + EANs auxiliares. Leitura por bipagem usa qualquer EAN.</p>
+      </div>
+      <button id="btn-novo" class="btn" style="background:#D97706;color:#fff;padding:9px 18px;border-radius:8px;font-weight:600;font-size:13px;border:none;cursor:pointer;">+ Novo Produto</button>
+    </div>
+    <div class="card-body">
+
+      <div class="filter-row">
+        <div class="filter-field"><label>Buscar</label><input type="text" id="f-q" placeholder="SKU, nome, EAN..."></div>
+        <div class="filter-field"><label>Categoria</label><select id="f-cat"><option value="">Todas</option></select></div>
+        <button id="btn-limpar" class="btn" style="padding:8px 14px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Limpar</button>
+      </div>
+
+      <div id="list-area"><div style="padding:30px;text-align:center;color:#64748B;">Carregando...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo/Editar -->
+<div id="modal-prod" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;max-width:620px;width:92%;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:16px 22px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;">
+      <h3 id="m-title" style="margin:0;font-size:16px;font-weight:600;">Novo Produto</h3>
+      <button onclick="fecharProd()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748B;">&times;</button>
+    </div>
+    <div class="modal-form" style="padding:20px 22px;">
+      <input type="hidden" id="m-id">
+      <div class="fr-2">
+        <div><label>SKU *</label><input type="text" id="m-sku" placeholder="JR-OL-15W40"></div>
+        <div><label>Categoria *</label><select id="m-cat"></select></div>
+      </div>
+      <div class="fr"><label>Nome *</label><input type="text" id="m-nome" placeholder="Ex: Oleo motor 15W40 - 1L"></div>
+      <div class="fr-2">
+        <div><label>Unidade</label>
+          <select id="m-un">
+            <option value="UN">UN</option><option value="PC">PC</option><option value="LT">LT</option>
+            <option value="KG">KG</option><option value="M">M</option><option value="M2">M2</option>
+            <option value="M3">M3</option><option value="CX">CX</option><option value="PAR">PAR</option>
+          </select>
+        </div>
+        <div><label>Estoque minimo</label><input type="number" step="0.001" id="m-min" placeholder="0"></div>
+      </div>
+      <div class="fr-2">
+        <div><label>Localizacao</label><input type="text" id="m-loc" placeholder="Ex: Almox A1"></div>
+        <div><label>NCM</label><input type="text" id="m-ncm"></div>
+      </div>
+      <div class="fr">
+        <label>EANs vinculados</label>
+        <div id="ean-list" class="ean-list"><span style="color:#94A3B8;font-size:12px;">Nenhum EAN</span></div>
+        <div style="display:flex;gap:6px;">
+          <input type="text" id="ean-novo" placeholder="Bipe ou digite EAN" style="flex:1;padding:8px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;">
+          <button onclick="adicionarEan()" style="padding:8px 14px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;">+ EAN</button>
+        </div>
+      </div>
+      <div class="fr"><label>Observacao</label><textarea id="m-obs" rows="2" style="width:100%;padding:9px 12px;border:1px solid #CBD5E1;border-radius:6px;"></textarea></div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="fecharProd()" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Cancelar</button>
+      <button id="btn-salvar" onclick="salvar()" style="padding:9px 20px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let produtos = [];
+let categorias = [];
+let easPorProduto = {};
+let easEditando = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'produtos',
+    title: 'Produtos',
+    breadcrumb: 'Estoque > Produtos',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const [rP, rC, rE, rS] = await Promise.all([
+        API.get('jr_produtos?select=*&order=nome'),
+        API.get('jr_categorias_produto?select=*&ativo=eq.true&order=nome'),
+        API.get('jr_produtos_ean?select=produto_id,ean'),
+        API.get('v_jr_estoque_consolidado?select=produto_id,saldo_total,saldo_novo,saldo_usado_a,saldo_usado_b,saldo_usado_c,lotes_count'),
+      ]);
+      const eas = {};
+      (rE.ok ? rE.data : []).forEach(e => { (eas[e.produto_id] = eas[e.produto_id] || []).push(e.ean); });
+      const sal = {};
+      (rS.ok ? rS.data : []).forEach(s => sal[s.produto_id] = s);
+      return { produtos: rP.ok ? rP.data : [], categorias: rC.ok ? rC.data : [], eas, sal };
+    },
+    render: (d) => {
+      produtos = d.produtos.map(p => ({ ...p, _eas: d.eas[p.id] || [], _sal: d.sal[p.id] || {} }));
+      categorias = d.categorias;
+      preencherSelects();
+      aplicar();
+    }
+  });
+
+  ['f-q','f-cat'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', aplicar);
+  });
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    document.getElementById('f-q').value = '';
+    document.getElementById('f-cat').value = '';
+    aplicar();
+  });
+  document.getElementById('btn-novo').addEventListener('click', () => abrirProd(null));
+  document.getElementById('ean-novo').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); adicionarEan(); }
+  });
+})();
+
+function preencherSelects() {
+  const opts = categorias.map(c => `<option value="${c.id}">${API.esc(c.nome)}</option>`).join('');
+  document.getElementById('f-cat').innerHTML = '<option value="">Todas</option>' + opts;
+  document.getElementById('m-cat').innerHTML = '<option value="">Selecione...</option>' + opts;
+}
+
+function aplicar() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const cat = document.getElementById('f-cat').value;
+  let lista = produtos.slice();
+  if (q) lista = lista.filter(p =>
+    (p.sku || '').toLowerCase().includes(q) ||
+    (p.nome || '').toLowerCase().includes(q) ||
+    (p._eas || []).some(e => e.toLowerCase().includes(q))
+  );
+  if (cat) lista = lista.filter(p => p.categoria_id === cat);
+  render(lista);
+}
+
+function render(lista) {
+  const area = document.getElementById('list-area');
+  if (!lista.length) { area.innerHTML = '<div style="padding:40px;text-align:center;color:#64748B;">Nenhum produto.</div>'; return; }
+  let html = '<div style="overflow-x:auto;"><table class="d-table"><thead><tr>';
+  html += '<th>SKU</th><th>Nome</th><th>Categoria</th><th>UN</th><th class="right">Saldo total</th><th class="right">Lotes</th><th>EANs</th><th>Local</th><th></th>';
+  html += '</tr></thead><tbody>';
+  lista.forEach(p => {
+    const cat = categorias.find(c => c.id === p.categoria_id);
+    const saldo = Number(p._sal.saldo_total || 0);
+    const min = Number(p.estoque_min || 0);
+    let cls = 'saldo-ok'; if (saldo === 0) cls = 'saldo-zero'; else if (min > 0 && saldo < min) cls = 'saldo-low';
+    const eans = (p._eas || []).slice(0, 3).map(e => `<span class="ean-pill">${API.esc(e)}</span>`).join('');
+    const more = p._eas.length > 3 ? ` <span style="font-size:11px;color:#94A3B8;">+${p._eas.length - 3}</span>` : '';
+    html += `<tr>
+      <td><span class="sku">${API.esc(p.sku)}</span></td>
+      <td>${API.esc(p.nome)}</td>
+      <td>${cat ? `<span class="cat-badge">${API.esc(cat.nome)}</span>` : '—'}</td>
+      <td>${API.esc(p.unidade)}</td>
+      <td class="right"><span class="saldo-bx ${cls}">${saldo.toLocaleString('pt-BR')}</span></td>
+      <td class="right">${p._sal.lotes_count || 0}</td>
+      <td>${eans || '—'}${more}</td>
+      <td>${API.esc(p.localizacao || '—')}</td>
+      <td><button onclick='abrirProd(${JSON.stringify(p.id)})' style="background:none;border:none;color:#D97706;cursor:pointer;font-weight:600;font-size:12px;">Editar</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+function abrirProd(id) {
+  if (!API.canAccess('editar_estoque')) { UI.toast('Sem permissao', 'err'); return; }
+  document.getElementById('m-id').value = id || '';
+  const p = id ? produtos.find(x => x.id === id) : null;
+  document.getElementById('m-title').textContent = p ? 'Editar Produto' : 'Novo Produto';
+  document.getElementById('m-sku').value = p?.sku || '';
+  document.getElementById('m-nome').value = p?.nome || '';
+  document.getElementById('m-cat').value = p?.categoria_id || '';
+  document.getElementById('m-un').value = p?.unidade || 'UN';
+  document.getElementById('m-min').value = p?.estoque_min || '';
+  document.getElementById('m-loc').value = p?.localizacao || '';
+  document.getElementById('m-ncm').value = p?.ncm || '';
+  document.getElementById('m-obs').value = p?.observacao || '';
+  easEditando = p ? [...(p._eas || [])] : [];
+  renderEans();
+  document.getElementById('modal-prod').style.display = 'flex';
+}
+
+function fecharProd() { document.getElementById('modal-prod').style.display = 'none'; }
+
+function renderEans() {
+  const el = document.getElementById('ean-list');
+  if (!easEditando.length) { el.innerHTML = '<span style="color:#94A3B8;font-size:12px;">Nenhum EAN</span>'; return; }
+  el.innerHTML = easEditando.map((e,i) => `<span class="ean-tag">${API.esc(e)}<button onclick="removerEan(${i})">&times;</button></span>`).join('');
+}
+
+function adicionarEan() {
+  const inp = document.getElementById('ean-novo');
+  const v = inp.value.trim();
+  if (!v) return;
+  if (easEditando.includes(v)) { UI.toast('EAN ja adicionado', 'warn'); return; }
+  easEditando.push(v);
+  renderEans();
+  inp.value = '';
+  inp.focus();
+}
+
+function removerEan(i) { easEditando.splice(i, 1); renderEans(); }
+
+async function salvar() {
+  const id = document.getElementById('m-id').value;
+  const sku = document.getElementById('m-sku').value.trim();
+  const nome = document.getElementById('m-nome').value.trim();
+  const catId = document.getElementById('m-cat').value;
+  if (!sku) { UI.toast('SKU obrigatorio', 'err'); return; }
+  if (!nome) { UI.toast('Nome obrigatorio', 'err'); return; }
+  if (!catId) { UI.toast('Categoria obrigatoria', 'err'); return; }
+
+  const body = {
+    sku, nome, categoria_id: catId,
+    unidade: document.getElementById('m-un').value,
+    estoque_min: parseFloat(document.getElementById('m-min').value) || 0,
+    localizacao: document.getElementById('m-loc').value.trim() || null,
+    ncm: document.getElementById('m-ncm').value.trim() || null,
+    observacao: document.getElementById('m-obs').value.trim() || null,
+  };
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = '...';
+
+  let prodId = id;
+  let r;
+  if (id) {
+    r = await API.patch('jr_produtos?id=eq.' + encodeURIComponent(id), body);
+  } else {
+    r = await API.post('jr_produtos', body);
+    if (r.ok && r.data && r.data[0]) prodId = r.data[0].id;
+  }
+  if (!r.ok) { btn.disabled = false; btn.textContent = 'Salvar'; UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+
+  if (prodId) {
+    const atuaisR = await API.get('jr_produtos_ean?produto_id=eq.' + encodeURIComponent(prodId));
+    const atuais = atuaisR.ok ? atuaisR.data.map(e => e.ean) : [];
+    const adicionar = easEditando.filter(e => !atuais.includes(e));
+    const remover = atuais.filter(e => !easEditando.includes(e));
+    for (const ean of adicionar) {
+      const er = await API.post('jr_produtos_ean', { produto_id: prodId, ean });
+      if (!er.ok) UI.toast('EAN ' + ean + ' falhou: ' + er.error, 'warn');
+    }
+    for (const ean of remover) {
+      await API.del('jr_produtos_ean?ean=eq.' + encodeURIComponent(ean));
+    }
+  }
+
+  btn.disabled = false; btn.textContent = 'Salvar';
+  UI.toast('Produto salvo', 'ok');
+  fecharProd();
+  await recarregar();
+}
+
+async function recarregar() {
+  const [rP, rE, rS] = await Promise.all([
+    API.get('jr_produtos?select=*&order=nome'),
+    API.get('jr_produtos_ean?select=produto_id,ean'),
+    API.get('v_jr_estoque_consolidado?select=produto_id,saldo_total,saldo_novo,saldo_usado_a,saldo_usado_b,saldo_usado_c,lotes_count'),
+  ]);
+  const eas = {};
+  (rE.ok ? rE.data : []).forEach(e => { (eas[e.produto_id] = eas[e.produto_id] || []).push(e.ean); });
+  const sal = {};
+  (rS.ok ? rS.data : []).forEach(s => sal[s.produto_id] = s);
+  produtos = (rP.ok ? rP.data : []).map(p => ({ ...p, _eas: eas[p.id] || [], _sal: sal[p.id] || {} }));
+  aplicar();
+}
+</script>
+</body>
+</html>

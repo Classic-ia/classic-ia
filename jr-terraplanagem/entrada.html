@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrada de Estoque - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.terminal { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+.box { background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:22px; }
+.box h4 { margin:0 0 14px 0; font-size:14px; color:#475569; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+.ean-input { width:100%; padding:18px 22px; font-size:18px; font-family:ui-monospace,monospace; border:2px solid #D97706; border-radius:10px; box-sizing:border-box; }
+.ean-input:focus { outline:none; box-shadow:0 0 0 3px rgba(217,119,6,0.2); }
+.produto-card { padding:14px; background:#FEF3C7; border-radius:8px; border:1px solid #FDE68A; }
+.produto-card .sku { font-family:ui-monospace,monospace; color:#D97706; font-weight:700; }
+.produto-card .nome { font-size:15px; font-weight:600; margin-top:4px; color:#78350F; }
+.produto-card .meta { font-size:12px; color:#92400E; margin-top:6px; }
+.fr { margin-bottom:14px; }
+.fr-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.fr label, .fr-2 label { display:block; font-size:12px; font-weight:600; color:#475569; margin-bottom:4px; }
+.fr input, .fr-2 input, .fr select, .fr-2 select {
+  width:100%; padding:9px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box;
+}
+.btn-primary { background:#D97706;color:#fff;padding:12px 24px;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer; }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.history { margin-top:16px; max-height:340px; overflow-y:auto; }
+.hist-row { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; border-bottom:1px solid #F1F5F9; font-size:13px; }
+.hist-row .l { display:flex; flex-direction:column; }
+.hist-row .lote { font-family:ui-monospace,monospace; color:#D97706; font-weight:600; font-size:12px; }
+.hist-row .n { color:#475569; }
+.hist-row .qt { font-weight:700; color:#059669; font-variant-numeric:tabular-nums; }
+.empty-prod { padding:40px;text-align:center;color:#94A3B8;border:2px dashed #E2E8F0;border-radius:10px; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Entrada de Estoque</h3>
+      <p class="text-sm text-muted">Bipe o EAN ou digite. Cada entrada gera um lote interno (L-NNNNNN).</p>
+    </div>
+    <div class="card-body">
+      <div class="terminal">
+
+        <div class="box">
+          <h4>1. Identificar produto</h4>
+          <input type="text" id="i-ean" class="ean-input" placeholder="Bipe ou digite EAN..." autocomplete="off" autofocus>
+          <div id="prod-info" style="margin-top:14px;">
+            <div class="empty-prod">Aguardando bipagem...</div>
+          </div>
+        </div>
+
+        <div class="box">
+          <h4>2. Dados da entrada</h4>
+          <form id="form-entrada" onsubmit="event.preventDefault();salvar();">
+            <div class="fr-2">
+              <div><label>Quantidade *</label><input type="number" step="0.001" id="i-qt" placeholder="0" required></div>
+              <div><label>Custo unitario</label><input type="number" step="0.0001" id="i-custo" placeholder="0,00"></div>
+            </div>
+            <div class="fr-2">
+              <div><label>Lote do fornecedor</label><input type="text" id="i-lotefor" placeholder="Ex: F-2026-42"></div>
+              <div><label>Fornecedor</label><select id="i-forn"><option value="">—</option></select></div>
+            </div>
+            <div class="fr-2">
+              <div><label>Data fabricacao</label><input type="date" id="i-fab"></div>
+              <div><label>Data validade</label><input type="date" id="i-val"></div>
+            </div>
+            <div class="fr"><label>Documento (NF, OS...)</label><input type="text" id="i-doc"></div>
+            <button type="submit" id="btn-salvar" class="btn-primary" style="width:100%;" disabled>Salvar entrada (Enter)</button>
+          </form>
+        </div>
+
+      </div>
+
+      <div class="box" style="margin-top:20px;">
+        <h4>Ultimas entradas (sessao)</h4>
+        <div id="history" class="history">
+          <div style="padding:30px;text-align:center;color:#94A3B8;font-size:13px;">Nada nesta sessao ainda.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let produtoAtual = null;
+let fornecedores = [];
+let historico = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'entrada',
+    title: 'Entrada de Estoque',
+    breadcrumb: 'Estoque > Entrada',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const r = await API.get('jr_fornecedores?select=id,razao_social&ativo=eq.true&order=razao_social');
+      return { fornecedores: r.ok ? r.data : [] };
+    },
+    render: (d) => {
+      fornecedores = d.fornecedores;
+      document.getElementById('i-forn').innerHTML = '<option value="">—</option>' + fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+    }
+  });
+
+  const inp = document.getElementById('i-ean');
+  inp.focus();
+  inp.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); buscarPorEan(inp.value.trim()); }
+  });
+})();
+
+async function buscarPorEan(ean) {
+  if (!ean) return;
+  const r = await API.rpc('jr_buscar_produto_por_ean', { p_ean: ean });
+  if (!r.ok || !r.data?.ok) {
+    UI.toast(r.data?.error || 'EAN nao cadastrado. Cadastre em Produtos primeiro.', 'warn');
+    document.getElementById('prod-info').innerHTML = `<div class="empty-prod" style="color:#DC2626;border-color:#FECACA;">EAN nao cadastrado: <b>${API.esc(ean)}</b></div>`;
+    document.getElementById('btn-salvar').disabled = true;
+    return;
+  }
+  produtoAtual = r.data.produto;
+  produtoAtual._lotes = r.data.lotes_liberados || [];
+  produtoAtual._ean_lido = ean;
+  renderProduto();
+  document.getElementById('btn-salvar').disabled = false;
+  document.getElementById('i-qt').focus();
+}
+
+function renderProduto() {
+  const p = produtoAtual;
+  const saldo = p._lotes.reduce((a,l) => a + Number(l.saldo || 0), 0);
+  document.getElementById('prod-info').innerHTML = `
+    <div class="produto-card">
+      <div class="sku">${API.esc(p.sku)}</div>
+      <div class="nome">${API.esc(p.nome)}</div>
+      <div class="meta">EAN lido: <b>${API.esc(p._ean_lido)}</b> · Unidade: ${API.esc(p.unidade)} · Saldo atual: <b>${saldo.toLocaleString('pt-BR')}</b> em ${p._lotes.length} lote(s)</div>
+    </div>`;
+}
+
+async function salvar() {
+  if (!produtoAtual) { UI.toast('Identifique o produto primeiro', 'err'); return; }
+  const qt = parseFloat(document.getElementById('i-qt').value);
+  if (isNaN(qt) || qt <= 0) { UI.toast('Quantidade invalida', 'err'); return; }
+
+  const btn = document.getElementById('btn-salvar');
+  btn.disabled = true; btn.textContent = '...';
+
+  const r = await API.rpc('jr_entrada_estoque', {
+    p_produto_id: produtoAtual.id,
+    p_quantidade: qt,
+    p_lote_fornecedor: document.getElementById('i-lotefor').value.trim() || null,
+    p_fornecedor_id: document.getElementById('i-forn').value || null,
+    p_data_validade: document.getElementById('i-val').value || null,
+    p_data_fabricacao: document.getElementById('i-fab').value || null,
+    p_custo_unitario: parseFloat(document.getElementById('i-custo').value) || null,
+    p_ean_lido: produtoAtual._ean_lido,
+    p_documento: document.getElementById('i-doc').value.trim() || null,
+  });
+
+  btn.disabled = false; btn.textContent = 'Salvar entrada (Enter)';
+  if (!r.ok || !r.data?.ok) {
+    UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err');
+    return;
+  }
+
+  historico.unshift({
+    sku: produtoAtual.sku,
+    nome: produtoAtual.nome,
+    qt,
+    lote: r.data.lote_interno,
+    when: new Date().toLocaleTimeString('pt-BR').slice(0,5),
+  });
+  renderHistorico();
+
+  UI.toast('Entrada OK: lote ' + r.data.lote_interno, 'ok');
+  resetForm();
+}
+
+function resetForm() {
+  produtoAtual = null;
+  document.getElementById('i-ean').value = '';
+  document.getElementById('i-qt').value = '';
+  document.getElementById('i-custo').value = '';
+  document.getElementById('i-lotefor').value = '';
+  document.getElementById('i-forn').value = '';
+  document.getElementById('i-fab').value = '';
+  document.getElementById('i-val').value = '';
+  document.getElementById('i-doc').value = '';
+  document.getElementById('prod-info').innerHTML = '<div class="empty-prod">Aguardando bipagem...</div>';
+  document.getElementById('btn-salvar').disabled = true;
+  document.getElementById('i-ean').focus();
+}
+
+function renderHistorico() {
+  const el = document.getElementById('history');
+  if (!historico.length) { el.innerHTML = '<div style="padding:30px;text-align:center;color:#94A3B8;font-size:13px;">Nada nesta sessao ainda.</div>'; return; }
+  el.innerHTML = historico.map(h => `
+    <div class="hist-row">
+      <div class="l">
+        <span class="n"><b>${API.esc(h.sku)}</b> - ${API.esc(h.nome)}</span>
+        <span class="lote">Lote ${API.esc(h.lote)} · ${h.when}</span>
+      </div>
+      <span class="qt">+${h.qt.toLocaleString('pt-BR')}</span>
+    </div>
+  `).join('');
+}
+</script>
+</body>
+</html>

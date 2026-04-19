@@ -34,6 +34,7 @@ const Shell = (() => {
     { group: 'Estoque', id: 'entrada', label: 'Entrada', href: 'entrada.html', icon: 'download', perfis: ['admin', 'gestor', 'operador'] },
     { group: 'Estoque', id: 'saida', label: 'Saida', href: 'saida.html', icon: 'upload', perfis: ['admin', 'gestor', 'operador'] },
     { group: 'Estoque', id: 'lotes', label: 'Lotes', href: 'lotes.html', icon: 'layers', perfis: ['admin', 'gestor'] },
+    { group: 'Estoque', id: 'entrada_nfe', label: 'Entrada NFe', href: 'entrada_nfe.html', icon: 'file-text', perfis: ['admin', 'gestor', 'financeiro'] },
 
     // RELATORIOS
     { group: 'Relatorios', id: 'relatorios', label: 'Relatorios/DRE', href: 'relatorios.html', icon: 'trending-up', perfis: ['admin', 'gestor', 'financeiro'] },

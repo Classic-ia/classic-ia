@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Entrada via NFe - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.upload-area {
+  border:2px dashed #D97706; border-radius:12px; padding:50px 20px; text-align:center;
+  background:#FFFBEB; cursor:pointer; transition:all 0.2s;
+}
+.upload-area:hover { background:#FEF3C7; }
+.upload-area.dragging { background:#FEF3C7; border-color:#92400E; }
+.upload-area svg { color:#D97706; margin-bottom:14px; }
+.upload-area h3 { margin:0 0 6px 0; color:#78350F; font-size:18px; }
+.upload-area p { margin:0; color:#92400E; font-size:13px; }
+.upload-area input { display:none; }
+
+.nfe-info { background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:22px; margin-top:20px; }
+.nfe-info h4 { margin:0 0 14px 0; font-size:14px; color:#475569; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+.nfe-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+.nfe-grid .item { display:flex; flex-direction:column; }
+.nfe-grid .item .label { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.nfe-grid .item .value { font-size:14px; color:#0F172A; font-weight:600; margin-top:2px; }
+
+.itens-table { width:100%; border-collapse:collapse; margin-top:14px; font-size:13px; }
+.itens-table th { background:#F8FAFC; padding:10px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.05em; border-bottom:2px solid #E2E8F0; }
+.itens-table td { padding:10px; border-bottom:1px solid #F1F5F9; vertical-align:middle; }
+.itens-table tr.match-ok td { background:#F0FDF4; }
+.itens-table tr.match-warn td { background:#FFFBEB; }
+.match-ok .status-pill { background:#D1FAE5; color:#065F46; }
+.match-warn .status-pill { background:#FEF3C7; color:#92400E; }
+.status-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+.itens-table select, .itens-table input {
+  width:100%; padding:6px 8px; border:1px solid #CBD5E1; border-radius:5px; font-size:12px; box-sizing:border-box;
+}
+
+.summary { display:flex; gap:14px; margin-top:14px; padding:14px; background:#F8FAFC; border-radius:8px; }
+.summary .box { flex:1; }
+.summary .box .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.summary .box .v { font-size:18px; color:#0F172A; font-weight:700; margin-top:2px; }
+
+.btn-primary { background:#D97706;color:#fff;padding:12px 24px;border:none;border-radius:8px;font-weight:600;font-size:14px;cursor:pointer; }
+.btn-primary:disabled { opacity:0.5; cursor:not-allowed; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:10px 18px; border-radius:8px; font-weight:600; cursor:pointer; }
+
+.result-card { background:#F0FDF4; border:1px solid #86EFAC; border-radius:10px; padding:18px; margin-top:14px; }
+.result-card h4 { margin:0 0 10px 0; color:#065F46; }
+.lote-criado { display:flex; justify-content:space-between; padding:8px 12px; background:#fff; border-radius:6px; margin-top:6px; font-size:13px; }
+.lote-criado .li { font-family:ui-monospace,monospace; color:#D97706; font-weight:700; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Entrada via NFe (XML)</h3>
+      <p class="text-sm text-muted">Faca upload do XML da NFe. Cada item gera um lote interno automatico.</p>
+    </div>
+    <div class="card-body">
+
+      <div id="step-upload">
+        <label for="xml-file" class="upload-area" id="dropzone">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <h3>Arraste o XML aqui ou clique para selecionar</h3>
+          <p>Apenas arquivos .xml de NFe 4.00</p>
+          <input type="file" id="xml-file" accept=".xml,text/xml,application/xml">
+        </label>
+      </div>
+
+      <div id="step-review" style="display:none;">
+        <div class="nfe-info">
+          <h4>Dados da NFe</h4>
+          <div class="nfe-grid">
+            <div class="item"><span class="label">Numero</span><span class="value" id="i-numero">—</span></div>
+            <div class="item"><span class="label">Serie</span><span class="value" id="i-serie">—</span></div>
+            <div class="item"><span class="label">Data emissao</span><span class="value" id="i-data">—</span></div>
+            <div class="item"><span class="label">Valor total</span><span class="value" id="i-valor">—</span></div>
+            <div class="item" style="grid-column: span 2;"><span class="label">Fornecedor</span><span class="value" id="i-forn">—</span></div>
+            <div class="item" style="grid-column: span 2;"><span class="label">CNPJ</span><span class="value" id="i-cnpj">—</span></div>
+            <div class="item" style="grid-column: span 4;"><span class="label">Chave de acesso</span><span class="value" id="i-chave" style="font-family:ui-monospace,monospace;font-size:12px;">—</span></div>
+          </div>
+        </div>
+
+        <div class="nfe-info">
+          <h4>Itens da nota (<span id="i-count">0</span>)</h4>
+          <table class="itens-table">
+            <thead>
+              <tr>
+                <th style="width:120px;">EAN</th>
+                <th>Descricao NFe</th>
+                <th style="width:80px;">Qtd</th>
+                <th style="width:100px;">Vlr Unit</th>
+                <th style="width:280px;">Produto JR *</th>
+                <th style="width:120px;">Lote forn.</th>
+                <th style="width:90px;">Status</th>
+              </tr>
+            </thead>
+            <tbody id="itens-tbody"></tbody>
+          </table>
+
+          <div class="summary">
+            <div class="box"><div class="l">Itens</div><div class="v" id="s-itens">0</div></div>
+            <div class="box"><div class="l">Casados</div><div class="v" id="s-ok" style="color:#059669;">0</div></div>
+            <div class="box"><div class="l">Pendentes</div><div class="v" id="s-pend" style="color:#DC2626;">0</div></div>
+            <div class="box"><div class="l">Total NFe</div><div class="v" id="s-total">R$ 0,00</div></div>
+          </div>
+
+          <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:18px;">
+            <button class="btn-secondary" onclick="resetar()">Cancelar</button>
+            <button class="btn-primary" id="btn-importar" onclick="importar()" disabled>Importar NFe</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="step-result" style="display:none;">
+        <div class="result-card">
+          <h4>NFe importada com sucesso</h4>
+          <p style="margin:0 0 8px 0; color:#475569; font-size:13px;">Itens processados: <b id="r-count">0</b></p>
+          <div id="r-lotes"></div>
+          <div style="margin-top:14px; display:flex; gap:10px;">
+            <button class="btn-secondary" onclick="resetar()">Importar outra NFe</button>
+            <a href="lotes.html" class="btn-primary" style="text-decoration:none; display:inline-block;">Ver lotes</a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+let nfeData = null;
+let produtos = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'entrada_nfe',
+    title: 'Entrada via NFe',
+    breadcrumb: 'Estoque > Entrada NFe',
+    perfisPermitidos: ['admin','gestor','financeiro'],
+    loadData: async () => {
+      const r = await API.get('jr_produtos?select=id,sku,nome,unidade&ativo=eq.true&order=sku');
+      return { produtos: r.ok ? r.data : [] };
+    },
+    render: (d) => { produtos = d.produtos; }
+  });
+
+  const dz = document.getElementById('dropzone');
+  const inp = document.getElementById('xml-file');
+  inp.addEventListener('change', e => { if (e.target.files[0]) processarArquivo(e.target.files[0]); });
+  dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('dragging'); });
+  dz.addEventListener('dragleave', () => dz.classList.remove('dragging'));
+  dz.addEventListener('drop', e => {
+    e.preventDefault();
+    dz.classList.remove('dragging');
+    if (e.dataTransfer.files[0]) processarArquivo(e.dataTransfer.files[0]);
+  });
+})();
+
+function processarArquivo(file) {
+  if (!file.name.toLowerCase().endsWith('.xml')) {
+    UI.toast('Selecione um arquivo .xml', 'err'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      await parsearXml(e.target.result);
+    } catch (err) {
+      console.error(err);
+      UI.toast('Erro ao ler XML: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+async function parsearXml(xmlText) {
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(xmlText, 'text/xml');
+  if (doc.getElementsByTagName('parsererror').length) throw new Error('XML invalido');
+
+  const infNFe = doc.getElementsByTagName('infNFe')[0];
+  if (!infNFe) throw new Error('Nao e NFe (sem infNFe)');
+
+  const chave = (infNFe.getAttribute('Id') || '').replace('NFe', '');
+  if (chave.length !== 44) throw new Error('Chave de acesso invalida');
+
+  const ide = infNFe.getElementsByTagName('ide')[0];
+  const emit = infNFe.getElementsByTagName('emit')[0];
+  const total = infNFe.getElementsByTagName('total')[0];
+
+  const txt = (parent, tag) => {
+    if (!parent) return '';
+    const el = parent.getElementsByTagName(tag)[0];
+    return el ? el.textContent.trim() : '';
+  };
+
+  const numero = txt(ide, 'nNF');
+  const serie = txt(ide, 'serie');
+  const dataEmissao = (txt(ide, 'dhEmi') || txt(ide, 'dEmi')).slice(0, 10);
+  const cnpj = txt(emit, 'CNPJ');
+  const razao = txt(emit, 'xNome');
+  const valorTotal = parseFloat(txt(total?.getElementsByTagName('ICMSTot')[0], 'vNF') || '0');
+
+  const dets = infNFe.getElementsByTagName('det');
+  const itens = [];
+  for (let i = 0; i < dets.length; i++) {
+    const det = dets[i];
+    const prod = det.getElementsByTagName('prod')[0];
+    if (!prod) continue;
+    const ean = txt(prod, 'cEAN');
+    const eanLimpo = (ean && ean !== 'SEM GTIN') ? ean : '';
+    const rastro = prod.getElementsByTagName('rastro')[0];
+    itens.push({
+      ean: eanLimpo,
+      codigo_fornecedor: txt(prod, 'cProd'),
+      descricao_nfe: txt(prod, 'xProd'),
+      ncm: txt(prod, 'NCM'),
+      cfop: txt(prod, 'CFOP'),
+      unidade: txt(prod, 'uCom'),
+      quantidade: parseFloat(txt(prod, 'qCom') || '0'),
+      valor_unitario: parseFloat(txt(prod, 'vUnCom') || '0'),
+      valor_total: parseFloat(txt(prod, 'vProd') || '0'),
+      lote_fornecedor: rastro ? txt(rastro, 'nLote') : '',
+      data_fabricacao: rastro ? txt(rastro, 'dFab') : '',
+      data_validade: rastro ? txt(rastro, 'dVal') : '',
+      produto_id: null,
+    });
+  }
+
+  if (!itens.length) throw new Error('NFe sem itens');
+
+  for (const it of itens) {
+    if (!it.ean) continue;
+    const r = await API.get(`jr_produtos_ean?ean=eq.${encodeURIComponent(it.ean)}&select=produto_id`);
+    if (r.ok && r.data?.length) it.produto_id = r.data[0].produto_id;
+  }
+
+  nfeData = { chave, numero, serie, data_emissao: dataEmissao, valor_total: valorTotal, fornecedor: { cnpj, razao_social: razao }, itens };
+  renderRevisao();
+}
+
+function renderRevisao() {
+  document.getElementById('step-upload').style.display = 'none';
+  document.getElementById('step-review').style.display = 'block';
+
+  document.getElementById('i-numero').textContent = nfeData.numero || '—';
+  document.getElementById('i-serie').textContent = nfeData.serie || '—';
+  document.getElementById('i-data').textContent = nfeData.data_emissao ? new Date(nfeData.data_emissao + 'T00:00').toLocaleDateString('pt-BR') : '—';
+  document.getElementById('i-valor').textContent = 'R$ ' + nfeData.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  document.getElementById('i-forn').textContent = nfeData.fornecedor.razao_social || '—';
+  document.getElementById('i-cnpj').textContent = nfeData.fornecedor.cnpj || '—';
+  document.getElementById('i-chave').textContent = nfeData.chave;
+  document.getElementById('i-count').textContent = nfeData.itens.length;
+
+  const tbody = document.getElementById('itens-tbody');
+  const buildOpts = (selectedId) => {
+    let html = `<option value=""${!selectedId ? ' selected' : ''}>— casar com produto —</option>`;
+    for (const p of produtos) {
+      const sel = (p.id === selectedId) ? ' selected' : '';
+      html += `<option value="${p.id}"${sel}>${API.esc(p.sku)} · ${API.esc(p.nome)}</option>`;
+    }
+    return html;
+  };
+  tbody.innerHTML = nfeData.itens.map((it, idx) => `
+    <tr id="row-${idx}" class="${it.produto_id ? 'match-ok' : 'match-warn'}">
+      <td style="font-family:ui-monospace,monospace;font-size:11px;">${API.esc(it.ean) || '—'}</td>
+      <td>${API.esc(it.descricao_nfe)}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">${it.quantidade.toLocaleString('pt-BR')}</td>
+      <td style="text-align:right;font-variant-numeric:tabular-nums;">R$ ${it.valor_unitario.toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</td>
+      <td>
+        <select onchange="setProduto(${idx}, this.value)">${buildOpts(it.produto_id)}</select>
+      </td>
+      <td><input type="text" value="${API.esc(it.lote_fornecedor || '')}" onchange="setLoteFor(${idx}, this.value)" placeholder="—"></td>
+      <td><span class="status-pill">${it.produto_id ? 'OK' : 'Pendente'}</span></td>
+    </tr>
+  `).join('');
+
+  atualizarSummary();
+}
+
+function setProduto(idx, val) {
+  nfeData.itens[idx].produto_id = val || null;
+  const row = document.getElementById('row-' + idx);
+  row.className = val ? 'match-ok' : 'match-warn';
+  row.querySelector('.status-pill').textContent = val ? 'OK' : 'Pendente';
+  atualizarSummary();
+}
+
+function setLoteFor(idx, val) {
+  nfeData.itens[idx].lote_fornecedor = val.trim();
+}
+
+function atualizarSummary() {
+  const total = nfeData.itens.length;
+  const ok = nfeData.itens.filter(i => i.produto_id).length;
+  document.getElementById('s-itens').textContent = total;
+  document.getElementById('s-ok').textContent = ok;
+  document.getElementById('s-pend').textContent = total - ok;
+  document.getElementById('s-total').textContent = 'R$ ' + nfeData.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+  document.getElementById('btn-importar').disabled = (ok !== total);
+}
+
+async function importar() {
+  const btn = document.getElementById('btn-importar');
+  btn.disabled = true; btn.textContent = 'Importando...';
+
+  const r = await API.rpc('jr_importar_nfe', { p_payload: nfeData });
+
+  btn.disabled = false; btn.textContent = 'Importar NFe';
+
+  if (!r.ok || !r.data?.ok) {
+    UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err');
+    return;
+  }
+
+  document.getElementById('step-review').style.display = 'none';
+  document.getElementById('step-result').style.display = 'block';
+  document.getElementById('r-count').textContent = r.data.itens_processados;
+  const lotes = r.data.lotes_criados || [];
+  document.getElementById('r-lotes').innerHTML = lotes.map(l => `
+    <div class="lote-criado">
+      <span class="li">${API.esc(l.lote_interno)}</span>
+      <span>Qtd: <b>${Number(l.quantidade).toLocaleString('pt-BR')}</b></span>
+    </div>
+  `).join('');
+  UI.toast('NFe importada — ' + lotes.length + ' lote(s) criado(s)', 'ok');
+}
+
+function resetar() {
+  nfeData = null;
+  document.getElementById('xml-file').value = '';
+  document.getElementById('step-review').style.display = 'none';
+  document.getElementById('step-result').style.display = 'none';
+  document.getElementById('step-upload').style.display = 'block';
+}
+</script>
+</body>
+</html>

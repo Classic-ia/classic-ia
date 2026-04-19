@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lotes - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.d-table { width:100%; border-collapse:collapse; font-size:13px; }
+.d-table th, .d-table td { padding:10px 12px; text-align:left; border-bottom:1px solid #E2E8F0; }
+.d-table th { background:#F8FAFC; font-weight:600; color:#475569; font-size:12px; text-transform:uppercase; }
+.d-table tr:hover { background:#FEF3C7; }
+.d-table .right { text-align:right; font-variant-numeric:tabular-nums; }
+.lote-name { font-family:ui-monospace,monospace; color:#D97706; font-weight:700; }
+.sku { font-family:ui-monospace,monospace; color:#475569; font-weight:600; font-size:12px; }
+.sa-badge { padding:3px 10px; border-radius:999px; font-size:11px; font-weight:600; }
+.sa-liberado { background:#ECFDF5; color:#065F46; }
+.sa-bloqueado { background:#FEE2E2; color:#991B1B; }
+.sa-quarentena { background:#FEF3C7; color:#92400E; }
+.sa-reprovado { background:#F3E8FF; color:#6B21A8; }
+.val-warn { color:#DC2626; font-weight:600; }
+.val-soon { color:#D97706; font-weight:600; }
+.filter-row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:16px; }
+.filter-field { display:flex; flex-direction:column; gap:4px; }
+.filter-field label { font-size:12px; font-weight:500; color:#475569; }
+.filter-field input, .filter-field select { padding:8px 12px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; background:#fff; min-width:160px; }
+.summary-row { display:flex; gap:16px; margin-bottom:18px; }
+.summary-card { flex:1; background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:14px 18px; }
+.summary-label { font-size:11px; color:#64748B; text-transform:uppercase; font-weight:600; }
+.summary-value { font-size:22px; font-weight:700; margin-top:4px; font-variant-numeric:tabular-nums; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Lotes</h3>
+      <p class="text-sm text-muted">Gestao de lotes (FEFO/FIFO). Status controla se o lote pode sair.</p>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-row">
+        <div class="summary-card"><div class="summary-label">Lotes ativos</div><div class="summary-value" id="s-total" style="color:#1E293B;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Liberados</div><div class="summary-value" id="s-lib" style="color:#059669;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Bloqueados/Quarentena</div><div class="summary-value" id="s-blo" style="color:#DC2626;">0</div></div>
+        <div class="summary-card"><div class="summary-label">Vencendo (30d)</div><div class="summary-value" id="s-venc" style="color:#D97706;">0</div></div>
+      </div>
+
+      <div class="filter-row">
+        <div class="filter-field"><label>Buscar</label><input type="text" id="f-q" placeholder="lote interno, fornecedor, SKU..."></div>
+        <div class="filter-field"><label>Status</label>
+          <select id="f-st">
+            <option value="">Todos</option>
+            <option value="liberado">Liberado</option>
+            <option value="bloqueado">Bloqueado</option>
+            <option value="quarentena">Quarentena</option>
+            <option value="reprovado">Reprovado</option>
+          </select>
+        </div>
+        <div class="filter-field"><label>Apenas com saldo</label><select id="f-sal"><option value="">Todos</option><option value="sim" selected>Com saldo</option><option value="zero">Zerados</option></select></div>
+        <button id="btn-limpar" style="padding:8px 14px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Limpar</button>
+      </div>
+
+      <div id="list-area"><div style="padding:30px;text-align:center;color:#64748B;">Carregando...</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal alterar status -->
+<div id="modal-st" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:#fff;border-radius:12px;max-width:460px;width:92%;box-shadow:0 20px 60px rgba(0,0,0,.2);">
+    <div style="padding:16px 22px;border-bottom:1px solid #E2E8F0;display:flex;align-items:center;justify-content:space-between;">
+      <h3 style="margin:0;font-size:16px;font-weight:600;">Alterar status do lote</h3>
+      <button onclick="fecharSt()" style="background:none;border:none;font-size:22px;cursor:pointer;color:#64748B;">&times;</button>
+    </div>
+    <div style="padding:20px 22px;">
+      <input type="hidden" id="m-id">
+      <div style="margin-bottom:14px;font-size:13px;color:#475569;">Lote: <b id="m-lote-name" style="font-family:ui-monospace,monospace;color:#D97706;"></b></div>
+      <div style="margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">Novo status</label>
+        <select id="m-st" style="width:100%;padding:9px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;">
+          <option value="liberado">Liberado</option>
+          <option value="bloqueado">Bloqueado</option>
+          <option value="quarentena">Quarentena</option>
+          <option value="reprovado">Reprovado</option>
+        </select>
+      </div>
+      <div>
+        <label style="display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:4px;">Motivo *</label>
+        <textarea id="m-motivo" rows="3" style="width:100%;padding:9px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;box-sizing:border-box;"></textarea>
+      </div>
+    </div>
+    <div style="padding:14px 22px;border-top:1px solid #E2E8F0;display:flex;justify-content:flex-end;gap:8px;">
+      <button onclick="fecharSt()" style="padding:9px 16px;border:1px solid #CBD5E1;background:#fff;color:#475569;border-radius:6px;font-size:13px;cursor:pointer;">Cancelar</button>
+      <button id="btn-salvar-st" onclick="salvarSt()" style="padding:9px 20px;background:#D97706;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">Aplicar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let lotes = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'lotes',
+    title: 'Lotes',
+    breadcrumb: 'Estoque > Lotes',
+    perfisPermitidos: ['admin','gestor'],
+    loadData: async () => {
+      const r = await API.get('jr_lotes?select=*,jr_estoque_lote!inner(quantidade),jr_produtos(sku,nome,unidade),jr_fornecedores(razao_social)&order=created_at.desc&limit=2000');
+      // Re-mapear: PostgREST embed
+      return { lotes: r.ok ? r.data.map(l => ({
+        ...l,
+        saldo: l.jr_estoque_lote?.[0]?.quantidade ?? l.jr_estoque_lote?.quantidade ?? 0,
+        sku: l.jr_produtos?.sku,
+        produto_nome: l.jr_produtos?.nome,
+        unidade: l.jr_produtos?.unidade,
+        fornecedor_nome: l.jr_fornecedores?.razao_social,
+      })) : [] };
+    },
+    render: (d) => { lotes = d.lotes; aplicar(); }
+  });
+
+  ['f-q','f-st','f-sal'].forEach(id => {
+    const el = document.getElementById(id);
+    el.addEventListener(el.tagName === 'SELECT' ? 'change' : 'input', aplicar);
+  });
+  document.getElementById('btn-limpar').addEventListener('click', () => {
+    document.getElementById('f-q').value = '';
+    document.getElementById('f-st').value = '';
+    document.getElementById('f-sal').value = 'sim';
+    aplicar();
+  });
+})();
+
+function aplicar() {
+  const q = (document.getElementById('f-q').value || '').toLowerCase().trim();
+  const st = document.getElementById('f-st').value;
+  const sal = document.getElementById('f-sal').value;
+  let lista = lotes.slice();
+  if (q) lista = lista.filter(l =>
+    (l.lote_interno || '').toLowerCase().includes(q) ||
+    (l.lote_fornecedor || '').toLowerCase().includes(q) ||
+    (l.sku || '').toLowerCase().includes(q) ||
+    (l.produto_nome || '').toLowerCase().includes(q) ||
+    (l.fornecedor_nome || '').toLowerCase().includes(q)
+  );
+  if (st) lista = lista.filter(l => l.status === st);
+  if (sal === 'sim') lista = lista.filter(l => Number(l.saldo) > 0);
+  if (sal === 'zero') lista = lista.filter(l => Number(l.saldo) === 0);
+  resumo(lista);
+  render(lista);
+}
+
+function resumo(lista) {
+  const today = new Date().toISOString().slice(0,10);
+  const in30 = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+  document.getElementById('s-total').textContent = lista.length;
+  document.getElementById('s-lib').textContent = lista.filter(l => l.status === 'liberado').length;
+  document.getElementById('s-blo').textContent = lista.filter(l => ['bloqueado','quarentena','reprovado'].includes(l.status)).length;
+  document.getElementById('s-venc').textContent = lista.filter(l => l.data_validade && l.data_validade <= in30 && l.data_validade >= today && Number(l.saldo) > 0).length;
+}
+
+function render(lista) {
+  const area = document.getElementById('list-area');
+  if (!lista.length) { area.innerHTML = '<div style="padding:40px;text-align:center;color:#64748B;">Nenhum lote.</div>'; return; }
+  const today = new Date().toISOString().slice(0,10);
+  const in30 = new Date(Date.now() + 30*86400000).toISOString().slice(0,10);
+  let html = '<div style="overflow-x:auto;"><table class="d-table"><thead><tr>';
+  html += '<th>Lote</th><th>Produto</th><th>Forn. lote</th><th>Fornecedor</th><th>Entrada</th><th>Validade</th><th class="right">Saldo</th><th>Status</th><th></th>';
+  html += '</tr></thead><tbody>';
+  lista.forEach(l => {
+    let valCls = '';
+    if (l.data_validade) {
+      if (l.data_validade < today) valCls = 'val-warn';
+      else if (l.data_validade <= in30) valCls = 'val-soon';
+    }
+    html += `<tr>
+      <td><span class="lote-name">${API.esc(l.lote_interno)}</span></td>
+      <td><div class="sku">${API.esc(l.sku || '—')}</div><div style="font-size:12px;color:#475569;">${API.esc(l.produto_nome || '—')}</div></td>
+      <td>${API.esc(l.lote_fornecedor || '—')}</td>
+      <td>${API.esc(l.fornecedor_nome || '—')}</td>
+      <td>${API.fmtData(l.data_entrada)}</td>
+      <td class="${valCls}">${l.data_validade ? API.fmtData(l.data_validade) : '—'}</td>
+      <td class="right">${Number(l.saldo).toLocaleString('pt-BR')} ${API.esc(l.unidade || '')}</td>
+      <td><span class="sa-badge sa-${l.status}">${l.status}</span></td>
+      <td><button onclick='abrirSt(${JSON.stringify(l.id)}, ${JSON.stringify(l.lote_interno)}, ${JSON.stringify(l.status)})' style="background:none;border:none;color:#D97706;font-weight:600;font-size:12px;cursor:pointer;">Status</button></td>
+    </tr>`;
+  });
+  html += '</tbody></table></div>';
+  area.innerHTML = html;
+}
+
+function abrirSt(id, name, statusAtual) {
+  document.getElementById('m-id').value = id;
+  document.getElementById('m-lote-name').textContent = name;
+  document.getElementById('m-st').value = statusAtual;
+  document.getElementById('m-motivo').value = '';
+  document.getElementById('modal-st').style.display = 'flex';
+}
+
+function fecharSt() { document.getElementById('modal-st').style.display = 'none'; }
+
+async function salvarSt() {
+  const id = document.getElementById('m-id').value;
+  const novoSt = document.getElementById('m-st').value;
+  const motivo = document.getElementById('m-motivo').value.trim();
+  if (motivo.length < 3) { UI.toast('Motivo obrigatorio (>= 3 chars)', 'err'); return; }
+
+  const btn = document.getElementById('btn-salvar-st');
+  btn.disabled = true; btn.textContent = '...';
+  const r = await API.rpc('jr_alterar_status_lote', { p_lote_id: id, p_novo_status: novoSt, p_motivo: motivo });
+  btn.disabled = false; btn.textContent = 'Aplicar';
+
+  if (!r.ok) { UI.toast('Erro: ' + (r.error || ''), 'err'); return; }
+  UI.toast('Status alterado', 'ok');
+  fecharSt();
+  // Recarregar
+  const rl = await API.get('jr_lotes?select=*,jr_estoque_lote!inner(quantidade),jr_produtos(sku,nome,unidade),jr_fornecedores(razao_social)&order=created_at.desc&limit=2000');
+  if (rl.ok) {
+    lotes = rl.data.map(l => ({ ...l,
+      saldo: l.jr_estoque_lote?.[0]?.quantidade ?? l.jr_estoque_lote?.quantidade ?? 0,
+      sku: l.jr_produtos?.sku, produto_nome: l.jr_produtos?.nome, unidade: l.jr_produtos?.unidade,
+      fornecedor_nome: l.jr_fornecedores?.razao_social,
+    }));
+    aplicar();
+  }
+}
+</script>
+</body>
+</html>

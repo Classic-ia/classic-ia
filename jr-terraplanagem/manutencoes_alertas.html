@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alertas de Manutencao - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.summary-grid { display:grid; grid-template-columns:repeat(3, 1fr); gap:14px; margin-bottom:18px; }
+.s-card { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px; }
+.s-card .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.s-card .v { font-size:28px; font-weight:700; margin-top:6px; font-variant-numeric:tabular-nums; }
+.s-card.atrasada .v { color:#DC2626; }
+.s-card.breve .v { color:#D97706; }
+.s-card.dia .v { color:#059669; }
+
+.card-alerta {
+  background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:16px;
+  display:grid; grid-template-columns:1fr 220px 220px 130px;
+  gap:14px; align-items:center; margin-bottom:10px;
+}
+.card-alerta.atrasada { border-left:4px solid #DC2626; background:#FEF2F2; }
+.card-alerta.vence_em_breve { border-left:4px solid #D97706; background:#FFFBEB; }
+.card-alerta.em_dia { border-left:4px solid #059669; }
+.ca-titulo { font-size:14px; font-weight:700; color:#0F172A; }
+.ca-sub { font-size:12px; color:#64748B; margin-top:3px; }
+.ca-info { font-size:12px; color:#475569; }
+.ca-info b { color:#0F172A; }
+.ca-restante { font-size:18px; font-weight:700; }
+.atrasada .ca-restante { color:#DC2626; }
+.vence_em_breve .ca-restante { color:#D97706; }
+.em_dia .ca-restante { color:#059669; }
+
+.btn-primary { background:#D97706; color:#fff; padding:8px 14px; border:none; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer; text-decoration:none; display:inline-block; }
+.filters { display:flex; gap:10px; align-items:end; margin-bottom:16px; flex-wrap:wrap; }
+.filters .fld label { font-size:11px; color:#475569; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px; }
+.filters select { padding:8px; border:1px solid #CBD5E1; border-radius:6px; min-width:200px; font-size:13px; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Alertas de Manutencao</h3>
+      <p class="text-sm text-muted">Manutencoes vencidas, vencendo em breve e em dia (calculadas em tempo real).</p>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-grid">
+        <div class="s-card atrasada"><div class="l">Atrasadas</div><div class="v" id="s-at">0</div></div>
+        <div class="s-card breve"><div class="l">Vencem em breve</div><div class="v" id="s-vb">0</div></div>
+        <div class="s-card dia"><div class="l">Em dia</div><div class="v" id="s-ed">0</div></div>
+      </div>
+
+      <div class="filters">
+        <div class="fld"><label>Maquina</label><select id="f-maq"><option value="">Todas</option></select></div>
+        <div class="fld"><label>Severidade</label><select id="f-sev">
+          <option value="">Todas</option>
+          <option value="atrasada">Atrasadas</option>
+          <option value="vence_em_breve">Vencem em breve</option>
+          <option value="em_dia">Em dia</option>
+        </select></div>
+        <button class="btn-primary" onclick="render()">Filtrar</button>
+      </div>
+
+      <div id="lista"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let alertas = [], maquinas = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'alertas_manut',
+    title: 'Alertas de Manutencao',
+    breadcrumb: 'Oficina > Alertas',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const [r, m] = await Promise.all([
+        API.rpc('jr_manutencoes_alertas', {}),
+        API.get('jr_maquinas?select=id,codigo,descricao&order=codigo'),
+      ]);
+      return { alertas: (r.ok && r.data?.alertas) ? r.data.alertas : [], maquinas: m.ok ? m.data : [] };
+    },
+    render: (d) => {
+      alertas = d.alertas; maquinas = d.maquinas;
+      document.getElementById('f-maq').innerHTML = '<option value="">Todas</option>' + maquinas.map(x => `<option value="${x.id}">${API.esc(x.codigo)} · ${API.esc(x.descricao)}</option>`).join('');
+      render();
+    }
+  });
+})();
+
+function render() {
+  const fm = document.getElementById('f-maq').value;
+  const fs = document.getElementById('f-sev').value;
+  const items = alertas.filter(a => (!fm || a.maquina_id === fm) && (!fs || a.severidade === fs));
+
+  document.getElementById('s-at').textContent = alertas.filter(a => a.severidade === 'atrasada').length;
+  document.getElementById('s-vb').textContent = alertas.filter(a => a.severidade === 'vence_em_breve').length;
+  document.getElementById('s-ed').textContent = alertas.filter(a => a.severidade === 'em_dia').length;
+
+  if (!items.length) {
+    document.getElementById('lista').innerHTML = '<div style="padding:40px;text-align:center;color:#94A3B8;background:#fff;border:1px solid #E2E8F0;border-radius:10px;">Nenhum alerta no filtro.</div>';
+    return;
+  }
+
+  document.getElementById('lista').innerHTML = items.map(a => {
+    const restante = a.horas_restantes !== null ? `${Math.round(a.horas_restantes).toLocaleString('pt-BR')}h` :
+                     a.dias_restantes !== null ? `${a.dias_restantes}d` : '—';
+    const proximo = a.proximo_horimetro ? `${Number(a.proximo_horimetro).toLocaleString('pt-BR')}h` :
+                    a.proxima_data ? new Date(a.proxima_data + 'T00:00').toLocaleDateString('pt-BR') : '—';
+    return `
+      <div class="card-alerta ${a.severidade}">
+        <div>
+          <div class="ca-titulo">${API.esc(a.maquina_codigo)} · ${API.esc(a.maquina_descricao)}</div>
+          <div class="ca-sub">${API.esc(a.plano_nome)} (${a.tipo_servico})</div>
+        </div>
+        <div class="ca-info">
+          <div>Horimetro atual: <b>${Number(a.horimetro_atual || 0).toLocaleString('pt-BR')}h</b></div>
+          <div>Ultima execucao: <b>${a.ultima_execucao_horimetro ? Number(a.ultima_execucao_horimetro).toLocaleString('pt-BR') + 'h' : '—'}</b></div>
+        </div>
+        <div class="ca-info">
+          <div>Proximo: <b>${proximo}</b></div>
+          <div class="ca-restante">${restante}</div>
+        </div>
+        <div style="text-align:right;">
+          <a class="btn-primary" href="manutencoes.html">Registrar</a>
+        </div>
+      </div>`;
+  }).join('');
+}
+</script>
+</body>
+</html>

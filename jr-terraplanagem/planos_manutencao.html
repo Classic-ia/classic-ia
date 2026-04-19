@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planos de Manutencao - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.tbl { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #E2E8F0; border-radius:10px; overflow:hidden; }
+.tbl th { background:#F8FAFC; padding:11px 13px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.05em; }
+.tbl td { padding:11px 13px; border-top:1px solid #F1F5F9; }
+.btn-primary { background:#D97706; color:#fff; padding:9px 18px; border:none; border-radius:7px; font-weight:600; font-size:13px; cursor:pointer; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:8px 14px; border-radius:6px; font-size:12px; cursor:pointer; }
+.btn-link { background:transparent; border:none; color:#D97706; font-size:12px; cursor:pointer; font-weight:600; }
+.modal-bg { position:fixed; inset:0; background:rgba(15,23,42,0.6); display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-bg.show { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:26px; min-width:520px; max-width:90vw; }
+.modal-box h3 { margin:0 0 16px 0; font-size:18px; }
+.fld-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.fld-grid .full { grid-column: span 2; }
+.fld-grid label { display:block; font-size:11px; color:#475569; font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.04em; }
+.fld-grid input, .fld-grid select, .fld-grid textarea {
+  width:100%; padding:9px 11px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; font-family:inherit;
+}
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+.tag { display:inline-block; background:#F1F5F9; padding:2px 8px; border-radius:8px; font-size:11px; margin:1px 3px 1px 0; color:#475569; }
+.section { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px; margin-top:16px; }
+.section h4 { margin:0 0 12px 0; font-size:14px; color:#475569; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Planos de Manutencao</h3>
+      <p class="text-sm text-muted">Templates por horimetro/dias e associacoes a maquinas.</p>
+    </div>
+    <div class="card-body">
+
+      <div style="display:flex;justify-content:flex-end;margin-bottom:14px;">
+        <button class="btn-primary" onclick="abrirPlano()">+ Novo plano</button>
+      </div>
+
+      <div class="section">
+        <h4>Planos cadastrados</h4>
+        <div id="lst-planos"></div>
+      </div>
+
+      <div class="section">
+        <h4>Maquinas com planos associados</h4>
+        <div id="lst-assoc"></div>
+      </div>
+
+      <div class="section">
+        <h4>Associar plano a maquina</h4>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:12px;align-items:end;">
+          <div>
+            <label style="font-size:11px;color:#475569;font-weight:600;text-transform:uppercase;">Plano</label>
+            <select id="a-plano" style="width:100%;padding:9px;border:1px solid #CBD5E1;border-radius:6px;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#475569;font-weight:600;text-transform:uppercase;">Maquina</label>
+            <select id="a-maq" style="width:100%;padding:9px;border:1px solid #CBD5E1;border-radius:6px;"></select>
+          </div>
+          <div>
+            <label style="font-size:11px;color:#475569;font-weight:600;text-transform:uppercase;">Ultima execucao (horimetro)</label>
+            <input type="number" step="0.01" id="a-h" placeholder="Opcional" style="width:100%;padding:9px;border:1px solid #CBD5E1;border-radius:6px;">
+          </div>
+          <button class="btn-primary" onclick="associar()">Associar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal plano -->
+<div class="modal-bg" id="modal-plano">
+  <div class="modal-box">
+    <h3 id="modal-title">Novo plano</h3>
+    <form onsubmit="event.preventDefault(); salvarPlano();">
+      <div class="fld-grid">
+        <div class="full"><label>Nome *</label><input type="text" id="p-nome" required></div>
+        <div><label>Tipo *</label><select id="p-tipo" required>
+          <option value="troca_oleo">Troca de oleo</option>
+          <option value="filtro_oleo">Filtro de oleo</option>
+          <option value="filtro_ar">Filtro de ar</option>
+          <option value="filtro_combustivel">Filtro combustivel</option>
+          <option value="lubrificacao">Lubrificacao</option>
+          <option value="revisao">Revisao</option>
+          <option value="undercarriage">Undercarriage</option>
+          <option value="alinhamento">Alinhamento</option>
+          <option value="outro">Outro</option>
+        </select></div>
+        <div><label>Ativo</label><select id="p-ativo"><option value="true">Sim</option><option value="false">Nao</option></select></div>
+        <div><label>Intervalo horas</label><input type="number" step="0.01" id="p-h" placeholder="Ex: 250"></div>
+        <div><label>Intervalo dias</label><input type="number" id="p-d" placeholder="Ex: 180"></div>
+        <div class="full"><label>Observacao</label><textarea id="p-obs" rows="2"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="fechar()">Cancelar</button>
+        <button type="submit" class="btn-primary">Salvar</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let planos = [], maquinas = [], associacoes = [];
+let editingId = null;
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'planos_manutencao',
+    title: 'Planos de Manutencao',
+    breadcrumb: 'Oficina > Planos',
+    perfisPermitidos: ['admin','gestor'],
+    loadData: async () => {
+      const [p, m, a] = await Promise.all([
+        API.get('jr_planos_manutencao?select=*&order=nome'),
+        API.get('jr_maquinas?select=id,codigo,descricao,horimetro_atual&order=codigo'),
+        API.get('v_jr_planos_maquina_status?select=*&order=maquina_codigo,plano_nome'),
+      ]);
+      return { planos: p.ok ? p.data : [], maquinas: m.ok ? m.data : [], assoc: a.ok ? a.data : [] };
+    },
+    render: (d) => {
+      planos = d.planos; maquinas = d.maquinas; associacoes = d.assoc;
+      document.getElementById('a-plano').innerHTML = planos.map(p => `<option value="${p.id}">${API.esc(p.nome)}</option>`).join('');
+      document.getElementById('a-maq').innerHTML = maquinas.map(m => `<option value="${m.id}">${API.esc(m.codigo)} · ${API.esc(m.descricao)}</option>`).join('');
+      renderPlanos();
+      renderAssoc();
+    }
+  });
+})();
+
+function renderPlanos() {
+  if (!planos.length) { document.getElementById('lst-planos').innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;">Nenhum plano.</div>'; return; }
+  document.getElementById('lst-planos').innerHTML = `
+    <table class="tbl">
+      <thead><tr><th>Nome</th><th>Tipo</th><th>Intervalo</th><th>Status</th><th></th></tr></thead>
+      <tbody>${planos.map(p => `
+        <tr>
+          <td><b>${API.esc(p.nome)}</b></td>
+          <td>${API.esc(p.tipo_servico)}</td>
+          <td>
+            ${p.intervalo_horas ? `<span class="tag">${p.intervalo_horas}h</span>` : ''}
+            ${p.intervalo_dias  ? `<span class="tag">${p.intervalo_dias}d</span>` : ''}
+          </td>
+          <td>${p.ativo ? '<span class="tag" style="background:#D1FAE5;color:#065F46;">Ativo</span>' : '<span class="tag" style="background:#FEE2E2;color:#991B1B;">Inativo</span>'}</td>
+          <td><button class="btn-link" onclick='editarPlano(${JSON.stringify(p)})'>Editar</button></td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function renderAssoc() {
+  if (!associacoes.length) { document.getElementById('lst-assoc').innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;">Nenhuma associacao.</div>'; return; }
+  document.getElementById('lst-assoc').innerHTML = `
+    <table class="tbl">
+      <thead><tr><th>Maquina</th><th>Plano</th><th>Horimetro atual</th><th>Proxima</th><th>Restante</th><th></th></tr></thead>
+      <tbody>${associacoes.map(a => {
+        const restante = a.horas_restantes !== null ? `${Math.round(a.horas_restantes).toLocaleString('pt-BR')}h` :
+                         a.dias_restantes !== null ? `${a.dias_restantes}d` : '—';
+        const cor = (a.horas_restantes !== null && a.horas_restantes <= 0) || (a.dias_restantes !== null && a.dias_restantes <= 0) ? '#DC2626' :
+                    (a.horas_restantes !== null && a.horas_restantes <= 50) || (a.dias_restantes !== null && a.dias_restantes <= 15) ? '#D97706' : '#475569';
+        const proxima = a.proximo_horimetro ? `${Number(a.proximo_horimetro).toLocaleString('pt-BR')}h` :
+                        a.proxima_data ? new Date(a.proxima_data + 'T00:00').toLocaleDateString('pt-BR') : '—';
+        return `<tr>
+          <td><b>${API.esc(a.maquina_codigo)}</b><br><span style="font-size:11px;color:#64748B;">${API.esc(a.maquina_descricao)}</span></td>
+          <td>${API.esc(a.plano_nome)}</td>
+          <td style="font-variant-numeric:tabular-nums;">${Number(a.horimetro_atual || 0).toLocaleString('pt-BR')}h</td>
+          <td>${proxima}</td>
+          <td style="color:${cor};font-weight:700;">${restante}</td>
+          <td><button class="btn-link" style="color:#DC2626;" onclick="removerAssoc('${a.plano_maquina_id}')">Remover</button></td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>`;
+}
+
+function abrirPlano() {
+  editingId = null;
+  document.getElementById('modal-title').textContent = 'Novo plano';
+  ['p-nome','p-h','p-d','p-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('p-tipo').value = 'troca_oleo';
+  document.getElementById('p-ativo').value = 'true';
+  document.getElementById('modal-plano').classList.add('show');
+}
+
+function editarPlano(p) {
+  editingId = p.id;
+  document.getElementById('modal-title').textContent = 'Editar plano';
+  document.getElementById('p-nome').value = p.nome;
+  document.getElementById('p-tipo').value = p.tipo_servico;
+  document.getElementById('p-ativo').value = String(p.ativo);
+  document.getElementById('p-h').value = p.intervalo_horas || '';
+  document.getElementById('p-d').value = p.intervalo_dias || '';
+  document.getElementById('p-obs').value = p.observacao || '';
+  document.getElementById('modal-plano').classList.add('show');
+}
+
+function fechar() { document.getElementById('modal-plano').classList.remove('show'); }
+
+async function salvarPlano() {
+  const h = document.getElementById('p-h').value;
+  const d = document.getElementById('p-d').value;
+  if (!h && !d) { UI.toast('Informe intervalo em horas ou dias', 'err'); return; }
+
+  const payload = {
+    nome: document.getElementById('p-nome').value.trim(),
+    tipo_servico: document.getElementById('p-tipo').value,
+    ativo: document.getElementById('p-ativo').value === 'true',
+    intervalo_horas: h ? parseFloat(h) : null,
+    intervalo_dias: d ? parseInt(d) : null,
+    observacao: document.getElementById('p-obs').value.trim() || null,
+  };
+
+  const r = editingId
+    ? await API.patch(`jr_planos_manutencao?id=eq.${editingId}`, payload)
+    : await API.post('jr_planos_manutencao', payload);
+  if (!r.ok) { UI.toast('Erro ao salvar', 'err'); return; }
+  UI.toast('Plano salvo', 'ok');
+  fechar();
+  setTimeout(() => location.reload(), 400);
+}
+
+async function associar() {
+  const r = await API.post('jr_planos_maquina', {
+    plano_id: document.getElementById('a-plano').value,
+    maquina_id: document.getElementById('a-maq').value,
+    ultima_execucao_horimetro: document.getElementById('a-h').value ? parseFloat(document.getElementById('a-h').value) : null,
+    ultima_execucao_data: document.getElementById('a-h').value ? new Date().toISOString().slice(0,10) : null,
+  });
+  if (!r.ok) { UI.toast('Erro: ja associado?', 'err'); return; }
+  UI.toast('Associado', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+
+async function removerAssoc(id) {
+  if (!confirm('Remover associacao?')) return;
+  const r = await API.del(`jr_planos_maquina?id=eq.${id}`);
+  if (!r.ok) { UI.toast('Erro', 'err'); return; }
+  UI.toast('Removido', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+</script>
+</body>
+</html>

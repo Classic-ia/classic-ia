@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tanque Proprio - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.tanque-card {
+  background:#fff; border:1px solid #E2E8F0; border-radius:12px; padding:20px; margin-bottom:14px;
+  display:grid; grid-template-columns:1fr 1fr 1fr 200px; gap:16px; align-items:center;
+}
+.tanque-card .info .nome { font-size:16px; font-weight:700; color:#0F172A; }
+.tanque-card .info .meta { font-size:12px; color:#64748B; margin-top:3px; }
+.tanque-card .nivel { display:flex; flex-direction:column; }
+.tanque-card .nivel .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.tanque-card .nivel .v { font-size:22px; font-weight:700; color:#0F172A; font-variant-numeric:tabular-nums; }
+.bar-wrap { background:#F1F5F9; border-radius:8px; height:14px; overflow:hidden; margin-top:6px; }
+.bar { height:100%; background:linear-gradient(90deg,#D97706,#F59E0B); border-radius:8px; }
+.bar.low { background:linear-gradient(90deg,#DC2626,#EF4444); }
+.actions { display:flex; gap:8px; flex-direction:column; }
+
+.btn-primary { background:#D97706; color:#fff; padding:8px 14px; border:none; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:8px 14px; border-radius:6px; font-weight:600; font-size:12px; cursor:pointer; }
+.btn-add-tanque { background:#fff; color:#D97706; border:1px dashed #D97706; padding:14px 20px; border-radius:8px; font-weight:600; cursor:pointer; }
+
+.section { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px; margin-top:18px; }
+.section h4 { margin:0 0 12px 0; font-size:14px; color:#475569; text-transform:uppercase; font-weight:700; }
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { background:#F8FAFC; padding:10px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; }
+.tbl td { padding:10px; border-top:1px solid #F1F5F9; }
+.pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+.pill-entrada { background:#D1FAE5; color:#065F46; }
+.pill-saida   { background:#FEE2E2; color:#991B1B; }
+.pill-ajuste  { background:#FEF3C7; color:#92400E; }
+
+.modal-bg { position:fixed; inset:0; background:rgba(15,23,42,0.6); display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-bg.show { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:26px; min-width:480px; max-width:90vw; }
+.modal-box h3 { margin:0 0 14px 0; font-size:17px; }
+.fld-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+.fld-grid .full { grid-column: span 2; }
+.fld-grid label { display:block; font-size:11px; color:#475569; font-weight:600; margin-bottom:4px; text-transform:uppercase; }
+.fld-grid input, .fld-grid select, .fld-grid textarea {
+  width:100%; padding:9px 11px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; font-family:inherit;
+}
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:14px; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Tanque Proprio</h3>
+      <p class="text-sm text-muted">Tanques de combustivel da JR e movimentacoes (entrada/saida/ajuste).</p>
+    </div>
+    <div class="card-body">
+
+      <div id="lst-tanques"></div>
+      <button class="btn-add-tanque" onclick="abrirTanque()" style="margin-top:8px;">+ Novo tanque</button>
+
+      <div class="section">
+        <h4>Ultimas movimentacoes</h4>
+        <div id="lst-mov"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal movimentacao -->
+<div class="modal-bg" id="modal-mov">
+  <div class="modal-box">
+    <h3 id="mov-title">Entrada no tanque</h3>
+    <input type="hidden" id="mov-tanque">
+    <input type="hidden" id="mov-tipo">
+    <div class="fld-grid">
+      <div><label>Litros *</label><input type="number" step="0.001" id="mov-litros" required></div>
+      <div><label>Valor unitario (R$/L)</label><input type="number" step="0.0001" id="mov-vunit"></div>
+      <div><label>Data</label><input type="date" id="mov-data"></div>
+      <div><label>NF</label><input type="text" id="mov-nf"></div>
+      <div class="full"><label>Fornecedor (opcional)</label><select id="mov-forn"><option value="">—</option></select></div>
+      <div class="full"><label>Observacao</label><textarea id="mov-obs" rows="2"></textarea></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="fechar()">Cancelar</button>
+      <button class="btn-primary" onclick="salvarMov()">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal novo tanque -->
+<div class="modal-bg" id="modal-tan">
+  <div class="modal-box">
+    <h3>Novo tanque</h3>
+    <div class="fld-grid">
+      <div class="full"><label>Nome *</label><input type="text" id="t-nome" required></div>
+      <div><label>Combustivel *</label><select id="t-comb"><option value="diesel">Diesel</option><option value="s10">S10</option><option value="arla">Arla</option><option value="gasolina">Gasolina</option><option value="etanol">Etanol</option></select></div>
+      <div><label>Capacidade (L) *</label><input type="number" step="0.01" id="t-cap" required></div>
+      <div class="full"><label>Localizacao</label><input type="text" id="t-loc"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="document.getElementById('modal-tan').classList.remove('show')">Cancelar</button>
+      <button class="btn-primary" onclick="criarTanque()">Criar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let tanques = [], movs = [], fornecedores = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'tanque',
+    title: 'Tanque Proprio',
+    breadcrumb: 'Abastecimento > Tanque',
+    perfisPermitidos: ['admin','gestor','operador'],
+    loadData: async () => {
+      const [t, m, f] = await Promise.all([
+        API.get('jr_tanque?select=*&order=nome'),
+        API.get('jr_tanque_movimentacao?select=*,jr_tanque(nome),jr_fornecedores(razao_social)&order=data.desc,created_at.desc&limit=200'),
+        API.get('jr_fornecedores?select=id,razao_social&tipo=eq.combustivel&ativo=eq.true&order=razao_social'),
+      ]);
+      return { tanques: t.ok ? t.data : [], movs: m.ok ? m.data : [], fornecedores: f.ok ? f.data : [] };
+    },
+    render: (d) => {
+      tanques = d.tanques; movs = d.movs; fornecedores = d.fornecedores;
+      document.getElementById('mov-forn').innerHTML = '<option value="">—</option>' + fornecedores.map(f => `<option value="${f.id}">${API.esc(f.razao_social)}</option>`).join('');
+      renderTanques();
+      renderMovs();
+    }
+  });
+})();
+
+function renderTanques() {
+  if (!tanques.length) { document.getElementById('lst-tanques').innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;">Nenhum tanque.</div>'; return; }
+  document.getElementById('lst-tanques').innerHTML = tanques.map(t => {
+    const pct = (Number(t.saldo_atual_litros) / Number(t.capacidade_litros)) * 100;
+    const low = pct < 20;
+    return `
+      <div class="tanque-card">
+        <div class="info">
+          <div class="nome">${API.esc(t.nome)}</div>
+          <div class="meta">${API.esc(t.combustivel_tipo).toUpperCase()} · ${API.esc(t.localizacao || '—')}</div>
+        </div>
+        <div class="nivel">
+          <div class="l">Saldo atual</div>
+          <div class="v" style="color:${low ? '#DC2626' : '#0F172A'};">${Number(t.saldo_atual_litros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}L</div>
+          <div class="bar-wrap"><div class="bar ${low ? 'low' : ''}" style="width:${Math.min(100, pct)}%;"></div></div>
+          <div style="font-size:11px;color:#64748B;margin-top:4px;">${pct.toFixed(1)}% de ${Number(t.capacidade_litros).toLocaleString('pt-BR')}L</div>
+        </div>
+        <div class="nivel">
+          <div class="l">Capacidade</div>
+          <div class="v">${Number(t.capacidade_litros).toLocaleString('pt-BR')}L</div>
+        </div>
+        <div class="actions">
+          <button class="btn-primary" onclick="abrirMov('${t.id}', 'entrada', '${API.esc(t.nome)}')">+ Entrada</button>
+          <button class="btn-secondary" onclick="abrirMov('${t.id}', 'ajuste', '${API.esc(t.nome)}')">Ajuste</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderMovs() {
+  if (!movs.length) { document.getElementById('lst-mov').innerHTML = '<div style="padding:20px;text-align:center;color:#94A3B8;">Nenhuma movimentacao.</div>'; return; }
+  document.getElementById('lst-mov').innerHTML = `
+    <table class="tbl">
+      <thead><tr><th>Data</th><th>Tanque</th><th>Tipo</th><th style="text-align:right;">Litros</th><th style="text-align:right;">Vlr unit.</th><th style="text-align:right;">Total</th><th>Fornecedor</th><th>NF</th></tr></thead>
+      <tbody>${movs.map(m => `
+        <tr>
+          <td>${m.data ? new Date(m.data + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
+          <td>${API.esc(m.jr_tanque?.nome || '')}</td>
+          <td><span class="pill pill-${m.tipo}">${m.tipo}</span></td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${Number(m.litros).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;">${m.valor_unitario ? 'R$ ' + Number(m.valor_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 4 }) : '—'}</td>
+          <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">${m.valor_total ? 'R$ ' + Number(m.valor_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '—'}</td>
+          <td>${API.esc(m.jr_fornecedores?.razao_social || '—')}</td>
+          <td>${API.esc(m.nf_numero || '—')}</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function abrirMov(tid, tipo, nome) {
+  document.getElementById('mov-tanque').value = tid;
+  document.getElementById('mov-tipo').value = tipo;
+  document.getElementById('mov-title').textContent = `${tipo === 'entrada' ? 'Entrada' : tipo === 'saida' ? 'Saida' : 'Ajuste'} no tanque - ${nome}`;
+  ['mov-litros','mov-vunit','mov-nf','mov-obs'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('mov-data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('mov-forn').value = '';
+  document.getElementById('modal-mov').classList.add('show');
+}
+
+function fechar() { document.getElementById('modal-mov').classList.remove('show'); }
+
+async function salvarMov() {
+  const r = await API.rpc('jr_tanque_movimentar', {
+    p_tanque_id: document.getElementById('mov-tanque').value,
+    p_tipo: document.getElementById('mov-tipo').value,
+    p_litros: parseFloat(document.getElementById('mov-litros').value),
+    p_valor_unitario: parseFloat(document.getElementById('mov-vunit').value) || null,
+    p_data: document.getElementById('mov-data').value || null,
+    p_fornecedor_id: document.getElementById('mov-forn').value || null,
+    p_nf_numero: document.getElementById('mov-nf').value.trim() || null,
+    p_observacao: document.getElementById('mov-obs').value.trim() || null,
+  });
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  UI.toast('Movimentacao registrada', 'ok');
+  fechar();
+  setTimeout(() => location.reload(), 400);
+}
+
+function abrirTanque() {
+  ['t-nome','t-cap','t-loc'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('t-comb').value = 'diesel';
+  document.getElementById('modal-tan').classList.add('show');
+}
+
+async function criarTanque() {
+  const r = await API.post('jr_tanque', {
+    nome: document.getElementById('t-nome').value.trim(),
+    combustivel_tipo: document.getElementById('t-comb').value,
+    capacidade_litros: parseFloat(document.getElementById('t-cap').value),
+    localizacao: document.getElementById('t-loc').value.trim() || null,
+  });
+  if (!r.ok) { UI.toast('Erro ao criar tanque', 'err'); return; }
+  UI.toast('Tanque criado', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+</script>
+</body>
+</html>

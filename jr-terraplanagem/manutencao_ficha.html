@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha de Manutencao - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.section { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px; margin-bottom:14px; }
+.section h4 { margin:0 0 12px 0; font-size:13px; color:#475569; text-transform:uppercase; letter-spacing:0.05em; font-weight:700; }
+
+.head-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; }
+.head-grid .item .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.head-grid .item .v { font-size:15px; color:#0F172A; font-weight:600; margin-top:2px; }
+
+.pill { display:inline-block; padding:3px 9px; border-radius:11px; font-size:11px; font-weight:700; }
+.pill-aberta       { background:#DBEAFE; color:#1E40AF; }
+.pill-em_andamento { background:#FEF3C7; color:#92400E; }
+.pill-concluida    { background:#D1FAE5; color:#065F46; }
+.pill-cancelada    { background:#FEE2E2; color:#991B1B; }
+
+.tbl { width:100%; border-collapse:collapse; font-size:13px; }
+.tbl th { background:#F8FAFC; padding:10px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; }
+.tbl td { padding:10px; border-top:1px solid #F1F5F9; }
+
+.btn-primary { background:#D97706; color:#fff; padding:9px 18px; border:none; border-radius:7px; font-weight:600; font-size:13px; cursor:pointer; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:9px 16px; border-radius:7px; font-weight:600; cursor:pointer; }
+.btn-danger { background:#fff; color:#DC2626; border:1px solid #FCA5A5; padding:9px 16px; border-radius:7px; font-weight:600; cursor:pointer; }
+.btn-link { background:transparent; border:none; color:#DC2626; cursor:pointer; font-size:12px; font-weight:600; }
+
+.add-row { display:grid; grid-template-columns:1fr 100px 110px 100px auto; gap:10px; align-items:end; margin-top:10px; padding:14px; background:#FFFBEB; border:1px dashed #D97706; border-radius:8px; }
+.add-row label { display:block; font-size:11px; color:#475569; font-weight:600; margin-bottom:4px; text-transform:uppercase; }
+.add-row input, .add-row select { width:100%; padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; }
+
+.actions-bar { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+
+.modal-bg { position:fixed; inset:0; background:rgba(15,23,42,0.6); display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-bg.show { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:26px; min-width:440px; max-width:92vw; }
+.modal-box h3 { margin:0 0 14px 0; font-size:17px; }
+.modal-box label { display:block; font-size:11px; color:#475569; font-weight:600; margin:10px 0 4px; text-transform:uppercase; }
+.modal-box input, .modal-box textarea { width:100%; padding:9px 11px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div id="page-body">
+    <div style="text-align:center;padding:60px;color:#94A3B8;">Carregando...</div>
+  </div>
+
+</div>
+
+<!-- Modal finalizar -->
+<div class="modal-bg" id="modal-fin">
+  <div class="modal-box">
+    <h3>Finalizar manutencao</h3>
+    <label>Horimetro de conclusao *</label>
+    <input type="number" step="0.01" id="fin-h">
+    <label>Data execucao</label>
+    <input type="date" id="fin-d">
+    <div class="actions-bar">
+      <button class="btn-secondary" onclick="document.getElementById('modal-fin').classList.remove('show')">Cancelar</button>
+      <button class="btn-primary" onclick="finalizarOk()">Finalizar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal cancelar -->
+<div class="modal-bg" id="modal-can">
+  <div class="modal-box">
+    <h3>Cancelar manutencao</h3>
+    <label>Motivo *</label>
+    <textarea id="can-m" rows="3" placeholder="Minimo 3 caracteres"></textarea>
+    <div class="actions-bar">
+      <button class="btn-secondary" onclick="document.getElementById('modal-can').classList.remove('show')">Voltar</button>
+      <button class="btn-danger" onclick="cancelarOk()">Cancelar manutencao</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const id = new URLSearchParams(location.search).get('id');
+let manut = null, itens = [], maquina = null, produtos = [];
+
+(async () => {
+  if (!id) { document.getElementById('page-body').innerHTML = '<div style="text-align:center;padding:40px;color:#DC2626;">ID nao informado</div>'; return; }
+  await PageBootstrap.init({
+    page: 'manutencoes',
+    title: 'Ficha de Manutencao',
+    breadcrumb: 'Oficina > Ficha',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const m = await API.get(`jr_manutencoes?id=eq.${id}&select=*,jr_maquinas(id,codigo,descricao,horimetro_atual)`);
+      const i = await API.get(`jr_manutencao_itens?manutencao_id=eq.${id}&select=*,jr_produtos(sku,nome,unidade)&order=created_at`);
+      const p = await API.get('jr_produtos?select=id,sku,nome,unidade,custo_medio&ativo=eq.true&order=sku');
+      return { manut: m.ok ? m.data[0] : null, itens: i.ok ? i.data : [], produtos: p.ok ? p.data : [] };
+    },
+    render: (d) => {
+      manut = d.manut; itens = d.itens; produtos = d.produtos;
+      maquina = manut?.jr_maquinas;
+      render();
+    }
+  });
+})();
+
+function render() {
+  if (!manut) { document.getElementById('page-body').innerHTML = '<div style="text-align:center;padding:40px;">Manutencao nao encontrada</div>'; return; }
+
+  const editavel = manut.status === 'aberta' || manut.status === 'em_andamento';
+
+  document.getElementById('page-body').innerHTML = `
+    <div class="section">
+      <h4>Manutencao #${manut.id.slice(0,8)} <span class="pill pill-${manut.status}" style="margin-left:8px;">${manut.status.replace('_',' ')}</span></h4>
+      <div class="head-grid">
+        <div class="item"><div class="l">Maquina</div><div class="v">${API.esc(maquina?.codigo || '')} · ${API.esc(maquina?.descricao || '')}</div></div>
+        <div class="item"><div class="l">Tipo</div><div class="v">${manut.tipo}</div></div>
+        <div class="item"><div class="l">Servico</div><div class="v">${API.esc(manut.servico)}</div></div>
+        <div class="item"><div class="l">Horimetro abertura</div><div class="v">${Number(manut.horimetro_execucao || 0).toLocaleString('pt-BR')}h</div></div>
+        <div class="item"><div class="l">Data abertura</div><div class="v">${manut.data_abertura ? new Date(manut.data_abertura + 'T00:00').toLocaleDateString('pt-BR') : '—'}</div></div>
+        <div class="item"><div class="l">Oficina</div><div class="v">${API.esc(manut.oficina || '—')}</div></div>
+        <div class="item"><div class="l">Executor</div><div class="v">${API.esc(manut.executado_por || '—')}</div></div>
+        <div class="item"><div class="l">Custo total</div><div class="v" style="color:#D97706;">R$ ${Number(manut.custo_total_calc || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div></div>
+        ${manut.proximo_horimetro ? `<div class="item"><div class="l">Proximo vencimento</div><div class="v" style="color:#059669;">${Number(manut.proximo_horimetro).toLocaleString('pt-BR')}h</div></div>` : ''}
+        ${manut.proxima_data ? `<div class="item"><div class="l">Proxima data</div><div class="v" style="color:#059669;">${new Date(manut.proxima_data + 'T00:00').toLocaleDateString('pt-BR')}</div></div>` : ''}
+      </div>
+      ${manut.observacao ? `<div style="margin-top:14px;padding:12px;background:#F8FAFC;border-radius:6px;font-size:13px;color:#475569;">${API.esc(manut.observacao)}</div>` : ''}
+      ${manut.cancelada_motivo ? `<div style="margin-top:14px;padding:12px;background:#FEE2E2;border-radius:6px;font-size:13px;color:#991B1B;"><b>Cancelamento:</b> ${API.esc(manut.cancelada_motivo)}</div>` : ''}
+    </div>
+
+    <div class="section">
+      <h4>Itens consumidos do estoque</h4>
+      ${itens.length ? `
+        <table class="tbl">
+          <thead><tr>
+            <th>SKU</th><th>Produto</th><th>Modalidade</th><th style="text-align:right;">Qtd</th><th style="text-align:right;">Custo unit</th><th style="text-align:right;">Custo total</th><th></th>
+          </tr></thead>
+          <tbody>${itens.map(i => `
+            <tr>
+              <td><b>${API.esc(i.jr_produtos?.sku || '')}</b></td>
+              <td>${API.esc(i.jr_produtos?.nome || '')}</td>
+              <td>${i.modalidade === 'novo' ? `Novo (lote)` : `Usado (${i.condicao})`}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;">${Number(i.quantidade).toLocaleString('pt-BR')} ${API.esc(i.jr_produtos?.unidade || '')}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;">R$ ${Number(i.custo_unitario).toLocaleString('pt-BR', { minimumFractionDigits: 4 })}</td>
+              <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">R$ ${Number(i.custo_total).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+              <td>${editavel ? `<button class="btn-link" onclick="removerItem('${i.id}')">remover</button>` : ''}</td>
+            </tr>`).join('')}</tbody>
+        </table>` : '<div style="padding:20px;text-align:center;color:#94A3B8;">Nenhum item.</div>'}
+
+      ${editavel ? `
+        <div class="add-row">
+          <div>
+            <label>Produto *</label>
+            <select id="i-prod">
+              <option value="">— selecionar —</option>
+              ${produtos.map(p => `<option value="${p.id}">${API.esc(p.sku)} · ${API.esc(p.nome)}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label>Modalidade *</label>
+            <select id="i-mod" onchange="trocarMod()">
+              <option value="novo">Novo (FEFO)</option>
+              <option value="usado">Usado</option>
+            </select>
+          </div>
+          <div id="cond-wrap" style="display:none;">
+            <label>Condicao</label>
+            <select id="i-cond"><option value="A">A</option><option value="B">B</option><option value="C">C</option></select>
+          </div>
+          <div>
+            <label>Quantidade *</label>
+            <input type="number" step="0.001" id="i-qt" placeholder="0">
+          </div>
+          <button class="btn-primary" onclick="addItem()">+ Adicionar</button>
+        </div>` : ''}
+    </div>
+
+    ${editavel ? `
+      <div class="actions-bar">
+        <button class="btn-danger" onclick="document.getElementById('modal-can').classList.add('show')">Cancelar manutencao</button>
+        <button class="btn-primary" onclick="abrirFin()">Finalizar manutencao</button>
+      </div>` : ''}
+  `;
+}
+
+function trocarMod() {
+  const m = document.getElementById('i-mod').value;
+  document.getElementById('cond-wrap').style.display = m === 'usado' ? 'block' : 'none';
+}
+
+async function addItem() {
+  const prod = document.getElementById('i-prod').value;
+  const mod = document.getElementById('i-mod').value;
+  const qt = parseFloat(document.getElementById('i-qt').value);
+  if (!prod || !qt || qt <= 0) { UI.toast('Selecione produto e quantidade', 'err'); return; }
+
+  const params = {
+    p_manutencao_id: id,
+    p_produto_id: prod,
+    p_quantidade: qt,
+    p_modalidade: mod,
+  };
+  if (mod === 'usado') params.p_condicao = document.getElementById('i-cond').value;
+
+  const r = await API.rpc('jr_manutencao_adicionar_item', params);
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  UI.toast('Item adicionado', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+
+async function removerItem(itemId) {
+  if (!confirm('Remover item? Movimentacao compensatoria sera criada.')) return;
+  const r = await API.rpc('jr_manutencao_remover_item', { p_item_id: itemId });
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  UI.toast('Removido', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+
+function abrirFin() {
+  document.getElementById('fin-h').value = manut.horimetro_execucao || '';
+  document.getElementById('fin-d').value = new Date().toISOString().slice(0,10);
+  document.getElementById('modal-fin').classList.add('show');
+}
+
+async function finalizarOk() {
+  const h = parseFloat(document.getElementById('fin-h').value);
+  if (!h) { UI.toast('Horimetro obrigatorio', 'err'); return; }
+  const r = await API.rpc('jr_manutencao_finalizar', {
+    p_manutencao_id: id,
+    p_horimetro_final: h,
+    p_data_execucao: document.getElementById('fin-d').value || null,
+  });
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  let msg = 'Manutencao finalizada';
+  if (r.data.proximo_horimetro) msg += ` · proxima em ${Number(r.data.proximo_horimetro).toLocaleString('pt-BR')}h`;
+  UI.toast(msg, 'ok');
+  setTimeout(() => location.reload(), 600);
+}
+
+async function cancelarOk() {
+  const m = document.getElementById('can-m').value.trim();
+  if (m.length < 3) { UI.toast('Motivo minimo 3 caracteres', 'err'); return; }
+  const r = await API.rpc('jr_manutencao_cancelar', { p_manutencao_id: id, p_motivo: m });
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  UI.toast('Cancelada', 'ok');
+  setTimeout(() => location.reload(), 400);
+}
+</script>
+</body>
+</html>

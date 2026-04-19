@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Abastecimentos - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.summary-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:18px; }
+.s-card { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:18px; }
+.s-card .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.s-card .v { font-size:24px; font-weight:700; margin-top:6px; color:#0F172A; font-variant-numeric:tabular-nums; }
+.s-card .v.lit { color:#D97706; }
+.s-card .v.real { color:#059669; }
+.s-card .v.cons { color:#2563EB; }
+
+.filters { display:flex; gap:10px; align-items:end; margin-bottom:14px; flex-wrap:wrap; }
+.filters .fld label { font-size:11px; color:#475569; font-weight:600; text-transform:uppercase; display:block; margin-bottom:4px; }
+.filters select, .filters input { padding:8px; border:1px solid #CBD5E1; border-radius:6px; min-width:160px; font-size:13px; }
+
+.tbl { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #E2E8F0; border-radius:10px; overflow:hidden; }
+.tbl th { background:#F8FAFC; padding:12px 10px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; }
+.tbl td { padding:12px 10px; border-top:1px solid #F1F5F9; }
+.tbl tr:hover { background:#FAFBFC; }
+.right { text-align:right; font-variant-numeric:tabular-nums; }
+.pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; }
+.pill-tp { background:#FEF3C7; color:#92400E; }
+.pill-po { background:#DBEAFE; color:#1E3A8A; }
+.cons-pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; font-variant-numeric:tabular-nums; }
+.cons-normal { background:#D1FAE5; color:#065F46; }
+.cons-alto   { background:#FEE2E2; color:#991B1B; }
+.cons-baixo  { background:#FEF3C7; color:#92400E; }
+
+.btn-primary { background:#D97706; color:#fff; padding:9px 16px; border:none; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:9px 16px; border-radius:6px; font-weight:600; font-size:13px; cursor:pointer; }
+
+.modal-bg { position:fixed; inset:0; background:rgba(15,23,42,0.6); display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-bg.show { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:26px; min-width:560px; max-width:92vw; max-height:90vh; overflow:auto; }
+.modal-box h3 { margin:0 0 14px 0; font-size:17px; }
+.fld-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:10px; }
+.fld label { display:block; font-size:11px; color:#475569; font-weight:600; text-transform:uppercase; margin-bottom:4px; }
+.fld input, .fld select, .fld textarea { width:100%; padding:9px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; font-family:inherit; }
+.modal-actions { display:flex; justify-content:flex-end; gap:10px; margin-top:16px; }
+.empty { padding:40px; text-align:center; color:#94A3B8; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Abastecimentos</h3>
+      <p class="text-sm text-muted">Registro de combustivel das maquinas (tanque proprio + postos externos) com calculo de consumo L/h.</p>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-grid">
+        <div class="s-card"><div class="l">Abastecimentos no periodo</div><div class="v" id="s-qtd">0</div></div>
+        <div class="s-card"><div class="l">Total litros</div><div class="v lit" id="s-lit">0,00 L</div></div>
+        <div class="s-card"><div class="l">Total R$</div><div class="v real" id="s-real">R$ 0,00</div></div>
+        <div class="s-card"><div class="l">Consumo medio L/h</div><div class="v cons" id="s-cons">—</div></div>
+      </div>
+
+      <div class="filters">
+        <div class="fld"><label>Maquina</label><select id="f-maq"><option value="">Todas</option></select></div>
+        <div class="fld"><label>Origem</label><select id="f-or">
+          <option value="">Todas</option>
+          <option value="tanque_proprio">Tanque Proprio</option>
+          <option value="posto">Posto Externo</option>
+        </select></div>
+        <div class="fld"><label>Data de</label><input type="date" id="f-de"></div>
+        <div class="fld"><label>Data ate</label><input type="date" id="f-ate"></div>
+        <button class="btn-secondary" onclick="aplicarFiltros()">Filtrar</button>
+        <button class="btn-primary" onclick="abrirNovo()">+ Novo Abastecimento</button>
+      </div>
+
+      <div id="lista"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Abastecimento -->
+<div class="modal-bg" id="m-novo">
+  <div class="modal-box">
+    <h3>Novo Abastecimento</h3>
+    <div class="fld-grid">
+      <div class="fld"><label>Maquina *</label>
+        <select id="n-maq" onchange="onMaqChange()"><option value="">Selecione...</option></select>
+      </div>
+      <div class="fld"><label>Data *</label><input type="date" id="n-data"></div>
+      <div class="fld"><label>Origem *</label>
+        <select id="n-or" onchange="onOrigemChange()">
+          <option value="tanque_proprio">Tanque Proprio</option>
+          <option value="posto">Posto Externo</option>
+        </select>
+      </div>
+      <div class="fld" id="fl-tq"><label>Tanque *</label>
+        <select id="n-tq"><option value="">Selecione...</option></select>
+      </div>
+      <div class="fld" id="fl-posto" style="display:none"><label>Nome do Posto *</label>
+        <input type="text" id="n-posto" placeholder="Ex: Posto BR Marechal">
+      </div>
+      <div class="fld" id="fl-forn" style="display:none"><label>Fornecedor</label>
+        <select id="n-forn"><option value="">—</option></select>
+      </div>
+      <div class="fld"><label>Litros *</label>
+        <input type="number" id="n-lit" step="0.01" min="0.01" placeholder="0,00">
+      </div>
+      <div class="fld"><label>Valor Total (R$) *</label>
+        <input type="number" id="n-val" step="0.01" min="0" placeholder="0,00">
+      </div>
+      <div class="fld"><label>Horimetro Leitura *</label>
+        <input type="number" id="n-hor" step="0.1" min="0" placeholder="0,0">
+        <small id="n-hor-hint" style="color:#64748B; font-size:11px;"></small>
+      </div>
+      <div class="fld"><label>OS Vinculada</label>
+        <select id="n-os"><option value="">—</option></select>
+      </div>
+      <div class="fld"><label>Operador</label>
+        <input type="text" id="n-op" placeholder="Nome do operador">
+      </div>
+      <div class="fld"><label>NF / Cupom</label>
+        <input type="text" id="n-nf" placeholder="Numero da nota">
+      </div>
+    </div>
+    <div class="fld"><label>Observacao</label>
+      <textarea id="n-obs" rows="2" placeholder="Notas adicionais..."></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="document.getElementById('m-novo').classList.remove('show')">Cancelar</button>
+      <button class="btn-primary" onclick="salvar()">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let abastecimentos = [], maquinas = [], tanques = [], fornecedores = [], oss = [];
+let filtros = { maq: '', origem: '', de: '', ate: '' };
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'abastecimentos',
+    title: 'Abastecimentos',
+    breadcrumb: 'Operacao > Abastecimentos',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const hoje = new Date();
+      const ini = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0,10);
+      const fim = hoje.toISOString().slice(0,10);
+      filtros.de = ini; filtros.ate = fim;
+      document.getElementById('f-de').value = ini;
+      document.getElementById('f-ate').value = fim;
+      document.getElementById('n-data').value = fim;
+
+      const [a, m, t, f, o] = await Promise.all([
+        API.get(`v_jr_abastecimentos_consumo?select=*&data=gte.${ini}&data=lte.${fim}&order=data.desc,created_at.desc`),
+        API.get('jr_maquinas?select=id,codigo,descricao,horimetro_atual&order=codigo'),
+        API.get('jr_tanque?select=id,combustivel_tipo,saldo_atual_litros&order=combustivel_tipo'),
+        API.get('jr_fornecedores?select=id,razao_social&tipo=eq.combustivel&order=razao_social'),
+        API.get('jr_ordens_servico?select=id,numero_os,obra_local&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=200'),
+      ]);
+      return {
+        abastecimentos: a.ok ? a.data : [],
+        maquinas: m.ok ? m.data : [],
+        tanques: t.ok ? t.data : [],
+        fornecedores: f.ok ? f.data : [],
+        oss: o.ok ? o.data : [],
+      };
+    },
+    render: (d) => {
+      abastecimentos = d.abastecimentos;
+      maquinas = d.maquinas;
+      tanques = d.tanques;
+      fornecedores = d.fornecedores;
+      oss = d.oss;
+
+      const optsMaq = '<option value="">Todas</option>' + maquinas.map(x => `<option value="${x.id}">${API.esc(x.codigo)} · ${API.esc(x.descricao)}</option>`).join('');
+      document.getElementById('f-maq').innerHTML = optsMaq;
+      document.getElementById('n-maq').innerHTML = '<option value="">Selecione...</option>' + maquinas.map(x => `<option value="${x.id}" data-h="${x.horimetro_atual || 0}">${API.esc(x.codigo)} · ${API.esc(x.descricao)}</option>`).join('');
+      document.getElementById('n-tq').innerHTML = '<option value="">Selecione...</option>' + tanques.map(x => `<option value="${x.id}">${API.esc(x.combustivel_tipo)} (saldo ${Number(x.saldo_atual_litros).toLocaleString('pt-BR')}L)</option>`).join('');
+      document.getElementById('n-forn').innerHTML = '<option value="">—</option>' + fornecedores.map(x => `<option value="${x.id}">${API.esc(x.razao_social)}</option>`).join('');
+      document.getElementById('n-os').innerHTML = '<option value="">—</option>' + oss.map(x => `<option value="${x.id}">${API.esc(x.numero_os)} · ${API.esc(x.obra_local || '')}</option>`).join('');
+
+      renderLista();
+    }
+  });
+})();
+
+async function aplicarFiltros() {
+  filtros.maq = document.getElementById('f-maq').value;
+  filtros.origem = document.getElementById('f-or').value;
+  filtros.de = document.getElementById('f-de').value;
+  filtros.ate = document.getElementById('f-ate').value;
+
+  let q = `v_jr_abastecimentos_consumo?select=*&data=gte.${filtros.de}&data=lte.${filtros.ate}`;
+  if (filtros.maq) q += `&maquina_id=eq.${filtros.maq}`;
+  if (filtros.origem) q += `&origem=eq.${filtros.origem}`;
+  q += '&order=data.desc,created_at.desc';
+
+  const r = await API.get(q);
+  if (r.ok) { abastecimentos = r.data; renderLista(); }
+  else UI.toast('Erro ao filtrar: ' + (r.error || 'desconhecido'), 'err');
+}
+
+function renderLista() {
+  const totLit = abastecimentos.reduce((s,a) => s + Number(a.litros || 0), 0);
+  const totReal = abastecimentos.reduce((s,a) => s + Number(a.valor_total || 0), 0);
+  const cons = abastecimentos.filter(a => a.consumo_l_h !== null && a.consumo_l_h > 0);
+  const consMed = cons.length ? cons.reduce((s,a) => s + Number(a.consumo_l_h), 0) / cons.length : null;
+
+  document.getElementById('s-qtd').textContent = abastecimentos.length;
+  document.getElementById('s-lit').textContent = totLit.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2}) + ' L';
+  document.getElementById('s-real').textContent = 'R$ ' + totReal.toLocaleString('pt-BR', {minimumFractionDigits:2, maximumFractionDigits:2});
+  document.getElementById('s-cons').textContent = consMed !== null ? consMed.toFixed(2) + ' L/h' : '—';
+
+  if (!abastecimentos.length) {
+    document.getElementById('lista').innerHTML = '<div class="empty" style="background:#fff;border:1px solid #E2E8F0;border-radius:10px;">Nenhum abastecimento no periodo.</div>';
+    return;
+  }
+
+  const rows = abastecimentos.map(a => {
+    const dt = new Date(a.data + 'T00:00').toLocaleDateString('pt-BR');
+    const origemPill = a.origem === 'tanque_proprio'
+      ? '<span class="pill pill-tp">Tanque</span>'
+      : '<span class="pill pill-po">Posto</span>';
+    const fonte = a.origem === 'tanque_proprio' ? (a.tanque_combustivel || '—') : (a.posto_nome || '—');
+    let consHtml = '—';
+    if (a.consumo_l_h !== null && a.consumo_l_h > 0) {
+      const cls = a.classificacao_consumo === 'alto' ? 'cons-alto'
+                : a.classificacao_consumo === 'baixo' ? 'cons-baixo'
+                : 'cons-normal';
+      consHtml = `<span class="cons-pill ${cls}">${Number(a.consumo_l_h).toFixed(2)} L/h</span>`;
+    }
+    return `<tr>
+      <td>${dt}</td>
+      <td><b>${API.esc(a.maquina_codigo || '')}</b><br><span style="font-size:11px;color:#64748B;">${API.esc(a.maquina_descricao || '')}</span></td>
+      <td>${origemPill}<br><span style="font-size:11px;color:#64748B;">${API.esc(fonte)}</span></td>
+      <td class="right">${Number(a.litros).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})} L</td>
+      <td class="right">R$ ${Number(a.valor_total).toLocaleString('pt-BR',{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+      <td class="right">${Number(a.horimetro_leitura).toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}h</td>
+      <td>${consHtml}</td>
+      <td>${a.numero_os ? API.esc(a.numero_os) : '<span style="color:#CBD5E1">—</span>'}</td>
+      <td>${API.esc(a.operador_nome || '—')}</td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('lista').innerHTML = `
+    <table class="tbl">
+      <thead><tr>
+        <th>Data</th><th>Maquina</th><th>Origem</th>
+        <th class="right">Litros</th><th class="right">Valor</th><th class="right">Horimetro</th>
+        <th>Consumo</th><th>OS</th><th>Operador</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function abrirNovo() {
+  document.getElementById('n-maq').value = '';
+  document.getElementById('n-or').value = 'tanque_proprio';
+  document.getElementById('n-tq').value = '';
+  document.getElementById('n-posto').value = '';
+  document.getElementById('n-forn').value = '';
+  document.getElementById('n-lit').value = '';
+  document.getElementById('n-val').value = '';
+  document.getElementById('n-hor').value = '';
+  document.getElementById('n-os').value = '';
+  document.getElementById('n-op').value = '';
+  document.getElementById('n-nf').value = '';
+  document.getElementById('n-obs').value = '';
+  document.getElementById('n-hor-hint').textContent = '';
+  onOrigemChange();
+  document.getElementById('m-novo').classList.add('show');
+}
+
+function onOrigemChange() {
+  const o = document.getElementById('n-or').value;
+  document.getElementById('fl-tq').style.display = (o === 'tanque_proprio') ? '' : 'none';
+  document.getElementById('fl-posto').style.display = (o === 'posto') ? '' : 'none';
+  document.getElementById('fl-forn').style.display = (o === 'posto') ? '' : 'none';
+}
+
+function onMaqChange() {
+  const sel = document.getElementById('n-maq');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.dataset.h) { document.getElementById('n-hor-hint').textContent = ''; return; }
+  const h = Number(opt.dataset.h || 0);
+  document.getElementById('n-hor-hint').textContent = `Horimetro atual: ${h.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1})}h (deve ser >= este)`;
+  if (!document.getElementById('n-hor').value) document.getElementById('n-hor').value = h.toFixed(1);
+}
+
+async function salvar() {
+  const maq = document.getElementById('n-maq').value;
+  const data = document.getElementById('n-data').value;
+  const origem = document.getElementById('n-or').value;
+  const tanque = document.getElementById('n-tq').value;
+  const posto = document.getElementById('n-posto').value.trim();
+  const forn = document.getElementById('n-forn').value;
+  const lit = parseFloat(document.getElementById('n-lit').value);
+  const val = parseFloat(document.getElementById('n-val').value);
+  const hor = parseFloat(document.getElementById('n-hor').value);
+  const os = document.getElementById('n-os').value;
+  const op = document.getElementById('n-op').value.trim();
+  const nf = document.getElementById('n-nf').value.trim();
+  const obs = document.getElementById('n-obs').value.trim();
+
+  if (!maq) return UI.toast('Selecione a maquina', 'warn');
+  if (!data) return UI.toast('Informe a data', 'warn');
+  if (!lit || lit <= 0) return UI.toast('Litros invalido', 'warn');
+  if (val === undefined || val === null || isNaN(val) || val < 0) return UI.toast('Valor invalido', 'warn');
+  if (!hor || hor < 0) return UI.toast('Horimetro invalido', 'warn');
+  if (origem === 'tanque_proprio' && !tanque) return UI.toast('Selecione o tanque', 'warn');
+  if (origem === 'posto' && !posto) return UI.toast('Informe o nome do posto', 'warn');
+
+  const r = await API.rpc('jr_abastecimento_registrar', {
+    p_maquina_id: maq,
+    p_data: data,
+    p_origem: origem,
+    p_tanque_id: origem === 'tanque_proprio' ? tanque : null,
+    p_posto_nome: origem === 'posto' ? posto : null,
+    p_fornecedor_id: forn || null,
+    p_litros: lit,
+    p_valor_total: val,
+    p_horimetro_leitura: hor,
+    p_os_id: os || null,
+    p_operador_nome: op || null,
+    p_nf_numero: nf || null,
+    p_observacao: obs || null
+  });
+
+  if (!r.ok) return UI.toast('Erro: ' + (r.error || 'falha ao registrar'), 'err');
+
+  const cons = r.data?.consumo_l_h;
+  const msg = cons ? `Abastecimento registrado. Consumo: ${Number(cons).toFixed(2)} L/h` : 'Abastecimento registrado';
+  UI.toast(msg, 'ok');
+  document.getElementById('m-novo').classList.remove('show');
+  await aplicarFiltros();
+}
+</script>
+</body>
+</html>

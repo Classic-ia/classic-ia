@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manutencoes - JR Terraplanagem</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+<style>
+.summary-grid { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:18px; }
+.s-card { background:#fff; border:1px solid #E2E8F0; border-radius:10px; padding:16px; }
+.s-card .l { font-size:11px; color:#94A3B8; text-transform:uppercase; font-weight:600; }
+.s-card .v { font-size:22px; font-weight:700; color:#0F172A; margin-top:4px; font-variant-numeric:tabular-nums; }
+.s-card.warn .v { color:#D97706; }
+.s-card.err  .v { color:#DC2626; }
+.s-card.ok   .v { color:#059669; }
+
+.tbl { width:100%; border-collapse:collapse; font-size:13px; background:#fff; border:1px solid #E2E8F0; border-radius:10px; overflow:hidden; }
+.tbl th { background:#F8FAFC; padding:12px 14px; text-align:left; font-size:11px; font-weight:700; color:#475569; text-transform:uppercase; letter-spacing:0.05em; border-bottom:1px solid #E2E8F0; }
+.tbl td { padding:12px 14px; border-bottom:1px solid #F1F5F9; }
+.tbl tr:hover { background:#F8FAFC; cursor:pointer; }
+.tbl tr:last-child td { border-bottom:none; }
+
+.pill { display:inline-block; padding:3px 9px; border-radius:11px; font-size:11px; font-weight:700; }
+.pill-aberta       { background:#DBEAFE; color:#1E40AF; }
+.pill-em_andamento { background:#FEF3C7; color:#92400E; }
+.pill-concluida    { background:#D1FAE5; color:#065F46; }
+.pill-cancelada    { background:#FEE2E2; color:#991B1B; }
+.pill-preventiva   { background:#E0F2FE; color:#075985; }
+.pill-corretiva    { background:#FFE4E6; color:#9F1239; }
+
+.filters { display:flex; gap:10px; align-items:end; margin-bottom:16px; flex-wrap:wrap; }
+.filters .fld { display:flex; flex-direction:column; }
+.filters .fld label { font-size:11px; color:#475569; font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.04em; }
+.filters input, .filters select { padding:8px 10px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; min-width:160px; }
+.btn-primary { background:#D97706; color:#fff; padding:9px 18px; border:none; border-radius:7px; font-weight:600; font-size:13px; cursor:pointer; }
+.btn-primary:hover { background:#B45309; }
+
+.modal-bg { position:fixed; inset:0; background:rgba(15,23,42,0.6); display:none; align-items:center; justify-content:center; z-index:100; }
+.modal-bg.show { display:flex; }
+.modal-box { background:#fff; border-radius:14px; padding:26px; min-width:520px; max-width:90vw; box-shadow:0 20px 60px rgba(0,0,0,0.3); }
+.modal-box h3 { margin:0 0 16px 0; font-size:18px; color:#0F172A; }
+.fld-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px; }
+.fld-grid .full { grid-column: span 2; }
+.fld-grid label { display:block; font-size:11px; color:#475569; font-weight:600; margin-bottom:4px; text-transform:uppercase; letter-spacing:0.04em; }
+.fld-grid input, .fld-grid select, .fld-grid textarea {
+  width:100%; padding:9px 11px; border:1px solid #CBD5E1; border-radius:6px; font-size:13px; box-sizing:border-box; font-family:inherit;
+}
+.modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+.btn-secondary { background:#fff; color:#475569; border:1px solid #CBD5E1; padding:9px 18px; border-radius:7px; font-weight:600; cursor:pointer; }
+</style>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <div class="card">
+    <div class="card-header">
+      <h3>Manutencoes</h3>
+      <p class="text-sm text-muted">Ordens de servico de manutencao das maquinas (preventiva e corretiva).</p>
+    </div>
+    <div class="card-body">
+
+      <div class="summary-grid">
+        <div class="s-card"><div class="l">Total no periodo</div><div class="v" id="s-total">0</div></div>
+        <div class="s-card warn"><div class="l">Em andamento</div><div class="v" id="s-and">0</div></div>
+        <div class="s-card ok"><div class="l">Concluidas</div><div class="v" id="s-ok">0</div></div>
+        <div class="s-card"><div class="l">Custo total</div><div class="v" id="s-custo">R$ 0</div></div>
+      </div>
+
+      <div class="filters">
+        <div class="fld"><label>Maquina</label><select id="f-maquina"><option value="">Todas</option></select></div>
+        <div class="fld"><label>Tipo</label><select id="f-tipo">
+          <option value="">Todos</option><option value="preventiva">Preventiva</option><option value="corretiva">Corretiva</option>
+        </select></div>
+        <div class="fld"><label>Status</label><select id="f-status">
+          <option value="">Todos</option><option value="aberta">Aberta</option><option value="em_andamento">Em andamento</option><option value="concluida">Concluida</option><option value="cancelada">Cancelada</option>
+        </select></div>
+        <div class="fld"><label>De</label><input type="date" id="f-de"></div>
+        <div class="fld"><label>Ate</label><input type="date" id="f-ate"></div>
+        <button class="btn-secondary" onclick="aplicar()">Filtrar</button>
+        <button class="btn-primary" onclick="abrirNova()">+ Nova manutencao</button>
+      </div>
+
+      <div id="lista"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal nova manutencao -->
+<div class="modal-bg" id="modal-nova">
+  <div class="modal-box">
+    <h3>Nova manutencao</h3>
+    <form id="form-nova" onsubmit="event.preventDefault(); criar();">
+      <div class="fld-grid">
+        <div><label>Maquina *</label><select id="m-maquina" required><option value="">—</option></select></div>
+        <div><label>Tipo *</label><select id="m-tipo" required>
+          <option value="preventiva">Preventiva</option><option value="corretiva">Corretiva</option>
+        </select></div>
+        <div><label>Plano (opcional)</label><select id="m-plano"><option value="">—</option></select></div>
+        <div><label>Horimetro atual *</label><input type="number" step="0.01" id="m-horim" required></div>
+        <div class="full"><label>Servico *</label><input type="text" id="m-servico" placeholder="Ex: Troca de oleo motor" required></div>
+        <div><label>Oficina</label><input type="text" id="m-oficina" placeholder="Interna / nome da oficina"></div>
+        <div><label>Executado por</label><input type="text" id="m-exec"></div>
+        <div class="full"><label>Observacao</label><textarea id="m-obs" rows="2"></textarea></div>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn-secondary" onclick="fechar()">Cancelar</button>
+        <button type="submit" class="btn-primary">Abrir manutencao</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<script>
+let maquinas = [], planos = [], lista = [];
+
+(async () => {
+  await PageBootstrap.init({
+    page: 'manutencoes',
+    title: 'Manutencoes',
+    breadcrumb: 'Oficina > Manutencoes',
+    perfisPermitidos: ['admin','gestor','operador','financeiro'],
+    loadData: async () => {
+      const [m, p, l] = await Promise.all([
+        API.get('jr_maquinas?select=id,codigo,descricao,horimetro_atual&order=codigo'),
+        API.get('jr_planos_manutencao?select=id,nome,tipo_servico&ativo=eq.true&order=nome'),
+        API.get('jr_manutencoes?select=*,jr_maquinas(codigo,descricao)&order=data_abertura.desc&limit=300'),
+      ]);
+      return { maquinas: m.ok ? m.data : [], planos: p.ok ? p.data : [], lista: l.ok ? l.data : [] };
+    },
+    render: (d) => {
+      maquinas = d.maquinas;
+      planos = d.planos;
+      lista = d.lista;
+      const optsM = '<option value="">Todas</option>' + maquinas.map(m => `<option value="${m.id}">${API.esc(m.codigo)} · ${API.esc(m.descricao)}</option>`).join('');
+      const optsM2 = '<option value="">—</option>' + maquinas.map(m => `<option value="${m.id}" data-h="${m.horimetro_atual}">${API.esc(m.codigo)} · ${API.esc(m.descricao)}</option>`).join('');
+      document.getElementById('f-maquina').innerHTML = optsM;
+      document.getElementById('m-maquina').innerHTML = optsM2;
+      document.getElementById('m-plano').innerHTML = '<option value="">—</option>' + planos.map(p => `<option value="${p.id}">${API.esc(p.nome)}</option>`).join('');
+      document.getElementById('m-maquina').addEventListener('change', e => {
+        const opt = e.target.selectedOptions[0];
+        if (opt) document.getElementById('m-horim').value = opt.dataset.h || '';
+      });
+      render();
+    }
+  });
+})();
+
+function aplicar() { render(); }
+
+function render() {
+  const fm = document.getElementById('f-maquina').value;
+  const ft = document.getElementById('f-tipo').value;
+  const fs = document.getElementById('f-status').value;
+  const fd = document.getElementById('f-de').value;
+  const fa = document.getElementById('f-ate').value;
+
+  const items = lista.filter(x => {
+    if (fm && x.maquina_id !== fm) return false;
+    if (ft && x.tipo !== ft) return false;
+    if (fs && x.status !== fs) return false;
+    if (fd && x.data_abertura < fd) return false;
+    if (fa && x.data_abertura > fa) return false;
+    return true;
+  });
+
+  const total = items.length;
+  const and = items.filter(i => i.status === 'em_andamento' || i.status === 'aberta').length;
+  const ok = items.filter(i => i.status === 'concluida').length;
+  const custo = items.reduce((a, i) => a + Number(i.custo_total_calc || 0), 0);
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-and').textContent = and;
+  document.getElementById('s-ok').textContent = ok;
+  document.getElementById('s-custo').textContent = 'R$ ' + custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+
+  if (!items.length) {
+    document.getElementById('lista').innerHTML = '<div style="padding:40px;text-align:center;color:#94A3B8;">Nenhuma manutencao no filtro.</div>';
+    return;
+  }
+
+  document.getElementById('lista').innerHTML = `
+    <table class="tbl">
+      <thead><tr>
+        <th>Abertura</th><th>Maquina</th><th>Tipo</th><th>Servico</th><th>Horimetro</th><th>Status</th><th style="text-align:right;">Custo</th>
+      </tr></thead>
+      <tbody>
+        ${items.map(i => `
+          <tr onclick="window.location.href='manutencao_ficha.html?id=${i.id}'">
+            <td>${i.data_abertura ? new Date(i.data_abertura + 'T00:00').toLocaleDateString('pt-BR') : '—'}</td>
+            <td><b>${API.esc(i.jr_maquinas?.codigo || '')}</b><br><span style="font-size:11px;color:#64748B;">${API.esc(i.jr_maquinas?.descricao || '')}</span></td>
+            <td><span class="pill pill-${i.tipo}">${i.tipo}</span></td>
+            <td>${API.esc(i.servico)}</td>
+            <td style="font-variant-numeric:tabular-nums;">${Number(i.horimetro_execucao || 0).toLocaleString('pt-BR')}h</td>
+            <td><span class="pill pill-${i.status}">${i.status.replace('_',' ')}</span></td>
+            <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600;">R$ ${Number(i.custo_total_calc || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>`;
+}
+
+function abrirNova() {
+  document.getElementById('form-nova').reset();
+  document.getElementById('modal-nova').classList.add('show');
+}
+
+function fechar() { document.getElementById('modal-nova').classList.remove('show'); }
+
+async function criar() {
+  const r = await API.rpc('jr_manutencao_abrir', {
+    p_maquina_id: document.getElementById('m-maquina').value,
+    p_tipo: document.getElementById('m-tipo').value,
+    p_servico: document.getElementById('m-servico').value.trim(),
+    p_horimetro: parseFloat(document.getElementById('m-horim').value),
+    p_observacao: document.getElementById('m-obs').value.trim() || null,
+    p_oficina: document.getElementById('m-oficina').value.trim() || null,
+    p_executado_por: document.getElementById('m-exec').value.trim() || null,
+    p_plano_id: document.getElementById('m-plano').value || null,
+  });
+  if (!r.ok || !r.data?.ok) { UI.toast('Erro: ' + (r.data?.error || r.error || ''), 'err'); return; }
+  UI.toast('Manutencao aberta', 'ok');
+  window.location.href = 'manutencao_ficha.html?id=' + r.data.id;
+}
+</script>
+</body>
+</html>

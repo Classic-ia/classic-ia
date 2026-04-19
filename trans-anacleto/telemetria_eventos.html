@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eventos Raw - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filter-area"></div>
+  <div id="kpi-area"></div>
+  <div class="card" style="margin-top:16px"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal ingestao manual (teste) -->
+<div id="modal-ing" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeIng()"></div>
+  <div class="modal-content" style="max-width:640px">
+    <div class="modal-header">
+      <h3>Injetar eventos (teste)</h3>
+      <button class="modal-close" onclick="closeIng()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted">Cole array JSON de eventos. Util para testar integracao sem Onixsat:</p>
+      <textarea id="ing-json" rows="12" style="width:100%;font-family:monospace;font-size:12px" placeholder='[{"placa":"ABC1D23","data_hora":"2026-04-19T12:00:00Z","tipo_evento":"posicao","km_veiculo":150000,"velocidade":60,"ignicao":true,"latitude":-23.55,"longitude":-46.63}]'></textarea>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeIng()">Cancelar</button>
+      <button class="btn btn-primary" onclick="injetar()">Injetar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _filtros = { placa: '', tipo: '', dias: 1 };
+
+PageBootstrap.init({
+  page: 'telemetria_eventos',
+  title: 'Eventos Raw',
+  breadcrumb: 'Telemetria / Eventos Raw',
+  perfisPermitidos: ['admin'],
+  loadData: async () => loadData(),
+  render: (res) => {
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Eventos de telemetria (raw)',
+      subtitle: 'Ledger bruto recebido do Onixsat. Util para auditoria e debug.',
+      actions: [
+        { label: 'Injetar eventos (teste)', onclick: 'abrirIng()', class: 'btn-outline' },
+        { label: 'Consolidar dia', onclick: 'consolidarHoje()', class: 'btn-outline' },
+        { label: 'Avaliar alertas', onclick: 'avaliarAlertas()', class: 'btn-primary' }
+      ]
+    });
+    document.getElementById('filter-area').innerHTML = `
+      <div class="filter-bar">
+        <input id="f-placa" placeholder="Placa" value="${_filtros.placa}" oninput="_filtros.placa=this.value">
+        <select id="f-tipo" onchange="_filtros.tipo=this.value">
+          <option value="">Todos os tipos</option>
+          <option value="posicao">posicao</option>
+          <option value="ignicao_on">ignicao_on</option>
+          <option value="ignicao_off">ignicao_off</option>
+          <option value="velocidade_excesso">velocidade_excesso</option>
+          <option value="frenagem_brusca">frenagem_brusca</option>
+          <option value="parada_longa">parada_longa</option>
+          <option value="geofence_in">geofence_in</option>
+          <option value="geofence_out">geofence_out</option>
+        </select>
+        <select id="f-dias" onchange="_filtros.dias=parseInt(this.value)">
+          <option value="1">Ultimas 24h</option>
+          <option value="3">Ultimos 3 dias</option>
+          <option value="7">Ultimos 7 dias</option>
+          <option value="30">Ultimos 30 dias</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="aplicar()">Filtrar</button>
+      </div>
+    `;
+    renderKpis(res.eventos, res.nao_proc);
+    renderTabela(res.eventos);
+  }
+});
+
+async function loadData() {
+  const since = new Date(Date.now() - _filtros.dias * 86400000).toISOString();
+  let url = `v_trans_telemetria_eventos_full?select=*&order=data_hora.desc&limit=200&data_hora=gte.${since}`;
+  if (_filtros.placa) url += `&placa_externa=ilike.*${encodeURIComponent(_filtros.placa)}*`;
+  if (_filtros.tipo) url += `&tipo_evento=eq.${_filtros.tipo}`;
+  const [e, n] = await Promise.all([
+    API.get(url),
+    API.get('trans_telemetria_eventos?select=id&processado=eq.false&limit=1')
+  ]);
+  return { eventos: e.ok ? e.data : [], nao_proc: n.ok ? n.data.length : 0 };
+}
+
+async function aplicar() {
+  document.getElementById('table-area').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  const res = await loadData();
+  renderKpis(res.eventos, res.nao_proc);
+  renderTabela(res.eventos);
+}
+
+function renderKpis(eventos, naoProc) {
+  const porTipo = {};
+  eventos.forEach(e => { porTipo[e.tipo_evento] = (porTipo[e.tipo_evento]||0) + 1; });
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Eventos no periodo', value: eventos.length, color: '#2563eb' },
+    { label: 'Velocidade excesso', value: porTipo.velocidade_excesso||0, color: '#dc2626' },
+    { label: 'Geofence events', value: (porTipo.geofence_in||0) + (porTipo.geofence_out||0), color: '#059669' },
+    { label: 'Nao processados', value: naoProc, color: '#d97706' }
+  ]);
+}
+
+function renderTabela(eventos) {
+  if (eventos.length === 0) {
+    document.getElementById('table-area').innerHTML = '<p class="muted" style="text-align:center">Sem eventos no periodo.</p>';
+    return;
+  }
+  const rows = eventos.map(e => [
+    API.fmtDataHora(e.data_hora),
+    API.esc(e.veiculo_placa || e.placa_externa),
+    `<span class="badge badge-muted">${e.tipo_evento}</span>`,
+    e.km_veiculo ? API.fmtNum(e.km_veiculo,0) + ' km' : '-',
+    e.velocidade !== null ? API.fmtNum(e.velocidade,1) + ' km/h' : '-',
+    e.ignicao === true ? 'on' : e.ignicao === false ? 'off' : '-',
+    e.latitude && e.longitude ? `${API.fmtNum(e.latitude,4)},${API.fmtNum(e.longitude,4)}` : '-',
+    API.esc(e.geofence_nome||'-'),
+    e.processado ? '<span class="badge badge-success">ok</span>' : '<span class="badge badge-warning">pend</span>'
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Data/Hora','Placa','Tipo','KM','Vel.','Ign.','Lat/Lng','Geofence','Proc.'],
+    rows, empty: '-'
+  });
+}
+
+function abrirIng() {
+  document.getElementById('ing-json').value = '';
+  UI.openModal('modal-ing');
+}
+
+function closeIng() { UI.closeModal('modal-ing'); }
+
+async function injetar() {
+  let arr;
+  try {
+    arr = JSON.parse(document.getElementById('ing-json').value);
+    if (!Array.isArray(arr)) throw new Error('JSON deve ser array');
+  } catch (e) { UI.toast('JSON invalido: '+e.message, 'erro'); return; }
+
+  const r = await API.rpc('trans_onixsat_ingestar', { p_eventos: arr });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast(`${r.data.ok} ok, ${r.data.duplicados} duplicados, ${r.data.erro} erros`, r.data.erro > 0 ? 'erro' : 'ok');
+  closeIng();
+  aplicar();
+}
+
+async function consolidarHoje() {
+  const hoje = new Date().toISOString().slice(0,10);
+  const r = await API.rpc('trans_telemetria_consolidar_dia', { p_data: hoje });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Dia consolidado', 'ok');
+  aplicar();
+}
+
+async function avaliarAlertas() {
+  const r = await API.rpc('trans_alertas_avaliar', {});
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast(`${r.data.gerados} alertas gerados`, 'ok');
+}
+</script>
+</body>
+</html>

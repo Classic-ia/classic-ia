@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geofences - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal CRUD -->
+<div id="modal-geo" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeGeo()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="geo-title">Nova geofence</h3>
+      <button class="modal-close" onclick="closeGeo()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-geo" onsubmit="salvar(event)">
+        <input type="hidden" id="g-id">
+        <div class="form-field">
+          <label>Nome *</label>
+          <input id="g-nome" required>
+        </div>
+        <div class="form-field">
+          <label>Tipo *</label>
+          <select id="g-tipo" required>
+            <option value="origem">Origem</option>
+            <option value="destino">Destino</option>
+            <option value="oficina">Oficina</option>
+            <option value="posto_proprio">Posto proprio</option>
+            <option value="cliente">Cliente</option>
+            <option value="filial">Filial</option>
+            <option value="ponto_parada">Ponto de parada</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div class="form-grid" style="grid-template-columns:repeat(3,1fr);gap:12px">
+          <div class="form-field">
+            <label>Latitude *</label>
+            <input type="number" step="0.0000001" id="g-lat" required placeholder="-23.55052">
+          </div>
+          <div class="form-field">
+            <label>Longitude *</label>
+            <input type="number" step="0.0000001" id="g-lng" required placeholder="-46.633308">
+          </div>
+          <div class="form-field">
+            <label>Raio (m) *</label>
+            <input type="number" step="1" min="10" id="g-raio" required value="200">
+          </div>
+        </div>
+        <div class="form-field">
+          <label><input type="checkbox" id="g-ativo" checked> Ativa</label>
+        </div>
+        <div class="form-field">
+          <label>Observacao</label>
+          <input id="g-obs">
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeGeo()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-geo').requestSubmit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _geos = [];
+
+PageBootstrap.init({
+  page: 'geofences',
+  title: 'Geofences',
+  breadcrumb: 'Telemetria / Geofences',
+  perfisPermitidos: ['admin', 'gestor'],
+  loadData: async () => {
+    const r = await API.get('trans_geofences?select=*&order=tipo.asc,nome.asc');
+    return { r };
+  },
+  render: (res) => {
+    _geos = res.r.ok ? res.r.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Geofences',
+      subtitle: 'Cercas virtuais para abrir/fechar viagens automaticamente (origem, destino, oficina, cliente, filial).',
+      actions: [{ label: 'Nova geofence', onclick: 'abrirNova()', class: 'btn-primary' }]
+    });
+    renderTable();
+  }
+});
+
+function renderTable() {
+  if (_geos.length === 0) {
+    document.getElementById('table-area').innerHTML = '<p class="muted" style="text-align:center">Nenhuma geofence cadastrada.</p>';
+    return;
+  }
+  const rows = _geos.map(g => [
+    API.esc(g.nome),
+    `<span class="badge badge-muted">${g.tipo}</span>`,
+    API.fmtNum(g.latitude,5) + ', ' + API.fmtNum(g.longitude,5),
+    API.fmtNum(g.raio_metros,0) + ' m',
+    g.ativo ? '<span class="badge badge-success">Ativa</span>' : '<span class="badge badge-muted">Inativa</span>',
+    `<button class="btn btn-sm btn-outline" onclick="editar('${g.id}')">Editar</button>`
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Nome', 'Tipo', 'Coordenadas', 'Raio', 'Status', 'Acoes'],
+    rows, empty: '-'
+  });
+}
+
+function abrirNova() {
+  document.getElementById('form-geo').reset();
+  document.getElementById('g-id').value = '';
+  document.getElementById('g-raio').value = 200;
+  document.getElementById('g-ativo').checked = true;
+  document.getElementById('geo-title').textContent = 'Nova geofence';
+  UI.openModal('modal-geo');
+}
+
+function editar(id) {
+  const g = _geos.find(x => x.id === id);
+  if (!g) return;
+  document.getElementById('g-id').value = g.id;
+  document.getElementById('g-nome').value = g.nome;
+  document.getElementById('g-tipo').value = g.tipo;
+  document.getElementById('g-lat').value = g.latitude;
+  document.getElementById('g-lng').value = g.longitude;
+  document.getElementById('g-raio').value = g.raio_metros;
+  document.getElementById('g-ativo').checked = g.ativo;
+  document.getElementById('g-obs').value = g.observacao || '';
+  document.getElementById('geo-title').textContent = 'Editar geofence';
+  UI.openModal('modal-geo');
+}
+
+function closeGeo() { UI.closeModal('modal-geo'); }
+
+async function salvar(e) {
+  e.preventDefault();
+  const id = document.getElementById('g-id').value;
+  const payload = {
+    nome: document.getElementById('g-nome').value.trim(),
+    tipo: document.getElementById('g-tipo').value,
+    latitude: parseFloat(document.getElementById('g-lat').value),
+    longitude: parseFloat(document.getElementById('g-lng').value),
+    raio_metros: parseFloat(document.getElementById('g-raio').value),
+    ativo: document.getElementById('g-ativo').checked,
+    observacao: document.getElementById('g-obs').value.trim() || null
+  };
+  const r = id
+    ? await API.patch(`trans_geofences?id=eq.${id}`, payload)
+    : await API.post('trans_geofences', payload);
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Salvo', 'ok');
+  closeGeo();
+  location.reload();
+}
+</script>
+</body>
+</html>

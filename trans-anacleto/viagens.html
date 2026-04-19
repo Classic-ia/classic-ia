@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Viagens - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filter-area"></div>
+  <div id="kpi-area"></div>
+  <div class="card" style="margin-top:16px"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal vincular CT-e -->
+<div id="modal-cte" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeCte()"></div>
+  <div class="modal-content" style="max-width:480px">
+    <div class="modal-header">
+      <h3>Vincular CT-e</h3>
+      <button class="modal-close" onclick="closeCte()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-cte" onsubmit="confirmarCte(event)">
+        <input type="hidden" id="cte-viagem-id">
+        <div class="form-field"><label>Viagem</label><div class="muted" id="cte-viagem-info"></div></div>
+        <div class="form-field"><label>Numero CT-e *</label><input id="cte-numero" required></div>
+        <div class="form-field"><label>Chave (44 digitos)</label><input id="cte-chave"></div>
+        <div class="form-field"><label>Valor do frete (R$)</label><input type="number" step="0.01" id="cte-valor"></div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeCte()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-cte').requestSubmit()">Vincular</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _v = { viagens: [], filtros: { placa: '', status: '', dias: 30 } };
+
+PageBootstrap.init({
+  page: 'viagens',
+  title: 'Viagens',
+  breadcrumb: 'Telemetria / Viagens',
+  perfisPermitidos: ['all'],
+  loadData: async () => loadData(),
+  render: (res) => {
+    _v.viagens = res.viagens;
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Viagens operacionais',
+      subtitle: 'Abertura/fechamento automatico por geofences. Vincule CT-e do TMS para cruzar com acerto financeiro.'
+    });
+    document.getElementById('filter-area').innerHTML = `
+      <div class="filter-bar">
+        <input id="f-placa" placeholder="Placa" value="${_v.filtros.placa}" oninput="_v.filtros.placa=this.value">
+        <select id="f-status" onchange="_v.filtros.status=this.value">
+          <option value="">Todos os status</option>
+          <option value="em_andamento">Em andamento</option>
+          <option value="concluida">Concluida</option>
+          <option value="cancelada_auto">Cancelada (auto)</option>
+          <option value="cancelada_manual">Cancelada (manual)</option>
+        </select>
+        <select id="f-dias" onchange="_v.filtros.dias=parseInt(this.value)">
+          <option value="7">Ultimos 7 dias</option>
+          <option value="30" selected>Ultimos 30 dias</option>
+          <option value="90">Ultimos 90 dias</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="aplicar()">Filtrar</button>
+      </div>
+    `;
+    renderKpis();
+    renderTabela();
+  }
+});
+
+async function loadData() {
+  const since = new Date(Date.now() - _v.filtros.dias * 86400000).toISOString();
+  let url = `v_trans_viagens_full?select=*&order=data_inicio.desc&limit=300&data_inicio=gte.${since}`;
+  if (_v.filtros.status) url += `&status=eq.${_v.filtros.status}`;
+  if (_v.filtros.placa) url += `&veiculo_placa=ilike.*${encodeURIComponent(_v.filtros.placa)}*`;
+  const r = await API.get(url);
+  return { viagens: r.ok ? r.data : [] };
+}
+
+async function aplicar() {
+  document.getElementById('table-area').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  const r = await loadData();
+  _v.viagens = r.viagens;
+  renderKpis(); renderTabela();
+}
+
+function renderKpis() {
+  const ativas = _v.viagens.filter(v => v.status === 'em_andamento').length;
+  const concluidas = _v.viagens.filter(v => v.status === 'concluida').length;
+  const km = _v.viagens.reduce((s,v) => s + (Number(v.km_rodados)||0), 0);
+  const excessos = _v.viagens.reduce((s,v) => s + (v.excessos_velocidade||0), 0);
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Em andamento', value: ativas, color: '#2563eb' },
+    { label: 'Concluidas', value: concluidas, color: '#059669' },
+    { label: 'KM rodados', value: API.fmtNum(km,0), color: '#0ea5e9' },
+    { label: 'Excessos velocidade', value: excessos, color: '#dc2626' }
+  ]);
+}
+
+function renderTabela() {
+  if (_v.viagens.length === 0) {
+    document.getElementById('table-area').innerHTML = '<p class="muted" style="text-align:center">Sem viagens no periodo.</p>';
+    return;
+  }
+  const rows = _v.viagens.map(v => [
+    API.fmtDataHora(v.data_inicio),
+    API.esc(v.veiculo_placa||'-') + ' <span class="muted">' + API.esc(v.veiculo_modelo||'') + '</span>',
+    API.esc(v.motorista_nome||'-'),
+    API.esc(v.origem_nome||v.origem||'-') + ' → ' + API.esc(v.destino_nome||v.destino||'-'),
+    v.km_rodados ? API.fmtNum(v.km_rodados,0) + ' km' : '-',
+    v.status === 'em_andamento' ? '<span class="badge badge-info">Em andamento</span>'
+      : v.status === 'concluida' ? '<span class="badge badge-success">Concluida</span>'
+      : '<span class="badge badge-muted">Cancelada</span>',
+    v.ctes_count > 0 ? `<span class="badge badge-success">${v.ctes_count} CT-e</span>` : '-',
+    `<button class="btn btn-sm btn-outline" onclick="vincularCte('${v.id}','${API.esc(v.veiculo_placa||'')}',${v.data_inicio ? "'"+v.data_inicio+"'" : 'null'})">+ CT-e</button>`
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Inicio','Veiculo','Motorista','Trajeto','KM','Status','CT-e','Acoes'],
+    rows, empty: '-'
+  });
+}
+
+function vincularCte(id, placa, dtIni) {
+  document.getElementById('form-cte').reset();
+  document.getElementById('cte-viagem-id').value = id;
+  document.getElementById('cte-viagem-info').textContent = placa + (dtIni ? ' - ' + API.fmtDataHora(dtIni) : '');
+  UI.openModal('modal-cte');
+}
+
+function closeCte() { UI.closeModal('modal-cte'); }
+
+async function confirmarCte(e) {
+  e.preventDefault();
+  const r = await API.rpc('trans_tms_vincular_cte', {
+    p_viagem_id: document.getElementById('cte-viagem-id').value,
+    p_cte_numero: document.getElementById('cte-numero').value.trim(),
+    p_cte_chave: document.getElementById('cte-chave').value.trim() || null,
+    p_valor_frete: parseFloat(document.getElementById('cte-valor').value) || null
+  });
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('CT-e vinculado', 'ok');
+  closeCte();
+  aplicar();
+}
+</script>
+</body>
+</html>

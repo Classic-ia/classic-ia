@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Score Motoristas - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="filter-area"></div>
+  <div class="card" style="margin-top:16px"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<script>
+let _s = { scores: [], motoristas: [], filtros: { periodo: 'mensal', data_ref: null } };
+
+PageBootstrap.init({
+  page: 'motoristas_score',
+  title: 'Score Motoristas',
+  breadcrumb: 'Telemetria / Score',
+  perfisPermitidos: ['admin', 'gestor'],
+  loadData: async () => {
+    // default: mes atual
+    const hoje = new Date();
+    const ref = new Date(hoje.getFullYear(), hoje.getMonth(), 1).toISOString().slice(0,10);
+    _s.filtros.data_ref = ref;
+    return loadData();
+  },
+  render: (res) => {
+    _s.scores = res.scores;
+    _s.motoristas = res.motoristas;
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Score dos motoristas',
+      subtitle: 'Ranking baseado em excessos de velocidade, frenagens bruscas e consumo. 100 = impecavel.',
+      actions: [{ label: 'Recalcular todos', onclick: 'recalcularTodos()', class: 'btn-primary' }]
+    });
+    document.getElementById('filter-area').innerHTML = `
+      <div class="filter-bar">
+        <select id="f-periodo" onchange="_s.filtros.periodo=this.value">
+          <option value="diario">Diario</option>
+          <option value="semanal">Semanal</option>
+          <option value="mensal" selected>Mensal</option>
+        </select>
+        <input type="date" id="f-ref" value="${_s.filtros.data_ref}" onchange="_s.filtros.data_ref=this.value">
+        <button class="btn btn-primary btn-sm" onclick="aplicar()">Filtrar</button>
+      </div>
+    `;
+    renderTabela();
+  }
+});
+
+async function loadData() {
+  const [s, m] = await Promise.all([
+    API.get(`v_trans_motorista_score_ranking?select=*&periodo=eq.${_s.filtros.periodo}&data_ref=eq.${_s.filtros.data_ref}&order=posicao.asc`),
+    API.get('trans_motoristas?select=id,nome&ativo=eq.true&order=nome')
+  ]);
+  return { scores: s.ok ? s.data : [], motoristas: m.ok ? m.data : [] };
+}
+
+async function aplicar() {
+  document.getElementById('table-area').innerHTML = '<div class="loading-center"><div class="spinner"></div></div>';
+  const r = await loadData();
+  _s.scores = r.scores;
+  renderTabela();
+}
+
+function corScore(s) {
+  if (s === null || s === undefined) return '#94a3b8';
+  if (s >= 80) return '#059669';
+  if (s >= 60) return '#d97706';
+  return '#dc2626';
+}
+
+function renderTabela() {
+  if (_s.scores.length === 0) {
+    document.getElementById('table-area').innerHTML = `
+      <p class="muted" style="text-align:center">Nenhum score calculado para ${_s.filtros.periodo}/${_s.filtros.data_ref}. Use "Recalcular todos".</p>`;
+    return;
+  }
+  const rows = _s.scores.map(s => [
+    '<strong>#' + s.posicao + '</strong>',
+    API.esc(s.motorista_nome),
+    API.fmtNum(s.km_rodados,0) + ' km',
+    s.viagens_count || 0,
+    s.excessos_velocidade || 0,
+    s.frenagens_bruscas || 0,
+    s.consumo_medio_km_l ? API.fmtNum(s.consumo_medio_km_l,2) + ' km/L' : '-',
+    `<span class="badge" style="background:${corScore(s.score_calc)};color:white">${s.score_calc ?? '-'}</span>`
+  ]);
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Pos.', 'Motorista', 'KM', 'Viagens', 'Excessos', 'Frenagens', 'Consumo', 'Score'],
+    rows, empty: '-'
+  });
+}
+
+async function recalcularTodos() {
+  if (!confirm(`Recalcular score ${_s.filtros.periodo} para ${_s.motoristas.length} motoristas em ${_s.filtros.data_ref}?`)) return;
+  let ok = 0, erro = 0;
+  for (const m of _s.motoristas) {
+    const r = await API.rpc('trans_score_calcular', {
+      p_motorista_id: m.id, p_periodo: _s.filtros.periodo, p_data_ref: _s.filtros.data_ref
+    });
+    if (r.ok) ok++; else erro++;
+  }
+  UI.toast(`${ok} recalculados, ${erro} erro`, erro > 0 ? 'erro' : 'ok');
+  aplicar();
+}
+</script>
+</body>
+</html>

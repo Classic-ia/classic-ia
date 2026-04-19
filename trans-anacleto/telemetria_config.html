@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Configuracao Onixsat - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Integracao Onixsat</h4>
+
+    <form id="form-cfg" onsubmit="salvar(event)">
+      <div class="form-grid" style="grid-template-columns:repeat(2,1fr);gap:16px">
+        <div class="form-field">
+          <label>Modo de ingestao *</label>
+          <select id="c-modo">
+            <option value="webhook">Webhook (push - recomendado)</option>
+            <option value="pull">Pull (cron)</option>
+          </select>
+        </div>
+        <div class="form-field">
+          <label>Pull interval (minutos)</label>
+          <input type="number" min="1" max="60" id="c-pull">
+        </div>
+        <div class="form-field form-field-full">
+          <label>API URL Onixsat</label>
+          <input id="c-url" placeholder="https://api.onixsat.com.br/...">
+        </div>
+        <div class="form-field form-field-full">
+          <label>Webhook secret (HMAC shared)</label>
+          <input id="c-secret" placeholder="Segredo compartilhado com Onixsat">
+        </div>
+        <div class="form-field form-field-full">
+          <label>API key Onixsat (mudar)</label>
+          <input id="c-key" type="password" placeholder="Deixe vazio para manter atual">
+        </div>
+        <div class="form-field">
+          <label><input type="checkbox" id="c-ativo"> Integracao ativa</label>
+        </div>
+        <div class="form-field form-field-full">
+          <label>Observacao</label>
+          <input id="c-obs">
+        </div>
+      </div>
+
+      <div style="margin-top:16px;padding:12px;background:#f1f5f9;border-radius:6px" id="status-box">
+        <div class="muted">Carregando status...</div>
+      </div>
+
+      <div style="margin-top:16px;display:flex;gap:8px">
+        <button type="submit" class="btn btn-primary">Salvar</button>
+        <button type="button" class="btn btn-outline" onclick="testar()">Testar conexao</button>
+        <button type="button" class="btn btn-outline" onclick="window.open('/trans-anacleto/telemetria_eventos.html','_self')">Ver eventos raw</button>
+      </div>
+    </form>
+  </div></div>
+
+  <div class="card" style="margin-top:16px"><div class="card-body">
+    <h4 style="margin-top:0">Endpoint webhook</h4>
+    <p class="muted">Aponte o Onixsat para a Edge Function:</p>
+    <code style="display:block;padding:12px;background:#0f172a;color:#a7f3d0;border-radius:6px;font-size:13px" id="endpoint-url">--</code>
+    <p class="muted" style="margin-top:12px">
+      Payload esperado: array JSON com objetos <code>{placa, data_hora, tipo_evento, km_veiculo, velocidade, ignicao, latitude, longitude}</code>.
+      Header <code>X-Signature</code> deve conter HMAC-SHA256 do body com o secret configurado acima.
+    </p>
+  </div></div>
+</div>
+
+<script>
+let _cfg = null;
+
+PageBootstrap.init({
+  page: 'telemetria_config',
+  title: 'Config Onixsat',
+  breadcrumb: 'Telemetria / Config',
+  perfisPermitidos: ['admin'],
+  loadData: async () => {
+    const r = await API.get('trans_onixsat_config?select=*&limit=1');
+    return { r };
+  },
+  render: (res) => {
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Configuracao Onixsat',
+      subtitle: 'Credenciais, modo de ingestao e status da integracao de telemetria.'
+    });
+    _cfg = (res.r.ok && res.r.data.length > 0) ? res.r.data[0] : null;
+    if (_cfg) {
+      document.getElementById('c-modo').value = _cfg.modo_ingestao;
+      document.getElementById('c-pull').value = _cfg.pull_interval_min;
+      document.getElementById('c-url').value = _cfg.api_url || '';
+      document.getElementById('c-secret').value = _cfg.webhook_secret || '';
+      document.getElementById('c-ativo').checked = !!_cfg.ativo;
+      document.getElementById('c-obs').value = _cfg.observacao || '';
+    } else {
+      document.getElementById('c-pull').value = 5;
+    }
+    renderStatus();
+    renderEndpoint();
+  }
+});
+
+function renderStatus() {
+  const box = document.getElementById('status-box');
+  if (!_cfg) { box.innerHTML = '<div class="muted">Configuracao ainda nao criada.</div>'; return; }
+  const ultimo = _cfg.ultimo_sync ? API.fmtDataHora(_cfg.ultimo_sync) : 'nunca';
+  const diff = _cfg.ultimo_sync ? Math.round((Date.now() - new Date(_cfg.ultimo_sync))/60000) : null;
+  const cor = !_cfg.ativo ? '#94a3b8' : (diff === null || diff > 30 ? '#dc2626' : diff > 10 ? '#d97706' : '#059669');
+  box.innerHTML = `
+    <div style="display:flex;gap:16px;align-items:center">
+      <div style="width:12px;height:12px;background:${cor};border-radius:50%"></div>
+      <div><strong>${_cfg.ativo ? 'Ativa' : 'Inativa'}</strong></div>
+      <div class="muted">Ultimo sync: ${ultimo}${diff !== null ? ' ('+diff+' min atras)' : ''}</div>
+      ${_cfg.ultimo_erro ? '<div style="color:#dc2626">Ultimo erro: '+API.esc(_cfg.ultimo_erro)+'</div>' : ''}
+    </div>`;
+}
+
+function renderEndpoint() {
+  const base = (window.CONFIG && window.CONFIG.SB_URL) || '';
+  document.getElementById('endpoint-url').textContent =
+    base ? `POST ${base}/functions/v1/onixsat-webhook` : 'POST <seu-projeto>.supabase.co/functions/v1/onixsat-webhook';
+}
+
+async function salvar(e) {
+  e.preventDefault();
+  const payload = {
+    modo_ingestao: document.getElementById('c-modo').value,
+    pull_interval_min: parseInt(document.getElementById('c-pull').value) || 5,
+    api_url: document.getElementById('c-url').value.trim() || null,
+    webhook_secret: document.getElementById('c-secret').value.trim() || null,
+    ativo: document.getElementById('c-ativo').checked,
+    observacao: document.getElementById('c-obs').value.trim() || null
+  };
+  const keyNovo = document.getElementById('c-key').value.trim();
+  if (keyNovo) payload.api_key_encrypted = keyNovo;
+
+  let r;
+  if (_cfg) {
+    r = await API.patch(`trans_onixsat_config?id=eq.${_cfg.id}`, payload);
+  } else {
+    r = await API.post('trans_onixsat_config', payload);
+  }
+  if (!r.ok) { UI.toast(r.error || 'Erro', 'erro'); return; }
+  UI.toast('Configuracao salva', 'ok');
+  setTimeout(() => location.reload(), 800);
+}
+
+async function testar() {
+  if (!_cfg) { UI.toast('Salve a configuracao primeiro', 'erro'); return; }
+  UI.toast('Teste disponivel quando Edge Function estiver deployada', 'info');
+}
+</script>
+</body>
+</html>

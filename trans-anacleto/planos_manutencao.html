@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Planos de Manutencao - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal plano -->
+<div id="modal-plano" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalPlano()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3 id="mod-plano-titulo">Novo plano</h3>
+      <button class="modal-close" onclick="closeModalPlano()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-plano" onsubmit="salvarPlano(event)">
+        <input type="hidden" id="p-id">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field form-field-full"><label>Nome *</label><input id="p-nome" required></div>
+          <div class="form-field">
+            <label>Tipo de servico *</label>
+            <select id="p-tipo" required>
+              <option value="troca_oleo">Troca de oleo</option>
+              <option value="filtro_oleo">Filtro de oleo</option>
+              <option value="filtro_comb">Filtro combustivel</option>
+              <option value="filtro_ar">Filtro de ar</option>
+              <option value="lubrificacao">Lubrificacao</option>
+              <option value="revisao">Revisao</option>
+              <option value="alinhamento">Alinhamento</option>
+              <option value="balanceamento">Balanceamento</option>
+              <option value="correia">Correia</option>
+              <option value="freio">Freio</option>
+              <option value="suspensao">Suspensao</option>
+              <option value="eletrica">Eletrica</option>
+              <option value="outro">Outro</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Ativo</label>
+            <select id="p-ativo"><option value="true">Sim</option><option value="false">Nao</option></select>
+          </div>
+          <div class="form-field"><label>Intervalo KM</label><input type="number" id="p-km" min="0"></div>
+          <div class="form-field"><label>Intervalo dias</label><input type="number" id="p-dias" min="0"></div>
+          <div class="form-field form-field-full">
+            <label>Tipos de veiculo aplicaveis</label>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:13px">
+              <label><input type="checkbox" class="veic-tipo" value="cavalo"> Cavalo</label>
+              <label><input type="checkbox" class="veic-tipo" value="truck"> Truck</label>
+              <label><input type="checkbox" class="veic-tipo" value="toco"> Toco</label>
+              <label><input type="checkbox" class="veic-tipo" value="carreta"> Carreta</label>
+              <label><input type="checkbox" class="veic-tipo" value="utilitario"> Utilitario</label>
+            </div>
+          </div>
+          <div class="form-field form-field-full"><label>Observacao</label><textarea id="p-obs" rows="2"></textarea></div>
+        </div>
+        <p class="muted" style="font-size:12px;margin-top:8px">Pelo menos um intervalo (KM ou dias) obrigatorio.</p>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalPlano()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-plano').requestSubmit()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal vincular veiculos -->
+<div id="modal-veic" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalVeic()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Veiculos deste plano</h3>
+      <button class="modal-close" onclick="closeModalVeic()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted" style="font-size:13px" id="veic-plano-nome"></p>
+      <div id="veic-lista"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalVeic()">Fechar</button>
+      <button class="btn btn-primary" onclick="salvarVinculos()">Salvar vinculos</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let _planos = [];
+let _veiculos = [];
+let _planoVeiculos = []; // vinculos por plano: [{plano_id, veiculo_id, ativo, ultima_execucao_km, ultima_execucao_data}]
+let _planoAtivo = null;  // para modal de veiculos
+
+PageBootstrap.init({
+  page: 'planos_manutencao',
+  title: 'Planos de Manutencao',
+  breadcrumb: 'Oficina / Planos',
+  perfisPermitidos: ['admin','gestor'],
+  loadData: async () => {
+    const [p, v, pv] = await Promise.all([
+      API.get('trans_planos_manutencao?order=nome'),
+      API.get('trans_veiculos?order=placa&select=id,placa,modelo,tipo,km_atual,status'),
+      API.get('trans_planos_veiculo?select=*')
+    ]);
+    return { p, v, pv };
+  },
+  render: (res) => {
+    _planos = res.p.ok ? res.p.data : [];
+    _veiculos = res.v.ok ? res.v.data : [];
+    _planoVeiculos = res.pv.ok ? res.pv.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Planos de Manutencao',
+      subtitle: 'Templates com intervalos (KM ou dias). Vincular aos veiculos gera os alertas de vencimento.',
+      actions: [{ label: 'Novo plano', icon: 'plus', onClick: 'abrirNovo()', variant: 'primary' }]
+    });
+    renderKpis();
+    renderTable();
+  }
+});
+
+function renderKpis() {
+  const ativos = _planos.filter(p => p.ativo).length;
+  const totalVincs = _planoVeiculos.filter(pv => pv.ativo).length;
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Planos', value: _planos.length },
+    { label: 'Ativos', value: ativos },
+    { label: 'Veiculos na frota', value: _veiculos.length },
+    { label: 'Vinculos ativos', value: totalVincs }
+  ]);
+}
+
+function renderTable() {
+  const rows = _planos.map(p => {
+    const vincs = _planoVeiculos.filter(pv => pv.plano_id === p.id && pv.ativo).length;
+    const intervalo = [
+      p.intervalo_km ? `${API.fmtNum(p.intervalo_km, 0)} km` : null,
+      p.intervalo_dias ? `${p.intervalo_dias} dias` : null
+    ].filter(Boolean).join(' / ');
+    const tipos = (p.veiculo_tipo_aplicavel||[]).join(', ') || '—';
+    return [
+      API.esc(p.nome),
+      `<span class="m-mono" style="font-size:12px">${API.esc(p.tipo_servico)}</span>`,
+      intervalo,
+      tipos,
+      p.ativo ? UI.badge('Ativo','success') : UI.badge('Inativo','muted'),
+      `<strong>${vincs}</strong> veiculos`,
+      `<button class="btn btn-sm btn-outline" onclick="abrirEditar('${p.id}')">Editar</button>
+       <button class="btn btn-sm btn-outline" onclick="abrirVeiculos('${p.id}')">Vincular</button>`
+    ];
+  });
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Plano','Tipo','Intervalo','Aplicavel','Status','Veiculos','Acoes'],
+    rows,
+    empty: 'Nenhum plano cadastrado.'
+  });
+}
+
+function abrirNovo() {
+  document.getElementById('mod-plano-titulo').textContent = 'Novo plano';
+  document.getElementById('p-id').value = '';
+  document.getElementById('p-nome').value = '';
+  document.getElementById('p-tipo').value = 'troca_oleo';
+  document.getElementById('p-ativo').value = 'true';
+  document.getElementById('p-km').value = '';
+  document.getElementById('p-dias').value = '';
+  document.getElementById('p-obs').value = '';
+  document.querySelectorAll('.veic-tipo').forEach(c => c.checked = false);
+  UI.openModal('modal-plano');
+}
+
+function abrirEditar(id) {
+  const p = _planos.find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('mod-plano-titulo').textContent = 'Editar plano';
+  document.getElementById('p-id').value = p.id;
+  document.getElementById('p-nome').value = p.nome || '';
+  document.getElementById('p-tipo').value = p.tipo_servico || 'troca_oleo';
+  document.getElementById('p-ativo').value = String(p.ativo);
+  document.getElementById('p-km').value = p.intervalo_km || '';
+  document.getElementById('p-dias').value = p.intervalo_dias || '';
+  document.getElementById('p-obs').value = p.observacao || '';
+  const tipos = p.veiculo_tipo_aplicavel || [];
+  document.querySelectorAll('.veic-tipo').forEach(c => c.checked = tipos.includes(c.value));
+  UI.openModal('modal-plano');
+}
+
+function closeModalPlano() { UI.closeModal('modal-plano'); }
+
+async function salvarPlano(e) {
+  e.preventDefault();
+  const id = document.getElementById('p-id').value;
+  const nome = document.getElementById('p-nome').value.trim();
+  const tipo = document.getElementById('p-tipo').value;
+  const ativo = document.getElementById('p-ativo').value === 'true';
+  const km = parseInt(document.getElementById('p-km').value,10);
+  const dias = parseInt(document.getElementById('p-dias').value,10);
+  const obs = document.getElementById('p-obs').value.trim() || null;
+  const tipos = Array.from(document.querySelectorAll('.veic-tipo:checked')).map(c => c.value);
+  if (!nome) { UI.toast('Nome obrigatorio', 'erro'); return; }
+  if (!Number.isFinite(km) && !Number.isFinite(dias)) {
+    UI.toast('Informe pelo menos um intervalo', 'erro'); return;
+  }
+  const payload = {
+    nome, tipo_servico: tipo, ativo,
+    intervalo_km: Number.isFinite(km) ? km : null,
+    intervalo_dias: Number.isFinite(dias) ? dias : null,
+    veiculo_tipo_aplicavel: tipos,
+    observacao: obs
+  };
+  let r;
+  if (id) {
+    r = await API.patch(`trans_planos_manutencao?id=eq.${id}`, payload);
+  } else {
+    r = await API.post('trans_planos_manutencao', payload);
+  }
+  if (!r.ok) { UI.toast(r.error || 'Erro ao salvar', 'erro'); return; }
+  UI.toast('Plano salvo', 'ok');
+  closeModalPlano();
+  const rp = await API.get('trans_planos_manutencao?order=nome');
+  if (rp.ok) { _planos = rp.data; renderKpis(); renderTable(); }
+}
+
+async function abrirVeiculos(planoId) {
+  _planoAtivo = _planos.find(p => p.id === planoId);
+  if (!_planoAtivo) return;
+  document.getElementById('veic-plano-nome').textContent = _planoAtivo.nome;
+  const aplica = _planoAtivo.veiculo_tipo_aplicavel || [];
+  const vincs = _planoVeiculos.filter(pv => pv.plano_id === planoId);
+  const rows = _veiculos.map(v => {
+    const vinc = vincs.find(pv => pv.veiculo_id === v.id);
+    const aplicavel = aplica.length === 0 || aplica.includes(v.tipo);
+    return `
+      <div style="display:flex;justify-content:space-between;align-items:center;padding:8px;border-bottom:1px solid #e2e8f0">
+        <div>
+          <label><input type="checkbox" class="vinc-cb" data-id="${v.id}" ${vinc && vinc.ativo ? 'checked' : ''} ${aplicavel ? '' : 'disabled'}>
+            <strong>${API.esc(v.placa)}</strong> — ${API.esc(v.modelo||'')} <span class="muted">(${API.esc(v.tipo||'')})</span>
+          </label>
+          ${!aplicavel ? '<br><span class="muted" style="font-size:11px">nao aplicavel a este tipo</span>' : ''}
+        </div>
+        <div style="font-size:12px;text-align:right">
+          ${vinc && vinc.ultima_execucao_km ? 'Ult: '+API.fmtNum(vinc.ultima_execucao_km,0)+' km' : '—'}
+          ${vinc && vinc.ultima_execucao_data ? '<br>'+API.fmtData(vinc.ultima_execucao_data) : ''}
+        </div>
+      </div>`;
+  }).join('');
+  document.getElementById('veic-lista').innerHTML = rows || '<p class="muted">Cadastre veiculos primeiro.</p>';
+  UI.openModal('modal-veic');
+}
+
+function closeModalVeic() { UI.closeModal('modal-veic'); _planoAtivo = null; }
+
+async function salvarVinculos() {
+  if (!_planoAtivo) return;
+  const desejados = new Set(
+    Array.from(document.querySelectorAll('.vinc-cb:checked')).map(c => c.dataset.id)
+  );
+  const atuais = _planoVeiculos.filter(pv => pv.plano_id === _planoAtivo.id);
+  const adicionar = [...desejados].filter(id => !atuais.some(pv => pv.veiculo_id === id && pv.ativo));
+  const desativar = atuais.filter(pv => pv.ativo && !desejados.has(pv.veiculo_id));
+
+  let erros = 0;
+  for (const veic_id of adicionar) {
+    const existe = atuais.find(pv => pv.veiculo_id === veic_id);
+    if (existe) {
+      const r = await API.patch(`trans_planos_veiculo?id=eq.${existe.id}`, { ativo: true });
+      if (!r.ok) erros++;
+    } else {
+      const r = await API.post('trans_planos_veiculo', {
+        plano_id: _planoAtivo.id, veiculo_id: veic_id, ativo: true
+      });
+      if (!r.ok) erros++;
+    }
+  }
+  for (const pv of desativar) {
+    const r = await API.patch(`trans_planos_veiculo?id=eq.${pv.id}`, { ativo: false });
+    if (!r.ok) erros++;
+  }
+  if (erros > 0) UI.toast(`Alguns vinculos falharam (${erros})`, 'erro');
+  else UI.toast('Vinculos atualizados', 'ok');
+  const rpv = await API.get('trans_planos_veiculo?select=*');
+  if (rpv.ok) { _planoVeiculos = rpv.data; renderKpis(); renderTable(); }
+  closeModalVeic();
+}
+</script>
+</body>
+</html>

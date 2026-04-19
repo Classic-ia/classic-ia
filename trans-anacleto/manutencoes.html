@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manutencoes - Trans Anacleto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+<script src="page_bootstrap.js"></script>
+</head>
+<body class="page-bg">
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+  <div id="header-area"></div>
+  <div id="kpi-area"></div>
+  <div id="filters-area"></div>
+  <div class="card"><div class="card-body" id="table-area"><div class="loading-center"><div class="spinner"></div></div></div></div>
+</div>
+
+<!-- Modal abrir manutencao -->
+<div id="modal-abrir" class="modal" style="display:none">
+  <div class="modal-overlay" onclick="closeModalAbrir()"></div>
+  <div class="modal-content" style="max-width:560px">
+    <div class="modal-header">
+      <h3>Nova manutencao</h3>
+      <button class="modal-close" onclick="closeModalAbrir()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="form-abrir" onsubmit="confirmarAbrir(event)">
+        <div class="form-grid" style="grid-template-columns:repeat(2,1fr)">
+          <div class="form-field form-field-full">
+            <label>Veiculo *</label>
+            <select id="a-veiculo" required onchange="onVeiculoChange()">
+              <option value="">Selecione...</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Tipo *</label>
+            <select id="a-tipo" required>
+              <option value="preventiva">Preventiva</option>
+              <option value="corretiva">Corretiva</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label>KM atual *</label>
+            <input type="number" step="1" id="a-km" required>
+            <span class="muted" id="a-km-hint" style="font-size:12px"></span>
+          </div>
+          <div class="form-field form-field-full">
+            <label>Servico *</label>
+            <input id="a-servico" placeholder="ex: Troca de oleo motor" required>
+          </div>
+          <div class="form-field">
+            <label>Oficina</label>
+            <input id="a-oficina" placeholder="Interna / externa">
+          </div>
+          <div class="form-field">
+            <label>Executado por</label>
+            <input id="a-executor">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observacao</label>
+            <textarea id="a-obs" rows="2"></textarea>
+          </div>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModalAbrir()">Cancelar</button>
+      <button class="btn btn-primary" onclick="document.getElementById('form-abrir').requestSubmit()">Abrir</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const _state = {
+  manutencoes: [],
+  veiculos: [],
+  filtros: { veiculo: '', tipo: '', status: '', periodo: 'mes' },
+  page: 1,
+  pageSize: 50
+};
+
+PageBootstrap.init({
+  page: 'manutencoes',
+  title: 'Manutencoes',
+  breadcrumb: 'Oficina / Manutencoes',
+  perfisPermitidos: ['all'],
+  loadData: async () => {
+    const [v, m] = await Promise.all([
+      API.get('trans_veiculos?select=id,placa,modelo,tipo,km_atual,status&order=placa'),
+      API.get('v_trans_manutencoes_full?select=*&order=data_abertura.desc&limit=500')
+    ]);
+    return { v, m };
+  },
+  render: (res) => {
+    _state.veiculos = res.v.ok ? res.v.data : [];
+    _state.manutencoes = res.m.ok ? res.m.data : [];
+    document.getElementById('header-area').innerHTML = UI.pageHeader({
+      title: 'Manutencoes',
+      subtitle: 'Ordens de servico da frota. Preventiva (por plano) e corretiva (por ocorrencia).',
+      actions: [{ label: 'Nova manutencao', onclick: 'abrirNova()', class: 'btn-primary' }]
+    });
+    renderFilters();
+    renderKpis();
+    renderTable();
+  }
+});
+
+function renderFilters() {
+  const veicOpts = [{ value: '', label: 'Todos os veiculos' }]
+    .concat(_state.veiculos.map(v => ({ value: v.id, label: `${v.placa} - ${v.modelo||''}`.trim() })));
+  document.getElementById('filters-area').innerHTML = UI.filterBar({
+    id: 'fb-manut',
+    filters: [
+      { id: 'fb-veic', label: 'Veiculo', type: 'select', options: veicOpts, value: _state.filtros.veiculo },
+      { id: 'fb-tipo', label: 'Tipo', type: 'select', options: [
+        { value:'', label:'Todos' },
+        { value:'preventiva', label:'Preventiva' },
+        { value:'corretiva', label:'Corretiva' }
+      ], value: _state.filtros.tipo },
+      { id: 'fb-status', label: 'Status', type: 'select', options: [
+        { value:'', label:'Todos' },
+        { value:'aberta', label:'Aberta' },
+        { value:'em_andamento', label:'Em andamento' },
+        { value:'concluida', label:'Concluida' },
+        { value:'cancelada', label:'Cancelada' }
+      ], value: _state.filtros.status },
+      { id: 'fb-periodo', label: 'Periodo', type: 'select', options: [
+        { value:'mes', label:'Ultimos 30 dias' },
+        { value:'trimestre', label:'Ultimos 90 dias' },
+        { value:'ano', label:'Ultimos 12 meses' },
+        { value:'tudo', label:'Tudo' }
+      ], value: _state.filtros.periodo }
+    ],
+    onApply: 'aplicarFiltros()',
+    onClear: 'limparFiltros()'
+  });
+}
+
+function aplicarFiltros() {
+  _state.filtros.veiculo = document.getElementById('fb-veic').value;
+  _state.filtros.tipo = document.getElementById('fb-tipo').value;
+  _state.filtros.status = document.getElementById('fb-status').value;
+  _state.filtros.periodo = document.getElementById('fb-periodo').value;
+  _state.page = 1;
+  renderKpis(); renderTable();
+}
+function limparFiltros() {
+  _state.filtros = { veiculo:'', tipo:'', status:'', periodo:'mes' };
+  _state.page = 1;
+  renderFilters(); renderKpis(); renderTable();
+}
+
+function manutencoesFiltradas() {
+  const hoje = new Date();
+  let limite = null;
+  if (_state.filtros.periodo === 'mes') limite = new Date(hoje.getTime() - 30*86400000);
+  else if (_state.filtros.periodo === 'trimestre') limite = new Date(hoje.getTime() - 90*86400000);
+  else if (_state.filtros.periodo === 'ano') limite = new Date(hoje.getTime() - 365*86400000);
+  return _state.manutencoes.filter(m => {
+    if (_state.filtros.veiculo && m.veiculo_id !== _state.filtros.veiculo) return false;
+    if (_state.filtros.tipo && m.tipo !== _state.filtros.tipo) return false;
+    if (_state.filtros.status && m.status !== _state.filtros.status) return false;
+    if (limite && new Date(m.data_abertura) < limite) return false;
+    return true;
+  });
+}
+
+function renderKpis() {
+  const filt = manutencoesFiltradas();
+  const abertas = filt.filter(m => m.status === 'aberta').length;
+  const andamento = filt.filter(m => m.status === 'em_andamento').length;
+  const concluidas = filt.filter(m => m.status === 'concluida').length;
+  const custoTotal = filt.filter(m => m.status !== 'cancelada')
+    .reduce((s,m) => s + Number(m.custo_total_calc||0), 0);
+  document.getElementById('kpi-area').innerHTML = UI.kpiGrid([
+    { label: 'Abertas', value: abertas, color: '#2563eb' },
+    { label: 'Em andamento', value: andamento, color: '#d97706' },
+    { label: 'Concluidas', value: concluidas, color: '#059669' },
+    { label: 'Custo periodo', value: 'R$ '+API.fmtNum(custoTotal,2), color: '#0f172a' }
+  ]);
+}
+
+function statusBadge(s) {
+  const map = {
+    'aberta': { txt:'Aberta', cls:'badge-info' },
+    'em_andamento': { txt:'Em andamento', cls:'badge-warning' },
+    'concluida': { txt:'Concluida', cls:'badge-success' },
+    'cancelada': { txt:'Cancelada', cls:'badge-muted' }
+  };
+  const m = map[s] || { txt: s, cls: 'badge-muted' };
+  return `<span class="badge ${m.cls}">${m.txt}</span>`;
+}
+
+function renderTable() {
+  const filt = manutencoesFiltradas();
+  const total = filt.length;
+  const start = (_state.page - 1) * _state.pageSize;
+  const pageRows = filt.slice(start, start + _state.pageSize);
+
+  if (pageRows.length === 0) {
+    document.getElementById('table-area').innerHTML = UI.emptyState
+      ? UI.emptyState('Nenhuma manutencao encontrada com esses filtros.')
+      : '<p class="muted" style="padding:20px;text-align:center">Nenhuma manutencao encontrada.</p>';
+    return;
+  }
+
+  const rows = pageRows.map(m => [
+    API.fmtData(m.data_abertura),
+    `<strong>${API.esc(m.placa)}</strong><br><span class="muted" style="font-size:12px">${API.esc(m.veiculo_modelo||'')}</span>`,
+    m.tipo === 'preventiva'
+      ? '<span class="badge badge-info">Preventiva</span>'
+      : '<span class="badge badge-warning">Corretiva</span>',
+    API.esc(m.servico || ''),
+    API.fmtNum(m.km_abertura, 0) + ' km',
+    statusBadge(m.status),
+    m.itens_count + ' / ' + m.pneus_count,
+    'R$ ' + API.fmtNum(m.custo_total_calc||0, 2),
+    `<a class="btn btn-sm btn-outline" href="manutencao_ficha.html?id=${m.id}">Abrir</a>`
+  ]);
+
+  document.getElementById('table-area').innerHTML = UI.table({
+    columns: ['Data', 'Veiculo', 'Tipo', 'Servico', 'KM', 'Status', 'Itens/Pneus', 'Custo', 'Acoes'],
+    rows,
+    empty: 'Nenhum registro.'
+  });
+
+  if (total > _state.pageSize) {
+    const totalPages = Math.ceil(total / _state.pageSize);
+    document.getElementById('table-area').insertAdjacentHTML('beforeend',
+      UI.pagination({ currentPage: _state.page, totalPages, totalRows: total, pageSize: _state.pageSize, onChange: 'mudarPagina' }));
+  }
+}
+
+function mudarPagina(p) {
+  _state.page = p; renderTable();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+// -----------------------------------------------------------------
+// Abrir manutencao
+// -----------------------------------------------------------------
+function abrirNova() {
+  const sel = document.getElementById('a-veiculo');
+  sel.innerHTML = '<option value="">Selecione...</option>' +
+    _state.veiculos.filter(v => v.status !== 'vendido').map(v =>
+      `<option value="${v.id}" data-km="${v.km_atual||0}">${API.esc(v.placa)} - ${API.esc(v.modelo||'')}</option>`
+    ).join('');
+  document.getElementById('a-tipo').value = 'preventiva';
+  document.getElementById('a-km').value = '';
+  document.getElementById('a-servico').value = '';
+  document.getElementById('a-oficina').value = '';
+  document.getElementById('a-executor').value = '';
+  document.getElementById('a-obs').value = '';
+  document.getElementById('a-km-hint').textContent = '';
+  UI.openModal('modal-abrir');
+}
+function closeModalAbrir() { UI.closeModal('modal-abrir'); }
+
+function onVeiculoChange() {
+  const sel = document.getElementById('a-veiculo');
+  const km = sel.selectedOptions[0]?.dataset.km;
+  if (km) {
+    document.getElementById('a-km').value = km;
+    document.getElementById('a-km-hint').textContent = `KM atual do veiculo: ${API.fmtNum(km,0)}. Nao pode retroceder.`;
+  } else {
+    document.getElementById('a-km-hint').textContent = '';
+  }
+}
+
+async function confirmarAbrir(e) {
+  e.preventDefault();
+  const payload = {
+    p_veiculo_id: document.getElementById('a-veiculo').value,
+    p_tipo: document.getElementById('a-tipo').value,
+    p_km_atual: parseFloat(document.getElementById('a-km').value),
+    p_servico: document.getElementById('a-servico').value.trim(),
+    p_oficina: document.getElementById('a-oficina').value.trim() || null,
+    p_executado_por: document.getElementById('a-executor').value.trim() || null,
+    p_observacao: document.getElementById('a-obs').value.trim() || null
+  };
+  if (!payload.p_veiculo_id || !payload.p_servico) {
+    UI.toast('Preencha os campos obrigatorios', 'erro'); return;
+  }
+  const r = await API.rpc('trans_manutencao_abrir', payload);
+  if (!r.ok) { UI.toast(r.error || 'Erro ao abrir manutencao', 'erro'); return; }
+  UI.toast('Manutencao aberta', 'ok');
+  closeModalAbrir();
+  window.location.href = `manutencao_ficha.html?id=${r.data.manutencao_id || r.data.id || r.data}`;
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Finalizar - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3>Finalizar Manutencao</h3>
+    <div id="info">Carregando...</div>
+  </div>
+
+  <div class="m-card">
+    <div class="m-field">
+      <label>Horimetro final *</label>
+      <input type="number" id="hf" step="0.1" min="0" placeholder="0,0">
+      <div class="m-hint" id="hint"></div>
+    </div>
+    <div class="m-field">
+      <label>Data de execucao</label>
+      <input type="date" id="data">
+    </div>
+    <div class="m-field">
+      <label>Foto (opcional)</label>
+      <input type="file" accept="image/*" capture="environment">
+    </div>
+    <button class="m-btn-primary" onclick="finalizar()" id="btn">Confirmar Finalizacao</button>
+  </div>
+</main>
+<script>
+const manutId = new URLSearchParams(location.search).get('id');
+let manut = null;
+
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Finalizar', back: 'm_manutencao_itens.html?id=' + manutId, active: 'manut' });
+
+  if (!manutId) {
+    MShell.toast('ID invalido', 'err');
+    return;
+  }
+
+  document.getElementById('data').value = new Date().toISOString().slice(0,10);
+
+  const r = await API.get(`jr_manutencoes?select=id,servico,horimetro_execucao,custo_total_calc,status,maquina:jr_maquinas(codigo,descricao,horimetro_atual)&id=eq.${manutId}`);
+  if (!r.ok || !r.data.length) { MShell.toast('Manutencao nao encontrada', 'err'); return; }
+  manut = r.data[0];
+
+  if (manut.status === 'concluida' || manut.status === 'cancelada') {
+    MShell.toast('Manutencao ja encerrada', 'warn');
+    document.getElementById('btn').disabled = true;
+  }
+
+  const hAtual = Number(manut.maquina?.horimetro_atual || manut.horimetro_execucao || 0);
+  document.getElementById('hf').value = hAtual.toFixed(1);
+  document.getElementById('hint').textContent = `Horimetro atual: ${hAtual.toFixed(1)}h. Nao pode ser menor.`;
+
+  document.getElementById('info').innerHTML = `
+    <div class="m-info-label">Servico</div>
+    <div class="m-info-value">${esc(manut.servico)}</div>
+    <div style="margin-top:8px;" class="m-info-label">Maquina</div>
+    <div class="m-info-value">${esc(manut.maquina?.codigo || '')} - ${esc(manut.maquina?.descricao || '')}</div>
+    <div style="margin-top:8px;" class="m-info-label">Custo acumulado</div>
+    <div class="m-info-value">R$ ${Number(manut.custo_total_calc || 0).toFixed(2).replace('.',',')}</div>
+  `;
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function finalizar() {
+  const btn = document.getElementById('btn');
+  const hf = parseFloat(document.getElementById('hf').value);
+  const data = document.getElementById('data').value;
+  const hAtual = Number(manut.maquina?.horimetro_atual || manut.horimetro_execucao || 0);
+
+  if (isNaN(hf) || hf < 0) return MShell.toast('Horimetro invalido', 'warn');
+  if (hf < hAtual) return MShell.toast('Horimetro nao pode retroceder', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Finalizando...';
+  const r = await API.rpc('jr_manutencao_finalizar', {
+    p_manutencao_id: manutId,
+    p_horimetro_final: hf,
+    p_data_execucao: data || null
+  });
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = 'Confirmar Finalizacao';
+    return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  }
+
+  const proxH = r.data?.proximo_horimetro;
+  const proxD = r.data?.proxima_data;
+  let msg = 'Manutencao finalizada';
+  if (proxH) msg += ` · Proxima em ${Number(proxH).toFixed(0)}h`;
+  else if (proxD) msg += ` · Proxima em ${new Date(proxD + 'T00:00').toLocaleDateString('pt-BR')}`;
+  MShell.toast(msg, 'ok');
+  setTimeout(() => location.href = 'm_manutencao_buscar.html', 1500);
+}
+</script>
+</body>
+</html>

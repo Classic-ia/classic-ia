@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Deslocamento - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3>Registrar Deslocamento</h3>
+
+    <div class="m-field">
+      <label>Data</label>
+      <input type="date" id="data">
+    </div>
+
+    <div class="m-field">
+      <label>Veiculo *</label>
+      <select id="veic">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>OS</label>
+      <select id="os">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>Maquina Transportada</label>
+      <select id="maq">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-row">
+      <div class="m-field">
+        <label>KM Inicial</label>
+        <input type="number" id="ki" min="0" step="1" inputmode="numeric">
+      </div>
+      <div class="m-field">
+        <label>KM Final</label>
+        <input type="number" id="kf" min="0" step="1" inputmode="numeric">
+      </div>
+    </div>
+
+    <div class="m-field">
+      <label>Motivo *</label>
+      <textarea id="motivo" rows="2" placeholder="Descricao do deslocamento"></textarea>
+    </div>
+
+    <div class="m-field">
+      <label>Motorista</label>
+      <input type="text" id="motorista" placeholder="Nome do motorista">
+    </div>
+
+    <button class="m-btn-primary" onclick="salvar()" id="btn">Registrar</button>
+  </div>
+</main>
+<script>
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Deslocamento', back: 'm_home.html', active: 'mais' });
+
+  document.getElementById('data').value = new Date().toISOString().slice(0,10);
+  document.getElementById('motorista').value = user.nome || '';
+
+  const [v, m, o] = await Promise.all([
+    API.get('jr_veiculos?select=id,placa,descricao&order=placa'),
+    API.get('jr_maquinas?select=id,codigo,descricao&status=neq.vendida&order=codigo'),
+    API.get('jr_ordens_servico?select=id,numero_os,obra_local&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=200'),
+  ]);
+  const veics = v.ok ? v.data : [];
+  const maqs = m.ok ? m.data : [];
+  const oss = o.ok ? o.data : [];
+
+  document.getElementById('veic').innerHTML = '<option value="">Selecione...</option>' +
+    veics.map(x => `<option value="${x.id}">${esc(x.placa)} - ${esc(x.descricao || '')}</option>`).join('');
+  document.getElementById('maq').innerHTML = '<option value="">—</option>' +
+    maqs.map(x => `<option value="${x.id}">${esc(x.codigo)} - ${esc(x.descricao)}</option>`).join('');
+  document.getElementById('os').innerHTML = '<option value="">—</option>' +
+    oss.map(x => `<option value="${x.id}">${esc(x.numero_os)} - ${esc(x.obra_local || '')}</option>`).join('');
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function salvar() {
+  const btn = document.getElementById('btn');
+  const data = document.getElementById('data').value;
+  const veic = document.getElementById('veic').value;
+  const os = document.getElementById('os').value;
+  const maq = document.getElementById('maq').value;
+  const ki = parseInt(document.getElementById('ki').value, 10);
+  const kf = parseInt(document.getElementById('kf').value, 10);
+  const motivo = document.getElementById('motivo').value.trim();
+  const motorista = document.getElementById('motorista').value.trim();
+
+  if (!data) return MShell.toast('Informe a data', 'warn');
+  if (!veic) return MShell.toast('Selecione o veiculo', 'warn');
+  if (isNaN(ki) || ki < 0) return MShell.toast('KM inicial invalido', 'warn');
+  if (isNaN(kf) || kf <= ki) return MShell.toast('KM final deve ser maior que inicial', 'warn');
+  if (!motivo) return MShell.toast('Informe o motivo', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const r = await API.rpc('jr_deslocamento_registrar', {
+    p_veiculo_id: veic,
+    p_data: data,
+    p_km_inicial: ki,
+    p_km_final: kf,
+    p_motivo: motivo,
+    p_os_id: os || null,
+    p_maquina_id: maq || null,
+    p_motorista_nome: motorista || null
+  });
+
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = 'Registrar';
+    return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  }
+
+  MShell.toast('Deslocamento registrado (' + (kf - ki) + ' km)', 'ok');
+  setTimeout(() => { location.href = 'm_home.html'; }, 1200);
+}
+</script>
+</body>
+</html>

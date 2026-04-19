@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Periodo OS - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3>Selecionar Maquina</h3>
+    <button class="m-btn-primary" onclick="abrirCamera()" style="margin-bottom:10px;">
+      &#128247; Ler QR da Maquina
+    </button>
+    <div class="m-field">
+      <label>Ou escolha manualmente</label>
+      <select id="maq" onchange="onMaqChange()">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+    <div id="info-maq" style="display:none">
+      <div class="m-info-label">Horimetro atual</div>
+      <div class="m-info-value" id="horimetro-atual">—</div>
+    </div>
+  </div>
+
+  <div class="m-card" id="bloco-os" style="display:none">
+    <h3>OS em Andamento</h3>
+    <div class="m-field">
+      <label>Ordem de Servico</label>
+      <select id="os">
+        <option value="">Selecione...</option>
+      </select>
+      <div class="m-hint">Apenas OS em execucao aparecem aqui</div>
+    </div>
+
+    <div class="m-field">
+      <label>Data</label>
+      <input type="date" id="data">
+    </div>
+
+    <div class="m-row">
+      <div class="m-field">
+        <label>Horimetro Inicial</label>
+        <input type="number" id="hi" step="0.1" min="0" placeholder="0,0">
+      </div>
+      <div class="m-field">
+        <label>Horimetro Final</label>
+        <input type="number" id="hf" step="0.1" min="0" placeholder="0,0">
+      </div>
+    </div>
+
+    <div class="m-field">
+      <label>Observacao</label>
+      <textarea id="obs" rows="2" placeholder="Opcional"></textarea>
+    </div>
+
+    <button class="m-btn-primary" onclick="salvar()">Registrar Periodo</button>
+  </div>
+</main>
+<script>
+let maquinas = [];
+let oss = [];
+let maqSelecionada = null;
+
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Periodo OS', back: 'm_home.html', active: 'os' });
+
+  document.getElementById('data').value = new Date().toISOString().slice(0,10);
+
+  const [m, o] = await Promise.all([
+    API.get('jr_maquinas?select=id,codigo,descricao,horimetro_atual&status=neq.vendida&order=codigo'),
+    API.get('jr_ordens_servico?select=id,numero_os,obra_local,cliente:jr_clientes(razao_social,nome)&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=200'),
+  ]);
+  maquinas = m.ok ? m.data : [];
+  oss = o.ok ? o.data : [];
+
+  document.getElementById('maq').innerHTML = '<option value="">Selecione...</option>' +
+    maquinas.map(x => `<option value="${x.id}" data-h="${x.horimetro_atual || 0}">${esc(x.codigo)} - ${esc(x.descricao)}</option>`).join('');
+  document.getElementById('os').innerHTML = '<option value="">Selecione...</option>' +
+    oss.map(x => {
+      const nome = x.cliente?.razao_social || x.cliente?.nome || '';
+      return `<option value="${x.id}">${esc(x.numero_os)} - ${esc(nome)} (${esc(x.obra_local || '')})</option>`;
+    }).join('');
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function abrirCamera() {
+  MScan.openCamera({
+    title: 'Aponte para o QR da maquina',
+    onDetect: (codigo) => {
+      const maq = maquinas.find(m => m.codigo === codigo || m.id === codigo);
+      if (!maq) {
+        MShell.toast('Maquina nao encontrada: ' + codigo, 'err');
+        return;
+      }
+      document.getElementById('maq').value = maq.id;
+      onMaqChange();
+      MShell.toast('Maquina ' + maq.codigo + ' selecionada', 'ok');
+    }
+  });
+}
+
+function onMaqChange() {
+  const id = document.getElementById('maq').value;
+  maqSelecionada = maquinas.find(m => m.id === id);
+  if (maqSelecionada) {
+    const h = Number(maqSelecionada.horimetro_atual || 0);
+    document.getElementById('horimetro-atual').textContent = h.toLocaleString('pt-BR', {minimumFractionDigits:1, maximumFractionDigits:1}) + 'h';
+    document.getElementById('info-maq').style.display = '';
+    document.getElementById('bloco-os').style.display = '';
+    if (!document.getElementById('hi').value) document.getElementById('hi').value = h.toFixed(1);
+  } else {
+    document.getElementById('info-maq').style.display = 'none';
+    document.getElementById('bloco-os').style.display = 'none';
+  }
+}
+
+async function salvar() {
+  const os = document.getElementById('os').value;
+  const maq = document.getElementById('maq').value;
+  const data = document.getElementById('data').value;
+  const hi = parseFloat(document.getElementById('hi').value);
+  const hf = parseFloat(document.getElementById('hf').value);
+  const obs = document.getElementById('obs').value.trim();
+
+  if (!maq) return MShell.toast('Selecione a maquina', 'warn');
+  if (!os) return MShell.toast('Selecione a OS', 'warn');
+  if (!data) return MShell.toast('Informe a data', 'warn');
+  if (isNaN(hi) || hi < 0) return MShell.toast('Horimetro inicial invalido', 'warn');
+  if (isNaN(hf) || hf <= hi) return MShell.toast('Horimetro final deve ser maior que o inicial', 'warn');
+
+  const r = await API.rpc('jr_os_periodo_registrar', {
+    p_os_id: os,
+    p_maquina_id: maq,
+    p_data: data,
+    p_horimetro_inicial: hi,
+    p_horimetro_final: hf,
+    p_observacao: obs || null
+  });
+
+  if (!r.ok) return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  const horas = (hf - hi).toFixed(1);
+  MShell.toast(`Periodo registrado (${horas}h)`, 'ok');
+  setTimeout(() => { location.href = 'm_home.html'; }, 1200);
+}
+</script>
+</body>
+</html>

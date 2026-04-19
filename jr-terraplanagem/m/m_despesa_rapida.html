@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Despesa Rapida - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3>Nova Despesa</h3>
+
+    <div class="m-field">
+      <label>Data</label>
+      <input type="date" id="data">
+    </div>
+
+    <div class="m-field">
+      <label>Tipo *</label>
+      <select id="tipo">
+        <option value="combustivel">Combustivel</option>
+        <option value="peca">Peca</option>
+        <option value="manutencao">Manutencao</option>
+        <option value="servico">Servico</option>
+        <option value="outros">Outros</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>Valor (R$) *</label>
+      <input type="number" id="valor" step="0.01" min="0.01" placeholder="0,00" inputmode="decimal">
+    </div>
+
+    <div class="m-field">
+      <label>Descricao *</label>
+      <textarea id="desc" rows="2" placeholder="O que foi comprado/gasto"></textarea>
+    </div>
+
+    <div class="m-field">
+      <label>Maquina</label>
+      <select id="maq">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>OS Vinculada</label>
+      <select id="os">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>Fornecedor</label>
+      <select id="forn">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>NF / Cupom</label>
+      <input type="text" id="nf" placeholder="Numero">
+    </div>
+
+    <div class="m-field">
+      <label>Foto do comprovante</label>
+      <input type="file" accept="image/*" capture="environment" id="foto">
+      <div class="m-hint" id="foto-hint"></div>
+    </div>
+
+    <button class="m-btn-primary" onclick="salvar()" id="btn-save">Registrar Despesa</button>
+  </div>
+</main>
+<script>
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Despesa Rapida', back: 'm_home.html', active: 'mais' });
+
+  document.getElementById('data').value = new Date().toISOString().slice(0,10);
+
+  const [m, o, f] = await Promise.all([
+    API.get('jr_maquinas?select=id,codigo,descricao&status=neq.vendida&order=codigo'),
+    API.get('jr_ordens_servico?select=id,numero_os,obra_local&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=200'),
+    API.get('jr_fornecedores?select=id,razao_social&order=razao_social'),
+  ]);
+  const maqs = m.ok ? m.data : [];
+  const oss = o.ok ? o.data : [];
+  const forns = f.ok ? f.data : [];
+
+  document.getElementById('maq').innerHTML = '<option value="">—</option>' +
+    maqs.map(x => `<option value="${x.id}">${esc(x.codigo)} - ${esc(x.descricao)}</option>`).join('');
+  document.getElementById('os').innerHTML = '<option value="">—</option>' +
+    oss.map(x => `<option value="${x.id}">${esc(x.numero_os)} - ${esc(x.obra_local || '')}</option>`).join('');
+  document.getElementById('forn').innerHTML = '<option value="">—</option>' +
+    forns.map(x => `<option value="${x.id}">${esc(x.razao_social)}</option>`).join('');
+
+  document.getElementById('foto').addEventListener('change', (e) => {
+    const f = e.target.files[0];
+    if (f) document.getElementById('foto-hint').textContent = f.name + ' (' + Math.round(f.size / 1024) + ' KB)';
+  });
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function salvar() {
+  const btn = document.getElementById('btn-save');
+  const data = document.getElementById('data').value;
+  const tipo = document.getElementById('tipo').value;
+  const valor = parseFloat(document.getElementById('valor').value);
+  const desc = document.getElementById('desc').value.trim();
+  const maq = document.getElementById('maq').value;
+  const os = document.getElementById('os').value;
+  const forn = document.getElementById('forn').value;
+  const nf = document.getElementById('nf').value.trim();
+
+  if (!data) return MShell.toast('Informe a data', 'warn');
+  if (!tipo) return MShell.toast('Informe o tipo', 'warn');
+  if (isNaN(valor) || valor <= 0) return MShell.toast('Valor invalido', 'warn');
+  if (!desc) return MShell.toast('Descricao obrigatoria', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+
+  const r = await API.post('jr_despesas', {
+    data, tipo, valor,
+    descricao: desc,
+    maquina_id: maq || null,
+    os_id: os || null,
+    fornecedor_id: forn || null,
+    nota_fiscal_numero: nf || null
+  }, 'return=representation');
+
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = 'Registrar Despesa';
+    return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  }
+
+  MShell.toast('Despesa registrada (R$ ' + valor.toFixed(2).replace('.',',') + ')', 'ok');
+  setTimeout(() => { location.href = 'm_home.html'; }, 1200);
+}
+</script>
+</body>
+</html>

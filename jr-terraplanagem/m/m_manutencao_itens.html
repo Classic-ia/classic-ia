@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Itens - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3 id="titulo">Manutencao</h3>
+    <div id="info-top">Carregando...</div>
+  </div>
+
+  <div class="m-card">
+    <h3>Itens Consumidos</h3>
+    <div id="lista-itens"></div>
+    <button class="m-btn-secondary" onclick="abrirAdd()" style="margin-top:10px;">+ Adicionar item</button>
+  </div>
+
+  <div class="m-card">
+    <a class="m-btn-primary" id="link-fin" style="text-decoration:none; text-align:center; display:block;">Finalizar Manutencao</a>
+    <button class="m-btn-danger" onclick="cancelar()" style="margin-top:10px;">Cancelar Manutencao</button>
+  </div>
+
+  <!-- Modal Add Item -->
+  <div id="m-add" style="display:none; position:fixed; inset:0; background:rgba(15,23,42,0.7); z-index:150; align-items:flex-end; justify-content:center;">
+    <div style="background:#fff; border-radius:16px 16px 0 0; padding:20px; width:100%; max-height:85vh; overflow:auto;">
+      <h3 style="margin:0 0 14px 0;">Adicionar Item</h3>
+      <button class="m-btn-secondary" onclick="scanEan()" style="margin-bottom:10px;">&#128247; Bipar EAN</button>
+
+      <div class="m-field">
+        <label>Produto *</label>
+        <select id="add-prod">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label>Modalidade *</label>
+        <select id="add-mod" onchange="onModChange()">
+          <option value="novo">Novo (com lote FEFO)</option>
+          <option value="usado">Usado (condicao)</option>
+        </select>
+      </div>
+
+      <div class="m-field" id="fld-cond" style="display:none">
+        <label>Condicao</label>
+        <select id="add-cond">
+          <option value="A">A - Revisado</option>
+          <option value="B">B - Funcional</option>
+          <option value="C">C - Sucata</option>
+        </select>
+      </div>
+
+      <div class="m-field">
+        <label>Quantidade *</label>
+        <input type="number" id="add-qt" step="0.01" min="0.01" placeholder="0,00" inputmode="decimal">
+      </div>
+
+      <div class="m-row">
+        <button class="m-btn-secondary" onclick="document.getElementById('m-add').style.display='none'">Cancelar</button>
+        <button class="m-btn-primary" onclick="salvarItem()" id="btn-add">Adicionar</button>
+      </div>
+    </div>
+  </div>
+</main>
+<script>
+const manutId = new URLSearchParams(location.search).get('id');
+let manut = null;
+let produtos = [];
+
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Itens', back: 'm_manutencao_buscar.html', active: 'manut' });
+
+  if (!manutId) {
+    MShell.toast('ID invalido', 'err');
+    setTimeout(() => location.href = 'm_manutencao_buscar.html', 1200);
+    return;
+  }
+
+  await carregar();
+
+  const p = await API.get('jr_produtos?select=id,sku,nome&order=sku');
+  produtos = p.ok ? p.data : [];
+  document.getElementById('add-prod').innerHTML = '<option value="">Selecione...</option>' +
+    produtos.map(x => `<option value="${x.id}">${esc(x.sku)} - ${esc(x.nome)}</option>`).join('');
+
+  document.getElementById('link-fin').href = 'm_manutencao_finalizar.html?id=' + manutId;
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function carregar() {
+  const r = await API.get(`jr_manutencoes?select=id,tipo,servico,status,horimetro_execucao,custo_total_calc,maquina:jr_maquinas(codigo,descricao,horimetro_atual)&id=eq.${manutId}`);
+  if (!r.ok || !r.data.length) {
+    MShell.toast('Manutencao nao encontrada', 'err');
+    return;
+  }
+  manut = r.data[0];
+  document.getElementById('titulo').textContent = manut.servico;
+  const pill = manut.status === 'aberta' ? '<span class="m-pill m-pill-aberta">Aberta</span>'
+             : manut.status === 'em_andamento' ? '<span class="m-pill m-pill-andamento">Em andamento</span>'
+             : manut.status === 'concluida' ? '<span class="m-pill m-pill-concluida">Concluida</span>'
+             : '<span class="m-pill m-pill-cancelada">Cancelada</span>';
+  document.getElementById('info-top').innerHTML = `
+    <div class="m-info-label">Maquina</div>
+    <div class="m-info-value">${esc(manut.maquina?.codigo || '')} - ${esc(manut.maquina?.descricao || '')}</div>
+    <div style="margin-top:8px; display:flex; justify-content:space-between;">
+      <div>
+        <div class="m-info-label">Horimetro</div>
+        <div class="m-info-value">${Number(manut.horimetro_execucao || 0).toFixed(1)}h</div>
+      </div>
+      <div>
+        <div class="m-info-label">Custo</div>
+        <div class="m-info-value">R$ ${Number(manut.custo_total_calc || 0).toFixed(2).replace('.',',')}</div>
+      </div>
+      <div>${pill}</div>
+    </div>
+  `;
+
+  const editavel = manut.status === 'aberta' || manut.status === 'em_andamento';
+  document.getElementById('link-fin').style.display = editavel ? '' : 'none';
+
+  const ri = await API.get(`jr_manutencao_itens?select=id,quantidade,modalidade,condicao,custo_unitario,produto:jr_produtos(sku,nome)&manutencao_id=eq.${manutId}&order=created_at.asc`);
+  const itens = ri.ok ? ri.data : [];
+
+  if (!itens.length) {
+    document.getElementById('lista-itens').innerHTML = '<div class="m-empty">Nenhum item consumido ainda.</div>';
+    return;
+  }
+
+  document.getElementById('lista-itens').innerHTML = itens.map(it => {
+    const total = Number(it.quantidade) * Number(it.custo_unitario || 0);
+    const cond = it.modalidade === 'usado' ? ` (cond. ${it.condicao})` : '';
+    return `<div style="border-top:1px solid #F1F5F9; padding:10px 0;">
+      <div style="font-weight:600;">${esc(it.produto?.sku || '')} - ${esc(it.produto?.nome || '')}</div>
+      <div style="font-size:12px; color:#64748B; margin-top:2px; display:flex; justify-content:space-between;">
+        <span>${it.quantidade}x ${it.modalidade}${cond}</span>
+        <span><b>R$ ${total.toFixed(2).replace('.',',')}</b></span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function abrirAdd() {
+  if (!manut || (manut.status !== 'aberta' && manut.status !== 'em_andamento')) {
+    return MShell.toast('Manutencao nao editavel', 'warn');
+  }
+  document.getElementById('add-prod').value = '';
+  document.getElementById('add-mod').value = 'novo';
+  document.getElementById('add-qt').value = '';
+  onModChange();
+  document.getElementById('m-add').style.display = 'flex';
+}
+
+function onModChange() {
+  document.getElementById('fld-cond').style.display = document.getElementById('add-mod').value === 'usado' ? '' : 'none';
+}
+
+function scanEan() {
+  MScan.openCamera({
+    title: 'Aponte para o codigo de barras',
+    formats: ['ean_13','ean_8','code_128','code_39','qr_code'],
+    onDetect: async (ean) => {
+      const r = await API.get(`jr_produtos_ean?select=produto_id&ean=eq.${encodeURIComponent(ean)}`);
+      if (!r.ok || !r.data.length) return MShell.toast('EAN nao cadastrado: ' + ean, 'err');
+      document.getElementById('add-prod').value = r.data[0].produto_id;
+      MShell.toast('Produto localizado', 'ok');
+    }
+  });
+}
+
+async function salvarItem() {
+  const btn = document.getElementById('btn-add');
+  const prod = document.getElementById('add-prod').value;
+  const mod = document.getElementById('add-mod').value;
+  const cond = document.getElementById('add-cond').value;
+  const qt = parseFloat(document.getElementById('add-qt').value);
+
+  if (!prod) return MShell.toast('Selecione o produto', 'warn');
+  if (isNaN(qt) || qt <= 0) return MShell.toast('Quantidade invalida', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const r = await API.rpc('jr_manutencao_adicionar_item', {
+    p_manutencao_id: manutId,
+    p_produto_id: prod,
+    p_quantidade: qt,
+    p_modalidade: mod,
+    p_condicao: mod === 'usado' ? cond : null
+  });
+  btn.disabled = false; btn.textContent = 'Adicionar';
+  if (!r.ok) return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  MShell.toast('Item adicionado', 'ok');
+  document.getElementById('m-add').style.display = 'none';
+  await carregar();
+}
+
+async function cancelar() {
+  const motivo = prompt('Motivo do cancelamento (>= 3 caracteres):');
+  if (!motivo || motivo.trim().length < 3) return;
+  const r = await API.rpc('jr_manutencao_cancelar', {
+    p_manutencao_id: manutId,
+    p_motivo: motivo.trim()
+  });
+  if (!r.ok) return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  MShell.toast('Manutencao cancelada', 'ok');
+  setTimeout(() => location.href = 'm_manutencao_buscar.html', 1200);
+}
+</script>
+</body>
+</html>

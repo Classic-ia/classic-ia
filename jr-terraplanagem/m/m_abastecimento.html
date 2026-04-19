@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Abastecimento - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+<script src="m_scan.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3>Selecionar Maquina</h3>
+    <button class="m-btn-primary" onclick="abrirCamera()" style="margin-bottom:10px;">
+      &#128247; Ler QR da Maquina
+    </button>
+    <div class="m-field">
+      <label>Ou escolha manualmente</label>
+      <select id="maq" onchange="onMaqChange()">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+    <div id="info-maq" style="display:none">
+      <div class="m-info-label">Horimetro atual</div>
+      <div class="m-info-value" id="horimetro-atual">—</div>
+    </div>
+  </div>
+
+  <div class="m-card" id="form-card" style="display:none">
+    <h3>Dados do Abastecimento</h3>
+
+    <div class="m-field">
+      <label>Data *</label>
+      <input type="date" id="data">
+    </div>
+
+    <div class="m-field">
+      <label>Origem *</label>
+      <select id="origem" onchange="onOrigemChange()">
+        <option value="tanque_proprio">Tanque Proprio</option>
+        <option value="posto">Posto Externo</option>
+      </select>
+    </div>
+
+    <div class="m-field" id="fld-tanque">
+      <label>Tanque</label>
+      <select id="tanque">
+        <option value="">Selecione...</option>
+      </select>
+    </div>
+
+    <div class="m-field" id="fld-posto" style="display:none">
+      <label>Nome do Posto</label>
+      <input type="text" id="posto" placeholder="Ex: Posto BR Marechal">
+    </div>
+
+    <div class="m-row">
+      <div class="m-field">
+        <label>Litros *</label>
+        <input type="number" id="litros" step="0.01" min="0.01" placeholder="0,00" inputmode="decimal">
+      </div>
+      <div class="m-field">
+        <label>Valor Total (R$) *</label>
+        <input type="number" id="valor" step="0.01" min="0" placeholder="0,00" inputmode="decimal">
+      </div>
+    </div>
+
+    <div class="m-field">
+      <label>Horimetro no abastecimento *</label>
+      <input type="number" id="hor" step="0.1" min="0" placeholder="0,0" inputmode="decimal">
+      <div class="m-hint" id="hor-hint"></div>
+    </div>
+
+    <div class="m-field">
+      <label>OS vinculada</label>
+      <select id="os">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>NF / Cupom</label>
+      <input type="text" id="nf">
+    </div>
+
+    <div class="m-field">
+      <label>Foto da bomba (opcional)</label>
+      <input type="file" accept="image/*" capture="environment">
+    </div>
+
+    <button class="m-btn-primary" onclick="salvar()" id="btn">Registrar Abastecimento</button>
+  </div>
+</main>
+<script>
+let maquinas = [], tanques = [], oss = [], maqSelecionada = null;
+
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Abastecimento', back: 'm_home.html', active: 'abast' });
+
+  document.getElementById('data').value = new Date().toISOString().slice(0,10);
+
+  const [m, t, o] = await Promise.all([
+    API.get('jr_maquinas?select=id,codigo,descricao,horimetro_atual&status=neq.vendida&order=codigo'),
+    API.get('jr_tanque?select=id,combustivel_tipo,saldo_atual_litros&order=combustivel_tipo'),
+    API.get('jr_ordens_servico?select=id,numero_os,obra_local&status=in.(aberta,em_execucao)&order=numero_os.desc&limit=200'),
+  ]);
+  maquinas = m.ok ? m.data : [];
+  tanques  = t.ok ? t.data : [];
+  oss      = o.ok ? o.data : [];
+
+  document.getElementById('maq').innerHTML = '<option value="">Selecione...</option>' +
+    maquinas.map(x => `<option value="${x.id}">${esc(x.codigo)} - ${esc(x.descricao)}</option>`).join('');
+  document.getElementById('tanque').innerHTML = '<option value="">Selecione...</option>' +
+    tanques.map(x => `<option value="${x.id}">${esc(x.combustivel_tipo)} (${Number(x.saldo_atual_litros).toLocaleString('pt-BR')}L disp.)</option>`).join('');
+  document.getElementById('os').innerHTML = '<option value="">—</option>' +
+    oss.map(x => `<option value="${x.id}">${esc(x.numero_os)} - ${esc(x.obra_local || '')}</option>`).join('');
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+function abrirCamera() {
+  MScan.openCamera({
+    title: 'Aponte para o QR da maquina',
+    onDetect: (codigo) => {
+      const maq = maquinas.find(m => m.codigo === codigo || m.id === codigo);
+      if (!maq) return MShell.toast('Maquina nao encontrada: ' + codigo, 'err');
+      document.getElementById('maq').value = maq.id;
+      onMaqChange();
+    }
+  });
+}
+
+function onMaqChange() {
+  const id = document.getElementById('maq').value;
+  maqSelecionada = maquinas.find(m => m.id === id);
+  if (!maqSelecionada) {
+    document.getElementById('info-maq').style.display = 'none';
+    document.getElementById('form-card').style.display = 'none';
+    return;
+  }
+  const h = Number(maqSelecionada.horimetro_atual || 0);
+  document.getElementById('horimetro-atual').textContent = h.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + 'h';
+  document.getElementById('hor').value = h.toFixed(1);
+  document.getElementById('hor-hint').textContent = 'Deve ser >= ' + h.toFixed(1) + 'h';
+  document.getElementById('info-maq').style.display = '';
+  document.getElementById('form-card').style.display = '';
+}
+
+function onOrigemChange() {
+  const o = document.getElementById('origem').value;
+  document.getElementById('fld-tanque').style.display = o === 'tanque_proprio' ? '' : 'none';
+  document.getElementById('fld-posto').style.display  = o === 'posto' ? '' : 'none';
+}
+
+async function salvar() {
+  const btn = document.getElementById('btn');
+  if (!maqSelecionada) return MShell.toast('Selecione a maquina', 'warn');
+
+  const data = document.getElementById('data').value;
+  const origem = document.getElementById('origem').value;
+  const tanque = document.getElementById('tanque').value;
+  const posto = document.getElementById('posto').value.trim();
+  const litros = parseFloat(document.getElementById('litros').value);
+  const valor = parseFloat(document.getElementById('valor').value);
+  const hor = parseFloat(document.getElementById('hor').value);
+  const os = document.getElementById('os').value;
+  const nf = document.getElementById('nf').value.trim();
+
+  if (!data) return MShell.toast('Informe a data', 'warn');
+  if (isNaN(litros) || litros <= 0) return MShell.toast('Litros invalido', 'warn');
+  if (isNaN(valor) || valor < 0) return MShell.toast('Valor invalido', 'warn');
+  if (isNaN(hor) || hor < 0) return MShell.toast('Horimetro invalido', 'warn');
+  if (origem === 'tanque_proprio' && !tanque) return MShell.toast('Selecione o tanque', 'warn');
+  if (origem === 'posto' && !posto) return MShell.toast('Informe o nome do posto', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Salvando...';
+  const r = await API.rpc('jr_abastecimento_registrar', {
+    p_maquina_id: maqSelecionada.id,
+    p_data: data,
+    p_origem: origem,
+    p_tanque_id: origem === 'tanque_proprio' ? tanque : null,
+    p_posto_nome: origem === 'posto' ? posto : null,
+    p_litros: litros,
+    p_valor_total: valor,
+    p_horimetro_leitura: hor,
+    p_os_id: os || null,
+    p_nf_numero: nf || null
+  });
+
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = 'Registrar Abastecimento';
+    return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  }
+
+  const cons = r.data?.consumo_l_h;
+  let msg = 'Abastecimento registrado';
+  if (cons) msg += ` · Consumo ${Number(cons).toFixed(2)} L/h`;
+  MShell.toast(msg, 'ok');
+  setTimeout(() => location.href = 'm_home.html', 1500);
+}
+</script>
+</body>
+</html>

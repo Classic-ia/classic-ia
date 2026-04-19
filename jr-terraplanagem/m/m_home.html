@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>JR Mobile - Inicio</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <div style="font-size:12px; color:#94A3B8; text-transform:uppercase; font-weight:700;">Bem-vindo</div>
+    <div id="user-nome" style="font-size:18px; font-weight:700; margin-top:2px;">—</div>
+    <div id="user-perfil" style="font-size:12px; color:#64748B; margin-top:2px;"></div>
+  </div>
+
+  <div class="m-card">
+    <h3>Operacao rapida</h3>
+    <div class="m-tile-grid">
+      <a href="m_os_periodo.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 5h6a2 2 0 012 2v12a2 2 0 01-2 2H9a2 2 0 01-2-2V7a2 2 0 012-2zm0 0V3h6v2"/></svg></div>
+        Periodo OS
+      </a>
+      <a href="m_abastecimento.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2s-6 7-6 12a6 6 0 0012 0c0-5-6-12-6-12z"/></svg></div>
+        Abastecimento
+      </a>
+      <a href="m_despesa_rapida.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1v22M17 5H9a4 4 0 000 8h6a4 4 0 010 8H6"/></svg></div>
+        Despesa
+      </a>
+      <a href="m_deslocamento.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 13l3-8h12l3 8M5 13h14v7H5zM7 17h2M15 17h2"/></svg></div>
+        Deslocamento
+      </a>
+      <a href="m_manutencao_buscar.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"/></svg></div>
+        Manutencao
+      </a>
+      <a href="m_mais.html" class="m-tile">
+        <div class="m-icon"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg></div>
+        Mais
+      </a>
+    </div>
+  </div>
+
+  <div class="m-card">
+    <h3>Meus registros hoje</h3>
+    <div id="stats" class="m-empty">Carregando...</div>
+  </div>
+</main>
+<script>
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'JR Mobile', active: 'home' });
+  document.getElementById('user-nome').textContent = user.nome || '—';
+  document.getElementById('user-perfil').textContent = (user.perfil || '').toUpperCase();
+
+  // Stats simples do dia
+  const hoje = new Date().toISOString().slice(0,10);
+  const stats = await Promise.all([
+    API.get(`jr_os_periodos?select=id&data=eq.${hoje}`),
+    API.get(`jr_abastecimentos?select=id&data=eq.${hoje}`),
+    API.get(`jr_despesas?select=id&data=eq.${hoje}`),
+  ]);
+  const [os, ab, dp] = stats.map(r => r.ok ? (r.data || []).length : 0);
+  document.getElementById('stats').outerHTML = `
+    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px; text-align:center;">
+      <div><div style="font-size:22px; font-weight:700; color:#D97706;">${os}</div><div style="font-size:11px; color:#64748B;">Periodos OS</div></div>
+      <div><div style="font-size:22px; font-weight:700; color:#059669;">${ab}</div><div style="font-size:11px; color:#64748B;">Abastec.</div></div>
+      <div><div style="font-size:22px; font-weight:700; color:#2563EB;">${dp}</div><div style="font-size:11px; color:#64748B;">Despesas</div></div>
+    </div>
+  `;
+})();
+</script>
+</body>
+</html>

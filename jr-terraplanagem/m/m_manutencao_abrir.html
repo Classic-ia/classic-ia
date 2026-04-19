@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#D97706">
+<title>Nova Manutencao - JR Mobile</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="../config.js"></script>
+<script src="../auth.js"></script>
+<script src="../api.js"></script>
+<script src="m_shell.js"></script>
+</head>
+<body>
+<main id="m-main">
+  <div class="m-card">
+    <h3 id="titulo">Nova Manutencao</h3>
+    <div class="m-info-label">Maquina</div>
+    <div class="m-info-value" id="maq-info">—</div>
+    <div style="margin-top:8px;" class="m-info-label">Horimetro atual</div>
+    <div class="m-info-value" id="horimetro-atual">—</div>
+  </div>
+
+  <div class="m-card">
+    <div class="m-field">
+      <label>Tipo *</label>
+      <select id="tipo">
+        <option value="corretiva">Corretiva</option>
+        <option value="preventiva">Preventiva</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>Plano (se preventiva)</label>
+      <select id="plano">
+        <option value="">—</option>
+      </select>
+    </div>
+
+    <div class="m-field">
+      <label>Servico *</label>
+      <input type="text" id="servico" placeholder="Ex: Troca de oleo e filtros">
+    </div>
+
+    <div class="m-field">
+      <label>Horimetro no momento</label>
+      <input type="number" id="hor" step="0.1" min="0" placeholder="0,0">
+      <div class="m-hint" id="hor-hint"></div>
+    </div>
+
+    <div class="m-field">
+      <label>Oficina</label>
+      <input type="text" id="oficina" placeholder="Interna / Externa">
+    </div>
+
+    <div class="m-field">
+      <label>Executado por</label>
+      <input type="text" id="exec" placeholder="Nome do mecanico">
+    </div>
+
+    <div class="m-field">
+      <label>Observacao</label>
+      <textarea id="obs" rows="2" placeholder="Opcional"></textarea>
+    </div>
+
+    <button class="m-btn-primary" onclick="salvar()" id="btn">Abrir Manutencao</button>
+  </div>
+</main>
+<script>
+let maquina = null;
+
+(async () => {
+  const user = await MShell.init();
+  if (!user) return;
+  MShell.mount({ title: 'Nova Manutencao', back: 'm_manutencao_buscar.html', active: 'manut' });
+
+  const maqId = new URLSearchParams(location.search).get('maq');
+  if (!maqId) {
+    MShell.toast('Maquina nao informada', 'err');
+    setTimeout(() => location.href = 'm_manutencao_buscar.html', 1200);
+    return;
+  }
+
+  const [m, p] = await Promise.all([
+    API.get(`jr_maquinas?select=id,codigo,descricao,horimetro_atual,tipo&id=eq.${maqId}`),
+    API.get('jr_planos_manutencao?select=id,nome,tipo_servico,intervalo_horas,intervalo_dias&ativo=eq.true&order=nome'),
+  ]);
+  if (!m.ok || !m.data.length) {
+    MShell.toast('Maquina nao encontrada', 'err');
+    setTimeout(() => location.href = 'm_manutencao_buscar.html', 1200);
+    return;
+  }
+  maquina = m.data[0];
+  const planos = p.ok ? p.data : [];
+
+  document.getElementById('maq-info').textContent = `${maquina.codigo} - ${maquina.descricao}`;
+  const h = Number(maquina.horimetro_atual || 0);
+  document.getElementById('horimetro-atual').textContent = h.toLocaleString('pt-BR',{minimumFractionDigits:1,maximumFractionDigits:1}) + 'h';
+  document.getElementById('hor').value = h.toFixed(1);
+  document.getElementById('hor-hint').textContent = 'Deve ser >= ' + h.toFixed(1) + 'h';
+  document.getElementById('exec').value = user.nome || '';
+
+  document.getElementById('plano').innerHTML = '<option value="">—</option>' +
+    planos.map(x => `<option value="${x.id}" data-nome="${esc(x.nome)}">${esc(x.nome)}</option>`).join('');
+})();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'plano' && e.target.value) {
+    const opt = e.target.options[e.target.selectedIndex];
+    const nome = opt.dataset.nome;
+    if (nome && !document.getElementById('servico').value) {
+      document.getElementById('servico').value = nome;
+    }
+    document.getElementById('tipo').value = 'preventiva';
+  }
+});
+
+async function salvar() {
+  const btn = document.getElementById('btn');
+  const tipo = document.getElementById('tipo').value;
+  const plano = document.getElementById('plano').value;
+  const servico = document.getElementById('servico').value.trim();
+  const hor = parseFloat(document.getElementById('hor').value);
+  const oficina = document.getElementById('oficina').value.trim();
+  const exec = document.getElementById('exec').value.trim();
+  const obs = document.getElementById('obs').value.trim();
+
+  if (!servico) return MShell.toast('Descreva o servico', 'warn');
+  if (isNaN(hor) || hor < 0) return MShell.toast('Horimetro invalido', 'warn');
+  if (hor < Number(maquina.horimetro_atual || 0)) return MShell.toast('Horimetro nao pode retroceder', 'warn');
+
+  btn.disabled = true; btn.textContent = 'Abrindo...';
+  const r = await API.rpc('jr_manutencao_abrir', {
+    p_maquina_id: maquina.id,
+    p_tipo: tipo,
+    p_servico: servico,
+    p_horimetro: hor,
+    p_observacao: obs || null,
+    p_oficina: oficina || null,
+    p_executado_por: exec || null,
+    p_plano_id: plano || null
+  });
+  if (!r.ok) {
+    btn.disabled = false; btn.textContent = 'Abrir Manutencao';
+    return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
+  }
+  const id = r.data?.id || r.data?.manutencao_id || r.data;
+  MShell.toast('Manutencao aberta', 'ok');
+  setTimeout(() => { location.href = 'm_manutencao_itens.html?id=' + id; }, 800);
+}
+</script>
+</body>
+</html>

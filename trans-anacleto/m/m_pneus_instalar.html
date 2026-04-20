@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Instalar Pneu — Trans Anacleto Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +13,7 @@
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 </head>
 <body>
@@ -157,7 +160,7 @@ async function submitForm(e) {
 
   btn.disabled = true; btn.textContent = 'Enviando...';
   const fotoUrl = await uploadFotoOpcional();
-  const r = await API.rpc('trans_pneu_instalar', {
+  const r = await MOffline.enviarRpc('trans_pneu_instalar', {
     p_pneu_id: _pneuId,
     p_veiculo_id: veic,
     p_posicao: pos,
@@ -166,6 +169,9 @@ async function submitForm(e) {
     p_latitude: null,
     p_longitude: null,
     p_observacao: obs
+  }, {
+    label: `Instalar pneu ${_pneu.codigo_interno} posic ${pos}`,
+    kind: 'pneu_instalar'
   });
   if (!r.ok) {
     MShell.toast(r.error || 'Erro ao instalar', 'erro', 4000);
@@ -173,11 +179,11 @@ async function submitForm(e) {
     return;
   }
   if (_manutencaoId) {
-    await API.post('trans_manutencao_pneus', {
+    await MOffline.enviarPost('trans_manutencao_pneus', {
       manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'instalar'
-    });
+    }, { label: 'Vincular manut. ' + _pneu.codigo_interno, kind: 'manut_pneu' });
   }
-  MShell.toast('Pneu instalado.', 'ok');
+  MShell.toast(r.queued ? 'Sem conexao - instalacao salva offline.' : 'Pneu instalado.', r.queued ? 'aviso' : 'ok');
   setTimeout(() => {
     window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
   }, 900);

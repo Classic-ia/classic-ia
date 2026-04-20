@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Sucatar Pneu — Trans Anacleto Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +13,7 @@
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 </head>
 <body>
@@ -129,19 +132,22 @@ async function submitForm(e) {
     MShell.toast('Falha no upload da foto', 'erro', 4000);
     btn.disabled = false; btn.textContent = 'Confirmar sucata'; return;
   }
-  const r = await API.rpc('trans_pneu_sucatar', {
+  const r = await MOffline.enviarRpc('trans_pneu_sucatar', {
     p_pneu_id: _pneuId, p_motivo: motivo, p_foto_url: fotoUrl, p_observacao: motivoSel
+  }, {
+    label: `Sucatar pneu ${_pneu.codigo_interno}`,
+    kind: 'pneu_sucatar'
   });
   if (!r.ok) {
     MShell.toast(r.error || 'Erro ao sucatar', 'erro', 4000);
     btn.disabled = false; btn.textContent = 'Confirmar sucata'; return;
   }
   if (_manutencaoId) {
-    await API.post('trans_manutencao_pneus', {
+    await MOffline.enviarPost('trans_manutencao_pneus', {
       manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'sucata'
-    });
+    }, { label: 'Vincular manut. sucata ' + _pneu.codigo_interno, kind: 'manut_pneu' });
   }
-  MShell.toast('Pneu sucatado.', 'ok');
+  MShell.toast(r.queued ? 'Sem conexao - sucata salva offline.' : 'Pneu sucatado.', r.queued ? 'aviso' : 'ok');
   setTimeout(() => {
     window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
   }, 900);

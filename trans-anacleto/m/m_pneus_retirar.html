@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Retirar Pneu — Trans Anacleto Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +13,7 @@
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 <style>
   .destino-opts { display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
@@ -154,13 +157,16 @@ async function submitForm(e) {
   const btn = document.getElementById('btn-ok');
   btn.disabled = true; btn.textContent = 'Enviando...';
   const fotoUrl = await uploadFotoOpcional();
-  const r = await API.rpc('trans_pneu_retirar', {
+  const r = await MOffline.enviarRpc('trans_pneu_retirar', {
     p_pneu_id: _pneuId,
     p_km_veiculo: km,
     p_destino: dest,
     p_motivo: motivo,
     p_foto_url: fotoUrl,
     p_observacao: null
+  }, {
+    label: `Retirar pneu ${_pneu.codigo_interno} destino ${dest}`,
+    kind: 'pneu_retirar'
   });
   if (!r.ok) {
     MShell.toast(r.error || 'Erro ao retirar', 'erro', 4000);
@@ -168,13 +174,15 @@ async function submitForm(e) {
     return;
   }
   if (_manutencaoId) {
-    await API.post('trans_manutencao_pneus', {
+    await MOffline.enviarPost('trans_manutencao_pneus', {
       manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'retirar'
-    });
+    }, { label: 'Vincular manut. ' + _pneu.codigo_interno, kind: 'manut_pneu' });
   }
-  MShell.toast('Pneu retirado.', 'ok');
+  MShell.toast(r.queued ? 'Sem conexao - retirada salva offline.' : 'Pneu retirado.', r.queued ? 'aviso' : 'ok');
   setTimeout(() => {
-    if (dest === 'recapagem') {
+    if (r.queued) {
+      window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
+    } else if (dest === 'recapagem') {
       window.location.href = `m_pneus_recapagem.html?pneu_id=${_pneuId}&modo=enviar${_manutencaoId?'&manutencao_id='+_manutencaoId:''}`;
     } else {
       window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';

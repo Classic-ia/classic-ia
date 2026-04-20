@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Recapagem — Trans Anacleto Mobile</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -11,6 +13,7 @@
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 </head>
 <body>
@@ -154,20 +157,23 @@ async function submitEnviar(e) {
   if (!fornec) { MShell.toast('Selecione fornecedor', 'aviso'); return; }
   btn.disabled = true; btn.textContent = 'Enviando...';
   const fotoUrl = await uploadFotoOpcional();
-  const r = await API.rpc('trans_pneu_enviar_recapagem', {
+  const r = await MOffline.enviarRpc('trans_pneu_enviar_recapagem', {
     p_pneu_id: _pneuId, p_fornecedor_id: fornec,
     p_sulco_pre_mm: sulco, p_foto_url: fotoUrl, p_observacao: obs
+  }, {
+    label: `Enviar recapagem pneu ${_pneu.codigo_interno}`,
+    kind: 'pneu_enviar_recap'
   });
   if (!r.ok) {
     MShell.toast(r.error || 'Erro ao enviar', 'erro', 4000);
     btn.disabled = false; btn.textContent = 'Confirmar envio'; return;
   }
   if (_manutencaoId) {
-    await API.post('trans_manutencao_pneus', {
+    await MOffline.enviarPost('trans_manutencao_pneus', {
       manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'enviar_recap'
-    });
+    }, { label: 'Vincular manut. recap ' + _pneu.codigo_interno, kind: 'manut_pneu' });
   }
-  MShell.toast('Enviado para recapagem.', 'ok');
+  MShell.toast(r.queued ? 'Sem conexao - envio salvo offline.' : 'Enviado para recapagem.', r.queued ? 'aviso' : 'ok');
   setTimeout(() => {
     window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
   }, 900);
@@ -181,20 +187,27 @@ async function submitRetornar(e) {
   const aprov = document.getElementById('f-aprov').value === 'true';
   const obs = document.getElementById('f-obs-ret').value.trim() || null;
   btn.disabled = true; btn.textContent = 'Enviando...';
-  const r = await API.rpc('trans_pneu_retornar_recapagem', {
+  const r = await MOffline.enviarRpc('trans_pneu_retornar_recapagem', {
     p_pneu_id: _pneuId, p_sulco_pos_mm: sulco, p_custo: custo,
     p_aprovado: aprov, p_observacao: obs
+  }, {
+    label: `Retorno recapagem pneu ${_pneu.codigo_interno} ${aprov?'aprov':'reprov'}`,
+    kind: 'pneu_retornar_recap'
   });
   if (!r.ok) {
     MShell.toast(r.error || 'Erro ao registrar retorno', 'erro', 4000);
     btn.disabled = false; btn.textContent = 'Confirmar retorno'; return;
   }
   if (_manutencaoId) {
-    await API.post('trans_manutencao_pneus', {
+    await MOffline.enviarPost('trans_manutencao_pneus', {
       manutencao_id: _manutencaoId, pneu_id: _pneuId, acao: 'retornar_recap'
-    });
+    }, { label: 'Vincular manut. retorno ' + _pneu.codigo_interno, kind: 'manut_pneu' });
   }
-  MShell.toast(aprov ? 'Retorno aprovado.' : 'Reprovado (sucata).', 'ok');
+  MShell.toast(
+    r.queued ? 'Sem conexao - retorno salvo offline.' :
+    (aprov ? 'Retorno aprovado.' : 'Reprovado (sucata).'),
+    r.queued ? 'aviso' : 'ok'
+  );
   setTimeout(() => {
     window.location.href = _manutencaoId ? `m_manutencao_itens.html?id=${_manutencaoId}` : 'm_home.html';
   }, 900);

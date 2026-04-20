@@ -30,8 +30,11 @@ const MShell = (function () {
           ${backHref ? `<a href="${backHref}" class="m-back">&larr;</a>` : ''}
         </div>
         <div class="m-topbar-title">${escHtml(title)}</div>
-        <div class="m-topbar-right"></div>
+        <div class="m-topbar-right">
+          <button id="m-queue-btn" class="m-queue-btn" onclick="MShell.flushAgora()" style="display:none" title="Fila offline">&#9783;<span class="m-queue-badge" id="m-queue-badge">0</span></button>
+        </div>
       </header>
+      <div id="m-offline-bar" class="m-offline-bar hidden">Sem conexao - registros serao sincronizados quando voltar</div>
     `;
 
     const bottomnav = `
@@ -47,6 +50,65 @@ const MShell = (function () {
     `;
 
     root.innerHTML = topbar + bottomnav;
+    _injectStyle();
+    _setupOfflineUI();
+    _registerSW();
+  }
+
+  function _injectStyle() {
+    if (document.getElementById('m-shell-offline-style')) return;
+    const s = document.createElement('style');
+    s.id = 'm-shell-offline-style';
+    s.textContent = `
+      .m-topbar-right { position:relative; width:auto !important; min-width:40px; }
+      .m-queue-btn { position:relative; background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:16px; padding:6px 10px; border-radius:6px; cursor:pointer; }
+      .m-queue-badge { position:absolute; top:-4px; right:-4px; background:#dc2626; color:#fff; font-size:10px; font-weight:700; min-width:16px; height:16px; padding:0 4px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+      .m-offline-bar { background:#dc2626; color:#fff; padding:6px 14px; font-size:12px; font-weight:600; text-align:center; }
+      .m-offline-bar.hidden { display:none; }
+    `;
+    document.head.appendChild(s);
+  }
+
+  function _setupOfflineUI() {
+    const btn = document.getElementById('m-queue-btn');
+    const badge = document.getElementById('m-queue-badge');
+    const bar = document.getElementById('m-offline-bar');
+
+    function refreshOnline() {
+      const online = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+      if (bar) bar.classList.toggle('hidden', online);
+    }
+    refreshOnline();
+    window.addEventListener('online', refreshOnline);
+    window.addEventListener('offline', refreshOnline);
+
+    if (typeof MOffline === 'undefined' || !btn || !badge) return;
+
+    async function refreshBadge() {
+      try {
+        const n = await MOffline.pendingCount();
+        badge.textContent = String(n);
+        btn.style.display = n > 0 ? '' : 'none';
+      } catch (e) { /* ignora */ }
+    }
+    refreshBadge();
+    MOffline.onChange(refreshBadge);
+  }
+
+  async function flushAgora() {
+    if (typeof MOffline === 'undefined') return;
+    const n = await MOffline.pendingCount();
+    if (!n) { toast('Sem pendencias', 'ok'); return; }
+    if (!MOffline.isOnline()) { toast('Sem conexao - tente mais tarde', 'aviso'); return; }
+    toast('Enviando ' + n + ' pendente(s)...', 'ok');
+    const r = await MOffline.flush();
+    if (r.enviados) toast(r.enviados + ' enviado(s), ' + (r.falhas || 0) + ' falha(s)', r.falhas ? 'aviso' : 'ok');
+  }
+
+  function _registerSW() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+    navigator.serviceWorker.register('sw.js').catch(() => { /* dev local pode falhar */ });
   }
 
   async function logout() {
@@ -137,5 +199,5 @@ const MShell = (function () {
     return d.innerHTML;
   }
 
-  return { render, logout, init, getUser, toast, escHtml };
+  return { render, logout, init, getUser, toast, escHtml, flushAgora };
 })();

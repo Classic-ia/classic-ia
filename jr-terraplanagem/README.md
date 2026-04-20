@@ -4,10 +4,8 @@ Modulo de gestao de obras, maquinario, manutencao e financeiro.
 
 ## Estado do desenvolvimento
 
-- **Fase J1** - Infra + migracao localStorage - em andamento
-- Proximas: J2 (OS nucleo), J3 (pagamentos), J4 (despesas/deslocamentos),
-  J5 (estoque+NFe), J6 (manutencao+abastecimento), J7 (mobile operador),
-  J8 (relatorios/DRE), J9 (producao).
+- **J1 a J8** concluidos.
+- **J9 (producao)** - ver `DEPLOY.md` para o passo a passo.
 
 ## Arquitetura
 

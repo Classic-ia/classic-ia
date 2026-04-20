@@ -10,25 +10,9 @@ Plano completo em
 
 ## Status das Fases
 
-| Fase | Status | Entrega |
-|---|---|---|
-| **1 — Infra local** | ✅ Em andamento | Skeleton, auth, shell, Supabase CLI, trans_usuarios + RLS |
-| 2 — Cadastros | pendente | veículos, motoristas, fornecedores, categorias, produtos (SKU + EANs) |
-| 2.5 — Importar CSV | pendente | XLSX + RPC `p_importar_lote` |
-| 3 — Estoque Novo + Etiquetas | pendente | lote, FEFO/FIFO, labels.js, entrada/saida/lotes/etiquetas |
-| 3.2 — Estoque Usado + Conversões | pendente | A/B/C, sucata config, conversão novo→usado, usado→sucata |
-| 3.5 — NFe | pendente | XML parse, match por EAN, lote por item |
-| 3.7 — Inventário | pendente | contagem novo (lote+EAN) e usado (SKU+condição) |
-| 4 — Pneus Desktop | pendente | schema pneus, RPCs, gestão |
-| 4.5 — Pneus Mobile | pendente | /m/ shell, BarcodeDetector, fluxos mobile |
-| 5 — Manutenção Desktop + Planos | pendente | planos, OS, itens, alertas |
-| 5.2 — Manutenção Mobile | pendente | /m/m_manutencao_* |
-| 5.5 — NFS-e serviços | pendente | serviços externos, trigger recapagem/saída estoque |
-| 6 — Abastecimento | pendente | tanque + postos + consumo km/L |
-| 6.2 — Integração TMS | pendente | sync veículos/motoristas, export custos |
-| 6.5 — Telemetria Onixsat | pendente | webhook, km auto, motor de alertas, viagens, score |
-| 7 — Dashboard Gerencial | pendente | KPIs agregados |
-| 8 — Produção | pendente | cloud Supabase, DNS, transanacleto.com.br |
+Todas as fases 1 a 7 estao commitadas. Fase 8 (produção) tem docs e
+`vercel.json` prontos — execução dos passos em `DEPLOY.md` depende do
+usuário (Supabase cloud, DNS, credenciais Onixsat).
 
 ## Stack
 

@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#D97706">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Mais - JR Mobile</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 </head>
 <body>
@@ -28,6 +31,13 @@
   </div>
 
   <div class="m-card">
+    <h3>Fila offline</h3>
+    <div id="queue-summary" class="m-empty">Carregando...</div>
+    <div id="queue-list" style="margin-top:10px;"></div>
+    <button class="m-btn-primary" id="btn-flush" onclick="flushAgora()" style="margin-top:10px; display:none;">Enviar pendencias agora</button>
+  </div>
+
+  <div class="m-card">
     <h3>Acesso desktop</h3>
     <a class="m-btn-secondary" href="../index.html" style="text-decoration:none; text-align:center; display:block;">Ir para versao desktop</a>
     <button class="m-btn-danger" onclick="MShell.logout()" style="margin-top:10px;">Sair</button>
@@ -38,7 +48,60 @@
   const user = await MShell.init();
   if (!user) return;
   MShell.mount({ title: 'Mais', back: 'm_home.html', active: 'mais' });
+  await renderQueue();
+  MOffline.onChange(renderQueue);
 })();
+
+function esc(s) { return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+
+async function renderQueue() {
+  const ops = await MOffline.list();
+  const summary = document.getElementById('queue-summary');
+  const list = document.getElementById('queue-list');
+  const btn = document.getElementById('btn-flush');
+  if (!ops.length) {
+    summary.textContent = 'Nenhuma pendencia';
+    list.innerHTML = '';
+    btn.style.display = 'none';
+    return;
+  }
+  const permanentes = ops.filter(o => o.permanent_error).length;
+  summary.textContent = ops.length + ' pendente(s)' + (permanentes ? ' (' + permanentes + ' com erro)' : '');
+  list.innerHTML = ops.map(o => {
+    const when = new Date(o.created_at).toLocaleString('pt-BR');
+    const tag = o.permanent_error ? '<span class="m-pill" style="background:#FEE2E2; color:#991B1B;">ERRO</span>' :
+                (o.retry_count > 0 ? '<span class="m-pill m-pill-aberta">' + o.retry_count + 'x</span>' : '');
+    const err = o.last_error ? '<div style="font-size:11px; color:#DC2626; margin-top:3px;">' + esc(o.last_error) + '</div>' : '';
+    return `
+      <div style="border:1px solid #E2E8F0; border-radius:8px; padding:10px; margin-bottom:8px;">
+        <div style="display:flex; gap:6px; align-items:flex-start;">
+          <div style="flex:1;">
+            <div style="font-weight:600; font-size:13px;">${esc(o.label || o.kind)}</div>
+            <div style="font-size:11px; color:#64748B;">${when}</div>
+            ${err}
+          </div>
+          ${tag}
+          <button onclick="removerItem(${o.id})" style="background:none; border:none; color:#DC2626; font-size:18px; cursor:pointer;">&times;</button>
+        </div>
+      </div>`;
+  }).join('');
+  btn.style.display = MOffline.isOnline() ? '' : 'none';
+  btn.disabled = !MOffline.isOnline();
+}
+
+async function flushAgora() {
+  if (!MOffline.isOnline()) return MShell.toast('Sem conexao', 'warn');
+  MShell.toast('Enviando...', 'ok');
+  const r = await MOffline.flush();
+  if (r.enviados) MShell.toast(r.enviados + ' enviado(s), ' + (r.falhas || 0) + ' falha(s)', r.falhas ? 'warn' : 'ok');
+  else MShell.toast('Nada enviado', 'warn');
+}
+
+async function removerItem(id) {
+  if (!confirm('Remover esta pendencia da fila?')) return;
+  await MOffline.remove(id);
+  MShell.toast('Removido', 'ok');
+}
 </script>
 </body>
 </html>

@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#D97706">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Periodo OS - JR Mobile</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 <script src="m_scan.js"></script>
 </head>
@@ -140,19 +143,26 @@ async function salvar() {
   if (isNaN(hi) || hi < 0) return MShell.toast('Horimetro inicial invalido', 'warn');
   if (isNaN(hf) || hf <= hi) return MShell.toast('Horimetro final deve ser maior que o inicial', 'warn');
 
-  const r = await API.rpc('jr_os_periodo_registrar', {
+  const horas = (hf - hi).toFixed(1);
+  const r = await MOffline.enviarRpc('jr_os_periodo_registrar', {
     p_os_id: os,
     p_maquina_id: maq,
     p_data: data,
     p_horimetro_inicial: hi,
     p_horimetro_final: hf,
     p_observacao: obs || null
+  }, {
+    label: 'Periodo OS ' + horas + 'h',
+    kind: 'os_periodo'
   });
 
   if (!r.ok) return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
-  const horas = (hf - hi).toFixed(1);
-  MShell.toast(`Periodo registrado (${horas}h)`, 'ok');
-  setTimeout(() => { location.href = 'm_home.html'; }, 1200);
+  if (r.queued) {
+    MShell.toast('Sem conexao - periodo salvo offline (' + horas + 'h)', 'warn');
+  } else {
+    MShell.toast('Periodo registrado (' + horas + 'h)', 'ok');
+  }
+  setTimeout(() => { location.href = 'm_home.html'; }, 1400);
 }
 </script>
 </body>

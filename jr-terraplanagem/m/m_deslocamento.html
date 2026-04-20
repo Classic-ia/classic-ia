@@ -4,11 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#D97706">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
 <title>Deslocamento - JR Mobile</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="../config.js"></script>
 <script src="../auth.js"></script>
 <script src="../api.js"></script>
+<script src="m_offline.js"></script>
 <script src="m_shell.js"></script>
 </head>
 <body>
@@ -113,7 +116,7 @@ async function salvar() {
 
   btn.disabled = true; btn.textContent = 'Salvando...';
 
-  const r = await API.rpc('jr_deslocamento_registrar', {
+  const r = await MOffline.enviarRpc('jr_deslocamento_registrar', {
     p_veiculo_id: veic,
     p_data: data,
     p_km_inicial: ki,
@@ -122,6 +125,9 @@ async function salvar() {
     p_os_id: os || null,
     p_maquina_id: maq || null,
     p_motorista_nome: motorista || null
+  }, {
+    label: 'Deslocamento ' + (kf - ki) + ' km',
+    kind: 'deslocamento'
   });
 
   if (!r.ok) {
@@ -129,8 +135,12 @@ async function salvar() {
     return MShell.toast('Erro: ' + (r.error || 'falha'), 'err');
   }
 
-  MShell.toast('Deslocamento registrado (' + (kf - ki) + ' km)', 'ok');
-  setTimeout(() => { location.href = 'm_home.html'; }, 1200);
+  if (r.queued) {
+    MShell.toast('Sem conexao - deslocamento salvo offline (' + (kf - ki) + ' km)', 'warn');
+  } else {
+    MShell.toast('Deslocamento registrado (' + (kf - ki) + ' km)', 'ok');
+  }
+  setTimeout(() => { location.href = 'm_home.html'; }, 1400);
 }
 </script>
 </body>

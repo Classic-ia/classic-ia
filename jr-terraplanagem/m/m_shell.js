@@ -32,6 +32,10 @@ const MShell = (function () {
       .m-topbar .m-back { background:none; border:none; color:#fff; font-size:22px; padding:0 6px; cursor:pointer; }
       .m-topbar .m-title { font-size:17px; font-weight:700; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
       .m-topbar .m-logout { background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:13px; font-weight:600; padding:6px 10px; border-radius:6px; cursor:pointer; }
+      .m-topbar .m-queue { position:relative; background:rgba(255,255,255,0.2); border:none; color:#fff; font-size:16px; padding:6px 10px; border-radius:6px; cursor:pointer; }
+      .m-topbar .m-queue .m-badge { position:absolute; top:-4px; right:-4px; background:#DC2626; color:#fff; font-size:10px; font-weight:700; min-width:16px; height:16px; padding:0 4px; border-radius:8px; display:flex; align-items:center; justify-content:center; }
+      .m-offline-bar { background:#DC2626; color:#fff; padding:6px 14px; font-size:12px; font-weight:600; text-align:center; }
+      .m-offline-bar.hidden { display:none; }
       .m-page { padding:16px 14px 84px 14px; min-height:calc(100vh - 56px); }
       .m-bottomnav { position:fixed; left:0; right:0; bottom:0; background:#fff; border-top:1px solid #E2E8F0; display:flex; justify-content:space-around; padding:6px 0 10px 0; z-index:40; }
       .m-bottomnav a { flex:1; text-align:center; color:#64748B; text-decoration:none; font-size:11px; font-weight:600; padding:6px 4px; display:flex; flex-direction:column; align-items:center; gap:2px; }
@@ -88,8 +92,17 @@ const MShell = (function () {
     top.innerHTML = `
       ${back ? `<button class="m-back" onclick="location.href='${back}'">&larr;</button>` : ''}
       <div class="m-title">${escape(title)}</div>
+      <button class="m-queue" id="m-queue-btn" title="Fila offline" style="display:none">
+        &#9783;<span class="m-badge" id="m-queue-badge">0</span>
+      </button>
       <button class="m-logout" onclick="MShell.logout()">Sair</button>
     `;
+
+    // Offline bar
+    const offlineBar = document.createElement('div');
+    offlineBar.className = 'm-offline-bar hidden';
+    offlineBar.id = 'm-offline-bar';
+    offlineBar.textContent = 'Sem conexao - registros serao sincronizados quando voltar';
 
     // Bottom nav
     const nav = document.createElement('div');
@@ -102,10 +115,55 @@ const MShell = (function () {
     `).join('');
 
     document.body.insertBefore(top, document.body.firstChild);
+    top.after(offlineBar);
     document.body.appendChild(nav);
 
     const main = document.getElementById('m-main');
     if (main) main.classList.add('m-page');
+
+    _setupOfflineUI();
+    _registerSW();
+  }
+
+  function _setupOfflineUI() {
+    const btn = document.getElementById('m-queue-btn');
+    const badge = document.getElementById('m-queue-badge');
+    const bar = document.getElementById('m-offline-bar');
+
+    function refreshOnline() {
+      const online = typeof navigator !== 'undefined' ? navigator.onLine !== false : true;
+      if (bar) bar.classList.toggle('hidden', online);
+    }
+    refreshOnline();
+    window.addEventListener('online', refreshOnline);
+    window.addEventListener('offline', refreshOnline);
+
+    if (typeof MOffline === 'undefined' || !btn || !badge) return;
+
+    async function refreshBadge() {
+      try {
+        const n = await MOffline.pendingCount();
+        badge.textContent = String(n);
+        btn.style.display = n > 0 ? '' : 'none';
+      } catch (e) { /* ignora */ }
+    }
+    refreshBadge();
+    MOffline.onChange(refreshBadge);
+
+    btn.addEventListener('click', async () => {
+      const n = await MOffline.pendingCount();
+      if (!n) { toast('Sem pendencias', 'ok'); return; }
+      if (!MOffline.isOnline()) { toast('Sem conexao - tente mais tarde', 'warn'); return; }
+      toast('Enviando ' + n + ' pendente(s)...', 'ok');
+      const r = await MOffline.flush();
+      if (r.enviados) toast(r.enviados + ' enviado(s), ' + (r.falhas || 0) + ' falha(s)', r.falhas ? 'warn' : 'ok');
+    });
+  }
+
+  function _registerSW() {
+    if (!('serviceWorker' in navigator)) return;
+    if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') return;
+    navigator.serviceWorker.register('sw.js').catch(() => { /* dev local pode falhar */ });
   }
 
   async function init(opts = {}) {

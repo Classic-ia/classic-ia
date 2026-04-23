@@ -3,9 +3,9 @@
 // Em PROD, atualizar com URL/anon_key do projeto cloud transanacleto.
 
 const TRANS_CONFIG = {
-  // Supabase CLI local (default). Para producao, substituir pelos valores do projeto cloud.
-  SB_URL: 'http://127.0.0.1:54321',
-  SB_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJvbGUiOiJhbm9uIiwiaWF0IjoxNjQwOTk1MjAwLCJleHAiOjE5NTg0MTMyMDB9.M9jrxyvPLkUxWgOYSf5dNdJ8v_eRrq810ShFRT8N-6M',
+  // Supabase cloud (producao).
+  SB_URL: 'https://apqnflujltsobwedufdm.supabase.co',
+  SB_KEY: 'sb_publishable_qD_wa4K-KhJf1544lAf0GA_e6-8SP0A',
   APP_NAME: 'Trans Anacleto',
   VERSION: 'v2026.04',
   SESSION_KEY: 'trans_sess_v1',

@@ -29,7 +29,8 @@ SELECT
   cs.data_no_nivel,
   cs.fiducia_natureza,
   cs.area_cs,
-  cs.centro_custo,
+  cc.codigo                       AS centro_custo_codigo,
+  cc.descricao                    AS centro_custo,
   f.salario_base,
   cs.gratif_funcao,
   (COALESCE(f.salario_base,0) + COALESCE(cs.gratif_funcao,0)) AS remuneracao_total,
@@ -56,12 +57,13 @@ SELECT
   s.nome                          AS setor,
   fil.nome                        AS filial
 FROM rh_funcionarios f
-  LEFT JOIN rh_cargos c            ON c.id = f.cargo_id
-  LEFT JOIN rh_setores s           ON s.id = f.setor_id
-  LEFT JOIN rh_filiais fil         ON fil.id = f.filial_id
-  LEFT JOIN rh_cs_colaborador cs   ON cs.funcionario_id = f.id
-  LEFT JOIN rh_cs_familias fam     ON fam.id = cs.familia_id
-  LEFT JOIN rh_cs_cargo_meta cm    ON cm.cargo_id = c.id
+  LEFT JOIN rh_cargos c             ON c.id = f.cargo_id
+  LEFT JOIN rh_setores s            ON s.id = f.setor_id
+  LEFT JOIN rh_filiais fil          ON fil.id = f.filial_id
+  LEFT JOIN rh_centros_custo cc     ON cc.id = f.centro_custo_id
+  LEFT JOIN rh_cs_colaborador cs    ON cs.funcionario_id = f.id
+  LEFT JOIN rh_cs_familias fam      ON fam.id = cs.familia_id
+  LEFT JOIN rh_cs_cargo_meta cm     ON cm.cargo_id = c.id
   LEFT JOIN LATERAL (
     SELECT b.*
     FROM rh_cs_bandas b
@@ -163,10 +165,10 @@ SELECT
     AS custo_gratificacoes,
   -- Ciclo / governanca
   (SELECT COUNT(*) FROM rh_cs_excecoes
-     WHERE ciclo_ano = EXTRACT(YEAR FROM CURRENT_DATE) AND status = 'aprovada')
+     WHERE ciclo_ano = EXTRACT(YEAR FROM CURRENT_DATE)::INT AND status = 'aprovada')
     AS excecoes_ano,
   (SELECT COUNT(*) FROM rh_cs_progressoes
-     WHERE ciclo_ano = EXTRACT(YEAR FROM CURRENT_DATE)
+     WHERE ciclo_ano = EXTRACT(YEAR FROM CURRENT_DATE)::INT
        AND status IN ('homologada','aprovada_diretoria'))
     AS progressoes_ano,
   (SELECT COUNT(*) FROM rh_cs_alertas WHERE resolvido = FALSE)
@@ -253,9 +255,8 @@ CREATE OR REPLACE FUNCTION public.cs_set_perfil_colaborador(
   p_gratif_funcao    NUMERIC(12,2) DEFAULT NULL,
   p_fiducia_natureza CHAR(1) DEFAULT NULL,
   p_area_cs          TEXT DEFAULT NULL,
-  p_centro_custo     TEXT DEFAULT NULL,
   p_reporta_a_id     UUID DEFAULT NULL,
-  p_observacoes      TEXT DEFAULT NULL
+  p_observacoes_cs   TEXT DEFAULT NULL
 ) RETURNS UUID
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -270,12 +271,12 @@ BEGIN
 
   INSERT INTO rh_cs_colaborador (
     funcionario_id, familia_id, nivel, data_no_nivel,
-    gratif_funcao, fiducia_natureza, area_cs, centro_custo,
-    reporta_a_id, observacoes
+    gratif_funcao, fiducia_natureza, area_cs,
+    reporta_a_id, observacoes_cs
   ) VALUES (
     p_funcionario_id, p_familia_id, p_nivel, p_data_no_nivel,
-    COALESCE(p_gratif_funcao, 0), p_fiducia_natureza, p_area_cs, p_centro_custo,
-    p_reporta_a_id, p_observacoes
+    COALESCE(p_gratif_funcao, 0), p_fiducia_natureza, p_area_cs,
+    p_reporta_a_id, p_observacoes_cs
   )
   ON CONFLICT (funcionario_id) DO UPDATE SET
     familia_id       = COALESCE(EXCLUDED.familia_id, rh_cs_colaborador.familia_id),
@@ -284,9 +285,8 @@ BEGIN
     gratif_funcao    = COALESCE(EXCLUDED.gratif_funcao, rh_cs_colaborador.gratif_funcao),
     fiducia_natureza = COALESCE(EXCLUDED.fiducia_natureza, rh_cs_colaborador.fiducia_natureza),
     area_cs          = COALESCE(EXCLUDED.area_cs, rh_cs_colaborador.area_cs),
-    centro_custo     = COALESCE(EXCLUDED.centro_custo, rh_cs_colaborador.centro_custo),
     reporta_a_id     = COALESCE(EXCLUDED.reporta_a_id, rh_cs_colaborador.reporta_a_id),
-    observacoes      = COALESCE(EXCLUDED.observacoes, rh_cs_colaborador.observacoes),
+    observacoes_cs   = COALESCE(EXCLUDED.observacoes_cs, rh_cs_colaborador.observacoes_cs),
     updated_at       = NOW()
   RETURNING id INTO v_id;
 
@@ -295,7 +295,7 @@ END;
 $$;
 
 COMMENT ON FUNCTION public.cs_set_perfil_colaborador IS
-  'Cria ou atualiza dados de C&S do colaborador (nivel, gratif, fiducia).';
+  'Cria ou atualiza dados C&S do colaborador (nivel, gratif, fiducia). NAO modifica salario, centro_custo ou observacoes — esses sao do rh_funcionarios.';
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- FIM SGCS_03_VIEWS.sql

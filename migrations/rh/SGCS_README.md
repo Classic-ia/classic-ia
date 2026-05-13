@@ -95,9 +95,132 @@ Em Supabase, aplicar via SQL Editor ou MCP `apply_migration`.
 
 | Tabela                          | Leitura                                     | Escrita                |
 |---------------------------------|---------------------------------------------|------------------------|
-| Catalogo (familias, beneficios) | publico (RLS ativo mas USING=TRUE)          | admin/rh               |
-| Bandas, historico, beneficios   | admin/rh/conf/dir/fin                       | admin/rh               |
+| `rh_cs_familias`                | qualquer usuario autenticado                | admin/rh               |
+| `rh_cs_beneficios`              | qualquer usuario autenticado                | admin/rh               |
+| `rh_cs_cargo_meta` (criticidade)| admin/rh/gestor/conf/dir/fin                | admin/rh               |
+| Bandas, historico, eleg.        | admin/rh/conf/dir/fin                       | admin/rh               |
 | Colaborador C&S, fichas, prog.  | admin/rh/gestor/conf/dir                    | admin/rh/conf (fichas) |
 | Excecoes, atas, fiducia, alerta | admin/rh/conf/dir                           | admin/rh/conf/dir      |
 
 Onde: `conf` = `gestor_confianca`, `dir` = `diretoria`, `fin` = `financeiro`.
+
+**Importante (gap herdado):** `rh_usuarios.perfil CHECK` (`FUNDACAO_BANCO_v2.sql:212-213`)
+admite apenas `('administrador','rh','gestor','visualizador')`. Policies que
+referenciam `gestor_confianca`, `diretoria`, `financeiro`, `sst` so disparam
+quando o CHECK for expandido (ou quando migrar para `rh_perfis_acesso` 1:N).
+Esse e o mesmo gap presente em `RLS_TABELAS_NOVAS.sql` desde Abr/2026 — nao
+foi introduzido pela foundation SGCS. Tratar em PR separado.
+
+---
+
+## Rollback
+
+Para desfazer integralmente a foundation SGCS (em ordem inversa de
+dependencia):
+
+```sql
+-- 1. RPCs
+DROP FUNCTION IF EXISTS public.cs_set_perfil_colaborador(
+  UUID, UUID, CHAR, DATE, NUMERIC, CHAR, TEXT, UUID, TEXT
+);
+DROP FUNCTION IF EXISTS public.cs_recalcular_alertas_fora_banda();
+
+-- 2. Views
+DROP VIEW IF EXISTS public.vw_cs_dashboard_kpis;
+DROP VIEW IF EXISTS public.vw_cs_bandas_ativas;
+DROP VIEW IF EXISTS public.vw_cs_colaborador_banda;
+
+-- 3. Tabelas (em ordem de FK reversa)
+DROP TABLE IF EXISTS rh_cs_alertas              CASCADE;
+DROP TABLE IF EXISTS rh_cs_historico_beneficios CASCADE;
+DROP TABLE IF EXISTS rh_cs_elegibilidade        CASCADE;
+DROP TABLE IF EXISTS rh_cs_beneficios           CASCADE;
+DROP TABLE IF EXISTS rh_cs_relatorios_fiducia   CASCADE;
+DROP TABLE IF EXISTS rh_cs_reunioes_comite      CASCADE;
+DROP TABLE IF EXISTS rh_cs_excecoes             CASCADE;
+DROP TABLE IF EXISTS rh_cs_progressoes          CASCADE;
+DROP TABLE IF EXISTS rh_cs_fichas_avaliacao     CASCADE;
+DROP TABLE IF EXISTS rh_cs_documentos           CASCADE;
+DROP TABLE IF EXISTS rh_cs_historico_salarial   CASCADE;
+DROP TABLE IF EXISTS rh_cs_colaborador          CASCADE;
+DROP TABLE IF EXISTS rh_cs_bandas               CASCADE;
+DROP TABLE IF EXISTS rh_cs_cargo_meta           CASCADE;
+DROP TABLE IF EXISTS rh_cs_familias             CASCADE;
+```
+
+Nenhuma estrutura existente do RH e afetada por este rollback — todas as
+FKs sao **saindo** das tabelas `rh_cs_*` para tabelas base (`rh_funcionarios`,
+`rh_cargos`, `rh_centros_custo`), nunca o inverso.
+
+---
+
+## Criterios de aceite (smoke tests)
+
+Apos aplicar `SGCS_01` a `SGCS_04`, executar:
+
+```sql
+-- A1. 15 tabelas criadas com prefixo rh_cs_
+SELECT COUNT(*) AS tabelas_cs
+  FROM information_schema.tables
+ WHERE table_schema = 'public' AND table_name LIKE 'rh_cs_%';
+-- esperado: 15
+
+-- A2. RLS habilitado em todas (15 tabelas, 0 sem RLS)
+SELECT COUNT(*) AS sem_rls
+  FROM pg_tables
+ WHERE schemaname = 'public' AND tablename LIKE 'rh_cs_%' AND rowsecurity = false;
+-- esperado: 0
+
+-- A3. Zero policies USING(TRUE)
+SELECT COUNT(*) AS using_true
+  FROM pg_policies
+ WHERE schemaname = 'public' AND tablename LIKE 'rh_cs_%'
+   AND qual = 'true';
+-- esperado: 0
+
+-- A4. 10 familias semeadas
+SELECT COUNT(*) FROM rh_cs_familias WHERE ativo = TRUE;
+-- esperado: 10
+
+-- A5. 22 beneficios catalogados
+SELECT COUNT(*) FROM rh_cs_beneficios WHERE ativo = TRUE;
+-- esperado: >= 22
+
+-- A6. Views compilam (cada SELECT deve retornar >= 0 linhas sem erro)
+SELECT COUNT(*) FROM vw_cs_colaborador_banda;
+SELECT COUNT(*) FROM vw_cs_bandas_ativas;
+SELECT * FROM vw_cs_dashboard_kpis LIMIT 1;
+
+-- A7. RPCs executaveis (deve retornar JSON ou tabela, nao erro)
+SELECT * FROM cs_recalcular_alertas_fora_banda();
+-- esperado: 1 linha com (criados INT, resolvidos INT)
+
+-- A8. Sem duplicacao com rh_funcionarios
+SELECT column_name FROM information_schema.columns
+ WHERE table_name = 'rh_cs_colaborador'
+   AND column_name IN ('centro_custo','observacoes','salario_base','cargo_id');
+-- esperado: 0 linhas
+
+-- A9. FKs apontam para tabelas existentes (zero FKs orfas)
+SELECT COUNT(*) FROM pg_constraint c
+  JOIN pg_class t ON t.oid = c.conrelid
+ WHERE c.contype = 'f' AND t.relname LIKE 'rh_cs_%'
+   AND NOT EXISTS (
+     SELECT 1 FROM pg_class t2 WHERE t2.oid = c.confrelid
+   );
+-- esperado: 0
+```
+
+**Front-end** (manual, em `https://app.classiccouros.com.br/rh/`):
+
+1. Login como `administrador` → menu lateral exibe grupo **C&S** com
+   2 itens: "Colaboradores na Banda" e "Bandas Salariais".
+2. Abrir `sgcs_colaboradores.html` → KPIs renderizam (mesmo que zerados
+   antes do cadastro de bandas) e tabela lista os 140 colaboradores com
+   "Sem banda" enquanto `rh_cs_bandas` estiver vazia.
+3. Abrir `sgcs_bandas.html` → exibe empty-state "Nenhuma banda salarial
+   cadastrada ainda" enquanto `rh_cs_bandas` estiver vazia.
+4. Login como `visualizador` → grupo C&S **nao** aparece (perfis exigem
+   admin/rh/gestor_confianca/diretoria/financeiro).
+5. Exportar CSV em ambas as paginas → arquivo gerado com cabecalho
+   correto, separador `;`, BOM UTF-8.

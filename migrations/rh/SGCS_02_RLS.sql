@@ -12,21 +12,25 @@
 --     auxiliar de subordinacao; aqui leitura ampla para o perfil 'gestor_confianca').
 -- ════════════════════════════════════════════════════════════════════════════
 
--- ── 1. rh_cs_familias (catalogo nao-sensivel — leitura ampla) ───────────────
+-- ── 1. rh_cs_familias (catalogo — leitura para usuarios autenticados) ──────
+-- Nao-sensivel mas exige autenticacao (evita exposicao via anon key).
 ALTER TABLE rh_cs_familias ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "cs_fam_read" ON rh_cs_familias;
 CREATE POLICY "cs_fam_read" ON rh_cs_familias FOR SELECT
-  USING (TRUE);
+  USING (auth.role() = 'authenticated');
 DROP POLICY IF EXISTS "cs_fam_write" ON rh_cs_familias;
 CREATE POLICY "cs_fam_write" ON rh_cs_familias FOR ALL
   USING (rh_perfil_atual() IN ('administrador','rh'))
   WITH CHECK (rh_perfil_atual() IN ('administrador','rh'));
 
--- ── 2. rh_cs_cargo_meta (catalogo — leitura ampla) ──────────────────────────
+-- ── 2. rh_cs_cargo_meta (criticidade A/B/C — leitura restrita) ─────────────
+-- Criticidade e descricao funcional formal sao dados internos de governanca.
 ALTER TABLE rh_cs_cargo_meta ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "cs_meta_read" ON rh_cs_cargo_meta;
 CREATE POLICY "cs_meta_read" ON rh_cs_cargo_meta FOR SELECT
-  USING (TRUE);
+  USING (rh_perfil_atual() IN (
+    'administrador','rh','gestor','gestor_confianca','diretoria','financeiro'
+  ));
 DROP POLICY IF EXISTS "cs_meta_write" ON rh_cs_cargo_meta;
 CREATE POLICY "cs_meta_write" ON rh_cs_cargo_meta FOR ALL
   USING (rh_perfil_atual() IN ('administrador','rh'))
@@ -160,11 +164,11 @@ CREATE POLICY "cs_rel_fid_write" ON rh_cs_relatorios_fiducia FOR ALL
     'administrador','rh','gestor_confianca','diretoria'
   ));
 
--- ── 12. rh_cs_beneficios (catalogo) ────────────────────────────────────────
+-- ── 12. rh_cs_beneficios (catalogo — exige autenticacao) ───────────────────
 ALTER TABLE rh_cs_beneficios ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "cs_ben_read" ON rh_cs_beneficios;
 CREATE POLICY "cs_ben_read" ON rh_cs_beneficios FOR SELECT
-  USING (TRUE);
+  USING (auth.role() = 'authenticated');
 DROP POLICY IF EXISTS "cs_ben_write" ON rh_cs_beneficios;
 CREATE POLICY "cs_ben_write" ON rh_cs_beneficios FOR ALL
   USING (rh_perfil_atual() IN ('administrador','rh'))
@@ -208,5 +212,14 @@ CREATE POLICY "cs_alerta_write" ON rh_cs_alertas FOR ALL
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- FIM SGCS_02_RLS.sql
--- 15 tabelas com RLS habilitado | 30 policies | 0 tabela aberta
+-- 15 tabelas com RLS habilitado | 30 policies
+-- 0 USING(TRUE) | leituras de catalogo exigem auth.role() = 'authenticated'
+-- ════════════════════════════════════════════════════════════════════════════
+-- NOTA HERDADA (FUNDACAO_BANCO_v2.sql:212-213):
+--   rh_usuarios.perfil CHECK so admite ('administrador','rh','gestor',
+--   'visualizador'). As policies acima (e o resto do projeto desde
+--   RLS_TABELAS_NOVAS.sql) referenciam 'gestor_confianca','diretoria',
+--   'financeiro','sst' que nao existem no CHECK — usuarios com esses
+--   perfis nao conseguem ser cadastrados. Tratar em PR separado expandindo
+--   o CHECK ou migrando para rh_perfis_acesso (1:N).
 -- ════════════════════════════════════════════════════════════════════════════

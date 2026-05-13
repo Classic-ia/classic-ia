@@ -68,7 +68,9 @@ CREATE INDEX IF NOT EXISTS idx_cs_bandas_vigencia ON rh_cs_bandas(vigencia_inici
 COMMENT ON TABLE rh_cs_bandas IS 'Bandas salariais (min/referencia/teto) por cargo e nivel, com vigencia para versionamento.';
 
 -- ── 4. DADOS C&S DO COLABORADOR (extensao 1:1) ─────────────────────────────
--- Adiciona ao rh_funcionarios: nivel, gratificacao, fiducia, area C&S
+-- Adiciona ao rh_funcionarios APENAS o que e especifico do dominio C&S.
+-- Campos como salario_base, centro_custo, observacoes, setor, cargo, gestor
+-- operacional NAO sao duplicados aqui — sao lidos via JOIN em rh_funcionarios.
 CREATE TABLE IF NOT EXISTS rh_cs_colaborador (
   id                  UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   funcionario_id      UUID NOT NULL UNIQUE REFERENCES rh_funcionarios(id) ON DELETE CASCADE,
@@ -79,17 +81,19 @@ CREATE TABLE IF NOT EXISTS rh_cs_colaborador (
   fiducia_natureza    CHAR(1) CHECK (fiducia_natureza IN ('I','II','III') OR fiducia_natureza IS NULL),
   fiducia_termo_url   TEXT,
   area_cs             TEXT,
-  centro_custo        TEXT,
   reporta_a_id        UUID REFERENCES rh_funcionarios(id),
-  observacoes         TEXT,
+  observacoes_cs      TEXT,
   created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_cs_colab_func ON rh_cs_colaborador(funcionario_id);
 CREATE INDEX IF NOT EXISTS idx_cs_colab_fam ON rh_cs_colaborador(familia_id);
 CREATE INDEX IF NOT EXISTS idx_cs_colab_fid ON rh_cs_colaborador(fiducia_natureza) WHERE fiducia_natureza IS NOT NULL;
-COMMENT ON TABLE rh_cs_colaborador IS 'Dados de C&S do colaborador: trilha I/II/III, gratificacao de funcao, natureza de fiducia.';
+COMMENT ON TABLE rh_cs_colaborador IS 'Dados de C&S do colaborador: trilha I/II/III, gratificacao de funcao, natureza de fiducia. Extensao 1:1 do rh_funcionarios — NAO duplica salario, centro_custo, setor ou cargo.';
 COMMENT ON COLUMN rh_cs_colaborador.fiducia_natureza IS 'I=Gestao Operacional; II=Gestao Patrimonial/Administrativa; III=Representacao Tecnica Externa';
+COMMENT ON COLUMN rh_cs_colaborador.reporta_a_id IS 'Hierarquia FORMAL de C&S do organograma de Maio/2026. Pode diferir de rh_funcionarios.gestor_id (gestor operacional / eSocial). Quando NULL, assume gestor_id.';
+COMMENT ON COLUMN rh_cs_colaborador.area_cs IS 'Area funcional de C&S (1 das 6 areas do organograma). Pode diferir de rh_setores (organizacao operacional).';
+COMMENT ON COLUMN rh_cs_colaborador.observacoes_cs IS 'Observacoes especificas do contexto C&S (nao confundir com rh_funcionarios.observacoes, que e operacional).';
 
 -- ── 5. HISTORICO SALARIAL ──────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS rh_cs_historico_salarial (

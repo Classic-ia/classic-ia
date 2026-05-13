@@ -1,0 +1,456 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Workflow de Progressao</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Total no ciclo</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-elegiveis">--</div>
+      <div class="kpi-label">Elegiveis</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #F59E0B">
+      <div class="kpi-value" id="kpi-workflow">--</div>
+      <div class="kpi-label">Em workflow</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-homologadas">--</div>
+      <div class="kpi-label">Homologadas</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-bloqueadas">--</div>
+      <div class="kpi-label">Bloqueadas</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select id="filter-ciclo"></select>
+    <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome ou cargo...">
+    <select id="filter-status">
+      <option value="">Todos os status</option>
+      <option value="elegivel">Elegiveis</option>
+      <option value="bloqueado">Bloqueadas</option>
+      <option value="recomendada">Recomendadas</option>
+      <option value="aprovada_rh">Aprovadas RH</option>
+      <option value="aprovada_comite">Aprovadas Comite</option>
+      <option value="aprovada_diretoria">Aprovadas Diretoria</option>
+      <option value="homologada">Homologadas</option>
+      <option value="rejeitada">Rejeitadas</option>
+    </select>
+    <select id="filter-transicao">
+      <option value="">Todas transicoes</option>
+      <option value="I-II">I → II</option>
+      <option value="II-III">II → III</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-identificar">Identificar elegiveis</button>
+      <button class="btn btn-secondary btn-small" id="btn-export">Exportar CSV</button>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table id="prog-table">
+        <thead>
+          <tr>
+            <th data-col="nome">Colaborador</th>
+            <th data-col="cargo">Cargo</th>
+            <th style="text-align:center">Transicao</th>
+            <th data-col="salario_anterior" style="text-align:right">Atual</th>
+            <th data-col="salario_proposto" style="text-align:right">Proposto</th>
+            <th data-col="ficha_total" style="text-align:center">Nota</th>
+            <th data-col="status">Status</th>
+            <th>Proxima etapa</th>
+            <th style="width:120px">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="prog-tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">Carregando...</span>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Drawer: detalhe da progressao -->
+<div class="drawer-overlay" id="drawer-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:90"></div>
+<div class="drawer" id="drawer" style="position:fixed;right:0;top:0;height:100vh;width:min(520px,90vw);background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.1);transform:translateX(100%);transition:transform .25s ease;z-index:91;overflow-y:auto">
+  <div style="padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:16px;font-weight:600">Detalhe da progressao</div>
+    <button class="modal-close" id="drawer-close">&times;</button>
+  </div>
+  <div id="drawer-body" style="padding:20px"></div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_prog',
+    title: 'SGCS — Workflow de Progressao',
+    breadcrumb: 'SGCS › Progressoes',
+    perfisPermitidos: ['administrador','rh','gestor','gestor_confianca','diretoria','financeiro']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  const perfil = user.perfil;
+  const ehAdmin = ['administrador'].includes(perfil);
+  const ehRH = ['administrador','rh'].includes(perfil);
+  const ehSupervisor = ['administrador','rh','gestor','gestor_confianca'].includes(perfil);
+  const ehComite = ['administrador','gestor_confianca'].includes(perfil);
+  const ehDiretoria = ['administrador','diretoria'].includes(perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  const anoAtual = new Date().getFullYear();
+  let cicloSel = anoAtual;
+  let progressoes = [];
+  let sortCol = 'nome';
+  let sortAsc = true;
+
+  const $tbody  = document.getElementById('prog-tbody');
+  const $count  = document.getElementById('table-count');
+  const $search = document.getElementById('search-input');
+  const $fStatus = document.getElementById('filter-status');
+  const $fTrans  = document.getElementById('filter-transicao');
+  const $fCiclo  = document.getElementById('filter-ciclo');
+
+  for (let y = anoAtual + 1; y >= anoAtual - 2; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = 'Ciclo ' + y;
+    if (y === anoAtual) o.selected = true;
+    $fCiclo.appendChild(o);
+  }
+
+  // ============================================================
+  // CARREGAR
+  // ============================================================
+  async function carregar() {
+    $count.textContent = 'Carregando...';
+    cicloSel = parseInt($fCiclo.value, 10);
+    const res = await API.get(`vw_cs_progressoes_workflow?ciclo_ano=eq.${cicloSel}&order=nome.asc`);
+    progressoes = res.ok ? (res.data || []) : [];
+    if (!res.ok) {
+      $count.textContent = 'Erro: ' + (res.error || 'desconhecido');
+      return;
+    }
+    atualizarKPIs();
+    renderizar();
+  }
+
+  function atualizarKPIs() {
+    document.getElementById('kpi-total').textContent = progressoes.length;
+    document.getElementById('kpi-elegiveis').textContent = progressoes.filter(p => p.status === 'elegivel').length;
+    document.getElementById('kpi-workflow').textContent = progressoes.filter(p => ['recomendada','aprovada_rh','aprovada_comite','aprovada_diretoria'].includes(p.status)).length;
+    document.getElementById('kpi-homologadas').textContent = progressoes.filter(p => p.status === 'homologada').length;
+    document.getElementById('kpi-bloqueadas').textContent = progressoes.filter(p => p.status === 'bloqueado').length;
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  const STATUS_BADGE = {
+    'elegivel':            { label: 'Elegivel',         cls: 'success' },
+    'bloqueado':           { label: 'Bloqueado',        cls: 'danger' },
+    'recomendada':         { label: 'Recomendada',      cls: 'warning' },
+    'aprovada_rh':         { label: 'Aprovada RH',      cls: 'warning' },
+    'aprovada_comite':     { label: 'Aprovada Comite',  cls: 'warning' },
+    'aprovada_diretoria':  { label: 'Aprovada Diretoria',cls: 'warning' },
+    'homologada':          { label: 'Homologada',       cls: 'success' },
+    'rejeitada':           { label: 'Rejeitada',        cls: 'danger' }
+  };
+
+  const ETAPA_LABEL = {
+    'supervisor': 'Supervisor', 'rh': 'RH', 'comite': 'Comite',
+    'diretoria': 'Diretoria', 'homologacao': 'Homologacao'
+  };
+
+  function aplicarFiltros() {
+    const q = $search.value.trim().toLowerCase();
+    const st = $fStatus.value;
+    const tr = $fTrans.value;
+
+    return progressoes.filter(p => {
+      if (q && !(p.nome || '').toLowerCase().includes(q) && !(p.cargo || '').toLowerCase().includes(q)) return false;
+      if (st && p.status !== st) return false;
+      if (tr === 'I-II'  && !(p.nivel_anterior === 'I'  && p.nivel_novo === 'II'))  return false;
+      if (tr === 'II-III' && !(p.nivel_anterior === 'II' && p.nivel_novo === 'III')) return false;
+      return true;
+    });
+  }
+
+  function ordenar(arr) {
+    const dir = sortAsc ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+    });
+  }
+
+  function renderizar() {
+    const filtrados = ordenar(aplicarFiltros());
+
+    if (!filtrados.length) {
+      $tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhuma progressao com os filtros atuais. Use <strong>Identificar elegiveis</strong> para gerar o lote do ciclo.</td></tr>';
+      $count.textContent = '0 progressoes';
+      return;
+    }
+
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+
+    $tbody.innerHTML = filtrados.map(p => {
+      const badge = STATUS_BADGE[p.status] || { label: p.status, cls: 'info' };
+      const trans = (p.nivel_anterior && p.nivel_novo)
+        ? `<span class="badge badge-info">${p.nivel_anterior}</span> → <span class="badge badge-info">${p.nivel_novo}</span>`
+        : '—';
+      const proxima = p.proxima_etapa
+        ? `<span style="font-size:12px;color:var(--text-muted)">${ETAPA_LABEL[p.proxima_etapa] || p.proxima_etapa}</span>`
+        : '—';
+      const nota = p.ficha_total != null ? Number(p.ficha_total).toFixed(1) : '—';
+
+      return `<tr data-id="${p.progressao_id}">
+        <td><strong>${esc(p.nome)}</strong></td>
+        <td>${esc(p.cargo || '—')}</td>
+        <td style="text-align:center">${trans}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtM(p.salario_anterior)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtM(p.salario_proposto)}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${nota}</td>
+        <td><span class="badge badge-${badge.cls}">${badge.label}</span></td>
+        <td>${proxima}</td>
+        <td><button class="btn btn-secondary btn-small btn-detalhe" data-id="${p.progressao_id}">Detalhe</button></td>
+      </tr>`;
+    }).join('');
+
+    $tbody.querySelectorAll('.btn-detalhe').forEach(b => {
+      b.addEventListener('click', () => abrirDrawer(b.dataset.id));
+    });
+
+    $count.textContent = `${filtrados.length} progressoes`;
+  }
+
+  // ============================================================
+  // DRAWER (detalhe)
+  // ============================================================
+  function abrirDrawer(id) {
+    const p = progressoes.find(x => x.progressao_id === id);
+    if (!p) return;
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+
+    let acoes = '';
+    if (p.status === 'elegivel' && ehSupervisor) {
+      acoes += botaoEtapa('supervisor', true, 'Recomendar');
+      acoes += botaoEtapa('supervisor', false, 'Rejeitar', 'btn-secondary');
+    } else if (p.status === 'recomendada' && ehRH) {
+      acoes += botaoEtapa('rh', true, 'Aprovar RH');
+      acoes += botaoEtapa('rh', false, 'Rejeitar', 'btn-secondary');
+    } else if (p.status === 'aprovada_rh') {
+      if (p.nivel_novo === 'III') {
+        if (ehDiretoria) {
+          acoes += botaoEtapa('diretoria', true, 'Aprovar Diretoria');
+          acoes += botaoEtapa('diretoria', false, 'Rejeitar', 'btn-secondary');
+        }
+      } else if (ehComite) {
+        acoes += botaoEtapa('comite', true, 'Aprovar Comite');
+        acoes += botaoEtapa('comite', false, 'Rejeitar', 'btn-secondary');
+      }
+    } else if (p.status === 'aprovada_comite' && ehDiretoria) {
+      acoes += botaoEtapa('diretoria', true, 'Aprovar Diretoria');
+      acoes += botaoEtapa('diretoria', false, 'Rejeitar', 'btn-secondary');
+    } else if (p.status === 'aprovada_diretoria' && ehRH) {
+      acoes += botaoEtapa('homologar', true, 'Homologar');
+    }
+
+    function botaoEtapa(etapa, aprovar, label, cls) {
+      cls = cls || 'btn-primary';
+      return `<button class="btn ${cls}" data-etapa="${etapa}" data-aprovar="${aprovar}" style="margin-right:8px;margin-bottom:8px">${label}</button>`;
+    }
+
+    document.getElementById('drawer-body').innerHTML = `
+      <div style="margin-bottom:16px">
+        <div style="font-size:18px;font-weight:600">${esc(p.nome)}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(p.cargo || '—')} · Ciclo ${p.ciclo_ano}</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Transicao</div>
+          <div style="margin-top:4px;font-size:16px;font-weight:600">${p.nivel_anterior || '—'} → ${p.nivel_novo || '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Nota da ficha</div>
+          <div style="margin-top:4px;font-size:16px;font-weight:600">${p.ficha_total != null ? Number(p.ficha_total).toFixed(1) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Salario atual</div>
+          <div style="margin-top:4px;font-size:14px;font-variant-numeric:tabular-nums">${fmtM(p.salario_anterior)}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Salario proposto</div>
+          <div style="margin-top:4px;font-size:14px;font-weight:600;font-variant-numeric:tabular-nums">${fmtM(p.salario_proposto)}</div>
+        </div>
+      </div>
+
+      ${p.motivo_bloqueio ? `
+      <div style="background:#FEF3C7;border:1px solid #F59E0B;border-radius:6px;padding:12px;margin-bottom:16px">
+        <div style="font-size:12px;font-weight:600;color:#92400E;margin-bottom:4px">Bloqueios identificados</div>
+        <div style="font-size:13px;color:#78350F">${esc(p.motivo_bloqueio).replace(/; /g, '<br>')}</div>
+      </div>` : ''}
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:8px">Pareceres</div>
+        ${parecerLinha('Supervisor', p.parecer_supervisor, p.data_supervisor)}
+        ${parecerLinha('RH', p.parecer_rh, p.data_rh)}
+        ${parecerLinha('Comite', p.parecer_comite, p.data_comite)}
+        ${parecerLinha('Diretoria', p.parecer_diretoria, p.data_diretoria)}
+      </div>
+
+      ${acoes ? `
+      <div style="margin-bottom:8px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Seu parecer (opcional)</div>
+        <textarea id="parecer-input" rows="3" style="width:100%" placeholder="Justificativa, observacoes..."></textarea>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:12px">${acoes}</div>
+      ` : '<div style="font-size:12px;color:var(--text-muted);font-style:italic">Voce nao tem permissao para acoes nesta etapa.</div>'}
+    `;
+
+    document.querySelectorAll('#drawer-body button[data-etapa]').forEach(b => {
+      b.addEventListener('click', () => executarEtapa(p.progressao_id, b.dataset.etapa, b.dataset.aprovar === 'true'));
+    });
+
+    document.getElementById('drawer-overlay').style.display = 'block';
+    document.getElementById('drawer').style.transform = 'translateX(0)';
+  }
+
+  function parecerLinha(label, texto, data) {
+    if (!texto && !data) return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;color:var(--text-muted)"><strong>${label}:</strong> pendente</div>`;
+    return `<div style="padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+      <div style="display:flex;justify-content:space-between"><strong>${label}</strong><span style="color:var(--text-muted);font-size:11px">${data ? API.fmtData(data.slice(0,10)) : ''}</span></div>
+      <div style="color:var(--text-muted);margin-top:2px">${API.esc(texto || '(sem parecer textual)')}</div>
+    </div>`;
+  }
+
+  function fecharDrawer() {
+    document.getElementById('drawer').style.transform = 'translateX(100%)';
+    document.getElementById('drawer-overlay').style.display = 'none';
+  }
+  document.getElementById('drawer-close').addEventListener('click', fecharDrawer);
+  document.getElementById('drawer-overlay').addEventListener('click', fecharDrawer);
+
+  async function executarEtapa(id, etapa, aprovar) {
+    const parecer = (document.getElementById('parecer-input')?.value || '').trim() || null;
+    if (!aprovar && !parecer) {
+      if (!confirm('Rejeitar sem parecer textual?')) return;
+    }
+    const res = await API.rpc('cs_progressao_transicionar', {
+      p_progressao_id: id, p_etapa: etapa, p_aprovar: aprovar, p_parecer: parecer
+    });
+    if (res.ok) {
+      mostrarToast(aprovar ? 'Etapa registrada.' : 'Progressao rejeitada.', 'success');
+      fecharDrawer();
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  }
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  $fCiclo.addEventListener('change', carregar);
+  [$search, $fStatus, $fTrans].forEach(el => {
+    el.addEventListener('input', renderizar);
+    el.addEventListener('change', renderizar);
+  });
+
+  document.querySelectorAll('#prog-table th[data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = true; }
+      renderizar();
+    });
+  });
+
+  document.getElementById('btn-identificar').addEventListener('click', async () => {
+    if (!ehRH) { mostrarToast('Apenas administrador/RH pode identificar elegiveis.', 'danger'); return; }
+    if (!confirm(`Identificar elegiveis do ciclo ${cicloSel}? Vai criar/atualizar progressoes em estado inicial. Registros ja em workflow nao serao afetados.`)) return;
+    const btn = document.getElementById('btn-identificar');
+    btn.disabled = true; btn.textContent = 'Processando...';
+    const res = await API.rpc('cs_identificar_elegiveis', { p_ciclo_ano: cicloSel });
+    btn.disabled = false; btn.textContent = 'Identificar elegiveis';
+    if (res.ok) {
+      const d = res.data || {};
+      mostrarToast(`Elegiveis: ${d.elegiveis || 0} · Bloqueados: ${d.bloqueados || 0} · Ignorados: ${d.ignorados || 0}`, 'success');
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  });
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Ciclo','Nome','Cargo','NivelAnt','NivelNovo','SalarioAtual','SalarioProposto','NotaFicha','Status','Bloqueio'];
+    const linhas = filtrados.map(p => [
+      p.ciclo_ano, p.nome, p.cargo, p.nivel_anterior, p.nivel_novo,
+      p.salario_anterior, p.salario_proposto, p.ficha_total, p.status, p.motivo_bloqueio
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_progressoes_${cicloSel}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function mostrarToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    const m = document.getElementById('toast-msg');
+    m.textContent = msg;
+    t.className = 'toast toast-' + (tipo || 'info') + ' show';
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

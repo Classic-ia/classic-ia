@@ -97,6 +97,8 @@ const Shell = (() => {
     // C&S (SGCS — Governanca de Cargos & Salarios)
     { group: 'C&S', id: 'sgcs_colab', label: 'Colaboradores na Banda', href: 'sgcs_colaboradores.html', icon: 'users', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
     { group: 'C&S', id: 'sgcs_bandas', label: 'Bandas Salariais', href: 'sgcs_bandas.html', icon: 'bar-chart', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
+    { group: 'C&S', id: 'sgcs_fichas', label: 'Fichas de Avaliacao', href: 'sgcs_fichas.html', icon: 'file-text', perfis: ['administrador','rh','gestor','gestor_confianca','diretoria'] },
+    { group: 'C&S', id: 'sgcs_prog', label: 'Workflow Progressao', href: 'sgcs_progressoes.html', icon: 'trending-up', perfis: ['administrador','rh','gestor','gestor_confianca','diretoria','financeiro'] },
 
     // SISTEMA
     { group: 'Sistema', id: 'integracoes', label: 'Integracoes', href: 'integracoes.html', icon: 'code', perfis: ['administrador','rh'] },

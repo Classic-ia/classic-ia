@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Fichas de Avaliacao</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Fichas no ciclo</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-homologadas">--</div>
+      <div class="kpi-label">Homologadas</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #F59E0B">
+      <div class="kpi-value" id="kpi-pendentes">--</div>
+      <div class="kpi-label">Em andamento</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-media">--</div>
+      <div class="kpi-label">Nota media</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-sem">--</div>
+      <div class="kpi-label">Sem ficha</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select id="filter-ciclo"></select>
+    <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome ou cargo...">
+    <select id="filter-status">
+      <option value="">Todos os status</option>
+      <option value="__nofile__">Sem ficha</option>
+      <option value="rascunho">Rascunho</option>
+      <option value="enviada">Enviada</option>
+      <option value="validada">Validada</option>
+      <option value="homologada">Homologada</option>
+    </select>
+    <select id="filter-supervisor">
+      <option value="">Todos supervisores</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-export">Exportar CSV</button>
+      <button class="btn btn-primary btn-small" id="btn-nova">+ Nova ficha</button>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table id="fichas-table">
+        <thead>
+          <tr>
+            <th data-col="nome">Colaborador</th>
+            <th data-col="cargo">Cargo</th>
+            <th data-col="nivel" style="text-align:center">Nivel</th>
+            <th data-col="supervisor_nome">Supervisor</th>
+            <th data-col="bloco_tecnico" style="text-align:center;width:60px" title="Tecnico (0-35)">T</th>
+            <th data-col="bloco_comportamental" style="text-align:center;width:60px" title="Comportamental (0-35)">C</th>
+            <th data-col="bloco_frequencia" style="text-align:center;width:60px" title="Frequencia (0-15)">F</th>
+            <th data-col="bloco_seguranca" style="text-align:center;width:60px" title="Seguranca (0-15)">S</th>
+            <th data-col="total" style="text-align:center">Total</th>
+            <th data-col="percent_metas" style="text-align:center">Metas</th>
+            <th data-col="status">Status</th>
+            <th style="width:90px">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="fichas-tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">Carregando...</span>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Modal: novo (selecionar funcionario) -->
+<div class="modal-overlay" id="modal-novo">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nova ficha de avaliacao</div>
+      <button class="modal-close" id="modal-novo-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group full">
+        <label>Ciclo</label>
+        <input type="number" id="novo-ciclo" min="2025" max="2030">
+      </div>
+      <div class="form-group full">
+        <label>Colaborador</label>
+        <select id="novo-funcionario">
+          <option value="">Selecione...</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-novo-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-novo-ok">Continuar</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_fichas',
+    title: 'SGCS — Fichas de Avaliacao',
+    breadcrumb: 'SGCS › Fichas',
+    perfisPermitidos: ['administrador','rh','gestor','gestor_confianca','diretoria']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  const podeEditar = ['administrador','rh','gestor','gestor_confianca'].includes(user.perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  const anoAtual = new Date().getFullYear();
+  let cicloSel = anoAtual;
+  let fichas = [];
+  let funcionarios = [];
+  let supervisores = [];
+  let sortCol = 'nome';
+  let sortAsc = true;
+
+  const $tbody  = document.getElementById('fichas-tbody');
+  const $count  = document.getElementById('table-count');
+  const $search = document.getElementById('search-input');
+  const $fStatus = document.getElementById('filter-status');
+  const $fSup   = document.getElementById('filter-supervisor');
+  const $fCiclo = document.getElementById('filter-ciclo');
+
+  // Popula seletor de ciclo (ultimos 3 anos + proximo)
+  for (let y = anoAtual + 1; y >= anoAtual - 2; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = 'Ciclo ' + y;
+    if (y === anoAtual) o.selected = true;
+    $fCiclo.appendChild(o);
+  }
+
+  // ============================================================
+  // CARREGAR
+  // ============================================================
+  async function carregar() {
+    $count.textContent = 'Carregando...';
+    cicloSel = parseInt($fCiclo.value, 10);
+
+    const [resFichas, resFuncs] = await Promise.all([
+      API.get(`vw_cs_fichas_ciclo?ciclo_ano=eq.${cicloSel}&order=nome.asc`),
+      API.get('vw_funcionario_base?status=in.(ativo,experiencia)&order=nome.asc')
+    ]);
+
+    fichas = resFichas.ok ? (resFichas.data || []) : [];
+    funcionarios = resFuncs.ok ? (resFuncs.data || []) : [];
+
+    if (!resFichas.ok) {
+      $count.textContent = 'Erro: ' + (resFichas.error || 'desconhecido');
+      return;
+    }
+
+    // Supervisores distintos (das fichas existentes)
+    const supMap = new Map();
+    fichas.forEach(f => { if (f.supervisor_id && f.supervisor_nome) supMap.set(f.supervisor_id, f.supervisor_nome); });
+    supervisores = [...supMap.entries()].map(([id, nome]) => ({ id, nome })).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+    $fSup.innerHTML = '<option value="">Todos supervisores</option>' +
+      supervisores.map(s => `<option value="${s.id}">${API.esc(s.nome)}</option>`).join('');
+
+    // Populate "novo" dropdown
+    const $selNovo = document.getElementById('novo-funcionario');
+    const idsComFicha = new Set(fichas.map(f => f.funcionario_id));
+    $selNovo.innerHTML = '<option value="">Selecione...</option>' +
+      funcionarios.filter(f => !idsComFicha.has(f.id))
+                  .map(f => `<option value="${f.id}">${API.esc(f.nome)} — ${API.esc(f.cargo || '')}</option>`).join('');
+
+    atualizarKPIs();
+    renderizar();
+  }
+
+  function atualizarKPIs() {
+    const total = fichas.length;
+    const homologadas = fichas.filter(f => f.status === 'homologada').length;
+    const pendentes = fichas.filter(f => ['rascunho','enviada','validada'].includes(f.status)).length;
+    const semFicha = funcionarios.length - total;
+    const notas = fichas.filter(f => f.total != null).map(f => Number(f.total));
+    const media = notas.length ? notas.reduce((a, b) => a + b, 0) / notas.length : null;
+
+    document.getElementById('kpi-total').textContent = total;
+    document.getElementById('kpi-homologadas').textContent = homologadas;
+    document.getElementById('kpi-pendentes').textContent = pendentes;
+    document.getElementById('kpi-media').textContent = media != null ? media.toFixed(1) : '--';
+    document.getElementById('kpi-sem').textContent = semFicha;
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  const STATUS_BADGE = {
+    'rascunho':   { label: 'Rascunho',   cls: 'info' },
+    'enviada':    { label: 'Enviada',    cls: 'warning' },
+    'validada':   { label: 'Validada',   cls: 'warning' },
+    'homologada': { label: 'Homologada', cls: 'success' }
+  };
+
+  function aplicarFiltros() {
+    const q = $search.value.trim().toLowerCase();
+    const st = $fStatus.value;
+    const sup = $fSup.value;
+
+    if (st === '__nofile__') {
+      // Sem ficha: precisa listar funcionarios SEM ficha
+      const idsComFicha = new Set(fichas.map(f => f.funcionario_id));
+      return funcionarios
+        .filter(f => !idsComFicha.has(f.id))
+        .filter(f => !q || (f.nome || '').toLowerCase().includes(q) || (f.cargo || '').toLowerCase().includes(q))
+        .map(f => ({
+          funcionario_id: f.id, nome: f.nome, cargo: f.cargo,
+          status: '__nofile__', supervisor_nome: null, nivel: null
+        }));
+    }
+
+    return fichas.filter(f => {
+      if (q && !(f.nome || '').toLowerCase().includes(q) && !(f.cargo || '').toLowerCase().includes(q)) return false;
+      if (st && f.status !== st) return false;
+      if (sup && f.supervisor_id !== sup) return false;
+      return true;
+    });
+  }
+
+  function ordenar(arr) {
+    const dir = sortAsc ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+    });
+  }
+
+  function renderizar() {
+    const filtrados = ordenar(aplicarFiltros());
+
+    if (!filtrados.length) {
+      $tbody.innerHTML = '<tr><td colspan="12" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhuma ficha com os filtros atuais.</td></tr>';
+      $count.textContent = '0 fichas';
+      return;
+    }
+
+    const esc = API.esc;
+
+    $tbody.innerHTML = filtrados.map(f => {
+      const isEmpty = f.status === '__nofile__';
+      const badge = isEmpty
+        ? '<span class="badge badge-info">Sem ficha</span>'
+        : `<span class="badge badge-${STATUS_BADGE[f.status]?.cls || 'info'}">${STATUS_BADGE[f.status]?.label || f.status}</span>`;
+
+      const nivel = f.nivel ? `<span class="badge badge-info">${f.nivel}</span>` : '—';
+      const total = f.total != null ? Number(f.total).toFixed(1) : '—';
+      const totalCls = f.total >= 85 ? 'color:#16A34A;font-weight:600' : f.total >= 75 ? 'color:#F59E0B;font-weight:600' : '';
+      const metas = f.percent_metas != null ? f.percent_metas + '%' : '—';
+
+      let acoes;
+      if (isEmpty) {
+        acoes = podeEditar
+          ? `<a href="sgcs_ficha_edit.html?funcionario_id=${f.funcionario_id}&ciclo=${cicloSel}" class="btn btn-secondary btn-small">Criar</a>`
+          : '—';
+      } else {
+        acoes = `<a href="sgcs_ficha_edit.html?id=${f.ficha_id}" class="btn btn-secondary btn-small">Abrir</a>`;
+      }
+
+      return `<tr data-id="${f.funcionario_id}">
+        <td><strong>${esc(f.nome)}</strong></td>
+        <td>${esc(f.cargo || '—')}</td>
+        <td style="text-align:center">${nivel}</td>
+        <td style="font-size:12px;color:var(--text-muted)">${esc(f.supervisor_nome || '—')}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${f.bloco_tecnico != null ? Number(f.bloco_tecnico).toFixed(1) : '—'}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${f.bloco_comportamental != null ? Number(f.bloco_comportamental).toFixed(1) : '—'}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${f.bloco_frequencia != null ? Number(f.bloco_frequencia).toFixed(1) : '—'}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${f.bloco_seguranca != null ? Number(f.bloco_seguranca).toFixed(1) : '—'}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums;${totalCls}">${total}</td>
+        <td style="text-align:center;font-variant-numeric:tabular-nums">${metas}</td>
+        <td>${badge}</td>
+        <td>${acoes}</td>
+      </tr>`;
+    }).join('');
+
+    $count.textContent = `${filtrados.length} registro${filtrados.length === 1 ? '' : 's'}`;
+  }
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  $fCiclo.addEventListener('change', carregar);
+  [$search, $fStatus, $fSup].forEach(el => {
+    el.addEventListener('input', renderizar);
+    el.addEventListener('change', renderizar);
+  });
+
+  document.querySelectorAll('#fichas-table th[data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = true; }
+      renderizar();
+    });
+  });
+
+  // Botao nova
+  const $modalNovo = document.getElementById('modal-novo');
+  document.getElementById('btn-nova').addEventListener('click', () => {
+    if (!podeEditar) { mostrarToast('Sem permissao para criar ficha.', 'danger'); return; }
+    document.getElementById('novo-ciclo').value = cicloSel;
+    $modalNovo.classList.add('show');
+  });
+  document.getElementById('modal-novo-close').addEventListener('click', () => $modalNovo.classList.remove('show'));
+  document.getElementById('modal-novo-cancel').addEventListener('click', () => $modalNovo.classList.remove('show'));
+  document.getElementById('modal-novo-ok').addEventListener('click', () => {
+    const fid = document.getElementById('novo-funcionario').value;
+    const c = parseInt(document.getElementById('novo-ciclo').value, 10);
+    if (!fid || !c) { mostrarToast('Selecione colaborador e ciclo.', 'danger'); return; }
+    window.location.href = `sgcs_ficha_edit.html?funcionario_id=${fid}&ciclo=${c}`;
+  });
+
+  // Export
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Ciclo','Nome','Cargo','Nivel','Supervisor','Tecnico','Comportamental','Frequencia','Seguranca','Total','Metas','Status'];
+    const linhas = filtrados.map(f => [
+      cicloSel, f.nome, f.cargo, f.nivel || '', f.supervisor_nome || '',
+      f.bloco_tecnico, f.bloco_comportamental, f.bloco_frequencia, f.bloco_seguranca,
+      f.total, f.percent_metas, f.status
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_fichas_${cicloSel}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function mostrarToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    const m = document.getElementById('toast-msg');
+    m.textContent = msg;
+    t.className = 'toast toast-' + (tipo || 'info') + ' show';
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

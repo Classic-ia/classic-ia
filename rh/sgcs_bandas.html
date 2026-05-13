@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Bandas Salariais</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-bandas">--</div>
+      <div class="kpi-label">Bandas vigentes</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-cargos">--</div>
+      <div class="kpi-label">Cargos com banda</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-cobertos">--</div>
+      <div class="kpi-label">Colaboradores na banda</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-foras">--</div>
+      <div class="kpi-label">Fora do teto</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" class="search-input" id="search-input" placeholder="Buscar por cargo...">
+    <select id="filter-familia">
+      <option value="">Todas as famílias</option>
+    </select>
+    <select id="filter-criticidade">
+      <option value="">Todas criticidades</option>
+      <option value="A">A — alta</option>
+      <option value="B">B — média</option>
+      <option value="C">C — baixa</option>
+    </select>
+    <select id="filter-nivel">
+      <option value="">Todos os níveis</option>
+      <option value="I">Nível I</option>
+      <option value="II">Nível II</option>
+      <option value="III">Nível III</option>
+      <option value="__none__">Sem nível</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-toggle-view">Alternar visualização</button>
+      <button class="btn btn-secondary btn-small" id="btn-export">Exportar CSV</button>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div id="view-tabela" class="table-wrap">
+    <div class="table-scroll">
+      <table id="bandas-table">
+        <thead>
+          <tr>
+            <th data-col="cargo">Cargo</th>
+            <th data-col="familia">Família</th>
+            <th data-col="criticidade" style="text-align:center">Criticidade</th>
+            <th data-col="nivel" style="text-align:center">Nível</th>
+            <th data-col="salario_min" style="text-align:right">Mínimo</th>
+            <th data-col="salario_referencia" style="text-align:right">Referência</th>
+            <th data-col="salario_teto" style="text-align:right">Teto</th>
+            <th data-col="qtd_colaboradores" style="text-align:center">Colaboradores</th>
+            <th data-col="qtd_fora_teto" style="text-align:center">Fora do teto</th>
+            <th data-col="vigencia_inicio">Vigência</th>
+          </tr>
+        </thead>
+        <tbody id="bandas-tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">Carregando...</span>
+    </div>
+  </div>
+
+  <!-- Cards (visualização alternativa) -->
+  <div id="view-cards" style="display:none">
+    <div id="bandas-cards-container" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px;margin-top:8px"></div>
+  </div>
+
+  <!-- Empty state quando sem bandas cadastradas -->
+  <div id="empty-bandas" style="display:none;text-align:center;padding:48px 24px;background:var(--surface);border-radius:8px;border:1px dashed var(--border)">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">Nenhuma banda salarial cadastrada ainda</div>
+    <div style="font-size:13px;color:var(--text-muted);margin-bottom:16px;max-width:480px;margin-left:auto;margin-right:auto">
+      O Comitê de C&S precisa homologar as bandas oficiais por (cargo, nível) na tabela <code>rh_cs_bandas</code> antes que esta tela mostre dados.
+    </div>
+    <div style="font-size:12px;color:var(--text-muted)">
+      Próximo passo: rodar <code>SGCS_04_SEED.sql</code> e cadastrar as bandas via SQL ou tela do Comitê.
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_bandas',
+    title: 'SGCS — Bandas Salariais',
+    breadcrumb: 'SGCS › Bandas',
+    perfisPermitidos: ['administrador','rh','gestor_confianca','diretoria','financeiro']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  let bandas = [];
+  let familias = [];
+  let sortCol = 'cargo';
+  let sortAsc = true;
+  let viewMode = localStorage.getItem('sgcs_bandas_view') || 'tabela';
+
+  const $tbody  = document.getElementById('bandas-tbody');
+  const $count  = document.getElementById('table-count');
+  const $search = document.getElementById('search-input');
+  const $fFam   = document.getElementById('filter-familia');
+  const $fCrit  = document.getElementById('filter-criticidade');
+  const $fNivel = document.getElementById('filter-nivel');
+
+  // ============================================================
+  // CARREGAR
+  // ============================================================
+  async function carregar() {
+    $count.textContent = 'Carregando...';
+    const [resBandas, resFam] = await Promise.all([
+      API.get('vw_cs_bandas_ativas?order=familia.asc,cargo.asc,nivel.asc'),
+      API.get('rh_cs_familias?ativo=eq.true&order=ordem.asc')
+    ]);
+    bandas = resBandas.ok ? (resBandas.data || []) : [];
+    familias = resFam.ok ? (resFam.data || []) : [];
+
+    if (!resBandas.ok) {
+      $count.textContent = 'Erro: ' + (resBandas.error || 'desconhecido');
+      return;
+    }
+
+    popularFiltroFamilias();
+    atualizarKPIs();
+    if (!bandas.length) {
+      document.getElementById('view-tabela').style.display = 'none';
+      document.getElementById('view-cards').style.display = 'none';
+      document.getElementById('empty-bandas').style.display = '';
+      $count.textContent = '0 bandas';
+      return;
+    }
+    aplicarView();
+  }
+
+  function popularFiltroFamilias() {
+    $fFam.innerHTML = '<option value="">Todas as famílias</option>';
+    familias.forEach(f => {
+      $fFam.innerHTML += `<option value="${f.id}">${API.esc(f.nome)}</option>`;
+    });
+  }
+
+  // ============================================================
+  // KPIs
+  // ============================================================
+  function atualizarKPIs() {
+    document.getElementById('kpi-bandas').textContent = bandas.length;
+    const cargosUnicos = new Set(bandas.map(b => b.cargo_id));
+    document.getElementById('kpi-cargos').textContent = cargosUnicos.size;
+    const totalCob = bandas.reduce((s, b) => s + (b.qtd_colaboradores || 0), 0);
+    document.getElementById('kpi-cobertos').textContent = totalCob;
+    const totalFora = bandas.reduce((s, b) => s + (b.qtd_fora_teto || 0), 0);
+    document.getElementById('kpi-foras').textContent = totalFora;
+  }
+
+  // ============================================================
+  // FILTROS + SORT
+  // ============================================================
+  function aplicarFiltros() {
+    const q = $search.value.trim().toLowerCase();
+    const fam = $fFam.value;
+    const crit = $fCrit.value;
+    const niv = $fNivel.value;
+
+    return bandas.filter(b => {
+      if (q && !(b.cargo || '').toLowerCase().includes(q)) return false;
+      if (fam && b.familia_id !== fam) return false;
+      if (crit && b.criticidade !== crit) return false;
+      if (niv === '__none__' && b.nivel) return false;
+      if (niv && niv !== '__none__' && b.nivel !== niv) return false;
+      return true;
+    });
+  }
+
+  function ordenar(arr) {
+    const dir = sortAsc ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+    });
+  }
+
+  // ============================================================
+  // RENDER TABELA
+  // ============================================================
+  const CRIT_BADGE = {
+    'A': { label: 'A', cls: 'danger',  desc: 'Alta criticidade' },
+    'B': { label: 'B', cls: 'warning', desc: 'Média criticidade' },
+    'C': { label: 'C', cls: 'info',    desc: 'Baixa criticidade' }
+  };
+
+  function renderTabela() {
+    const filtrados = ordenar(aplicarFiltros());
+
+    if (!filtrados.length) {
+      $tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhuma banda com os filtros atuais.</td></tr>';
+      $count.textContent = '0 bandas';
+      return;
+    }
+
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+    const fmtD = API.fmtData;
+
+    $tbody.innerHTML = filtrados.map(b => {
+      const crit = CRIT_BADGE[b.criticidade] || { label: '—', cls: 'info', desc: '' };
+      const nivel = b.nivel ? `<span class="badge badge-info">${b.nivel}</span>` : '—';
+      const foraTeto = (b.qtd_fora_teto || 0) > 0
+        ? `<span class="badge badge-danger">${b.qtd_fora_teto}</span>`
+        : '0';
+      const vigencia = fmtD(b.vigencia_inicio) + (b.vigencia_fim ? ' → ' + fmtD(b.vigencia_fim) : '');
+
+      return `<tr data-id="${b.banda_id}">
+        <td><strong>${esc(b.cargo)}</strong>${b.cbo ? `<div style="font-size:11px;color:var(--text-muted)">CBO ${esc(b.cbo)}</div>` : ''}</td>
+        <td>${esc(b.familia || '—')}</td>
+        <td style="text-align:center"><span class="badge badge-${crit.cls}" title="${crit.desc}">${crit.label}</span></td>
+        <td style="text-align:center">${nivel}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtM(b.salario_min)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;font-weight:600">${fmtM(b.salario_referencia)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtM(b.salario_teto)}</td>
+        <td style="text-align:center">${b.qtd_colaboradores || 0}</td>
+        <td style="text-align:center">${foraTeto}</td>
+        <td style="font-size:11px;color:var(--text-muted)">${vigencia}</td>
+      </tr>`;
+    }).join('');
+
+    $count.textContent = `${filtrados.length} banda${filtrados.length === 1 ? '' : 's'} vigente${filtrados.length === 1 ? '' : 's'}`;
+  }
+
+  // ============================================================
+  // RENDER CARDS
+  // ============================================================
+  function renderCards() {
+    const filtrados = ordenar(aplicarFiltros());
+    const container = document.getElementById('bandas-cards-container');
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+
+    if (!filtrados.length) {
+      container.innerHTML = '<div style="grid-column:1/-1;text-align:center;padding:32px;color:var(--text-muted)">Nenhuma banda com os filtros atuais.</div>';
+      $count.textContent = '0 bandas';
+      return;
+    }
+
+    container.innerHTML = filtrados.map(b => {
+      const crit = CRIT_BADGE[b.criticidade] || { label: '—', cls: 'info', desc: '' };
+      const range = (b.salario_teto || 0) - (b.salario_min || 0);
+      const refPct = range > 0 ? ((b.salario_referencia - b.salario_min) / range) * 100 : 50;
+      const foraTeto = (b.qtd_fora_teto || 0);
+
+      return `<div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;gap:8px">
+          <div style="flex:1;min-width:0">
+            <div style="font-size:14px;font-weight:600;color:var(--text)">${esc(b.cargo)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(b.familia || '—')}${b.cbo ? ' · CBO ' + esc(b.cbo) : ''}</div>
+          </div>
+          <div style="display:flex;gap:4px;flex-shrink:0">
+            ${b.nivel ? `<span class="badge badge-info">${b.nivel}</span>` : ''}
+            <span class="badge badge-${crit.cls}" title="${crit.desc}">${crit.label}</span>
+          </div>
+        </div>
+        <div style="margin-top:12px">
+          <div style="position:relative;height:8px;background:linear-gradient(to right, #DCFCE7, #FEF3C7, #FEE2E2);border-radius:4px">
+            <div style="position:absolute;left:${refPct}%;top:-4px;width:2px;height:16px;background:var(--text);transform:translateX(-1px)" title="Referência"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--text-muted);margin-top:6px;font-variant-numeric:tabular-nums">
+            <span>${fmtM(b.salario_min)}</span>
+            <span style="font-weight:600;color:var(--text)">${fmtM(b.salario_referencia)}</span>
+            <span>${fmtM(b.salario_teto)}</span>
+          </div>
+        </div>
+        <div style="display:flex;gap:12px;margin-top:12px;font-size:12px;color:var(--text-muted)">
+          <div><strong style="color:var(--text)">${b.qtd_colaboradores || 0}</strong> colab.</div>
+          ${foraTeto > 0 ? `<div style="color:#DC2626"><strong>${foraTeto}</strong> fora do teto</div>` : ''}
+        </div>
+      </div>`;
+    }).join('');
+
+    $count.textContent = `${filtrados.length} banda${filtrados.length === 1 ? '' : 's'} vigente${filtrados.length === 1 ? '' : 's'}`;
+  }
+
+  function aplicarView() {
+    document.getElementById('view-tabela').style.display = viewMode === 'tabela' ? '' : 'none';
+    document.getElementById('view-cards').style.display  = viewMode === 'cards' ? '' : 'none';
+    if (viewMode === 'tabela') renderTabela();
+    else renderCards();
+  }
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  [$search, $fFam, $fCrit, $fNivel].forEach(el => {
+    el.addEventListener('input', aplicarView);
+    el.addEventListener('change', aplicarView);
+  });
+
+  document.querySelectorAll('#bandas-table th[data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = true; }
+      aplicarView();
+    });
+  });
+
+  document.getElementById('btn-toggle-view').addEventListener('click', () => {
+    viewMode = viewMode === 'tabela' ? 'cards' : 'tabela';
+    localStorage.setItem('sgcs_bandas_view', viewMode);
+    aplicarView();
+  });
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Cargo','CBO','Familia','Criticidade','Nivel','Minimo','Referencia','Teto','Colaboradores','Fora_teto','Vigencia_inicio','Vigencia_fim'];
+    const linhas = filtrados.map(b => [
+      b.cargo, b.cbo, b.familia, b.criticidade, b.nivel || '',
+      b.salario_min, b.salario_referencia, b.salario_teto,
+      b.qtd_colaboradores, b.qtd_fora_teto,
+      b.vigencia_inicio, b.vigencia_fim || ''
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_bandas_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ============================================================
+  // INICIA
+  // ============================================================
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

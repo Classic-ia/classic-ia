@@ -94,6 +94,10 @@ const Shell = (() => {
     { group: 'Gestao', id: 'auditoria_folha', label: 'Auditoria Folha', href: 'auditoria_folha.html', icon: 'search', perfis: ['administrador','rh'] },
     { group: 'Gestao', id: 'auditoria_rescisao', label: 'Auditoria Rescisao', href: 'auditoria_rescisao.html', icon: 'search', perfis: ['administrador','rh'] },
 
+    // C&S (SGCS — Governanca de Cargos & Salarios)
+    { group: 'C&S', id: 'sgcs_colab', label: 'Colaboradores na Banda', href: 'sgcs_colaboradores.html', icon: 'users', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
+    { group: 'C&S', id: 'sgcs_bandas', label: 'Bandas Salariais', href: 'sgcs_bandas.html', icon: 'bar-chart', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
+
     // SISTEMA
     { group: 'Sistema', id: 'integracoes', label: 'Integracoes', href: 'integracoes.html', icon: 'code', perfis: ['administrador','rh'] },
     { group: 'Sistema', id: 'convenia', label: 'Convenia', href: 'convenia_integracao.html', icon: 'code', perfis: ['administrador','rh'] },

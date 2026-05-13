@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Colaboradores na Banda</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Colaboradores ativos</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-piso">--</div>
+      <div class="kpi-label">No piso da banda</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #F59E0B">
+      <div class="kpi-value" id="kpi-teto">--</div>
+      <div class="kpi-label">No teto da banda</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-fora">--</div>
+      <div class="kpi-label">Acima do teto (exceção)</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #6B7280">
+      <div class="kpi-value" id="kpi-sem">--</div>
+      <div class="kpi-label">Sem banda atribuída</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome ou cargo...">
+    <select id="filter-familia">
+      <option value="">Todas as famílias</option>
+    </select>
+    <select id="filter-nivel">
+      <option value="">Todos os níveis</option>
+      <option value="I">Nível I</option>
+      <option value="II">Nível II</option>
+      <option value="III">Nível III</option>
+      <option value="__none__">Sem nível</option>
+    </select>
+    <select id="filter-posicao">
+      <option value="">Todas as posições</option>
+      <option value="piso">No piso</option>
+      <option value="teto">No teto</option>
+      <option value="acima_teto">Acima do teto</option>
+      <option value="abaixo_min">Abaixo do mínimo</option>
+      <option value="sem_banda">Sem banda</option>
+    </select>
+    <select id="filter-fiducia">
+      <option value="">Todos</option>
+      <option value="sim">Apenas fidúcia</option>
+      <option value="nao">Sem fidúcia</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-recalc" title="Recalcular alertas">Recalcular alertas</button>
+      <button class="btn btn-secondary btn-small" id="btn-export">Exportar CSV</button>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table id="cs-table">
+        <thead>
+          <tr>
+            <th data-col="nome">Nome <span class="sort-arrow">&#9650;</span></th>
+            <th data-col="cargo">Cargo</th>
+            <th data-col="familia">Família</th>
+            <th data-col="nivel" style="text-align:center">Nível</th>
+            <th data-col="fiducia_natureza" style="text-align:center">Fidúcia</th>
+            <th data-col="salario_base" style="text-align:right">Salário</th>
+            <th data-col="gratif_funcao" style="text-align:right">Gratif.</th>
+            <th style="min-width:180px">Banda (min / ref / teto)</th>
+            <th data-col="posicao_banda">Posição</th>
+            <th style="min-width:120px">% na banda</th>
+          </tr>
+        </thead>
+        <tbody id="cs-tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">Carregando...</span>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_colab',
+    title: 'SGCS — Colaboradores',
+    breadcrumb: 'SGCS › Colaboradores na banda',
+    perfisPermitidos: ['administrador','rh','gestor_confianca','diretoria','financeiro']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  let dados = [];
+  let familias = [];
+  let sortCol = 'nome';
+  let sortAsc = true;
+
+  const $tbody   = document.getElementById('cs-tbody');
+  const $count   = document.getElementById('table-count');
+  const $search  = document.getElementById('search-input');
+  const $fFam    = document.getElementById('filter-familia');
+  const $fNivel  = document.getElementById('filter-nivel');
+  const $fPos    = document.getElementById('filter-posicao');
+  const $fFid    = document.getElementById('filter-fiducia');
+
+  // ============================================================
+  // CARREGAR DADOS
+  // ============================================================
+  async function carregar() {
+    $count.textContent = 'Carregando...';
+    const [resColabs, resFam] = await Promise.all([
+      API.get('vw_cs_colaborador_banda?status=in.(ativo,experiencia,afastado,ferias)&order=nome.asc'),
+      API.get('rh_cs_familias?ativo=eq.true&order=ordem.asc')
+    ]);
+    dados = resColabs.ok ? (resColabs.data || []) : [];
+    familias = resFam.ok ? (resFam.data || []) : [];
+
+    if (!resColabs.ok) {
+      $count.textContent = 'Erro: ' + (resColabs.error || 'desconhecido');
+      return;
+    }
+
+    popularFiltroFamilias();
+    atualizarKPIs();
+    renderizar();
+  }
+
+  function popularFiltroFamilias() {
+    $fFam.innerHTML = '<option value="">Todas as famílias</option>';
+    familias.forEach(f => {
+      $fFam.innerHTML += `<option value="${f.id}">${API.esc(f.nome)}</option>`;
+    });
+  }
+
+  // ============================================================
+  // KPIs
+  // ============================================================
+  function atualizarKPIs() {
+    const ativos = dados.filter(d => d.status === 'ativo' || d.status === 'experiencia');
+    document.getElementById('kpi-total').textContent = ativos.length;
+    document.getElementById('kpi-piso').textContent = ativos.filter(d => d.posicao_banda === 'piso').length;
+    document.getElementById('kpi-teto').textContent = ativos.filter(d => d.posicao_banda === 'teto').length;
+    document.getElementById('kpi-fora').textContent = ativos.filter(d => d.posicao_banda === 'acima_teto').length;
+    document.getElementById('kpi-sem').textContent = ativos.filter(d => d.posicao_banda === 'sem_banda').length;
+  }
+
+  // ============================================================
+  // FILTRAR E ORDENAR
+  // ============================================================
+  function aplicarFiltros() {
+    const q = $search.value.trim().toLowerCase();
+    const fam = $fFam.value;
+    const niv = $fNivel.value;
+    const pos = $fPos.value;
+    const fid = $fFid.value;
+
+    return dados.filter(d => {
+      if (q && !(d.nome || '').toLowerCase().includes(q) && !(d.cargo || '').toLowerCase().includes(q)) return false;
+      if (fam && d.familia_id !== fam) return false;
+      if (niv === '__none__' && d.nivel) return false;
+      if (niv && niv !== '__none__' && d.nivel !== niv) return false;
+      if (pos && d.posicao_banda !== pos) return false;
+      if (fid === 'sim' && !d.fiducia_natureza) return false;
+      if (fid === 'nao' && d.fiducia_natureza) return false;
+      return true;
+    });
+  }
+
+  function ordenar(arr) {
+    const dir = sortAsc ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+    });
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  const POSICAO_BADGE = {
+    'piso':       { label: 'Piso',         cls: 'success' },
+    'teto':       { label: 'Teto',         cls: 'warning' },
+    'acima_teto': { label: 'Acima do teto', cls: 'danger' },
+    'abaixo_min': { label: 'Abaixo do mín.', cls: 'danger' },
+    'sem_banda':  { label: 'Sem banda',     cls: 'info' },
+    'sem_salario':{ label: 'Sem salário',   cls: 'info' }
+  };
+
+  const FIDUCIA_LABEL = {
+    'I':   'Operacional',
+    'II':  'Patrimonial',
+    'III': 'Representação'
+  };
+
+  function renderizar() {
+    const filtrados = ordenar(aplicarFiltros());
+
+    if (!filtrados.length) {
+      $tbody.innerHTML = '<tr><td colspan="10" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhum colaborador encontrado com os filtros atuais.</td></tr>';
+      $count.textContent = '0 colaboradores';
+      return;
+    }
+
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+
+    $tbody.innerHTML = filtrados.map(d => {
+      const badge = POSICAO_BADGE[d.posicao_banda] || { label: '—', cls: 'info' };
+      const fid = d.fiducia_natureza
+        ? `<span class="badge badge-warning" title="Natureza ${d.fiducia_natureza}: ${FIDUCIA_LABEL[d.fiducia_natureza] || ''}">F-${d.fiducia_natureza}</span>`
+        : '—';
+      const nivel = d.nivel ? `<span class="badge badge-info">${d.nivel}</span>` : '—';
+      const bandaTxt = d.banda_id
+        ? `${fmtM(d.banda_min)} <span style="color:var(--text-muted)">/</span> <strong>${fmtM(d.banda_ref)}</strong> <span style="color:var(--text-muted)">/</span> ${fmtM(d.banda_teto)}`
+        : '<span style="color:var(--text-muted)">—</span>';
+
+      const pct = d.pct_na_banda;
+      let pctBar = '<span style="color:var(--text-muted)">—</span>';
+      if (pct != null) {
+        const pctClamped = Math.max(0, Math.min(100, pct));
+        const cor = pct < 0 ? '#DC2626' : pct > 100 ? '#DC2626' : pct >= 80 ? '#F59E0B' : '#16A34A';
+        pctBar = `
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="flex:1;height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pctClamped}%;background:${cor}"></div>
+            </div>
+            <span style="font-size:11px;color:var(--text-muted);min-width:36px;text-align:right">${API.fmtNum(pct, 0)}%</span>
+          </div>`;
+      }
+
+      return `<tr data-id="${d.funcionario_id}">
+        <td><a href="ficha.html?id=${d.funcionario_id}" style="color:inherit;text-decoration:none;font-weight:500">${esc(d.nome)}</a></td>
+        <td>${esc(d.cargo || '—')}</td>
+        <td>${esc(d.familia || '—')}</td>
+        <td style="text-align:center">${nivel}</td>
+        <td style="text-align:center">${fid}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${fmtM(d.salario_base)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums;color:var(--text-muted)">${d.gratif_funcao > 0 ? fmtM(d.gratif_funcao) : '—'}</td>
+        <td style="font-size:11px;font-variant-numeric:tabular-nums">${bandaTxt}</td>
+        <td><span class="badge badge-${badge.cls}">${badge.label}</span></td>
+        <td>${pctBar}</td>
+      </tr>`;
+    }).join('');
+
+    $count.textContent = `${filtrados.length} colaboradore${filtrados.length === 1 ? '' : 's'}`;
+  }
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  [$search, $fFam, $fNivel, $fPos, $fFid].forEach(el => {
+    el.addEventListener('input', renderizar);
+    el.addEventListener('change', renderizar);
+  });
+
+  document.querySelectorAll('#cs-table th[data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = true; }
+      renderizar();
+    });
+  });
+
+  document.getElementById('btn-recalc').addEventListener('click', async () => {
+    if (!API.canAccess('editar_funcionario')) {
+      mostrarToast('Sem permissão para recalcular alertas.', 'danger');
+      return;
+    }
+    const btn = document.getElementById('btn-recalc');
+    btn.disabled = true;
+    btn.textContent = 'Recalculando...';
+    const res = await API.rpc('cs_recalcular_alertas_fora_banda');
+    btn.disabled = false;
+    btn.textContent = 'Recalcular alertas';
+    if (res.ok) {
+      const d = res.data || {};
+      mostrarToast(`Alertas recalculados: ${d.criados || 0} criados, ${d.resolvidos || 0} resolvidos.`, 'success');
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  });
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Nome','CPF','Matricula','Cargo','Familia','Nivel','Fiducia','Salario','Gratificacao','Remuneracao','Banda_min','Banda_ref','Banda_teto','Posicao','Pct_banda','Status'];
+    const linhas = filtrados.map(d => [
+      d.nome, d.cpf, d.matricula, d.cargo, d.familia, d.nivel || '', d.fiducia_natureza || '',
+      d.salario_base, d.gratif_funcao, d.remuneracao_total,
+      d.banda_min, d.banda_ref, d.banda_teto,
+      d.posicao_banda, d.pct_na_banda, d.status
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_colaboradores_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function mostrarToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    const m = document.getElementById('toast-msg');
+    m.textContent = msg;
+    t.className = 'toast toast-' + (tipo || 'info') + ' show';
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  // ============================================================
+  // INICIA
+  // ============================================================
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

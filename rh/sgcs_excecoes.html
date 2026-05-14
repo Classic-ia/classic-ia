@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Governanca de Excecoes</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Total no ciclo</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-aprovadas">--</div>
+      <div class="kpi-label">Aprovadas</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #F59E0B">
+      <div class="kpi-value" id="kpi-pendentes">--</div>
+      <div class="kpi-label">Pendentes</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-rejeitadas">--</div>
+      <div class="kpi-label">Rejeitadas</div>
+    </div>
+    <div class="kpi-card" id="kpi-pct-card">
+      <div class="kpi-value" id="kpi-pct">--</div>
+      <div class="kpi-label">% do quadro <span id="kpi-pct-flag" style="display:none">·</span></div>
+    </div>
+  </div>
+
+  <!-- Alerta de limite 5% -->
+  <div id="alerta-limite" style="display:none;background:#FEE2E2;border:1px solid #DC2626;border-radius:6px;padding:12px;margin-bottom:16px">
+    <div style="font-size:13px;font-weight:600;color:#991B1B;margin-bottom:4px">Limite politico atingido</div>
+    <div style="font-size:13px;color:#7F1D1D" id="alerta-limite-msg">--</div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select id="filter-ciclo"></select>
+    <input type="text" class="search-input" id="search-input" placeholder="Buscar por nome ou cargo...">
+    <select id="filter-tipo">
+      <option value="">Todos os tipos</option>
+      <option value="salario_fora_banda">Salario fora da banda</option>
+      <option value="promocao_extraordinaria">Promocao extraordinaria</option>
+      <option value="admissao_acima_referencia">Admissao acima da referencia</option>
+      <option value="retencao_especial">Retencao especial</option>
+      <option value="bonus_pontual">Bonus pontual</option>
+      <option value="alteracao_cargo">Alteracao de cargo</option>
+      <option value="reversao_fiducia">Reversao de fiducia</option>
+    </select>
+    <select id="filter-status">
+      <option value="">Todos status</option>
+      <option value="pendente">Pendentes</option>
+      <option value="aprovada">Aprovadas</option>
+      <option value="rejeitada">Rejeitadas</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-export">Exportar CSV</button>
+      <button class="btn btn-primary btn-small" id="btn-nova">+ Nova excecao</button>
+    </div>
+  </div>
+
+  <!-- Tabela -->
+  <div class="table-wrap">
+    <div class="table-scroll">
+      <table id="exc-table">
+        <thead>
+          <tr>
+            <th data-col="nome">Colaborador</th>
+            <th data-col="cargo">Cargo</th>
+            <th data-col="tipo">Tipo</th>
+            <th data-col="valor_envolvido" style="text-align:right">Valor</th>
+            <th data-col="motivo">Motivo</th>
+            <th data-col="alcada_aprovacao" style="text-align:center">Alcada</th>
+            <th data-col="status">Status</th>
+            <th data-col="created_at">Criada em</th>
+            <th style="width:120px">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="exc-tbody"></tbody>
+      </table>
+    </div>
+    <div class="table-footer">
+      <span id="table-count">Carregando...</span>
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Modal: nova excecao -->
+<div class="modal-overlay" id="modal-nova">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Nova excecao</div>
+      <button class="modal-close" id="modal-nova-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Colaborador</label>
+          <select id="nv-funcionario">
+            <option value="">Selecione...</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tipo de excecao</label>
+          <select id="nv-tipo">
+            <option value="salario_fora_banda">Salario fora da banda → Diretoria</option>
+            <option value="promocao_extraordinaria">Promocao extraordinaria → Comite</option>
+            <option value="admissao_acima_referencia">Admissao acima da referencia → Comite</option>
+            <option value="retencao_especial">Retencao especial → Diretoria</option>
+            <option value="bonus_pontual">Bonus pontual → Diretoria</option>
+            <option value="alteracao_cargo">Alteracao de cargo → Comite</option>
+            <option value="reversao_fiducia">Reversao de fiducia → Diretoria</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor envolvido (R$)</label>
+          <input type="number" id="nv-valor" step="0.01" min="0" placeholder="Opcional">
+        </div>
+        <div class="form-group full">
+          <label>Motivo (obrigatorio)</label>
+          <textarea id="nv-motivo" rows="3" placeholder="Justificativa fundamentada da excecao"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Parecer tecnico</label>
+          <textarea id="nv-parecer" rows="3" placeholder="Analise tecnica complementar (opcional)"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-nova-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-nova-ok">Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Drawer: detalhe da excecao -->
+<div class="drawer-overlay" id="drawer-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:90"></div>
+<div class="drawer" id="drawer" style="position:fixed;right:0;top:0;height:100vh;width:min(520px,90vw);background:var(--surface);box-shadow:-4px 0 24px rgba(0,0,0,.1);transform:translateX(100%);transition:transform .25s ease;z-index:91;overflow-y:auto">
+  <div style="padding:20px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <div style="font-size:16px;font-weight:600">Detalhe da excecao</div>
+    <button class="modal-close" id="drawer-close">&times;</button>
+  </div>
+  <div id="drawer-body" style="padding:20px"></div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_exc',
+    title: 'SGCS — Governanca de Excecoes',
+    breadcrumb: 'SGCS › Excecoes',
+    perfisPermitidos: ['administrador','rh','gestor_confianca','diretoria','financeiro']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  const perfil = user.perfil;
+  const podeCriar = ['administrador','rh','gestor_confianca'].includes(perfil);
+  const podeAprovarComite = ['administrador','gestor_confianca','diretoria'].includes(perfil);
+  const podeAprovarDiretoria = ['administrador','diretoria'].includes(perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  const anoAtual = new Date().getFullYear();
+  let cicloSel = anoAtual;
+  let excecoes = [];
+  let funcionarios = [];
+  let sortCol = 'created_at';
+  let sortAsc = false;
+
+  const $tbody  = document.getElementById('exc-tbody');
+  const $count  = document.getElementById('table-count');
+  const $search = document.getElementById('search-input');
+  const $fTipo   = document.getElementById('filter-tipo');
+  const $fStatus = document.getElementById('filter-status');
+  const $fCiclo  = document.getElementById('filter-ciclo');
+
+  for (let y = anoAtual + 1; y >= anoAtual - 2; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = 'Ciclo ' + y;
+    if (y === anoAtual) o.selected = true;
+    $fCiclo.appendChild(o);
+  }
+
+  // ============================================================
+  // LABELS
+  // ============================================================
+  const TIPO_LABEL = {
+    'salario_fora_banda':        'Salario fora da banda',
+    'promocao_extraordinaria':   'Promocao extraordinaria',
+    'admissao_acima_referencia': 'Admissao acima da referencia',
+    'retencao_especial':         'Retencao especial',
+    'bonus_pontual':             'Bonus pontual',
+    'alteracao_cargo':           'Alteracao de cargo',
+    'reversao_fiducia':          'Reversao de fiducia'
+  };
+
+  const STATUS_BADGE = {
+    'pendente':   { label: 'Pendente',   cls: 'warning' },
+    'aprovada':   { label: 'Aprovada',   cls: 'success' },
+    'rejeitada':  { label: 'Rejeitada',  cls: 'danger' }
+  };
+
+  const ALCADA_LABEL = {
+    'comite':    'Comite',
+    'diretoria': 'Diretoria'
+  };
+
+  // ============================================================
+  // CARREGAR
+  // ============================================================
+  async function carregar() {
+    $count.textContent = 'Carregando...';
+    cicloSel = parseInt($fCiclo.value, 10);
+    const [resExc, resFuncs, resInd] = await Promise.all([
+      API.get(`vw_cs_excecoes_ciclo?ciclo_ano=eq.${cicloSel}&order=created_at.desc`),
+      API.get('vw_funcionario_base?status=in.(ativo,experiencia)&order=nome.asc&select=id,nome,cargo'),
+      API.rpc('cs_excecao_indicadores', { p_ciclo_ano: cicloSel })
+    ]);
+
+    excecoes = resExc.ok ? (resExc.data || []) : [];
+    funcionarios = resFuncs.ok ? (resFuncs.data || []) : [];
+
+    if (!resExc.ok) {
+      $count.textContent = 'Erro: ' + (resExc.error || 'desconhecido');
+      return;
+    }
+
+    const ind = resInd.ok ? (resInd.data || {}) : {};
+    atualizarKPIs(ind);
+
+    // Popular dropdown
+    const $sel = document.getElementById('nv-funcionario');
+    $sel.innerHTML = '<option value="">Selecione...</option>' +
+      funcionarios.map(f => `<option value="${f.id}">${API.esc(f.nome)} — ${API.esc(f.cargo || '')}</option>`).join('');
+
+    renderizar();
+  }
+
+  function atualizarKPIs(ind) {
+    document.getElementById('kpi-total').textContent = ind.total || 0;
+    document.getElementById('kpi-aprovadas').textContent = ind.aprovadas || 0;
+    document.getElementById('kpi-pendentes').textContent = ind.pendentes || 0;
+    document.getElementById('kpi-rejeitadas').textContent = ind.rejeitadas || 0;
+
+    const pct = Number(ind.percent_quadro || 0);
+    document.getElementById('kpi-pct').textContent = pct.toFixed(2) + '%';
+    const card = document.getElementById('kpi-pct-card');
+    const alerta = document.getElementById('alerta-limite');
+    const flag = document.getElementById('kpi-pct-flag');
+
+    if (ind.atingiu_5pct) {
+      card.style.borderLeft = '3px solid #DC2626';
+      flag.style.display = 'inline'; flag.textContent = ' · LIMITE';
+      flag.style.color = '#DC2626'; flag.style.fontWeight = '600';
+      alerta.style.display = 'block';
+      document.getElementById('alerta-limite-msg').textContent =
+        `Excecoes aprovadas atingiram ${pct.toFixed(2)}% do quadro ativo (${ind.quadro_ativo} colaboradores). Politica define limite de 5%/ano — qualquer excecao adicional exige decisao estrategica da Diretoria.`;
+    } else {
+      card.style.borderLeft = pct >= 3 ? '3px solid #F59E0B' : '';
+      flag.style.display = 'none';
+      alerta.style.display = 'none';
+    }
+  }
+
+  // ============================================================
+  // FILTROS + ORDENACAO
+  // ============================================================
+  function aplicarFiltros() {
+    const q = $search.value.trim().toLowerCase();
+    const t = $fTipo.value;
+    const s = $fStatus.value;
+
+    return excecoes.filter(e => {
+      if (q && !(e.nome || '').toLowerCase().includes(q) && !(e.cargo || '').toLowerCase().includes(q)) return false;
+      if (t && e.tipo !== t) return false;
+      if (s && e.status !== s) return false;
+      return true;
+    });
+  }
+
+  function ordenar(arr) {
+    const dir = sortAsc ? 1 : -1;
+    return [...arr].sort((a, b) => {
+      let va = a[sortCol], vb = b[sortCol];
+      if (va == null) return 1;
+      if (vb == null) return -1;
+      if (typeof va === 'number') return (va - vb) * dir;
+      return String(va).localeCompare(String(vb), 'pt-BR') * dir;
+    });
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  function renderizar() {
+    const filtrados = ordenar(aplicarFiltros());
+
+    if (!filtrados.length) {
+      $tbody.innerHTML = '<tr><td colspan="9" style="text-align:center;padding:32px;color:var(--text-muted)">Nenhuma excecao no ciclo com os filtros atuais.</td></tr>';
+      $count.textContent = '0 excecoes';
+      return;
+    }
+
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+    const fmtD = API.fmtData;
+
+    $tbody.innerHTML = filtrados.map(e => {
+      const badge = STATUS_BADGE[e.status] || { label: e.status, cls: 'info' };
+      const motivoCurto = (e.motivo || '').length > 60 ? esc(e.motivo.slice(0, 60)) + '…' : esc(e.motivo || '—');
+      return `<tr data-id="${e.excecao_id}">
+        <td><strong>${esc(e.nome)}</strong></td>
+        <td>${esc(e.cargo || '—')}</td>
+        <td>${esc(TIPO_LABEL[e.tipo] || e.tipo)}</td>
+        <td style="text-align:right;font-variant-numeric:tabular-nums">${e.valor_envolvido != null ? fmtM(e.valor_envolvido) : '—'}</td>
+        <td style="font-size:12px" title="${esc(e.motivo || '')}">${motivoCurto}</td>
+        <td style="text-align:center"><span class="badge badge-info">${ALCADA_LABEL[e.alcada_aprovacao] || e.alcada_aprovacao}</span></td>
+        <td><span class="badge badge-${badge.cls}">${badge.label}</span></td>
+        <td style="font-size:12px;color:var(--text-muted)">${fmtD(e.created_at?.slice(0,10))}</td>
+        <td><button class="btn btn-secondary btn-small btn-detalhe" data-id="${e.excecao_id}">Detalhe</button></td>
+      </tr>`;
+    }).join('');
+
+    $tbody.querySelectorAll('.btn-detalhe').forEach(b => {
+      b.addEventListener('click', () => abrirDrawer(b.dataset.id));
+    });
+
+    $count.textContent = `${filtrados.length} excecao${filtrados.length === 1 ? '' : 'oes'}`;
+  }
+
+  // ============================================================
+  // DRAWER
+  // ============================================================
+  function abrirDrawer(id) {
+    const e = excecoes.find(x => x.excecao_id === id);
+    if (!e) return;
+    const esc = API.esc;
+    const fmtM = API.fmtMoeda;
+
+    let acoes = '';
+    if (e.status === 'pendente') {
+      const podeAprovar = (e.alcada_aprovacao === 'diretoria' && podeAprovarDiretoria) ||
+                         (e.alcada_aprovacao === 'comite' && podeAprovarComite);
+      if (podeAprovar) {
+        acoes = `
+          <button class="btn btn-primary" data-acao="aprovar" style="margin-right:8px">Aprovar</button>
+          <button class="btn btn-secondary" data-acao="rejeitar">Rejeitar</button>
+        `;
+      } else {
+        acoes = `<div style="font-size:12px;color:var(--text-muted);font-style:italic">Aprovacao exige perfil ${ALCADA_LABEL[e.alcada_aprovacao]}. Voce nao tem permissao.</div>`;
+      }
+    }
+
+    document.getElementById('drawer-body').innerHTML = `
+      <div style="margin-bottom:16px">
+        <div style="font-size:18px;font-weight:600">${esc(e.nome)}</div>
+        <div style="font-size:13px;color:var(--text-muted);margin-top:2px">${esc(e.cargo || '—')} · Ciclo ${e.ciclo_ano}</div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Tipo</div>
+        <div style="margin-top:4px;font-size:14px">${esc(TIPO_LABEL[e.tipo] || e.tipo)}</div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Valor envolvido</div>
+          <div style="margin-top:4px;font-size:14px;font-variant-numeric:tabular-nums">${e.valor_envolvido != null ? fmtM(e.valor_envolvido) : '—'}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Alcada</div>
+          <div style="margin-top:4px"><span class="badge badge-info">${ALCADA_LABEL[e.alcada_aprovacao] || e.alcada_aprovacao}</span></div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Motivo</div>
+        <div style="margin-top:4px;font-size:13px;white-space:pre-wrap">${esc(e.motivo || '—')}</div>
+      </div>
+
+      ${e.parecer_tecnico ? `
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Parecer tecnico</div>
+        <div style="margin-top:4px;font-size:13px;white-space:pre-wrap">${esc(e.parecer_tecnico)}</div>
+      </div>` : ''}
+
+      <div style="margin-bottom:16px">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">Status</div>
+        <div style="margin-top:4px"><span class="badge badge-${STATUS_BADGE[e.status]?.cls}">${STATUS_BADGE[e.status]?.label}</span></div>
+        ${e.data_aprovacao ? `<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Decidida em ${API.fmtData(e.data_aprovacao.slice(0,10))}</div>` : ''}
+      </div>
+
+      ${e.status === 'pendente' && acoes ? `
+        <div style="margin-bottom:8px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Parecer da aprovacao</div>
+          <textarea id="parecer-input" rows="3" style="width:100%" placeholder="Justificativa, ata, deliberacao..."></textarea>
+        </div>
+        <div style="margin-top:12px">${acoes}</div>
+      ` : acoes}
+    `;
+
+    document.querySelectorAll('#drawer-body button[data-acao]').forEach(b => {
+      b.addEventListener('click', () => decidir(id, b.dataset.acao === 'aprovar'));
+    });
+
+    document.getElementById('drawer-overlay').style.display = 'block';
+    document.getElementById('drawer').style.transform = 'translateX(0)';
+  }
+
+  function fecharDrawer() {
+    document.getElementById('drawer').style.transform = 'translateX(100%)';
+    document.getElementById('drawer-overlay').style.display = 'none';
+  }
+  document.getElementById('drawer-close').addEventListener('click', fecharDrawer);
+  document.getElementById('drawer-overlay').addEventListener('click', fecharDrawer);
+
+  async function decidir(id, aprovar) {
+    const parecer = (document.getElementById('parecer-input')?.value || '').trim() || null;
+    if (!aprovar && !parecer) {
+      if (!confirm('Rejeitar sem parecer textual?')) return;
+    }
+    const res = await API.rpc('cs_excecao_decidir', {
+      p_excecao_id: id, p_aprovar: aprovar, p_parecer: parecer
+    });
+    if (res.ok) {
+      mostrarToast(aprovar ? 'Excecao aprovada.' : 'Excecao rejeitada.', 'success');
+      fecharDrawer();
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  }
+
+  // ============================================================
+  // MODAL NOVA
+  // ============================================================
+  const $modalNova = document.getElementById('modal-nova');
+  document.getElementById('btn-nova').addEventListener('click', () => {
+    if (!podeCriar) { mostrarToast('Sem permissao.', 'danger'); return; }
+    document.getElementById('nv-motivo').value = '';
+    document.getElementById('nv-parecer').value = '';
+    document.getElementById('nv-valor').value = '';
+    document.getElementById('nv-funcionario').value = '';
+    $modalNova.classList.add('show');
+  });
+  document.getElementById('modal-nova-close').addEventListener('click', () => $modalNova.classList.remove('show'));
+  document.getElementById('modal-nova-cancel').addEventListener('click', () => $modalNova.classList.remove('show'));
+  document.getElementById('modal-nova-ok').addEventListener('click', async () => {
+    const fid = document.getElementById('nv-funcionario').value;
+    const tipo = document.getElementById('nv-tipo').value;
+    const motivo = document.getElementById('nv-motivo').value.trim();
+    const parecer = document.getElementById('nv-parecer').value.trim() || null;
+    const valor = parseFloat(document.getElementById('nv-valor').value) || null;
+
+    if (!fid) { mostrarToast('Selecione colaborador.', 'danger'); return; }
+    if (!motivo) { mostrarToast('Motivo e obrigatorio.', 'danger'); return; }
+
+    const res = await API.rpc('cs_excecao_criar', {
+      p_funcionario_id: fid,
+      p_tipo: tipo,
+      p_motivo: motivo,
+      p_parecer_tecnico: parecer,
+      p_valor_envolvido: valor,
+      p_ciclo_ano: cicloSel
+    });
+    if (res.ok) {
+      mostrarToast('Excecao registrada.', 'success');
+      $modalNova.classList.remove('show');
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  });
+
+  // ============================================================
+  // EVENTOS
+  // ============================================================
+  $fCiclo.addEventListener('change', carregar);
+  [$search, $fTipo, $fStatus].forEach(el => {
+    el.addEventListener('input', renderizar);
+    el.addEventListener('change', renderizar);
+  });
+
+  document.querySelectorAll('#exc-table th[data-col]').forEach(th => {
+    th.style.cursor = 'pointer';
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (sortCol === col) sortAsc = !sortAsc;
+      else { sortCol = col; sortAsc = true; }
+      renderizar();
+    });
+  });
+
+  document.getElementById('btn-export').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Ciclo','Nome','Cargo','Tipo','Valor','Motivo','ParecerTecnico','Alcada','Status','CriadaEm'];
+    const linhas = filtrados.map(e => [
+      e.ciclo_ano, e.nome, e.cargo, TIPO_LABEL[e.tipo] || e.tipo,
+      e.valor_envolvido, e.motivo, e.parecer_tecnico,
+      ALCADA_LABEL[e.alcada_aprovacao] || e.alcada_aprovacao,
+      e.status, e.created_at?.slice(0,10)
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_excecoes_${cicloSel}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function mostrarToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    const m = document.getElementById('toast-msg');
+    m.textContent = msg;
+    t.className = 'toast toast-' + (tipo || 'info') + ' show';
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

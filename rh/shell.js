@@ -99,6 +99,8 @@ const Shell = (() => {
     { group: 'C&S', id: 'sgcs_bandas', label: 'Bandas Salariais', href: 'sgcs_bandas.html', icon: 'bar-chart', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
     { group: 'C&S', id: 'sgcs_fichas', label: 'Fichas de Avaliacao', href: 'sgcs_fichas.html', icon: 'file-text', perfis: ['administrador','rh','gestor','gestor_confianca','diretoria'] },
     { group: 'C&S', id: 'sgcs_prog', label: 'Workflow Progressao', href: 'sgcs_progressoes.html', icon: 'trending-up', perfis: ['administrador','rh','gestor','gestor_confianca','diretoria','financeiro'] },
+    { group: 'C&S', id: 'sgcs_exc', label: 'Governanca Excecoes', href: 'sgcs_excecoes.html', icon: 'alert-triangle', perfis: ['administrador','rh','gestor_confianca','diretoria','financeiro'] },
+    { group: 'C&S', id: 'sgcs_comite', label: 'Comite de C&S', href: 'sgcs_comite.html', icon: 'award', perfis: ['administrador','rh','gestor_confianca','diretoria'] },
 
     // SISTEMA
     { group: 'Sistema', id: 'integracoes', label: 'Integracoes', href: 'integracoes.html', icon: 'code', perfis: ['administrador','rh'] },

@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SGCS - Comite de C&S</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="page_bootstrap.js"></script>
+<script src="shell.js"></script>
+</head>
+<body>
+
+<div id="shell"></div>
+<div id="shell-content">
+
+<div class="main">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-realizadas">--</div>
+      <div class="kpi-label">Realizadas no ano</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #16A34A">
+      <div class="kpi-value" id="kpi-proxima">--</div>
+      <div class="kpi-label">Proxima reuniao</div>
+    </div>
+    <div class="kpi-card" style="border-left:3px solid #DC2626">
+      <div class="kpi-value" id="kpi-atrasadas">--</div>
+      <div class="kpi-label">Atrasadas</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi-canceladas">--</div>
+      <div class="kpi-label">Canceladas</div>
+    </div>
+  </div>
+
+  <!-- Toolbar -->
+  <div class="toolbar">
+    <select id="filter-ano"></select>
+    <select id="filter-trimestre">
+      <option value="">Todos trimestres</option>
+      <option value="Q1">Q1 (jan)</option>
+      <option value="Q2">Q2 (abr)</option>
+      <option value="Q3">Q3 (jul)</option>
+      <option value="Q4">Q4 (out)</option>
+    </select>
+    <select id="filter-status">
+      <option value="">Todos status</option>
+      <option value="agendada">Agendadas</option>
+      <option value="realizada">Realizadas</option>
+      <option value="cancelada">Canceladas</option>
+    </select>
+    <div class="toolbar-right">
+      <button class="btn btn-secondary btn-small" id="btn-exportar">Exportar CSV</button>
+      <button class="btn btn-primary btn-small" id="btn-nova">+ Agendar reuniao</button>
+    </div>
+  </div>
+
+  <!-- Lista de reunioes (cards) -->
+  <div id="reunioes-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:16px;margin-top:8px"></div>
+
+  <!-- Empty state -->
+  <div id="empty-reunioes" style="display:none;text-align:center;padding:48px 24px;background:var(--surface);border-radius:8px;border:1px dashed var(--border)">
+    <div style="font-size:14px;font-weight:600;color:var(--text);margin-bottom:8px">Nenhuma reuniao no periodo</div>
+    <div style="font-size:13px;color:var(--text-muted);max-width:480px;margin:0 auto">
+      O Comite de C&S reune trimestralmente (Q1/Q2/Q3/Q4 — jan/abr/jul/out).
+      Clique em <strong>Agendar reuniao</strong> para criar a proxima.
+    </div>
+  </div>
+
+</div>
+
+</div><!-- /shell-content -->
+
+<!-- Modal: nova/editar reuniao -->
+<div class="modal-overlay" id="modal-reuniao">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="modal-reuniao-title">Agendar reuniao</div>
+      <button class="modal-close" id="modal-reuniao-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Data da reuniao</label>
+          <input type="date" id="rn-data">
+        </div>
+        <div class="form-group">
+          <label>Trimestre</label>
+          <select id="rn-trimestre">
+            <option value="Q1">Q1 (janeiro)</option>
+            <option value="Q2">Q2 (abril)</option>
+            <option value="Q3">Q3 (julho)</option>
+            <option value="Q4">Q4 (outubro)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Ano</label>
+          <input type="number" id="rn-ano" min="2025" max="2030">
+        </div>
+        <div class="form-group full">
+          <label>Participantes (um por linha)</label>
+          <textarea id="rn-participantes" rows="3" placeholder="Janaina&#10;Itamar&#10;Matheus"></textarea>
+        </div>
+        <div class="form-group full">
+          <label>Pauta</label>
+          <textarea id="rn-pauta" rows="5" placeholder="1. Status do pacote de C&S&#10;2. Excecoes pendentes&#10;3. Sinais de aderencia a politica&#10;4. Proximos passos"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-reuniao-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-reuniao-ok">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal: realizar reuniao -->
+<div class="modal-overlay" id="modal-realizar">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Registrar deliberacoes</div>
+      <button class="modal-close" id="modal-realizar-close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Deliberacoes (obrigatorias)</label>
+          <textarea id="rl-deliberacoes" rows="8" placeholder="Itens deliberados nesta reuniao..."></textarea>
+        </div>
+        <div class="form-group full">
+          <label>URL da ata (opcional)</label>
+          <input type="url" id="rl-ata-url" placeholder="https://...">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="modal-realizar-cancel">Cancelar</button>
+      <button class="btn btn-primary" id="modal-realizar-ok">Marcar como realizada</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toast-msg"></span></div>
+
+<script>
+(async () => {
+  const user = await Shell.init({
+    page: 'sgcs_comite',
+    title: 'SGCS — Comite de C&S',
+    breadcrumb: 'SGCS › Comite',
+    perfisPermitidos: ['administrador','rh','gestor_confianca','diretoria']
+  });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  const podeEditar = ['administrador','rh','gestor_confianca','diretoria'].includes(user.perfil);
+
+  // ============================================================
+  // ESTADO
+  // ============================================================
+  const anoAtual = new Date().getFullYear();
+  let reunioes = [];
+  let editandoId = null;
+  let realizandoId = null;
+
+  const $grid   = document.getElementById('reunioes-grid');
+  const $empty  = document.getElementById('empty-reunioes');
+  const $fAno   = document.getElementById('filter-ano');
+  const $fTri   = document.getElementById('filter-trimestre');
+  const $fStatus = document.getElementById('filter-status');
+
+  for (let y = anoAtual + 1; y >= anoAtual - 2; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    if (y === anoAtual) o.selected = true;
+    $fAno.appendChild(o);
+  }
+
+  // ============================================================
+  // CARREGAR
+  // ============================================================
+  async function carregar() {
+    const ano = parseInt($fAno.value, 10);
+    const res = await API.get(`vw_cs_reunioes_comite_listagem?ano=eq.${ano}&order=data_reuniao.desc`);
+    reunioes = res.ok ? (res.data || []) : [];
+    atualizarKPIs(ano);
+    renderizar();
+  }
+
+  function atualizarKPIs(ano) {
+    const real = reunioes.filter(r => r.status === 'realizada').length;
+    const atrasadas = reunioes.filter(r => r.atrasada).length;
+    const canceladas = reunioes.filter(r => r.status === 'cancelada').length;
+
+    const proxima = reunioes
+      .filter(r => r.status === 'agendada' && !r.atrasada)
+      .sort((a, b) => a.data_reuniao.localeCompare(b.data_reuniao))[0];
+
+    document.getElementById('kpi-realizadas').textContent = real + ' / 4';
+    document.getElementById('kpi-atrasadas').textContent = atrasadas;
+    document.getElementById('kpi-canceladas').textContent = canceladas;
+    document.getElementById('kpi-proxima').textContent = proxima
+      ? `${proxima.trimestre} · ${API.fmtData(proxima.data_reuniao)}`
+      : '—';
+  }
+
+  // ============================================================
+  // RENDER
+  // ============================================================
+  const STATUS_BADGE = {
+    'agendada':  { label: 'Agendada',  cls: 'info' },
+    'realizada': { label: 'Realizada', cls: 'success' },
+    'cancelada': { label: 'Cancelada', cls: 'danger' }
+  };
+
+  function aplicarFiltros() {
+    const tri = $fTri.value;
+    const st = $fStatus.value;
+    return reunioes.filter(r => {
+      if (tri && r.trimestre !== tri) return false;
+      if (st && r.status !== st) return false;
+      return true;
+    });
+  }
+
+  function renderizar() {
+    const filtrados = aplicarFiltros();
+
+    if (!filtrados.length) {
+      $grid.innerHTML = '';
+      $empty.style.display = '';
+      return;
+    }
+    $empty.style.display = 'none';
+
+    const esc = API.esc;
+    const fmtD = API.fmtData;
+
+    $grid.innerHTML = filtrados.map(r => {
+      const badge = STATUS_BADGE[r.status] || { label: r.status, cls: 'info' };
+      const atrasadaBadge = r.atrasada ? '<span class="badge badge-danger" style="margin-left:8px">Atrasada</span>' : '';
+      const diasInfo = r.dias_para != null
+        ? (r.dias_para > 0 ? `em ${r.dias_para} dia(s)` : r.dias_para === 0 ? 'hoje' : `${-r.dias_para} dia(s) atras`)
+        : '';
+
+      const participantes = Array.isArray(r.participantes_jsonb) ? r.participantes_jsonb : [];
+
+      const acoes = [];
+      if (podeEditar && r.status === 'agendada') {
+        acoes.push(`<button class="btn btn-primary btn-small" data-acao="realizar" data-id="${r.reuniao_id}">Registrar deliberacoes</button>`);
+        acoes.push(`<button class="btn btn-secondary btn-small" data-acao="editar" data-id="${r.reuniao_id}">Editar</button>`);
+        acoes.push(`<button class="btn btn-secondary btn-small" data-acao="cancelar" data-id="${r.reuniao_id}">Cancelar</button>`);
+      } else if (podeEditar && r.status === 'realizada') {
+        acoes.push(`<button class="btn btn-secondary btn-small" data-acao="editar" data-id="${r.reuniao_id}">Editar ata</button>`);
+      }
+
+      return `<div class="card" style="padding:16px">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:12px">
+          <div>
+            <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase">${r.trimestre} · ${r.ano}</div>
+            <div style="font-size:16px;font-weight:600;margin-top:2px">${fmtD(r.data_reuniao)}</div>
+            <div style="font-size:11px;color:var(--text-muted);margin-top:2px">${diasInfo}</div>
+          </div>
+          <div>
+            <span class="badge badge-${badge.cls}">${badge.label}</span>
+            ${atrasadaBadge}
+          </div>
+        </div>
+
+        ${participantes.length ? `<div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Participantes</div>
+          <div style="font-size:12px">${participantes.map(p => esc(String(p))).join(' · ')}</div>
+        </div>` : ''}
+
+        ${r.pauta ? `<div style="margin-bottom:12px">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Pauta</div>
+          <div style="font-size:12px;white-space:pre-wrap;max-height:120px;overflow-y:auto">${esc(r.pauta)}</div>
+        </div>` : ''}
+
+        ${r.deliberacoes ? `<div style="margin-bottom:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;margin-bottom:4px">Deliberacoes</div>
+          <div style="font-size:12px;white-space:pre-wrap;max-height:140px;overflow-y:auto">${esc(r.deliberacoes)}</div>
+        </div>` : ''}
+
+        ${r.ata_url ? `<div style="margin-bottom:12px">
+          <a href="${esc(r.ata_url)}" target="_blank" style="font-size:12px">📎 Ata oficial</a>
+        </div>` : ''}
+
+        ${acoes.length ? `<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${acoes.join('')}</div>` : ''}
+      </div>`;
+    }).join('');
+
+    // Bind action buttons
+    $grid.querySelectorAll('button[data-acao]').forEach(b => {
+      b.addEventListener('click', () => acao(b.dataset.acao, b.dataset.id));
+    });
+  }
+
+  // ============================================================
+  // ACOES
+  // ============================================================
+  const $modalRn = document.getElementById('modal-reuniao');
+  const $modalRl = document.getElementById('modal-realizar');
+
+  function acao(tipo, id) {
+    if (tipo === 'editar') abrirEdicao(id);
+    else if (tipo === 'realizar') abrirRealizar(id);
+    else if (tipo === 'cancelar') cancelar(id);
+  }
+
+  function abrirEdicao(id) {
+    const r = reunioes.find(x => x.reuniao_id === id);
+    if (!r) return;
+    editandoId = id;
+    document.getElementById('modal-reuniao-title').textContent = 'Editar reuniao';
+    document.getElementById('rn-data').value = r.data_reuniao;
+    document.getElementById('rn-trimestre').value = r.trimestre;
+    document.getElementById('rn-ano').value = r.ano;
+    document.getElementById('rn-participantes').value = Array.isArray(r.participantes_jsonb)
+      ? r.participantes_jsonb.join('\n') : '';
+    document.getElementById('rn-pauta').value = r.pauta || '';
+    $modalRn.classList.add('show');
+  }
+
+  function abrirNova() {
+    if (!podeEditar) { mostrarToast('Sem permissao.', 'danger'); return; }
+    editandoId = null;
+    document.getElementById('modal-reuniao-title').textContent = 'Agendar reuniao';
+    document.getElementById('rn-data').value = '';
+    // Trimestre default por data atual
+    const m = new Date().getMonth() + 1;
+    const tri = m <= 3 ? 'Q1' : m <= 6 ? 'Q2' : m <= 9 ? 'Q3' : 'Q4';
+    document.getElementById('rn-trimestre').value = tri;
+    document.getElementById('rn-ano').value = parseInt($fAno.value, 10);
+    document.getElementById('rn-participantes').value = 'Janaina\nItamar\nMatheus';
+    document.getElementById('rn-pauta').value = '';
+    $modalRn.classList.add('show');
+  }
+
+  async function salvarReuniao() {
+    const data = document.getElementById('rn-data').value;
+    const tri = document.getElementById('rn-trimestre').value;
+    const ano = parseInt(document.getElementById('rn-ano').value, 10);
+    const parts = document.getElementById('rn-participantes').value
+      .split('\n').map(s => s.trim()).filter(Boolean);
+    const pauta = document.getElementById('rn-pauta').value.trim() || null;
+
+    if (!data || !tri || !ano) { mostrarToast('Data, trimestre e ano sao obrigatorios.', 'danger'); return; }
+
+    const res = await API.rpc('cs_reuniao_upsert', {
+      p_id: editandoId,
+      p_data_reuniao: data,
+      p_trimestre: tri,
+      p_ano: ano,
+      p_participantes: parts,
+      p_pauta: pauta
+    });
+    if (res.ok) {
+      mostrarToast(editandoId ? 'Reuniao atualizada.' : 'Reuniao agendada.', 'success');
+      $modalRn.classList.remove('show');
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  }
+
+  function abrirRealizar(id) {
+    realizandoId = id;
+    document.getElementById('rl-deliberacoes').value = '';
+    document.getElementById('rl-ata-url').value = '';
+    $modalRl.classList.add('show');
+  }
+
+  async function salvarRealizar() {
+    const delib = document.getElementById('rl-deliberacoes').value.trim();
+    const ata = document.getElementById('rl-ata-url').value.trim() || null;
+
+    if (!delib) { mostrarToast('Deliberacoes sao obrigatorias.', 'danger'); return; }
+
+    const res = await API.rpc('cs_reuniao_realizar', {
+      p_id: realizandoId,
+      p_deliberacoes: delib,
+      p_ata_url: ata
+    });
+    if (res.ok) {
+      mostrarToast('Reuniao marcada como realizada.', 'success');
+      $modalRl.classList.remove('show');
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  }
+
+  async function cancelar(id) {
+    const motivo = prompt('Motivo do cancelamento:');
+    if (!motivo) return;
+    const res = await API.rpc('cs_reuniao_cancelar', { p_id: id, p_motivo: motivo });
+    if (res.ok) {
+      mostrarToast('Reuniao cancelada.', 'success');
+      await carregar();
+    } else {
+      mostrarToast('Erro: ' + (res.error || 'falhou'), 'danger');
+    }
+  }
+
+  // ============================================================
+  // BINDINGS
+  // ============================================================
+  $fAno.addEventListener('change', carregar);
+  [$fTri, $fStatus].forEach(el => el.addEventListener('change', renderizar));
+
+  document.getElementById('btn-nova').addEventListener('click', abrirNova);
+  document.getElementById('modal-reuniao-close').addEventListener('click', () => $modalRn.classList.remove('show'));
+  document.getElementById('modal-reuniao-cancel').addEventListener('click', () => $modalRn.classList.remove('show'));
+  document.getElementById('modal-reuniao-ok').addEventListener('click', salvarReuniao);
+
+  document.getElementById('modal-realizar-close').addEventListener('click', () => $modalRl.classList.remove('show'));
+  document.getElementById('modal-realizar-cancel').addEventListener('click', () => $modalRl.classList.remove('show'));
+  document.getElementById('modal-realizar-ok').addEventListener('click', salvarRealizar);
+
+  document.getElementById('btn-exportar').addEventListener('click', () => {
+    const filtrados = aplicarFiltros();
+    const header = ['Ano','Trimestre','Data','Status','Participantes','Pauta','Deliberacoes','AtaURL'];
+    const linhas = filtrados.map(r => [
+      r.ano, r.trimestre, r.data_reuniao, r.status,
+      (Array.isArray(r.participantes_jsonb) ? r.participantes_jsonb.join(' | ') : ''),
+      r.pauta, r.deliberacoes, r.ata_url
+    ]);
+    const csv = [header, ...linhas]
+      .map(r => r.map(v => v == null ? '' : `"${String(v).replace(/"/g, '""')}"`).join(';'))
+      .join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `sgcs_comite_${$fAno.value}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  function mostrarToast(msg, tipo) {
+    const t = document.getElementById('toast');
+    const m = document.getElementById('toast-msg');
+    m.textContent = msg;
+    t.className = 'toast toast-' + (tipo || 'info') + ' show';
+    setTimeout(() => t.classList.remove('show'), 4000);
+  }
+
+  await carregar();
+})();
+</script>
+
+</body>
+</html>

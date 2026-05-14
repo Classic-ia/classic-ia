@@ -21,7 +21,21 @@ Comite trimestral).
   - Identificacao automatica de elegibilidade (objetivos)
   - Workflow: elegivel → recomendada → aprovada_rh → aprovada_comite/diretoria → homologada
 
-Modulos remanescentes (6 Excecoes, 7 Comite, 8 Fiducia, 11 Beneficios) tem
+**Fase 2 — Governanca (Modulos 6 e 7):**
+- Modulo 6 — Governanca de Excecoes (7 tipos com alcadas distintas)
+  - Painel: `sgcs_excecoes.html`
+  - Alcadas: Comite (promocao_extraordinaria, admissao_acima_referencia,
+    alteracao_cargo) vs Diretoria (salario_fora_banda, retencao_especial,
+    bonus_pontual, reversao_fiducia)
+  - Alerta automatico quando excecoes aprovadas atingem 5% do quadro
+- Modulo 7 — Comite de C&S (reunioes trimestrais)
+  - Painel: `sgcs_comite.html`
+  - Calendario Q1/Q2/Q3/Q4 (jan/abr/jul/out)
+  - Workflow: agendada → realizada (com deliberacoes obrigatorias) ou
+    cancelada
+  - Flag automatica de reuniao atrasada (data passou e ainda agendada)
+
+Modulos remanescentes (8 Fiducia, 11 Beneficios, 10 Folha/eSocial) tem
 **estrutura SQL pronta** desde SGCS_01 — falta apenas a UI e RPCs de fluxo.
 
 ## Arquivos
@@ -33,6 +47,7 @@ Modulos remanescentes (6 Excecoes, 7 Comite, 8 Fiducia, 11 Beneficios) tem
 | `SGCS_03_VIEWS.sql`              | 3 views + 2 RPCs (foundation)                     |
 | `SGCS_04_SEED.sql`               | 10 familias funcionais + 22 beneficios catalogados|
 | `SGCS_05_FASE2_AVALIACOES.sql`   | 2 views + 5 RPCs (Modulos 4 + 5) + 1 indice       |
+| `SGCS_06_FASE2_GOVERNANCA.sql`   | 2 views + 7 RPCs (Modulos 6 + 7)                  |
 
 ## Ordem de execucao
 
@@ -45,6 +60,7 @@ psql -d <banco> -f SGCS_02_RLS.sql
 psql -d <banco> -f SGCS_03_VIEWS.sql
 psql -d <banco> -f SGCS_04_SEED.sql
 psql -d <banco> -f SGCS_05_FASE2_AVALIACOES.sql   # Fase 2 (Modulos 4+5)
+psql -d <banco> -f SGCS_06_FASE2_GOVERNANCA.sql   # Fase 2 (Modulos 6+7)
 ```
 
 Em Supabase, aplicar via SQL Editor ou MCP `apply_migration`.
@@ -95,15 +111,32 @@ Em Supabase, aplicar via SQL Editor ou MCP `apply_migration`.
 - `cs_progressao_transicionar(p_progressao_id, p_etapa, p_aprovar, p_parecer)` —
   avanca/rejeita workflow nas etapas supervisor/rh/comite/diretoria/homologar
 
+**Fase 2 — Modulos 6 + 7 (SGCS_06):**
+- `vw_cs_excecoes_ciclo` — excecoes + colaborador + alcada por tipo
+- `vw_cs_reunioes_comite_listagem` — reunioes + flag atrasada + dias_para
+- `cs_excecao_criar(...)` — cria excecao pendente (admin/rh/conf)
+- `cs_excecao_decidir(p_excecao_id, p_aprovar, p_parecer)` — aprova/rejeita
+  com validacao de alcada por tipo
+- `cs_excecao_indicadores(p_ciclo_ano)` — STABLE: contagens + % do quadro
+  + flag de limite 5%
+- `cs_excecao_recalcular_alerta_limite(p_ciclo_ano)` — interna, mantem
+  alerta rh_cs_alertas.tipo='excecao_limite' sincronizado
+- `cs_reuniao_upsert(...)` — cria/atualiza reuniao (admin/rh/conf/dir)
+- `cs_reuniao_realizar(p_id, p_deliberacoes, p_ata_url)` — marca como
+  realizada (deliberacoes obrigatorias)
+- `cs_reuniao_cancelar(p_id, p_motivo)` — cancela agendada
+
 ## Telas (rh/)
 
-| Pagina                       | Rota (shell.js)               | Perfis                          |
-|------------------------------|-------------------------------|---------------------------------|
-| `sgcs_colaboradores.html`    | `C&S > Colaboradores na Banda`| admin/rh/conf/dir/fin           |
-| `sgcs_bandas.html`           | `C&S > Bandas Salariais`      | admin/rh/conf/dir/fin           |
-| `sgcs_fichas.html`           | `C&S > Fichas de Avaliacao`   | admin/rh/gestor/conf/dir        |
-| `sgcs_ficha_edit.html`       | (acessada via link da listagem)| admin/rh/gestor/conf/dir       |
-| `sgcs_progressoes.html`      | `C&S > Workflow Progressao`   | admin/rh/gestor/conf/dir/fin    |
+| Pagina                       | Rota (shell.js)                | Perfis                          |
+|------------------------------|--------------------------------|---------------------------------|
+| `sgcs_colaboradores.html`    | `C&S > Colaboradores na Banda` | admin/rh/conf/dir/fin           |
+| `sgcs_bandas.html`           | `C&S > Bandas Salariais`       | admin/rh/conf/dir/fin           |
+| `sgcs_fichas.html`           | `C&S > Fichas de Avaliacao`    | admin/rh/gestor/conf/dir        |
+| `sgcs_ficha_edit.html`       | (acessada via link da listagem)| admin/rh/gestor/conf/dir        |
+| `sgcs_progressoes.html`      | `C&S > Workflow Progressao`    | admin/rh/gestor/conf/dir/fin    |
+| `sgcs_excecoes.html`         | `C&S > Governanca Excecoes`    | admin/rh/conf/dir/fin           |
+| `sgcs_comite.html`           | `C&S > Comite de C&S`          | admin/rh/conf/dir               |
 
 ## Proximos passos (apos rebuild da banca)
 
@@ -145,6 +178,13 @@ dependencia):
 
 ```sql
 -- 1. RPCs (Fase 2 primeiro, por dependencia logica)
+DROP FUNCTION IF EXISTS public.cs_reuniao_cancelar(UUID, TEXT);
+DROP FUNCTION IF EXISTS public.cs_reuniao_realizar(UUID, TEXT, TEXT);
+DROP FUNCTION IF EXISTS public.cs_reuniao_upsert(UUID, DATE, CHAR, INT, JSONB, TEXT);
+DROP FUNCTION IF EXISTS public.cs_excecao_recalcular_alerta_limite(INT);
+DROP FUNCTION IF EXISTS public.cs_excecao_indicadores(INT);
+DROP FUNCTION IF EXISTS public.cs_excecao_decidir(UUID, BOOLEAN, TEXT);
+DROP FUNCTION IF EXISTS public.cs_excecao_criar(UUID, TEXT, TEXT, TEXT, NUMERIC, INT);
 DROP FUNCTION IF EXISTS public.cs_progressao_transicionar(UUID, TEXT, BOOLEAN, TEXT);
 DROP FUNCTION IF EXISTS public.cs_identificar_elegiveis(INT);
 DROP FUNCTION IF EXISTS public.cs_calcular_proxima_progressao(UUID, INT);
@@ -161,6 +201,8 @@ DROP FUNCTION IF EXISTS public.cs_recalcular_alertas_fora_banda();
 DROP INDEX IF EXISTS uq_cs_prog_ciclo_inicial;
 
 -- 3. Views (Fase 2 primeiro)
+DROP VIEW IF EXISTS public.vw_cs_reunioes_comite_listagem;
+DROP VIEW IF EXISTS public.vw_cs_excecoes_ciclo;
 DROP VIEW IF EXISTS public.vw_cs_progressoes_workflow;
 DROP VIEW IF EXISTS public.vw_cs_fichas_ciclo;
 DROP VIEW IF EXISTS public.vw_cs_dashboard_kpis;
@@ -287,6 +329,49 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN NULL;
 END $$;
 -- esperado: nao falha (excecao capturada — ficha inexistente)
+
+-- ── Smoke tests Fase 2 - Modulos 6+7 (apos SGCS_06) ───────────
+
+-- A16. RPCs de governanca existem
+SELECT proname FROM pg_proc
+ WHERE proname IN (
+   'cs_excecao_criar','cs_excecao_decidir','cs_excecao_indicadores',
+   'cs_excecao_recalcular_alerta_limite',
+   'cs_reuniao_upsert','cs_reuniao_realizar','cs_reuniao_cancelar'
+ );
+-- esperado: 7 linhas
+
+-- A17. Views de governanca compilam
+SELECT COUNT(*) FROM vw_cs_excecoes_ciclo;
+SELECT COUNT(*) FROM vw_cs_reunioes_comite_listagem;
+-- esperado: >= 0
+
+-- A18. cs_excecao_indicadores retorna JSONB com chaves esperadas
+SELECT cs_excecao_indicadores(EXTRACT(YEAR FROM CURRENT_DATE)::INT) ?
+       ALL ARRAY['total','aprovadas','pendentes','rejeitadas',
+                 'quadro_ativo','percent_quadro','atingiu_5pct'];
+-- esperado: t
+
+-- A19. cs_excecao_criar valida tipo invalido
+DO $$ BEGIN
+  PERFORM cs_excecao_criar(
+    (SELECT id FROM rh_funcionarios LIMIT 1),
+    'tipo_invalido', 'motivo qualquer'
+  );
+  RAISE EXCEPTION 'Deveria ter falhado';
+EXCEPTION WHEN OTHERS THEN
+  IF SQLERRM NOT LIKE '%Tipo de excecao invalido%' THEN RAISE; END IF;
+END $$;
+-- esperado: sucesso silencioso (excecao capturada por tipo invalido)
+
+-- A20. cs_reuniao_realizar exige deliberacoes
+DO $$ BEGIN
+  PERFORM cs_reuniao_realizar(gen_random_uuid(), '');
+  RAISE EXCEPTION 'Deveria ter falhado';
+EXCEPTION WHEN OTHERS THEN NULL;
+END $$;
+-- esperado: sucesso silencioso (excecao capturada — reuniao inexistente
+-- ou deliberacoes vazias)
 ```
 
 **Front-end** (manual, em `https://app.classiccouros.com.br/rh/`):

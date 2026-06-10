@@ -9,21 +9,21 @@ echo   RENOMEADOR RH PRO - Classic Couros - v5.0 (FASE 5)
 echo  ============================================================
 echo.
 
-rem --- Procura o Python instalado (comando "python") ---
+rem --- Tenta o lancador "py" (recomendado no Windows) ---
+py --version >nul 2>nul
+if %errorlevel%==0 (
+    echo  Python encontrado. Abrindo o programa...
+    echo.
+    py "%~dp0renomeador_rh.py"
+    goto fim
+)
+
+rem --- Tenta o comando "python" ---
 where python >nul 2>nul
 if %errorlevel%==0 (
     echo  Python encontrado. Abrindo o programa...
     echo.
-    python renomeador_rh.py
-    goto fim
-)
-
-rem --- Tenta o lancador "py" (instalacoes mais novas) ---
-where py >nul 2>nul
-if %errorlevel%==0 (
-    echo  Python encontrado. Abrindo o programa...
-    echo.
-    py renomeador_rh.py
+    python "%~dp0renomeador_rh.py"
     goto fim
 )
 

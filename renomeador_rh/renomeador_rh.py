@@ -47,6 +47,7 @@ APP_VERSAO = "v5.0 - FASE 5"
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 PROGRESSO_PATH = os.path.join(APP_DIR, "progresso.json")
+ENV_PATH = os.path.join(APP_DIR, ".env")
 
 GEMINI_URL = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -139,6 +140,22 @@ def interruptible_sleep(seconds, stop_event):
             return False
         time.sleep(0.1)
     return True
+
+
+def ler_env(caminho):
+    """Le um arquivo .env simples (CHAVE=valor) e devolve um dicionario."""
+    valores = {}
+    try:
+        with open(caminho, "r", encoding="utf-8") as f:
+            for linha in f:
+                linha = linha.strip()
+                if not linha or linha.startswith("#") or "=" not in linha:
+                    continue
+                chave, _, valor = linha.partition("=")
+                valores[chave.strip().upper()] = valor.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return valores
 
 
 def remover_acentos(texto):
@@ -745,6 +762,7 @@ class App:
         self._construir_estilo()
         self._construir_ui()
         self._carregar_config()
+        self._carregar_env()
 
         self.root.protocol("WM_DELETE_WINDOW", self._ao_fechar)
         self.root.after(120, self._processar_fila)
@@ -1030,6 +1048,21 @@ class App:
                 self._atualizar_label_intervalo()
             except Exception:
                 pass
+
+    def _carregar_env(self):
+        """Le credenciais de um arquivo .env (compartilhado via OneDrive) e
+        preenche os campos. As chaves no .env tem prioridade sobre o config.json."""
+        if not os.path.exists(ENV_PATH):
+            return
+        env = ler_env(ENV_PATH)
+        if env.get("GEMINI_KEY"):
+            self.var_gemini.set(env["GEMINI_KEY"])
+        if env.get("CLAUDE_KEY"):
+            self.var_claude.set(env["CLAUDE_KEY"])
+        if env.get("CONVENIA_TOKEN"):
+            self.var_convenia.set(env["CONVENIA_TOKEN"])
+        if env:
+            self.log("Credenciais carregadas do arquivo .env compartilhado.", "info")
 
     def _salvar_config(self):
         try:

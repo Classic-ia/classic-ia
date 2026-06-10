@@ -1,11 +1,11 @@
 @echo off
 chcp 65001 >nul
-title Renomeador de Documentos RH - Classic Couros
+title Renomeador RH PRO - Classic Couros - v5.0
 cd /d "%~dp0"
 
 echo.
 echo  ============================================================
-echo   RENOMEADOR DE DOCUMENTOS RH - Classic Couros
+echo   RENOMEADOR RH PRO - Classic Couros - v5.0 (FASE 5)
 echo  ============================================================
 echo.
 

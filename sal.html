@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Controle de Sal · Classic CQ</title>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="page-bg">
+
+<div class="header">
+  <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'">
+  <div>
+    <div class="ht">Classic CQ</div>
+    <div class="hs">Controle de Sal</div>
+  </div>
+  <div id="cq-user-chip" style="margin-left:auto;margin-right:12px;"></div>
+  <a href="app.html" class="btn-back">← Menu</a>
+</div>
+
+<div style="max-width:1100px;margin:0 auto;padding:18px 16px;">
+
+  <!-- SALDO POR TIPO -->
+  <h2 style="font-size:16px;margin:6px 0 10px;color:var(--ink,#0f172a);">Saldo atual</h2>
+  <div id="saldoCards" class="form-grid" style="margin-bottom:22px;">
+    <div class="card card-body">Carregando…</div>
+  </div>
+
+  <!-- NOVA MOVIMENTAÇÃO -->
+  <div class="card" style="margin-bottom:22px;">
+    <div class="card-header"><div class="card-title">Nova movimentação</div></div>
+    <div class="card-body">
+      <form id="formMov" onsubmit="return salvarMov(event)">
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Data</label>
+            <input type="date" id="mData" required>
+          </div>
+          <div class="form-field">
+            <label>Tipo de movimentação</label>
+            <select id="mTipo" onchange="ajustarCampos()" required>
+              <option value="entrada">Entrada</option>
+              <option value="saida">Saída</option>
+              <option value="consumo">Consumo (por setor)</option>
+              <option value="ajuste">Ajuste de inventário</option>
+              <option value="transferencia">Transferência entre tipos</option>
+            </select>
+          </div>
+          <div class="form-field">
+            <label id="lblTipoSal">Tipo de sal</label>
+            <select id="mTipoSal" required></select>
+          </div>
+          <div class="form-field" id="boxDestino" style="display:none;">
+            <label>Tipo de sal — destino</label>
+            <select id="mTipoSalDest"></select>
+          </div>
+          <div class="form-field" id="boxSetor" style="display:none;">
+            <label>Setor (consumo)</label>
+            <select id="mSetor">
+              <option value="Couro">Couro</option>
+              <option value="Omaso">Omaso</option>
+            </select>
+          </div>
+          <div class="form-field" id="boxOrigem">
+            <label id="lblOrigem">Fornecedor / Origem</label>
+            <input type="text" id="mOrigem" placeholder="Ex.: Salina São João">
+          </div>
+          <div class="form-field">
+            <label id="lblQtd">Quantidade (kg)</label>
+            <input type="number" id="mQtd" step="any" required placeholder="Ex.: 1000">
+          </div>
+          <div class="form-field form-field-full">
+            <label>Observação</label>
+            <input type="text" id="mObs" placeholder="opcional">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button type="submit" class="btn btn-primary" id="btnSalvar">Salvar movimentação</button>
+          <span id="msg" style="margin-left:12px;font-size:13px;"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">Movimentações recentes</div></div>
+    <div class="data-table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Data</th><th>Tipo</th><th>Sal</th><th>Setor/Destino</th><th>Origem/Destino</th><th style="text-align:right;">Qtd (kg)</th></tr></thead>
+        <tbody id="movBody"><tr><td colspan="6">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let TIPOS = [];
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtKg(n){ return (Number(n)||0).toLocaleString('pt-BR',{minimumFractionDigits:0,maximumFractionDigits:2}); }
+function fmtData(d){ if(!d)return''; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+const ROT = {entrada:'Entrada',saida:'Saída',consumo:'Consumo',ajuste:'Ajuste',transferencia:'Transferência'};
+
+function ajustarCampos(){
+  const t = document.getElementById('mTipo').value;
+  document.getElementById('boxSetor').style.display   = (t==='consumo') ? '' : 'none';
+  document.getElementById('boxDestino').style.display = (t==='transferencia') ? '' : 'none';
+  document.getElementById('lblTipoSal').textContent   = (t==='transferencia') ? 'Tipo de sal — origem' : 'Tipo de sal';
+  const lblO = document.getElementById('lblOrigem'), boxO = document.getElementById('boxOrigem');
+  if(t==='entrada'){ boxO.style.display=''; lblO.textContent='Fornecedor / Origem'; }
+  else if(t==='saida'){ boxO.style.display=''; lblO.textContent='Destino / Cliente'; }
+  else { boxO.style.display='none'; }
+  document.getElementById('lblQtd').textContent = (t==='ajuste') ? 'Quantidade real contada (kg)' : 'Quantidade (kg)';
+}
+
+function preencherSelectsTipo(){
+  const opts = TIPOS.map(t=>`<option value="${t.id}">${esc(t.nome)}</option>`).join('');
+  document.getElementById('mTipoSal').innerHTML = opts;
+  document.getElementById('mTipoSalDest').innerHTML = opts;
+}
+
+async function carregarSaldo(){
+  const rows = await CQ_API.get('cq_sal_saldo?order=nome.asc') || [];
+  const el = document.getElementById('saldoCards');
+  el.innerHTML = rows.length ? rows.map(r=>`
+    <div class="card card-body" style="text-align:center;">
+      <div style="font-size:12px;color:var(--muted,#64748b);text-transform:uppercase;letter-spacing:.04em;">${esc(r.nome)}</div>
+      <div style="font-size:24px;font-weight:800;color:var(--blue,#2563eb);margin-top:4px;">${fmtKg(r.saldo)}</div>
+      <div style="font-size:11px;color:var(--muted,#64748b);">${esc(r.unidade||'kg')}</div>
+    </div>`).join('') : '<div class="card card-body">Nenhum tipo de sal cadastrado.</div>';
+}
+
+async function carregarMov(){
+  const rows = await CQ_API.get('cq_sal_mov?order=data.desc,criado_em.desc&limit=100') || [];
+  const nome = id => (TIPOS.find(t=>t.id===id)||{}).nome || '—';
+  document.getElementById('movBody').innerHTML = rows.length ? rows.map(m=>{
+    const dest = m.tipo==='transferencia' ? ('→ '+nome(m.tipo_sal_destino_id)) : (m.tipo==='consumo' ? esc(m.setor||'') : '');
+    return `<tr>
+      <td>${fmtData(m.data)}</td>
+      <td>${esc(ROT[m.tipo]||m.tipo)}</td>
+      <td>${esc(nome(m.tipo_sal_id))}</td>
+      <td>${dest}</td>
+      <td>${esc(m.origem_destino||'')}</td>
+      <td style="text-align:right;">${fmtKg(m.quantidade_kg)}</td>
+    </tr>`;
+  }).join('') : '<tr><td colspan="6">Nenhuma movimentação registrada.</td></tr>';
+}
+
+async function salvarMov(ev){
+  ev.preventDefault();
+  const t = document.getElementById('mTipo').value;
+  const qtd = Number(document.getElementById('mQtd').value);
+  if(!(qtd>0 || t==='ajuste')){ msg('Informe a quantidade.','#dc2626'); return false; }
+  const dados = {
+    data: document.getElementById('mData').value,
+    tipo: t,
+    tipo_sal_id: document.getElementById('mTipoSal').value,
+    tipo_sal_destino_id: (t==='transferencia') ? document.getElementById('mTipoSalDest').value : null,
+    setor: (t==='consumo') ? document.getElementById('mSetor').value : null,
+    origem_destino: (t==='entrada'||t==='saida') ? (document.getElementById('mOrigem').value.trim()||null) : null,
+    quantidade_kg: qtd,
+    unidade: 'kg',
+    obs: document.getElementById('mObs').value.trim() || null,
+    ...(typeof CQAuth!=='undefined' ? CQAuth.dadosRegistro() : {}),
+  };
+  if(t==='transferencia' && dados.tipo_sal_id === dados.tipo_sal_destino_id){ msg('Origem e destino devem ser diferentes.','#dc2626'); return false; }
+  const btn = document.getElementById('btnSalvar'); btn.disabled = true;
+  const ok = (await CQ_API.post('cq_sal_mov', dados, 'return=minimal')).ok;
+  btn.disabled = false;
+  if(ok){
+    msg('✓ Movimentação salva.','#16a34a');
+    document.getElementById('mQtd').value=''; document.getElementById('mObs').value=''; document.getElementById('mOrigem').value='';
+    await carregarSaldo(); await carregarMov();
+  } else { msg('Erro ao salvar.','#dc2626'); }
+  return false;
+}
+function msg(t,c){ const e=document.getElementById('msg'); e.textContent=t; e.style.color=c; setTimeout(()=>{if(e.textContent===t)e.textContent='';},4000); }
+
+(async function init(){
+  const user = await CQAuth.init({ perfisPermitidos: ['administrador','admin','qualidade','producao'] });
+  if(!user) return;
+  document.getElementById('mData').value = new Date().toISOString().slice(0,10);
+  TIPOS = await CQ_API.get('cq_sal_tipos?ativo=eq.true&order=nome.asc') || [];
+  preencherSelectsTipo();
+  ajustarCampos();
+  await carregarSaldo();
+  await carregarMov();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RNC — Não Conformidade ao Fornecedor · Classic CQ</title>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="page-bg">
+
+<div class="header">
+  <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'">
+  <div>
+    <div class="ht">Classic CQ</div>
+    <div class="hs">RNC — Não Conformidade ao Fornecedor</div>
+  </div>
+  <div id="cq-user-chip" style="margin-left:auto;margin-right:12px;"></div>
+  <a href="app.html" class="btn-back">← Menu</a>
+</div>
+
+<div style="max-width:1000px;margin:0 auto;padding:18px 16px;">
+
+  <!-- ABRIR RNC -->
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><div class="card-title">Abrir RNC</div></div>
+    <div class="card-body">
+      <form id="formRnc" onsubmit="return salvarRnc(event)">
+        <div class="form-grid">
+          <div class="form-field"><label>Fornecedor *</label><select id="rForn" required></select></div>
+          <div class="form-field"><label>Gravidade</label>
+            <select id="rGrav"><option value="menor">Menor</option><option value="maior">Maior</option><option value="critica">Crítica</option></select>
+          </div>
+          <div class="form-field"><label>Lote / Produto (ref.)</label><input type="text" id="rProduto" placeholder="ex.: lote 1638 / couro"></div>
+          <div class="form-field"><label>Prazo de resposta</label><input type="date" id="rPrazo"></div>
+          <div class="form-field form-field-full"><label>Descrição da não conformidade *</label><input type="text" id="rDesc" required placeholder="O que foi constatado"></div>
+          <div class="form-field form-field-full"><label>Defeito / causa observada</label><input type="text" id="rCausa" placeholder="ex.: 27% das peças com furos/rasgos"></div>
+          <div class="form-field form-field-full"><label>Evidência (link da foto/vídeo)</label><input type="text" id="rEvid" placeholder="URL da evidência (opcional)"></div>
+        </div>
+        <div class="form-actions" style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" id="btnSalvar">Abrir RNC</button>
+          <span id="msg" style="margin-left:12px;font-size:13px;"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- LISTA DE RNCs -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">RNCs registrados</div></div>
+    <div class="data-table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Código</th><th>Data</th><th>Fornecedor</th><th>Gravidade</th><th>Status</th><th>Enviado</th><th>Ações</th></tr></thead>
+        <tbody id="rncBody"><tr><td colspan="7">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+let FORN = {};   // codigo_atak -> fornecedor
+let RNCS = [];
+
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmtData(d){ if(!d)return''; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function hojeISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+const GRAV = {menor:'Menor',maior:'Maior',critica:'Crítica'};
+const STAT = {aberta:'Aberta',em_tratamento:'Em tratamento',concluida:'Concluída',cancelada:'Cancelada'};
+
+async function carregarFornecedores(){
+  const rows = await CQ_API.get('cq_fornecedores?ativo=eq.true&order=nome.asc&limit=2000') || [];
+  FORN = {};
+  const sel = document.getElementById('rForn');
+  sel.innerHTML = '<option value="">Selecione…</option>' + rows.filter(f=>f.codigo_atak).map(f=>{
+    FORN[f.codigo_atak] = f;
+    return `<option value="${esc(f.codigo_atak)}">${esc(f.nome)}</option>`;
+  }).join('');
+}
+
+async function proximoCodigo(){
+  try{
+    const r = await CQ_API.fetch('rpc/cq_proximo_codigo_rnc', { method:'POST', body:'{}' });
+    if(r.ok){ const v = await r.json(); if(typeof v==='string' && v) return v; }
+  }catch(e){}
+  // fallback
+  const n = new Date(); const p = x=>String(x).padStart(2,'0');
+  return `RNC-${n.getFullYear()}${p(n.getMonth()+1)}${p(n.getDate())}-${p(n.getHours())}${p(n.getMinutes())}${p(n.getSeconds())}`;
+}
+
+async function carregarRncs(){
+  RNCS = await CQ_API.get('cq_nao_conformidades?tipo=eq.fornecedor&order=criado_em.desc&limit=200') || [];
+  const b = document.getElementById('rncBody');
+  b.innerHTML = RNCS.length ? RNCS.map(n=>{
+    const fn = (FORN[n.fornecedor_codigo]||{}).nome || n.fornecedor_codigo || '—';
+    return `<tr>
+      <td>${esc(n.codigo)}</td>
+      <td>${fmtData(n.criado_em)}</td>
+      <td>${esc(fn)}</td>
+      <td>${esc(GRAV[n.gravidade]||n.gravidade)}</td>
+      <td>${esc(STAT[n.status]||n.status)}</td>
+      <td>${n.enviado_fornecedor?'✓ '+fmtData(n.data_envio):'—'}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-sm btn-secondary" onclick="imprimirRnc('${esc(n.id)}')">🖨️ PDF</button>
+        <button class="btn btn-sm btn-outline" onclick="enviarRnc('${esc(n.id)}')">✉️ Enviar</button>
+      </td></tr>`;
+  }).join('') : '<tr><td colspan="7">Nenhum RNC registrado.</td></tr>';
+}
+
+async function salvarRnc(ev){
+  ev.preventDefault();
+  const forn = document.getElementById('rForn').value;
+  const desc = document.getElementById('rDesc').value.trim();
+  if(!forn){ return msg('Selecione o fornecedor.','#dc2626'); }
+  if(!desc){ return msg('Descreva a não conformidade.','#dc2626'); }
+  const codigo = await proximoCodigo();
+  const u = (typeof CQAuth!=='undefined' && CQAuth.getUser()) ? CQAuth.getUser() : {};
+  const dados = {
+    codigo, tipo:'fornecedor',
+    gravidade: document.getElementById('rGrav').value,
+    status:'aberta',
+    fornecedor_codigo: forn,
+    produto_codigo: document.getElementById('rProduto').value.trim() || null,
+    descricao: desc,
+    causa_raiz: document.getElementById('rCausa').value.trim() || null,
+    evidencia_url: document.getElementById('rEvid').value.trim() || null,
+    prazo_resposta: document.getElementById('rPrazo').value || null,
+    data_limite: document.getElementById('rPrazo').value || null,
+    registrado_por: u.nome || u.email || 'sistema',
+  };
+  const btn = document.getElementById('btnSalvar'); btn.disabled = true;
+  const ok = (await CQ_API.post('cq_nao_conformidades', dados, 'return=minimal')).ok;
+  btn.disabled = false;
+  if(ok){
+    msg('✓ RNC '+codigo+' aberto.','#16a34a');
+    document.getElementById('rDesc').value=''; document.getElementById('rCausa').value=''; document.getElementById('rEvid').value='';
+    await carregarRncs();
+  } else { msg('Erro ao salvar.','#dc2626'); }
+  return false;
+}
+
+function imprimirRnc(id){
+  const n = RNCS.find(x=>x.id===id); if(!n) return;
+  const f = FORN[n.fornecedor_codigo] || {};
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>${esc(n.codigo)}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:32px;font-size:13px;line-height:1.5;}
+    h1{font-size:18px;margin:0;} .sub{color:#555;font-size:12px;}
+    .head{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:10px;margin-bottom:16px;}
+    .box{border:1px solid #999;border-radius:6px;padding:10px 12px;margin-bottom:12px;}
+    .lbl{font-size:11px;text-transform:uppercase;color:#666;letter-spacing:.04em;}
+    table{width:100%;border-collapse:collapse;} td{padding:4px 0;vertical-align:top;}
+    .grav-critica{color:#b91c1c;font-weight:bold;} .grav-maior{color:#b45309;font-weight:bold;}
+    .resp{border:1px dashed #999;border-radius:6px;min-height:90px;padding:10px;margin-top:6px;}
+    .sign{display:flex;justify-content:space-between;margin-top:48px;} .sign div{width:45%;text-align:center;border-top:1px solid #111;padding-top:6px;font-size:12px;}
+    @media print{ button{display:none;} body{margin:12mm;} }
+  </style></head><body>
+  <div class="head">
+    <div><h1>REGISTRO DE NÃO CONFORMIDADE</h1><div class="sub">Classic Importação e Exportação de Couros</div></div>
+    <div style="text-align:right;"><div style="font-size:16px;font-weight:bold;">${esc(n.codigo)}</div><div class="sub">Emitido em ${fmtData(n.criado_em||hojeISO())}</div></div>
+  </div>
+  <div class="box"><table>
+    <tr><td style="width:50%;"><span class="lbl">Fornecedor</span><br>${esc(f.nome||n.fornecedor_codigo||'')}</td>
+        <td><span class="lbl">Cidade / Contato</span><br>${esc(f.cidade||'')} ${f.contato?(' · '+esc(f.contato)):''}</td></tr>
+    <tr><td><span class="lbl">Gravidade</span><br><span class="grav-${esc(n.gravidade)}">${esc((GRAV[n.gravidade]||n.gravidade||'').toUpperCase())}</span></td>
+        <td><span class="lbl">Lote / Produto</span><br>${esc(n.produto_codigo||'—')}</td></tr>
+    <tr><td><span class="lbl">Prazo de resposta</span><br>${n.prazo_resposta?fmtData(n.prazo_resposta):'—'}</td>
+        <td><span class="lbl">Registrado por</span><br>${esc(n.registrado_por||'')}</td></tr>
+  </table></div>
+  <div class="box"><span class="lbl">Descrição da não conformidade</span><br>${esc(n.descricao||'')}</div>
+  ${n.causa_raiz?`<div class="box"><span class="lbl">Defeito / causa observada</span><br>${esc(n.causa_raiz)}</div>`:''}
+  ${n.evidencia_url?`<div class="box"><span class="lbl">Evidência</span><br><a href="${esc(n.evidencia_url)}">${esc(n.evidencia_url)}</a></div>`:''}
+  <div class="box"><span class="lbl">Resposta / ação corretiva do fornecedor</span><div class="resp"></div></div>
+  <div class="sign"><div>Classic — Qualidade</div><div>Fornecedor (resp. / data)</div></div>
+  <div style="margin-top:24px;text-align:center;"><button onclick="window.print()" style="padding:8px 18px;">🖨️ Imprimir / Salvar PDF</button></div>
+  </body></html>`);
+  win.document.close();
+}
+
+async function enviarRnc(id){
+  const n = RNCS.find(x=>x.id===id); if(!n) return;
+  const f = FORN[n.fornecedor_codigo] || {};
+  // canal de e-mail configurado?
+  const canais = await CQ_API.get("cq_canais_notificacao?tipo=eq.email&ativo=eq.true&limit=1") || [];
+  if(!canais.length){
+    alert('Canal de e-mail ainda não configurado no sistema.\n\nPor enquanto: gere o PDF (🖨️) e envie manualmente ao fornecedor.\nQuando o canal de e-mail for ligado, este botão envia automaticamente.');
+    return;
+  }
+  if(!f.email){ alert('O fornecedor "'+(f.nome||'')+'" não tem e-mail cadastrado. Cadastre o e-mail dele para enviar.'); return; }
+  if(!confirm('Enviar o RNC '+n.codigo+' por e-mail para '+f.email+'?')) return;
+  const enf = (await CQ_API.post('cq_fila_notificacao', {
+    canal_id: canais[0].id, evento: 'rnc_fornecedor',
+    titulo: 'Registro de Não Conformidade '+n.codigo,
+    mensagem: 'Prezado fornecedor, segue RNC '+n.codigo+'. Descrição: '+(n.descricao||''),
+    dados_json: { rnc_id: n.id, codigo: n.codigo, fornecedor: f.nome, email: f.email, prazo: n.prazo_resposta },
+  }, 'return=minimal')).ok;
+  if(enf){
+    await CQ_API.fetch('cq_nao_conformidades?id=eq.'+n.id, { method:'PATCH', headers:{'Prefer':'return=minimal'}, body:{ enviado_fornecedor:true, data_envio:new Date().toISOString() } });
+    await carregarRncs();
+    alert('RNC enfileirado para envio ao fornecedor.');
+  } else { alert('Não foi possível enfileirar o envio.'); }
+}
+
+function msg(t,c){ const e=document.getElementById('msg'); e.textContent=t; e.style.color=c; setTimeout(()=>{if(e.textContent===t)e.textContent='';},4000); return false; }
+
+(async function init(){
+  const user = await CQAuth.init({ perfisPermitidos:['administrador','admin','qualidade'] });
+  if(!user) return;
+  document.getElementById('rPrazo').value = '';
+  await carregarFornecedores();
+  await carregarRncs();
+})();
+</script>
+</body>
+</html>

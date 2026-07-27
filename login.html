@@ -5,234 +5,94 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Login &middot; Classic Couros</title>
 <link rel="icon" type="image/jpeg" href="assets/logo-classic-icon.png.jpg">
+<script src="config.js"></script>
+<script src="cq_auth.js"></script>
 <link rel="stylesheet" href="landing.css">
-<style>
-/* ── LOGIN PAGE ─────────────────────────────────────────── */
-.login-wrap {
-  min-height:100vh; display:flex;
-  align-items:center; justify-content:center;
-  padding:24px;
-}
-.login-card {
-  background:var(--surface); border:1px solid var(--border);
-  border-radius:8px; padding:48px 40px 40px;
-  width:100%; max-width:400px; position:relative;
-}
-.login-card::before {
-  content:''; position:absolute; top:0; left:50%; transform:translateX(-50%);
-  width:60%; height:1px;
-  background:linear-gradient(90deg,transparent,var(--accent),transparent);
-}
-.login-logo {
-  text-align:center; margin-bottom:32px;
-}
-.login-logo img {
-  width:64px; height:auto; margin:0 auto 16px; border-radius:8px;
-}
-.login-logo h1 {
-  font-size:20px; font-weight:800; letter-spacing:0.04em;
-}
-.login-logo h1 em { font-style:normal; color:var(--accent); }
-.login-logo p {
-  font-size:12px; color:var(--muted); margin-top:6px;
-  letter-spacing:0.08em; text-transform:uppercase;
-}
-
-.login-field { margin-bottom:20px; }
-.login-field label {
-  display:block; font-size:11px; color:var(--muted);
-  letter-spacing:0.08em; text-transform:uppercase;
-  margin-bottom:6px;
-}
-.login-field input {
-  width:100%; padding:12px 14px;
-  background:var(--bg); border:1px solid var(--border);
-  border-radius:4px; color:var(--text); font-size:14px;
-  font-family:inherit; transition:border-color 0.2s;
-  outline:none;
-}
-.login-field input::placeholder { color:var(--muted); }
-.login-field input:focus { border-color:var(--accent-border); }
-.login-field input.error { border-color:#ef4444; }
-
-.login-btn {
-  width:100%; padding:12px; margin-top:8px;
-  background:var(--accent); color:var(--bg);
-  border:none; border-radius:4px;
-  font-family:inherit; font-size:13px; font-weight:700;
-  letter-spacing:0.06em; text-transform:uppercase;
-  cursor:pointer; transition:opacity 0.2s;
-  display:flex; align-items:center; justify-content:center; gap:8px;
-}
-.login-btn:hover { opacity:0.9; }
-.login-btn:disabled { opacity:0.5; cursor:default; }
-
-.login-spinner {
-  display:none; width:16px; height:16px;
-  border:2px solid transparent; border-top-color:var(--bg);
-  border-radius:50%; animation:spin 0.6s linear infinite;
-}
-@keyframes spin { to { transform:rotate(360deg); } }
-
-.login-error {
-  display:none; margin-top:16px; padding:10px 14px;
-  background:rgba(239,68,68,0.08); border:1px solid rgba(239,68,68,0.2);
-  border-radius:4px; font-size:13px; color:#fca5a5;
-  text-align:center;
-}
-
-.login-expired {
-  display:none; margin-bottom:20px; padding:10px 14px;
-  background:rgba(251,191,36,0.08); border:1px solid rgba(251,191,36,0.2);
-  border-radius:4px; font-size:13px; color:#fde68a;
-  text-align:center;
-}
-
-.login-footer {
-  text-align:center; margin-top:24px; padding-top:20px;
-  border-top:1px solid var(--border);
-}
-.login-footer a {
-  font-size:11px; color:var(--muted); letter-spacing:0.06em;
-  transition:color 0.2s;
-}
-.login-footer a:hover { color:var(--accent); }
-.login-version {
-  font-size:10px; color:var(--muted); text-align:center;
-  margin-top:16px; opacity:0.5;
-}
-</style>
-<script>
-// Config inline para evitar conflito de const entre config.js e config_rh.js
-var CQ_CFG = {
-  URL: 'https://nvqxsulntpftcwtkjedu.supabase.co',
-  KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im52cXhzdWxudHBmdGN3dGtqZWR1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNTIwODksImV4cCI6MjA4ODkyODA4OX0.JvahlmaqJUzd2FQp-27uADe3mL7Wccg68PA2_3YWRhw'
-};
-var RH_CFG = {
-  URL: 'https://muiqmtnfvyffborgiwdw.supabase.co',
-  KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im11aXFtdG5mdnlmZmJvcmdpd2R3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4NzQ2MTAsImV4cCI6MjA4OTQ1MDYxMH0.ReerGoDWcLrxJ1WIIKflN4Sc-st4zR1b6yWagCaPq_A'
-};
-</script>
 </head>
-<body>
+<body class="auth-page">
 
-<div class="login-wrap">
-  <div class="login-card">
-    <div class="login-logo">
-      <img src="assets/logo-classic-icon.png.jpg" alt="Classic Couros" onerror="this.style.display='none'">
-      <h1>Classic Couros</h1>
-      <p>Acesso Restrito</p>
-    </div>
+<main class="auth-card" role="main">
 
-    <div class="login-expired" id="expiredBanner">
-      Sessao expirada por inatividade. Faca login novamente.
-    </div>
+  <div class="auth-brand">
+    <img class="auth-brand-logo" id="logoImg" src="assets/logo-classic-icon.png.jpg"
+         alt="Classic Couros" onerror="this.style.display='none'">
+    <div class="auth-brand-title">Classic Couros</div>
+    <div class="auth-brand-sub">Acesso Restrito</div>
+  </div>
 
-    <div class="login-field">
+  <div class="auth-expired" id="expiredBanner">
+    &#9200; Sessao expirada por inatividade. Faca login novamente.
+  </div>
+
+  <form class="auth-form" onsubmit="fazerLogin(); return false;" novalidate>
+
+    <div class="auth-field">
       <label for="inp-email">E-mail</label>
       <input type="email" id="inp-email" placeholder="usuario@classiccouros.com.br"
-        autocomplete="email" onkeydown="if(event.key==='Enter') document.getElementById('inp-senha').focus()">
+             autocomplete="email" autofocus>
     </div>
 
-    <div class="login-field">
+    <div class="auth-field">
       <label for="inp-senha">Senha</label>
-      <input type="password" id="inp-senha" placeholder="&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;"
-        autocomplete="current-password"
-        onkeydown="if(event.key==='Enter') fazerLogin()">
+      <input type="password" id="inp-senha" placeholder="Sua senha"
+             autocomplete="current-password">
     </div>
 
-    <button class="login-btn" id="btnLogin" onclick="fazerLogin()">
-      <div class="login-spinner" id="spinner"></div>
+    <div class="auth-error" id="errMsg" role="alert">
+      <span>&#9888;</span>
+      <span id="errTxt"></span>
+    </div>
+
+    <button class="auth-btn" type="submit" id="btnLogin">
+      <div class="spinner" id="spinner"></div>
       <span id="btnTxt">Entrar</span>
     </button>
 
-    <div class="login-error" id="errMsg"></div>
+  </form>
 
-    <div class="login-footer">
-      <a href="index.html">Voltar ao site</a>
-    </div>
-
-    <div class="login-version">Classic Couros &middot; 2026</div>
+  <div class="auth-links">
+    <button onclick="entrarModoDemo()">Modo demonstracao (sem servidor)</button>
+    <a href="rh/login.html">Ir para RH &amp; Seguranca do Trabalho</a>
   </div>
-</div>
+
+  <div class="auth-footer">Classic Couros &middot; 2026</div>
+
+</main>
 
 <script>
-// ── CONFIG ─────────────────────────────────────────────────
-var CQ_URL = CQ_CFG.URL;
-var CQ_KEY = CQ_CFG.KEY;
-var RH_URL = RH_CFG.URL;
-var RH_KEY = RH_CFG.KEY;
-
-// ── SESSION CHECK ──────────────────────────────────────────
 (function(){
-  // Se ja tem sessao ativa → portal
+  var el = document.getElementById('logoImg');
+  var s = localStorage.getItem('classic_logo');
+  if (s) el.src = s;
+
   try {
-    var cq = localStorage.getItem('cq_sess_v2');
-    var rh = localStorage.getItem('rh_sess_v2');
-    if (cq || rh) {
-      var temSessao = false;
-      if (cq) {
-        var s = JSON.parse(cq);
-        var idade = Date.now() - (s.ts || 0);
-        if (idade < 3600000 && (s.access_token || (s.token && s.token.startsWith('demo-')))) temSessao = true;
-        else localStorage.removeItem('cq_sess_v2');
+    var raw = localStorage.getItem('cq_sess_v2');
+    if (raw) {
+      var sess = JSON.parse(raw);
+      if (sess.token && sess.user && sess.ts) {
+        var umHora = 60 * 60 * 1000;
+        var idade  = Date.now() - (sess.ts || 0);
+        var temJwt = !!sess.access_token;
+        var isDemoToken = sess.token && sess.token.startsWith('demo-');
+        if (idade < umHora && (temJwt || isDemoToken)) {
+          window.location.href = 'app.html';
+          return;
+        } else {
+          localStorage.removeItem('cq_sess_v2');
+        }
+      } else {
+        localStorage.removeItem('cq_sess_v2');
       }
-      if (rh) {
-        var s2 = JSON.parse(rh);
-        var idade2 = Date.now() - (s2.ts || 0);
-        if (idade2 < 3600000 && s2.access_token) temSessao = true;
-        else localStorage.removeItem('rh_sess_v2');
-      }
-      if (temSessao) { window.location.href = 'portal.html'; return; }
     }
   } catch(e) {
     localStorage.removeItem('cq_sess_v2');
-    localStorage.removeItem('rh_sess_v2');
   }
 
-  // Sessao expirada?
   var params = new URLSearchParams(window.location.search);
   if (params.get('exp') === '1') {
-    document.getElementById('expiredBanner').style.display = 'block';
+    document.getElementById('expiredBanner').classList.add('visible');
   }
 })();
-
-// ── LOGIN ──────────────────────────────────────────────────
-async function tentarAuthSupabase(url, key, email, senha) {
-  try {
-    var r = await fetch(url + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'apikey': key },
-      body: JSON.stringify({ email: email, password: senha })
-    });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch(e) { return null; }
-}
-
-async function buscarPerfilCQ(url, key, token) {
-  try {
-    var r = await fetch(url + '/rest/v1/cq_usuarios?select=id,email,nome,perfil&email=eq.' + encodeURIComponent(token.user.email), {
-      headers: { 'Content-Type':'application/json', 'apikey': key, 'Authorization':'Bearer ' + token.access_token }
-    });
-    if (!r.ok) return null;
-    var rows = await r.json();
-    return rows && rows.length > 0 ? rows[0] : null;
-  } catch(e) { return null; }
-}
-
-async function buscarPerfilRH(url, key, token) {
-  try {
-    var r = await fetch(url + '/rest/v1/rpc/rh_meu_perfil', {
-      method: 'POST',
-      headers: { 'Content-Type':'application/json', 'apikey': key, 'Authorization':'Bearer ' + token.access_token },
-      body: '{}'
-    });
-    if (!r.ok) return null;
-    var rows = await r.json();
-    return rows && rows.length > 0 ? rows[0] : null;
-  } catch(e) { return null; }
-}
 
 async function fazerLogin() {
   var email = document.getElementById('inp-email').value.trim();
@@ -242,8 +102,7 @@ async function fazerLogin() {
   var spin  = document.getElementById('spinner');
   var txt   = document.getElementById('btnTxt');
 
-  // Limpar
-  err.style.display = 'none';
+  err.classList.remove('visible');
   document.getElementById('inp-email').classList.remove('error');
   document.getElementById('inp-senha').classList.remove('error');
 
@@ -256,54 +115,15 @@ async function fazerLogin() {
     mostrarErro('Informe a senha'); return;
   }
 
-  // Loading
   btn.disabled = true;
   spin.style.display = 'block';
   txt.textContent = 'Entrando...';
 
   try {
-    // Tentar ambos Supabase em paralelo
-    var [authCQ, authRH] = await Promise.all([
-      tentarAuthSupabase(CQ_URL, CQ_KEY, email, senha),
-      RH_URL ? tentarAuthSupabase(RH_URL, RH_KEY, email, senha) : Promise.resolve(null)
-    ]);
-
-    if (!authCQ && !authRH) {
-      throw new Error('E-mail ou senha incorretos.');
-    }
-
-    // Buscar perfis em paralelo
-    var [perfilCQ, perfilRH] = await Promise.all([
-      authCQ ? buscarPerfilCQ(CQ_URL, CQ_KEY, authCQ) : Promise.resolve(null),
-      authRH ? buscarPerfilRH(RH_URL, RH_KEY, authRH) : Promise.resolve(null)
-    ]);
-
-    // Salvar sessoes
-    if (authCQ) {
-      localStorage.setItem('cq_sess_v2', JSON.stringify({
-        token: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-        access_token: authCQ.access_token,
-        refresh_token: authCQ.refresh_token,
-        user: perfilCQ || { email: email },
-        ts: Date.now()
-      }));
-    }
-
-    if (authRH) {
-      localStorage.setItem('rh_sess_v2', JSON.stringify({
-        token: crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(),
-        access_token: authRH.access_token,
-        refresh_token: authRH.refresh_token,
-        user: perfilRH || { email: email },
-        ts: Date.now()
-      }));
-    }
-
-    // Redirecionar para portal
+    await CQAuth.login(email, senha);
     var params = new URLSearchParams(window.location.search);
-    window.location.href = params.get('next') || 'portal.html';
-
-  } catch(e) {
+    window.location.href = params.get('next') || 'app.html';
+  } catch (e) {
     mostrarErro(e.message || 'Erro ao conectar. Tente novamente.');
     btn.disabled = false;
     spin.style.display = 'none';
@@ -312,9 +132,8 @@ async function fazerLogin() {
 }
 
 function mostrarErro(msg) {
-  var err = document.getElementById('errMsg');
-  err.textContent = msg;
-  err.style.display = 'block';
+  document.getElementById('errTxt').textContent = msg;
+  document.getElementById('errMsg').classList.add('visible');
 }
 </script>
 </body>

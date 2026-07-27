@@ -2,67 +2,16 @@
   Classic RH - Gestao da CIPA
   Comissao Interna de Prevencao de Acidentes
 
-  CREATE TABLE rh_cipa_mandatos (
-    id       UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    inicio   DATE NOT NULL,
-    fim      DATE NOT NULL,
-    status   TEXT NOT NULL DEFAULT 'ativo' CHECK (status IN ('ativo','encerrado','futuro')),
-    criado_em TIMESTAMPTZ DEFAULT now()
-  );
-
-  ALTER TABLE rh_cipa_mandatos ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "rh_cipa_mandatos_all" ON rh_cipa_mandatos FOR ALL USING (true) WITH CHECK (true);
-
-  CREATE TABLE rh_cipa_membros (
-    id               UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    mandato_id       UUID REFERENCES rh_cipa_mandatos(id),
-    colaborador_id   UUID REFERENCES rh_colaboradores(id),
-    cargo_cipa       TEXT NOT NULL CHECK (cargo_cipa IN ('presidente','vice','secretario','titular_empregador','titular_empregado','suplente')),
-    tipo             TEXT NOT NULL CHECK (tipo IN ('eleito','indicado')),
-    estabilidade_ate DATE,
-    criado_em        TIMESTAMPTZ DEFAULT now()
-  );
-
-  CREATE INDEX idx_cipa_membros_mandato ON rh_cipa_membros(mandato_id);
-  CREATE INDEX idx_cipa_membros_colab ON rh_cipa_membros(colaborador_id);
-
-  ALTER TABLE rh_cipa_membros ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "rh_cipa_membros_all" ON rh_cipa_membros FOR ALL USING (true) WITH CHECK (true);
-
-  CREATE TABLE rh_cipa_reunioes (
-    id              UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    mandato_id      UUID REFERENCES rh_cipa_mandatos(id),
-    data            DATE NOT NULL,
-    pauta           TEXT,
-    presentes       JSONB DEFAULT '[]',
-    deliberacoes    TEXT,
-    ata             TEXT,
-    local           TEXT,
-    proxima_reuniao DATE,
-    criado_em       TIMESTAMPTZ DEFAULT now()
-  );
-
-  CREATE INDEX idx_cipa_reunioes_mandato ON rh_cipa_reunioes(mandato_id);
-  CREATE INDEX idx_cipa_reunioes_data ON rh_cipa_reunioes(data);
-
-  ALTER TABLE rh_cipa_reunioes ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "rh_cipa_reunioes_all" ON rh_cipa_reunioes FOR ALL USING (true) WITH CHECK (true);
-
-  CREATE TABLE rh_cipa_acoes (
-    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    reuniao_id  UUID REFERENCES rh_cipa_reunioes(id),
-    acao        TEXT NOT NULL,
-    responsavel TEXT NOT NULL,
-    prazo       DATE,
-    status      TEXT NOT NULL DEFAULT 'aberto' CHECK (status IN ('aberto','andamento','concluido')),
-    criado_em   TIMESTAMPTZ DEFAULT now()
-  );
-
-  CREATE INDEX idx_cipa_acoes_reuniao ON rh_cipa_acoes(reuniao_id);
-  CREATE INDEX idx_cipa_acoes_status ON rh_cipa_acoes(status);
-
-  ALTER TABLE rh_cipa_acoes ENABLE ROW LEVEL SECURITY;
-  CREATE POLICY "rh_cipa_acoes_all" ON rh_cipa_acoes FOR ALL USING (true) WITH CHECK (true);
+  Schema canonico em producao (nome sem prefixo `rh_`):
+  - cipa_mandato   (id, numero, empresa_id, data_inicio, data_fim, cnae,
+                    grau_risco, efetivos, suplentes, status)
+  - cipa_membros   (id, mandato_id, funcionario_id, nome, cargo_cipa, tipo,
+                    categoria, data_posse, estabilidade_ate, treinado, ativo)
+  - cipa_reunioes  (id, mandato_id, numero, data, tipo, local, pauta,
+                    ata_texto, status, proxima_data)
+  - cipa_acoes     (id, reuniao_id, mandato_id, acao, descricao, responsavel,
+                    responsavel_id, prazo, status, prioridade) — ver
+                    migrations/rh/MODULO_CIPA_ACOES.sql
 -->
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -511,22 +460,22 @@ async function loadColaboradores() {
 }
 
 async function loadMandatos() {
-  const res = await API.get('rh_cipa_mandatos?select=*&order=inicio.desc');
+  const res = await API.get('cipa_mandato?select=*&order=data_inicio.desc');
   mandatos = res.ok ? res.data : [];
 }
 
 async function loadMembros() {
-  const res = await API.get('rh_cipa_membros?select=*&order=cargo_cipa');
+  const res = await API.get('cipa_membros?select=*&order=cargo_cipa');
   membros = res.ok ? res.data : [];
 }
 
 async function loadReunioes() {
-  const res = await API.get('rh_cipa_reunioes?select=*&order=data.desc');
+  const res = await API.get('cipa_reunioes?select=*&order=data.desc');
   reunioes = res.ok ? res.data : [];
 }
 
 async function loadAcoes() {
-  const res = await API.get('rh_cipa_acoes?select=*&order=prazo');
+  const res = await API.get('cipa_acoes?select=*&order=prazo');
   acoes = res.ok ? res.data : [];
 }
 
@@ -554,7 +503,7 @@ function getColabName(id) {
 function findCurrentMandato() {
   const today = new Date().toISOString().slice(0, 10);
   currentMandato = mandatos.find(m => m.status === 'ativo') ||
-    mandatos.find(m => m.inicio <= today && m.fim >= today) ||
+    mandatos.find(m => m.data_inicio <= today && m.data_fim >= today) ||
     (mandatos.length > 0 ? mandatos[0] : null);
 }
 
@@ -573,7 +522,7 @@ function getCurrentReunioes() {
 // ============================================================
 function renderKPIs() {
   if (currentMandato) {
-    document.getElementById('kpi-mandato').textContent = fmtDate(currentMandato.inicio) + ' a ' + fmtDate(currentMandato.fim);
+    document.getElementById('kpi-mandato').textContent = fmtDate(currentMandato.data_inicio) + ' a ' + fmtDate(currentMandato.data_fim);
   } else {
     document.getElementById('kpi-mandato').textContent = 'Sem mandato';
   }
@@ -608,13 +557,14 @@ function renderMembros() {
 
   empty.style.display = 'none';
   tbody.innerHTML = list.map(m => {
-    const nome = getColabName(m.colaborador_id);
+    // Prod usa funcionario_id + nome desnormalizado; fallback para colaborador_id (legado)
+    const nome = m.nome || getColabName(m.funcionario_id || m.colaborador_id);
     return `<tr>
       <td style="font-weight:600;color:var(--text);">${nome}</td>
       <td><span class="badge badge-accent">${CARGOS_CIPA[m.cargo_cipa] || m.cargo_cipa}</span></td>
       <td><span class="badge ${m.tipo === 'eleito' ? 'badge-info' : 'badge-muted'}">${m.tipo === 'eleito' ? 'Eleito' : 'Indicado'}</span></td>
-      <td class="mono">${currentMandato ? fmtDate(currentMandato.inicio) : '--'}</td>
-      <td class="mono">${currentMandato ? fmtDate(currentMandato.fim) : '--'}</td>
+      <td class="mono">${currentMandato ? fmtDate(currentMandato.data_inicio) : '--'}</td>
+      <td class="mono">${currentMandato ? fmtDate(currentMandato.data_fim) : '--'}</td>
       <td class="mono">${fmtDate(m.estabilidade_ate)}</td>
       <td>
         <button class="btn btn-outline btn-sm" onclick="editMembro('${m.id}')">Editar</button>
@@ -661,7 +611,7 @@ function openModalMembro(id) {
   if (id) {
     const m = membros.find(x => x.id === id);
     if (m) {
-      document.getElementById('memb-colab-id').value = m.colaborador_id;
+      document.getElementById('memb-colab-id').value = m.funcionario_id || m.colaborador_id;
       document.getElementById('memb-colab-search').value = getColabName(m.colaborador_id);
       document.getElementById('memb-colab-name').textContent = getColabName(m.colaborador_id);
       document.getElementById('memb-cargo').value = m.cargo_cipa;
@@ -678,7 +628,7 @@ function openModalMembro(id) {
 
     // Auto-calc estabilidade
     if (currentMandato) {
-      const fimDate = new Date(currentMandato.fim + 'T00:00:00');
+      const fimDate = new Date(currentMandato.data_fim + 'T00:00:00');
       fimDate.setFullYear(fimDate.getFullYear() + 1);
       document.getElementById('memb-estabilidade').value = fimDate.toISOString().slice(0, 10);
     }
@@ -708,19 +658,24 @@ async function salvarMembro() {
   }
 
   try {
+    // Schema cipa_membros (prod): mandato_id, funcionario_id (nao colaborador_id),
+    // nome (NOT NULL), cargo_cipa, tipo, estabilidade_ate, ativo
+    const nomeColab = (document.getElementById('memb-colab-name')?.textContent || '').trim();
     const data = {
       mandato_id: currentMandato.id,
-      colaborador_id: colabId,
+      funcionario_id: colabId,
+      nome: nomeColab || 'Membro CIPA',
       cargo_cipa: cargo,
       tipo,
-      estabilidade_ate: estabilidade
+      estabilidade_ate: estabilidade,
+      ativo: true
     };
 
     let res;
     if (editingMembroId) {
-      res = await API.patch('rh_cipa_membros?id=eq.' + editingMembroId, data);
+      res = await API.patch('cipa_membros?id=eq.' + editingMembroId, data);
     } else {
-      res = await API.post('rh_cipa_membros', data);
+      res = await API.post('cipa_membros', data);
     }
 
     if (!res.ok) { toast('Erro ao salvar membro: ' + res.error, 'err'); return; }
@@ -737,7 +692,7 @@ async function salvarMembro() {
 async function removeMembro(id) {
   if (!confirm('Tem certeza que deseja remover este membro?')) return;
   try {
-    const res = await API.del('rh_cipa_membros?id=eq.' + id);
+    const res = await API.del('cipa_membros?id=eq.' + id);
     if (!res.ok) { toast('Erro ao remover membro: ' + res.error, 'err'); return; }
     toast('Membro removido!');
     await loadMembros();
@@ -838,15 +793,24 @@ async function salvarReuniao() {
   btn.innerHTML = '<span class="spinner"></span> Salvando...';
 
   try {
-    const res = await API.post('rh_cipa_reunioes', {
+    // Schema cipa_reunioes (prod): mandato_id, numero (text NOT NULL), data, tipo,
+    // local, pauta, ata_texto, status, proxima_data. Nao tem `presentes` nem
+    // `deliberacoes` (estao em cipa_presencas e cipa_acoes respectivamente).
+    // Presenças e deliberações seguem fluxos separados; aqui concatenamos
+    // deliberacoes em ata_texto para nao perder a informacao.
+    const ataFull = [ata, deliberacoes ? '\n--- Deliberacoes ---\n' + deliberacoes : '']
+      .filter(Boolean).join('');
+    const numero = 'R-' + (data || '').replace(/-/g, '');
+    const res = await API.post('cipa_reunioes', {
       mandato_id: currentMandato.id,
+      numero,
       data,
-      pauta,
-      presentes: selectedPresentes,
-      deliberacoes: deliberacoes || null,
-      ata: ata || null,
+      tipo: 'ordinaria',
       local: local || null,
-      proxima_reuniao: proxima
+      pauta,
+      ata_texto: ataFull || null,
+      status: 'aprovada',
+      proxima_data: proxima
     });
 
     if (!res.ok) { toast('Erro ao salvar reuniao: ' + res.error, 'err'); return; }
@@ -946,7 +910,14 @@ async function criarMandato() {
   }
 
   try {
-    const res = await API.post('rh_cipa_mandatos', { inicio, fim, status: 'ativo' });
+    // Schema cipa_mandato: numero (text NOT NULL), data_inicio, data_fim, status
+    const numero = 'CIPA-' + (inicio || '').slice(0, 4) + '/' + (fim || '').slice(0, 4);
+    const res = await API.post('cipa_mandato', {
+      numero,
+      data_inicio: inicio,
+      data_fim: fim,
+      status: 'ativo',
+    });
     if (!res.ok) { toast('Erro ao criar mandato: ' + res.error, 'err'); return; }
     toast('Mandato criado com sucesso!');
     await loadMandatos();
@@ -975,9 +946,9 @@ function renderMandatos() {
     const statusBadge = m.status === 'ativo' ? 'badge-ok' : m.status === 'encerrado' ? 'badge-muted' : 'badge-warn';
     const statusLabel = m.status === 'ativo' ? 'Ativo' : m.status === 'encerrado' ? 'Encerrado' : 'Futuro';
     return `<tr>
-      <td style="font-weight:600;color:var(--text);">${fmtDate(m.inicio)} a ${fmtDate(m.fim)}</td>
-      <td class="mono">${fmtDate(m.inicio)}</td>
-      <td class="mono">${fmtDate(m.fim)}</td>
+      <td style="font-weight:600;color:var(--text);">${fmtDate(m.data_inicio)} a ${fmtDate(m.data_fim)}</td>
+      <td class="mono">${fmtDate(m.data_inicio)}</td>
+      <td class="mono">${fmtDate(m.data_fim)}</td>
       <td><span class="badge ${statusBadge}">${statusLabel}</span></td>
       <td style="text-align:center;">${mCount}</td>
       <td>
@@ -991,7 +962,7 @@ function renderMandatos() {
 async function encerrarMandato(id) {
   if (!confirm('Encerrar este mandato?')) return;
   try {
-    const res = await API.patch('rh_cipa_mandatos?id=eq.' + id, { status: 'encerrado' });
+    const res = await API.patch('cipa_mandato?id=eq.' + id, { status: 'encerrado' });
     if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
     toast('Mandato encerrado.');
     await loadMandatos();
@@ -1007,10 +978,10 @@ async function ativarMandato(id) {
     // Deactivate all others
     for (const m of mandatos) {
       if (m.status === 'ativo') {
-        await API.patch('rh_cipa_mandatos?id=eq.' + m.id, { status: 'encerrado' });
+        await API.patch('cipa_mandato?id=eq.' + m.id, { status: 'encerrado' });
       }
     }
-    const res = await API.patch('rh_cipa_mandatos?id=eq.' + id, { status: 'ativo' });
+    const res = await API.patch('cipa_mandato?id=eq.' + id, { status: 'ativo' });
     if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
     toast('Mandato ativado.');
     await loadMandatos();
@@ -1067,7 +1038,7 @@ async function salvarAcao() {
   }
 
   try {
-    const res = await API.post('rh_cipa_acoes', {
+    const res = await API.post('cipa_acoes', {
       reuniao_id: reuniaoId,
       acao,
       responsavel,
@@ -1126,7 +1097,7 @@ function renderAcoes() {
 
 async function updateAcaoStatus(id, status) {
   try {
-    const res = await API.patch('rh_cipa_acoes?id=eq.' + id, { status });
+    const res = await API.patch('cipa_acoes?id=eq.' + id, { status });
     if (!res.ok) { toast('Erro: ' + res.error, 'err'); return; }
     toast('Status atualizado!');
     await loadAcoes();

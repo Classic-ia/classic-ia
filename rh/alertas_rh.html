@@ -3,158 +3,251 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Central de Alertas - Classic RH &amp; SST</title>
+<title>Pendencias Executivas - Classic RH &amp; SST</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="ds.css">
 <script src="config.js"></script>
 <script src="rh_auth.js"></script>
 <script src="api.js"></script>
 <script src="ui_components.js"></script>
 <script src="page_bootstrap.js"></script>
 <script src="shell.js"></script>
-<link rel="stylesheet" href="ds.css">
 </head>
 <body class="page-bg">
 
 <div id="shell"></div>
-<div id="shell-content">
+<div id="shell-content" class="content-area page-padding">
 
-<div class="main">
-
-  <!-- Loading -->
-  <div id="loading-state" class="loading-state">
-    <div class="loading-spinner"></div>
-    Carregando alertas...
+  <!-- Page header -->
+  <div class="page-header">
+    <div class="page-header-text">
+      <div class="page-header-title">Pendencias Executivas</div>
+      <div class="page-header-subtitle">Decisoes pendentes: contratos, ASO, treinamentos, ferias e aniversarios</div>
+    </div>
   </div>
 
-  <!-- Content (hidden until loaded) -->
+  <!-- Loading state -->
+  <div id="loading-state" class="loading-center" style="padding:var(--space-8);">
+    <div class="spinner"></div>
+  </div>
+
+  <!-- Content -->
   <div id="content" style="display:none;">
 
     <!-- Refresh bar -->
-    <div class="refresh-bar">
-      <div class="refresh-info">
-        <span class="refresh-dot"></span>
-        Atualizado em <span id="last-refresh">--</span> — auto-refresh a cada 5 min
+    <div class="pend-refresh-bar">
+      <div class="pend-refresh-info">
+        <span class="pend-refresh-dot"></span>
+        Atualizado em <strong id="last-refresh" style="color:var(--text);margin:0 4px;">--</strong>
+        &middot; auto-refresh a cada 5 min
       </div>
+      <button class="btn btn-ghost btn-sm" id="btnRefresh">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></svg>
+        Atualizar
+      </button>
     </div>
 
     <!-- KPI Summary -->
-    <div class="kpi-summary">
-      <div class="kpi-box urgente">
-        <div class="kpi-num red" id="kpi-urgente">0</div>
-        <div class="kpi-lbl">Urgentes</div>
+    <div class="pend-kpis">
+      <div class="pend-kpi urgente">
+        <div class="pend-kpi-num" id="kpi-urgente">0</div>
+        <div>
+          <div class="pend-kpi-label">Urgentes</div>
+          <div class="pend-kpi-hint">Vencidos ou ate 7 dias</div>
+        </div>
       </div>
-      <div class="kpi-box atencao">
-        <div class="kpi-num orange" id="kpi-atencao">0</div>
-        <div class="kpi-lbl">Atencao</div>
+      <div class="pend-kpi atencao">
+        <div class="pend-kpi-num" id="kpi-atencao">0</div>
+        <div>
+          <div class="pend-kpi-label">Atencao</div>
+          <div class="pend-kpi-hint">8 a 30 dias</div>
+        </div>
       </div>
-      <div class="kpi-box ok">
-        <div class="kpi-num green" id="kpi-ok">0</div>
-        <div class="kpi-lbl">OK</div>
+      <div class="pend-kpi ok">
+        <div class="pend-kpi-num" id="kpi-ok">0</div>
+        <div>
+          <div class="pend-kpi-label">Acompanhar</div>
+          <div class="pend-kpi-hint">Itens em dia ou lembrete</div>
+        </div>
       </div>
     </div>
 
-    <!-- Filter bar -->
-    <div class="filter-bar">
-      <button class="filter-btn active" data-filter="todos">Todos <span class="count" id="fc-todos">0</span></button>
-      <button class="filter-btn" data-filter="urgente">Urgentes <span class="count" id="fc-urgente">0</span></button>
-      <button class="filter-btn" data-filter="atencao">Atencao <span class="count" id="fc-atencao">0</span></button>
+    <!-- Filter tabs -->
+    <div class="pend-tabs" role="tablist">
+      <button class="pend-tab active" data-filter="todos" role="tab">
+        Todos <span class="count" id="fc-todos">0</span>
+      </button>
+      <button class="pend-tab" data-filter="urgente" role="tab">
+        Urgentes <span class="count" id="fc-urgente">0</span>
+      </button>
+      <button class="pend-tab" data-filter="atencao" role="tab">
+        Atencao <span class="count" id="fc-atencao">0</span>
+      </button>
     </div>
 
-    <!-- Alert sections container -->
+    <!-- Sections -->
     <div id="sections-container"></div>
 
   </div>
 </div>
 
-</div><!-- /shell-content -->
+<!-- ── Modal: Registrar decisao de contrato de experiencia ── -->
+<div class="modal-overlay" id="decisaoModal" role="dialog" aria-modal="true" aria-labelledby="decisaoModalTitle">
+  <div class="modal">
+    <div class="modal-header">
+      <h2 id="decisaoModalTitle">Registrar decisao de contrato</h2>
+      <button class="modal-close" type="button" id="decisaoCloseBtn" aria-label="Fechar">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-section" style="padding:0;border:0;background:transparent;">
+        <div class="form-grid" style="grid-template-columns:1fr 1fr;">
+          <div class="form-field">
+            <label>Colaborador</label>
+            <input class="form-input" id="dmColab"     readonly>
+          </div>
+          <div class="form-field">
+            <label>Periodo</label>
+            <input class="form-input" id="dmPeriodo"   readonly>
+          </div>
+          <div class="form-field">
+            <label>Admissao</label>
+            <input class="form-input" id="dmAdmissao"  readonly>
+          </div>
+          <div class="form-field">
+            <label>Vencimento</label>
+            <input class="form-input" id="dmVencimento" readonly>
+          </div>
+        </div>
+
+        <div class="form-field form-field-full" style="margin-top:var(--space-4);">
+          <label>Decisao <span style="color:var(--danger);">*</span></label>
+          <div class="form-checkbox-group" id="dmDecisaoGroup" style="flex-direction:column;gap:var(--space-2);">
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="renovar">
+              <span><strong style="color:var(--success);">Renovar</strong> &middot; efetivar / continuar</span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="avaliar">
+              <span><strong style="color:var(--info);">Avaliar</strong> &middot; agendar nova analise</span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="ressalva">
+              <span><strong style="color:var(--warning);">Ressalva</strong> &middot; renovar com plano de melhoria <em>(justificativa obrigatoria)</em></span>
+            </label>
+            <label class="form-checkbox" style="cursor:pointer;">
+              <input type="radio" name="dmDecisao" value="nao-renovar">
+              <span><strong style="color:var(--danger);">Nao renovar</strong> &middot; encerrar contrato <em>(justificativa obrigatoria)</em></span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-field form-field-full" style="margin-top:var(--space-4);">
+          <label>Justificativa <span id="dmJustReq" style="color:var(--danger);display:none;">*</span></label>
+          <textarea class="form-textarea" id="dmJustificativa" rows="4"
+            placeholder="Minimo 10 caracteres para ressalva ou nao-renovar"></textarea>
+          <div class="form-hint">Obrigatorio para "ressalva" e "nao renovar".</div>
+        </div>
+
+        <div class="alert alert-danger" id="dmErro" style="display:none;margin-top:var(--space-4);"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" type="button" id="dmCancelar">Cancelar</button>
+      <button class="btn btn-primary" type="button" id="dmConfirmar">
+        <span id="dmConfirmarLabel">Registrar decisao</span>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 (async () => {
 
-  // ── Shell ──
-  const user = await Shell.init({ page: 'pendencias', title: 'Pendencias e Alertas' });
+  // ----- Shell + Auth -----
+  const user = await Shell.init({ page: 'pendencias', title: 'Pendencias Executivas' });
   if (!user) return;
   API.setPerfil(user.perfil);
 
-  // ── State ──
+  // ----- State -----
   let allAlerts = [];
   let activeFilter = 'todos';
   const HOJE = new Date();
   HOJE.setHours(0, 0, 0, 0);
 
-  // ── Utility ──
+  // Mapa funcionarioId+'_'+periodo -> { decisao, decidido_em, justificativa }
+  // populado em loadData() via RPC rh_listar_decisoes_experiencia
+  let decisoesMap = {};
+
+  // Estado do modal de decisao
+  let modalContext = null; // { colabId, nome, periodo, admissao, vencimento }
+
+  // ----- Utility -----
   function diffDays(dateStr) {
     if (!dateStr) return null;
     const d = new Date(dateStr + 'T00:00:00');
     return Math.ceil((d - HOJE) / (1000 * 60 * 60 * 24));
   }
-
   function fmtDate(d) { return API.fmtData(d); }
-
   function fmtDateObj(d) {
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
-    const yy = d.getFullYear();
-    return dd + '/' + mm + '/' + yy;
+    return dd + '/' + mm + '/' + d.getFullYear();
   }
-
   function toISODate(d) {
     const dd = String(d.getDate()).padStart(2, '0');
     const mm = String(d.getMonth() + 1).padStart(2, '0');
     return d.getFullYear() + '-' + mm + '-' + dd;
   }
-
   function addDays(dateStr, days) {
     const d = new Date(dateStr + 'T00:00:00');
     d.setDate(d.getDate() + days);
     return d;
   }
-
   function esc(s) { return API.esc(s); }
 
-  // ── Load all data ──
+  // ----- Load data -----
   async function loadData() {
     let colaboradores = [], asos = [], treinamentos = [];
     try {
-      const [resColab, resAsos, resTrein] = await Promise.all([
+      const [resColab, resAsos, resTrein, resDecisoes] = await Promise.all([
         API.get('rh_colaboradores?status=in.(ativo,afastado,ferias,experiencia)&select=id,nome,categoria,data_admissao,data_nascimento,cargo,unidade'),
         API.get('rh_asos?select=id,colaborador_id,tipo_aso,data_realizacao,data_vencimento,status'),
         API.get('rh_treinamentos?select=id,colaborador_id,treinamento,data_realizacao,data_vencimento,status'),
+        API.rpc('rh_listar_decisoes_experiencia'),
       ]);
       colaboradores = resColab.ok ? resColab.data : [];
-      asos = resAsos.ok ? resAsos.data : [];
-      treinamentos = resTrein.ok ? resTrein.data : [];
+      asos          = resAsos.ok  ? resAsos.data  : [];
+      treinamentos  = resTrein.ok ? resTrein.data : [];
+
+      // Indexa decisoes por funcionario+periodo
+      decisoesMap = {};
+      const lista = resDecisoes.ok && Array.isArray(resDecisoes.data) ? resDecisoes.data : [];
+      lista.forEach(d => { decisoesMap[d.funcionario_id + '_' + d.periodo] = d; });
     } catch (err) {
       console.error('Erro ao carregar dados de alertas:', err);
       API.logEvent('UI_ERROR', { page: 'alertas_rh', error: err.message });
     }
 
-    // Build colaborador map
     const colabMap = {};
     colaboradores.forEach(c => { colabMap[c.id] = c; });
 
     allAlerts = [];
 
-    // ── (a) Contratos de Experiencia ──
     processContratosExperiencia(colaboradores);
-
-    // ── (b) ASOs ──
     processASOs(asos, colabMap);
-
-    // ── (c) Treinamentos ──
     processTreinamentos(treinamentos, colabMap);
-
-    // ── (d) Ferias (periodo concessivo) ──
     processFeriasPeriodo(colaboradores);
-
-    // ── (e) Aniversariantes ──
     processAniversariantes(colaboradores);
 
     renderAll();
   }
 
-  // ── (a) Contratos de Experiencia ──
+  // ----- (a) Contratos de Experiencia -----
+  // Decisao executiva: 1o periodo (45 dias) -> avaliar / ressalva
+  //                    2o periodo (90 dias) -> renovar ou nao renovar
   function processContratosExperiencia(colaboradores) {
-    // Filtrar por data_admissao nos ultimos 90 dias (periodo de experiencia)
     const experiencia = colaboradores.filter(c => {
       if (!c.data_admissao) return false;
       const admDate = new Date(c.data_admissao + 'T00:00:00');
@@ -164,20 +257,14 @@
 
     experiencia.forEach(c => {
       const admissao = c.data_admissao;
-
-      // Primeiro vencimento: 45 dias
       const venc45 = addDays(admissao, 45);
-      const dias45 = Math.ceil((venc45 - HOJE) / (1000 * 60 * 60 * 24));
-
-      // Segundo vencimento (maximo): 90 dias
       const venc90 = addDays(admissao, 90);
+      const dias45 = Math.ceil((venc45 - HOJE) / (1000 * 60 * 60 * 24));
       const dias90 = Math.ceil((venc90 - HOJE) / (1000 * 60 * 60 * 24));
 
-      // Se ja passou dos 90 dias, nao alertar (contrato ja encerrou ou foi efetivado)
-      if (dias90 < 0) return;
+      if (dias90 < 0) return; // Contrato ja encerrou
 
-      // Determinar qual vencimento alertar
-      // Se ainda nao passou do primeiro periodo (45 dias)
+      // 1o periodo: janela de 45 dias — avaliar ressalva
       if (dias45 >= 0 && dias45 <= 30) {
         let nivel = 'ok';
         if (dias45 <= 7) nivel = 'urgente';
@@ -186,16 +273,19 @@
         allAlerts.push({
           categoria: 'contrato',
           nivel,
+          periodo: 1,
           nome: c.nome,
-          detalhe: '1o periodo experiencia (45 dias) vence em ' + fmtDateObj(venc45),
+          detalhe: '1o periodo de experiencia (45 dias) vence em ' + fmtDateObj(venc45),
+          decisao: dias45 <= 7 ? 'avaliar' : 'ressalva',
+          decisaoLabel: dias45 <= 7 ? 'Avaliar' : 'Ressalva opcional',
           dataRef: toISODate(venc45),
           dias: dias45,
-          link: 'colaboradores.html',
-          linkLabel: 'Ver colaborador',
+          colabId: c.id,
+          link: 'ficha.html?id=' + (c.id || ''),
         });
       }
 
-      // Alertar para o vencimento do segundo periodo (90 dias)
+      // 2o periodo: 90 dias — decisao final renovar/nao renovar
       if (dias90 >= 0 && dias90 <= 30) {
         let nivel = 'ok';
         if (dias90 <= 7) nivel = 'urgente';
@@ -204,37 +294,35 @@
         allAlerts.push({
           categoria: 'contrato',
           nivel,
+          periodo: 2,
           nome: c.nome,
-          detalhe: '2o periodo experiencia (90 dias) vence em ' + fmtDateObj(venc90) + ' — DECISAO: efetivar ou desligar',
+          detalhe: '2o periodo (90 dias) vence em ' + fmtDateObj(venc90) + ' — decisao: efetivar ou desligar',
+          decisao: dias90 <= 7 ? 'nao-renovar' : 'renovar',
+          decisaoLabel: dias90 <= 7 ? 'Decidir agora' : 'Renovar/avaliar',
           dataRef: toISODate(venc90),
           dias: dias90,
-          link: 'colaboradores.html',
-          linkLabel: 'Ver colaborador',
+          colabId: c.id,
+          link: 'ficha.html?id=' + (c.id || ''),
         });
       }
     });
   }
 
-  // ── (b) ASOs ──
+  // ----- (b) ASOs -----
   function processASOs(asos, colabMap) {
     asos.forEach(a => {
       const colab = colabMap[a.colaborador_id];
-      if (!colab) return; // colaborador nao encontrado no filtro ativo
-      if (!a.data_vencimento) return;
-
+      if (!colab || !a.data_vencimento) return;
       const dias = diffDays(a.data_vencimento);
-      if (dias === null) return;
-
-      // Vencido ou vencendo em 30 dias
-      if (dias > 30) return;
+      if (dias === null || dias > 30) return;
 
       let nivel = 'ok';
       if (dias <= 0) nivel = 'urgente';
-      else if (dias <= 30) nivel = 'atencao';
+      else if (dias <= 30) nivel = dias <= 7 ? 'urgente' : 'atencao';
 
       const statusTxt = dias <= 0
         ? 'VENCIDO ha ' + Math.abs(dias) + ' dia(s)'
-        : 'Vence em ' + dias + ' dia(s)';
+        : 'vence em ' + dias + ' dia(s)';
 
       allAlerts.push({
         categoria: 'aso',
@@ -242,33 +330,28 @@
         nome: colab.nome,
         detalhe: (a.tipo_aso || 'ASO').toUpperCase() + ' — ' + statusTxt,
         dataRef: a.data_vencimento,
-        dias: dias,
-        link: 'colaboradores.html',
-        linkLabel: 'Ver ASO',
+        dias,
+        colabId: a.colaborador_id,
+        link: 'ficha.html?id=' + a.colaborador_id,
       });
     });
   }
 
-  // ── (c) Treinamentos ──
+  // ----- (c) Treinamentos -----
   function processTreinamentos(treinamentos, colabMap) {
     treinamentos.forEach(t => {
       const colab = colabMap[t.colaborador_id];
-      if (!colab) return;
-      if (!t.data_vencimento) return;
-
+      if (!colab || !t.data_vencimento) return;
       const dias = diffDays(t.data_vencimento);
-      if (dias === null) return;
-
-      // Vencido ou vencendo em 30 dias
-      if (dias > 30) return;
+      if (dias === null || dias > 30) return;
 
       let nivel = 'ok';
       if (dias <= 0) nivel = 'urgente';
-      else if (dias <= 30) nivel = 'atencao';
+      else if (dias <= 30) nivel = dias <= 7 ? 'urgente' : 'atencao';
 
       const statusTxt = dias <= 0
         ? 'VENCIDO ha ' + Math.abs(dias) + ' dia(s)'
-        : 'Vence em ' + dias + ' dia(s)';
+        : 'vence em ' + dias + ' dia(s)';
 
       allAlerts.push({
         categoria: 'treinamento',
@@ -276,81 +359,58 @@
         nome: colab.nome,
         detalhe: (t.treinamento || 'Treinamento') + ' — ' + statusTxt,
         dataRef: t.data_vencimento,
-        dias: dias,
-        link: 'colaboradores.html',
-        linkLabel: 'Ver treinamento',
+        dias,
+        colabId: t.colaborador_id,
+        link: 'ficha.html?id=' + t.colaborador_id,
       });
     });
   }
 
-  // ── (d) Ferias — Periodo Concessivo ──
+  // ----- (d) Ferias — Periodo Concessivo -----
   function processFeriasPeriodo(colaboradores) {
     colaboradores.forEach(c => {
       if (!c.data_admissao) return;
-
       const admissao = new Date(c.data_admissao + 'T00:00:00');
-      const hojeMs = HOJE.getTime();
 
-      // Calcular periodos aquisitivos a partir da admissao
-      // Periodo aquisitivo N: admissao + N*12 meses ate admissao + (N+1)*12 meses
-      // Periodo concessivo correspondente: admissao + (N+1)*12 ate admissao + (N+2)*12
-
-      // Quantos anos completos desde admissao?
       let anosCompletos = 0;
       let check = new Date(admissao);
       while (true) {
-        let next = new Date(check);
+        const next = new Date(check);
         next.setFullYear(next.getFullYear() + 1);
-        if (next <= HOJE) {
-          anosCompletos++;
-          check = next;
-        } else {
-          break;
-        }
+        if (next <= HOJE) { anosCompletos++; check = next; } else break;
       }
-
-      // Se menos de 1 ano, ainda nao tem periodo concessivo
       if (anosCompletos < 1) return;
 
-      // Periodo concessivo mais recente que pode estar vencendo:
-      // Aquisitivo: admissao + (anosCompletos-1)*12m a admissao + anosCompletos*12m
-      // Concessivo: admissao + anosCompletos*12m a admissao + (anosCompletos+1)*12m
       const fimConcessivo = new Date(admissao);
       fimConcessivo.setFullYear(admissao.getFullYear() + anosCompletos + 1);
-
       const diasParaFim = Math.ceil((fimConcessivo - HOJE) / (1000 * 60 * 60 * 24));
 
-      // Se ja passou, o periodo venceu (ferias nao gozadas = problema serio)
-      // Alertar se <= 60 dias para vencer
       if (diasParaFim > 60) return;
 
       let nivel = 'ok';
-      if (diasParaFim <= 0) nivel = 'urgente';
-      else if (diasParaFim <= 30) nivel = 'urgente';
+      if (diasParaFim <= 30) nivel = 'urgente';
       else if (diasParaFim <= 60) nivel = 'atencao';
 
       const statusTxt = diasParaFim <= 0
-        ? 'PERIODO CONCESSIVO VENCIDO ha ' + Math.abs(diasParaFim) + ' dia(s) — RISCO TRABALHISTA'
-        : 'Periodo concessivo vence em ' + diasParaFim + ' dia(s)';
-
-      const periodoRef = anosCompletos + 'o periodo aquisitivo';
+        ? 'PERIODO CONCESSIVO VENCIDO ha ' + Math.abs(diasParaFim) + ' dia(s) — risco trabalhista'
+        : 'periodo concessivo vence em ' + diasParaFim + ' dia(s)';
 
       allAlerts.push({
         categoria: 'ferias',
         nivel,
         nome: c.nome,
-        detalhe: periodoRef + ' — ' + statusTxt,
+        detalhe: anosCompletos + 'o periodo aquisitivo — ' + statusTxt,
         dataRef: toISODate(fimConcessivo),
         dias: diasParaFim,
-        link: 'colaboradores.html',
-        linkLabel: 'Ver colaborador',
+        colabId: c.id,
+        link: 'ficha.html?id=' + c.id,
       });
     });
   }
 
-  // ── (e) Aniversariantes do Mes ──
+  // ----- (e) Aniversariantes do Mes -----
   function processAniversariantes(colaboradores) {
-    const mesAtual = HOJE.getMonth() + 1; // 1-12
+    const mesAtual = HOJE.getMonth() + 1;
     colaboradores.forEach(c => {
       if (!c.data_nascimento) return;
       const parts = c.data_nascimento.split('-');
@@ -374,54 +434,59 @@
         detalhe: fmtDate(c.data_nascimento) + ' — completa ' + idade + ' anos',
         dataRef: HOJE.getFullYear() + '-' + String(mesAtual).padStart(2,'0') + '-' + String(diaNasc).padStart(2,'0'),
         dias: diasPara,
-        link: 'colaboradores.html',
-        linkLabel: 'Ver colaborador',
+        colabId: c.id,
+        link: 'ficha.html?id=' + c.id,
       });
     });
   }
 
-  // ── Render ──
+  // ----- Render -----
   function renderAll() {
-    // Sort: urgente first, then by dias ascending
+    // Sort: priority by nivel, then by date (closest first / vencidos primeiro)
     allAlerts.sort((a, b) => {
       const order = { urgente: 0, atencao: 1, ok: 2 };
       if (order[a.nivel] !== order[b.nivel]) return order[a.nivel] - order[b.nivel];
       return a.dias - b.dias;
     });
 
-    // KPIs
     const urgentes = allAlerts.filter(a => a.nivel === 'urgente').length;
-    const atencao = allAlerts.filter(a => a.nivel === 'atencao').length;
-    const ok = allAlerts.filter(a => a.nivel === 'ok').length;
+    const atencao  = allAlerts.filter(a => a.nivel === 'atencao').length;
+    const ok       = allAlerts.filter(a => a.nivel === 'ok').length;
 
     document.getElementById('kpi-urgente').textContent = urgentes;
     document.getElementById('kpi-atencao').textContent = atencao;
     document.getElementById('kpi-ok').textContent = ok;
 
-    // Filter counts
-    document.getElementById('fc-todos').textContent = allAlerts.length;
+    document.getElementById('fc-todos').textContent   = allAlerts.length;
     document.getElementById('fc-urgente').textContent = urgentes;
     document.getElementById('fc-atencao').textContent = atencao;
 
-    // Render sections
     renderSections();
 
-    // Update timestamp
     const now = new Date();
     document.getElementById('last-refresh').textContent =
       String(now.getHours()).padStart(2, '0') + ':' +
       String(now.getMinutes()).padStart(2, '0') + ':' +
       String(now.getSeconds()).padStart(2, '0');
 
-    // Show content
     document.getElementById('loading-state').style.display = 'none';
     document.getElementById('content').style.display = 'block';
   }
 
   function getFilteredAlerts(categoria) {
     let filtered = allAlerts.filter(a => a.categoria === categoria);
-    if (activeFilter === 'urgente') filtered = filtered.filter(a => a.nivel === 'urgente');
+    if (activeFilter === 'urgente')      filtered = filtered.filter(a => a.nivel === 'urgente');
     else if (activeFilter === 'atencao') filtered = filtered.filter(a => a.nivel === 'atencao');
+
+    // Specific sort: contratos por periodo/vencimento, outros por dias
+    if (categoria === 'contrato') {
+      filtered.sort((a, b) => {
+        if (a.dias !== b.dias) return a.dias - b.dias;
+        return (a.periodo || 0) - (b.periodo || 0);
+      });
+    } else {
+      filtered.sort((a, b) => a.dias - b.dias);
+    }
     return filtered;
   }
 
@@ -431,38 +496,38 @@
     const sections = [
       {
         id: 'contrato',
-        title: 'Contratos de Experiencia Vencendo',
-        subtitle: 'Admitidos nos ultimos 90 dias — periodos de 45 e 90 dias',
-        icon: '&#128196;',
+        title: 'Contratos de Experiencia',
+        subtitle: 'Admitidos nos ultimos 90 dias — decisoes de 45 e 90 dias',
+        icon: svgIconSmall('file-text'),
         iconClass: 'orange',
       },
       {
         id: 'aso',
         title: 'ASOs Vencidos / Vencendo',
         subtitle: 'Atestados de Saude Ocupacional',
-        icon: '&#9764;',
+        icon: svgIconSmall('activity'),
         iconClass: 'red',
       },
       {
         id: 'treinamento',
         title: 'Treinamentos Vencidos / Vencendo',
         subtitle: 'Treinamentos obrigatorios e NRs',
-        icon: '&#9998;',
+        icon: svgIconSmall('book'),
         iconClass: 'blue',
       },
       {
         id: 'ferias',
         title: 'Ferias — Periodo Concessivo',
         subtitle: 'Colaboradores que precisam tirar ferias',
-        icon: '&#9992;',
+        icon: svgIconSmall('sun'),
         iconClass: 'green',
       },
       {
         id: 'aniversario',
         title: 'Aniversariantes do Mes',
         subtitle: 'Datas de nascimento dos colaboradores',
-        icon: '&#9733;',
-        iconClass: 'blue',
+        icon: svgIconSmall('award'),
+        iconClass: 'violet',
       },
     ];
 
@@ -474,102 +539,259 @@
       const atcCount = alerts.filter(a => a.nivel === 'atencao').length;
       const totalCount = alerts.length;
 
-      // Determine badge
       let badgeHtml = '';
-      if (urgCount > 0) {
-        badgeHtml = '<span class="section-badge"><span class="dot dot-red"></span><span style="color:var(--err)">' + urgCount + ' urgente(s)</span></span>';
-        if (atcCount > 0) badgeHtml += ' <span class="section-badge" style="margin-left:8px"><span class="dot dot-orange"></span><span style="color:var(--warn)">' + atcCount + ' atencao</span></span>';
-      } else if (atcCount > 0) {
-        badgeHtml = '<span class="section-badge"><span class="dot dot-orange"></span><span style="color:var(--warn)">' + atcCount + ' atencao</span></span>';
-      } else {
-        badgeHtml = '<span class="section-badge"><span class="dot dot-green"></span><span style="color:var(--ok)">Tudo em dia</span></span>';
-      }
+      if (urgCount > 0)      badgeHtml += '<span class="pend-section-badge urgente">' + urgCount + ' urgente(s)</span>';
+      if (atcCount > 0)      badgeHtml += '<span class="pend-section-badge atencao">' + atcCount + ' atencao</span>';
+      if (!urgCount && !atcCount) badgeHtml = '<span class="pend-section-badge ok">Tudo em dia</span>';
 
-      // Auto-open if has alerts
       const openClass = totalCount > 0 ? ' open' : '';
 
-      html += '<div class="alert-section' + openClass + '" data-section="' + sec.id + '">';
-      html += '<div class="section-header" onclick="toggleSection(this)">';
-      html += '<div class="section-left">';
-      html += '<div class="section-icon ' + sec.iconClass + '">' + sec.icon + '</div>';
-      html += '<div><div class="section-title">' + sec.title + '</div>';
-      html += '<div class="section-subtitle">' + sec.subtitle + '</div></div>';
-      html += '</div>';
-      html += '<div style="display:flex;align-items:center;">' + badgeHtml;
-      html += '<span class="section-chevron">&#9660;</span>';
-      html += '</div>';
-      html += '</div>';
-
-      html += '<div class="section-body"><div class="section-content">';
+      html += '<div class="pend-section' + openClass + '" data-section="' + sec.id + '">';
+      html += '  <div class="pend-section-header" onclick="toggleSection(this)">';
+      html += '    <div class="pend-section-left">';
+      html += '      <div class="pend-section-icon ' + sec.iconClass + '">' + sec.icon + '</div>';
+      html += '      <div>';
+      html += '        <div class="pend-section-title">' + sec.title + '</div>';
+      html += '        <div class="pend-section-subtitle">' + sec.subtitle + '</div>';
+      html += '      </div>';
+      html += '    </div>';
+      html += '    <div class="pend-section-right">';
+      html += '      <div class="pend-section-badges">' + badgeHtml + '</div>';
+      html += '      <svg class="pend-section-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>';
+      html += '    </div>';
+      html += '  </div>';
+      html += '  <div class="pend-section-body"><div class="pend-section-content">';
 
       if (alerts.length === 0) {
-        html += '<div class="empty-section">';
-        html += '<div class="icon-ok">&#10003;</div>';
-        html += 'Nenhum alerta nesta categoria';
+        html += '<div class="pend-empty">';
+        html += '  <div class="pend-empty-icon">&#10003;</div>';
+        html += '  <div>Nenhum alerta nesta categoria</div>';
         html += '</div>';
       } else {
-        html += '<div class="alert-list">';
+        html += '<div class="pend-list">';
         alerts.forEach(a => {
-          const cardClass = a.nivel === 'urgente' ? 'urgente' : (a.nivel === 'atencao' ? 'atencao' : 'ok-card');
-          const levelClass = a.nivel === 'urgente' ? 'level-red' : (a.nivel === 'atencao' ? 'level-orange' : 'level-green');
-          const daysClass = a.nivel === 'urgente' ? 'days-red' : (a.nivel === 'atencao' ? 'days-orange' : 'days-green');
-
-          let daysLabel;
-          if (a.dias < 0) {
-            daysLabel = Math.abs(a.dias) + 'd atras';
-          } else if (a.dias === 0) {
-            daysLabel = 'HOJE';
-          } else {
-            daysLabel = a.dias + 'd';
-          }
-
-          let levelLabel;
-          if (a.dias <= 0) levelLabel = '!!';
-          else if (a.dias <= 7) levelLabel = '!';
-          else levelLabel = a.dias + 'd';
-
-          html += '<div class="alert-card ' + cardClass + '">';
-          html += '<div class="alert-level ' + levelClass + '">' + levelLabel + '</div>';
-          html += '<div class="alert-info">';
-          html += '<div class="alert-name">' + esc(a.nome) + '</div>';
-          html += '<div class="alert-detail">' + esc(a.detalhe) + '</div>';
-          html += '</div>';
-          html += '<div class="alert-meta">';
-          html += '<div class="alert-days ' + daysClass + '">' + daysLabel + '</div>';
-          html += '<div class="alert-date">' + fmtDate(a.dataRef) + '</div>';
-          html += '</div>';
-          html += '<a href="' + a.link + '" class="alert-action">' + a.linkLabel + '</a>';
-          html += '</div>';
+          html += renderAlertCard(a);
         });
         html += '</div>';
       }
 
-      html += '</div></div>';
+      html += '  </div></div>';
       html += '</div>';
     });
 
     container.innerHTML = html;
   }
 
-  // ── Section toggle ──
+  function renderAlertCard(a) {
+    let levelLabel;
+    if (a.dias <= 0)      levelLabel = '!!';
+    else if (a.dias <= 7) levelLabel = '!';
+    else                  levelLabel = a.dias + 'd';
+
+    let daysLabel;
+    if (a.dias < 0)       daysLabel = Math.abs(a.dias) + 'd atras';
+    else if (a.dias === 0) daysLabel = 'HOJE';
+    else                   daysLabel = a.dias + 'd';
+
+    // Verifica se existe decisao registrada para este contrato+periodo
+    const decisaoKey = a.colabId + '_' + (a.periodo || 0);
+    const decisaoRegistrada = (a.categoria === 'contrato' && a.periodo) ? decisoesMap[decisaoKey] : null;
+
+    let decisionHtml = '';
+    if (decisaoRegistrada) {
+      const labelMap = { 'renovar':'Renovado', 'avaliar':'Em avaliacao', 'ressalva':'Com ressalva', 'nao-renovar':'Nao renovar' };
+      decisionHtml = '<span class="pend-item-decision ' + decisaoRegistrada.decisao + '" title="Decidido em ' + fmtDate((decisaoRegistrada.decidido_em || '').slice(0,10)) + '">&#10003; ' + esc(labelMap[decisaoRegistrada.decisao] || decisaoRegistrada.decisao) + '</span>';
+    } else if (a.decisao) {
+      decisionHtml = '<span class="pend-item-decision ' + a.decisao + '">' + esc(a.decisaoLabel) + '</span>';
+    }
+
+    let html = '<div class="pend-item ' + a.nivel + '">';
+    html += '  <div class="pend-item-level">' + levelLabel + '</div>';
+    html += '  <div class="pend-item-body">';
+    html += '    <div class="pend-item-name">' + esc(a.nome) + '</div>';
+    html += '    <div class="pend-item-detail">' + esc(a.detalhe) + '</div>';
+    if (decisionHtml) html += '    ' + decisionHtml;
+    html += '  </div>';
+    html += '  <div class="pend-item-meta">';
+    html += '    <div class="pend-item-days">' + daysLabel + '</div>';
+    html += '    <div class="pend-item-date">' + fmtDate(a.dataRef) + '</div>';
+    html += '  </div>';
+    html += '  <div class="pend-item-actions">';
+    html += '    <a href="' + a.link + '" class="pend-item-action">Ver ficha</a>';
+
+    // CTA "Registrar decisao" — apenas para contratos sem decisao registrada
+    if (a.categoria === 'contrato' && a.periodo && !decisaoRegistrada) {
+      const ctxAttr = "openDecisaoModal(this)";
+      html += '    <button type="button" class="pend-item-action secondary"';
+      html += '      data-colab-id="' + esc(a.colabId) + '"';
+      html += '      data-colab-nome="' + esc(a.nome) + '"';
+      html += '      data-periodo="' + a.periodo + '"';
+      html += '      data-admissao="' + esc((a.detalhe.match(/(\d{2}\/\d{2}\/\d{4})/) || [,''])[1]) + '"';
+      html += '      data-vencimento="' + esc(fmtDate(a.dataRef)) + '"';
+      html += '      onclick="' + ctxAttr + '">Registrar decisao</button>';
+    }
+    if (a.categoria === 'contrato' && a.periodo && decisaoRegistrada) {
+      html += '    <button type="button" class="pend-item-action secondary"';
+      html += '      data-colab-id="' + esc(a.colabId) + '"';
+      html += '      data-colab-nome="' + esc(a.nome) + '"';
+      html += '      data-periodo="' + a.periodo + '"';
+      html += '      data-admissao=""';
+      html += '      data-vencimento="' + esc(fmtDate(a.dataRef)) + '"';
+      html += '      onclick="openDecisaoModal(this)">Revisar</button>';
+    }
+    html += '  </div>';
+    html += '</div>';
+    return html;
+  }
+
+  // ----- Icons -----
+  function svgIconSmall(name) {
+    const paths = {
+      'file-text':   '<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>',
+      'activity':    '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+      'book':        '<path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/>',
+      'sun':         '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/>',
+      'award':       '<circle cx="12" cy="8" r="7"/><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"/>',
+    };
+    return '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">' + (paths[name] || paths['file-text']) + '</svg>';
+  }
+
+  // ----- Interactions -----
   window.toggleSection = function(header) {
-    header.closest('.alert-section').classList.toggle('open');
+    header.closest('.pend-section').classList.toggle('open');
   };
 
-  // ── Filter buttons ──
-  document.querySelectorAll('.filter-btn').forEach(btn => {
+  document.querySelectorAll('.pend-tab').forEach(btn => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.pend-tab').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
       activeFilter = btn.dataset.filter;
       renderSections();
     });
   });
 
-  // ── Initial load ──
-  await loadData();
+  document.getElementById('btnRefresh').addEventListener('click', async () => {
+    document.getElementById('content').style.display = 'none';
+    document.getElementById('loading-state').style.display = 'flex';
+    await loadData();
+  });
 
-  // ── Auto-refresh every 5 minutes ──
+  // ────────────────────────────────────────────────────────────────────────
+  // MODAL DE DECISAO — chama RPC rh_registrar_decisao_experiencia
+  // ────────────────────────────────────────────────────────────────────────
+  const dmModal     = document.getElementById('decisaoModal');
+  const dmJustReq   = document.getElementById('dmJustReq');
+  const dmJustEl    = document.getElementById('dmJustificativa');
+  const dmErroEl    = document.getElementById('dmErro');
+  const dmConfirmEl = document.getElementById('dmConfirmar');
+  const dmConfirmLb = document.getElementById('dmConfirmarLabel');
+
+  window.openDecisaoModal = function(btn) {
+    modalContext = {
+      colabId:   btn.dataset.colabId,
+      nome:      btn.dataset.colabNome,
+      periodo:   parseInt(btn.dataset.periodo, 10),
+      admissao:  btn.dataset.admissao || '',
+      vencimento: btn.dataset.vencimento || '',
+    };
+    document.getElementById('dmColab').value      = modalContext.nome;
+    document.getElementById('dmPeriodo').value    = modalContext.periodo === 1 ? '1o periodo (45 dias)' : '2o periodo (90 dias)';
+    document.getElementById('dmAdmissao').value   = modalContext.admissao || '—';
+    document.getElementById('dmVencimento').value = modalContext.vencimento;
+    document.querySelectorAll('input[name="dmDecisao"]').forEach(r => { r.checked = false; });
+    dmJustEl.value = '';
+    dmJustReq.style.display = 'none';
+    dmErroEl.style.display = 'none';
+    dmConfirmEl.disabled = false;
+    dmConfirmLb.textContent = 'Registrar decisao';
+
+    // Pre-popula com decisao existente se houver
+    const key = modalContext.colabId + '_' + modalContext.periodo;
+    const existing = decisoesMap[key];
+    if (existing) {
+      const r = document.querySelector('input[name="dmDecisao"][value="' + existing.decisao + '"]');
+      if (r) r.checked = true;
+      if (existing.justificativa) dmJustEl.value = existing.justificativa;
+      onDecisaoChange();
+    }
+
+    dmModal.classList.add('active');
+    setTimeout(() => dmJustEl.focus(), 100);
+  };
+
+  window.closeDecisaoModal = function() {
+    dmModal.classList.remove('active');
+    modalContext = null;
+  };
+
+  function onDecisaoChange() {
+    const v = document.querySelector('input[name="dmDecisao"]:checked')?.value;
+    const requerJust = (v === 'nao-renovar' || v === 'ressalva');
+    dmJustReq.style.display = requerJust ? '' : 'none';
+  }
+  document.querySelectorAll('input[name="dmDecisao"]').forEach(r => r.addEventListener('change', onDecisaoChange));
+
+  document.getElementById('dmCancelar').addEventListener('click', closeDecisaoModal);
+  document.getElementById('dmCloseBtn'); // pode estar ausente em ids antigos
+  const closeBtn = document.getElementById('decisaoCloseBtn');
+  if (closeBtn) closeBtn.addEventListener('click', closeDecisaoModal);
+  dmModal.addEventListener('click', (e) => { if (e.target === dmModal) closeDecisaoModal(); });
+
+  document.getElementById('dmConfirmar').addEventListener('click', async () => {
+    if (!modalContext) return;
+    dmErroEl.style.display = 'none';
+
+    const decisao = document.querySelector('input[name="dmDecisao"]:checked')?.value;
+    if (!decisao) {
+      dmErroEl.textContent = 'Selecione uma decisao.';
+      dmErroEl.style.display = '';
+      return;
+    }
+    const justificativa = dmJustEl.value.trim();
+    if ((decisao === 'nao-renovar' || decisao === 'ressalva') && justificativa.length < 10) {
+      dmErroEl.textContent = 'Justificativa de pelo menos 10 caracteres e obrigatoria para "' + decisao + '".';
+      dmErroEl.style.display = '';
+      dmJustEl.focus();
+      return;
+    }
+
+    dmConfirmEl.disabled = true;
+    dmConfirmLb.textContent = 'Registrando...';
+
+    const res = await API.rpc('rh_registrar_decisao_experiencia', {
+      p_funcionario_id: modalContext.colabId,
+      p_periodo:        modalContext.periodo,
+      p_decisao:        decisao,
+      p_justificativa:  justificativa || null,
+    });
+
+    if (!res.ok) {
+      dmErroEl.textContent = res.error || 'Falha ao registrar decisao.';
+      dmErroEl.style.display = '';
+      dmConfirmEl.disabled = false;
+      dmConfirmLb.textContent = 'Registrar decisao';
+      return;
+    }
+
+    // Sucesso — atualiza local map e re-renderiza, fecha modal
+    const key = modalContext.colabId + '_' + modalContext.periodo;
+    decisoesMap[key] = {
+      funcionario_id: modalContext.colabId,
+      periodo:        modalContext.periodo,
+      decisao,
+      justificativa:  justificativa || null,
+      decidido_em:    new Date().toISOString(),
+    };
+    closeDecisaoModal();
+    renderSections();
+
+    if (typeof toast === 'function') {
+      toast('Decisao registrada: ' + decisao, 'success');
+    }
+  });
+
+  // ----- Initial load + auto-refresh -----
+  await loadData();
   setInterval(async () => {
     allAlerts = [];
     await loadData();

@@ -84,9 +84,23 @@
 --                                                          (dashboards,
 --                                                          CRUD, ETL)
 --
+-- 19  VIEWS_FRONTEND_COMPATIBILIDADE.sql    2 views        Compatibilidade
+--                                                          (vw_funcionario_base,
+--                                                          rh_colaboradores)
+--
+-- 20  MODULO_DECISAO_EXPERIENCIA.sql        1 tabela,      Decisão executiva
+--                                           2 RPCs,        sobre contratos
+--                                           1 view,        de experiência
+--                                           4 RLS policies (45d e 90d)
+--
+-- 21  MODULO_CIPA_ACOES.sql                 1 tabela,      Ações/deliberações
+--                                           3 RLS policies de reuniões CIPA
+--                                                          (backend da aba
+--                                                          "Ações" em cipa.html)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   177 tabelas | 30 views | 67 functions | 60 triggers
---   64 tabelas com RLS | 219 policies
+--   179 tabelas | 33 views | 70 functions | 62 triggers
+--   66 tabelas com RLS | 226 policies
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

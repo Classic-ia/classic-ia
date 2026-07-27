@@ -225,6 +225,19 @@ const RHAuth = (function () {
     clearTimeout(_tExp); clearTimeout(_tWarn); clearInterval(_tBeat);
     localStorage.removeItem(STORE_KEY);
     _user = null; _token = null;
+
+    try {
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+      if ('indexedDB' in window) {
+        indexedDB.databases().then(function(dbs) {
+          dbs.forEach(function(db) { indexedDB.deleteDatabase(db.name); });
+        });
+      }
+    } catch(e) {}
   }
 
   // ═══ API PÚBLICA ═══
@@ -239,12 +252,15 @@ const RHAuth = (function () {
     }
     if (!_user || !_token) { window.location.href = 'login_rh.html'; return null; }
 
-    // Sessão demo — aceitar diretamente sem validação do servidor
+    // Sessão demo REMOVIDA (auditoria C-01: bypass de autenticação)
     if (_token && _token.startsWith('demo-')) {
-      console.info('[RHAuth] Sessão demo ativa — sem validação do servidor.');
+      console.warn('[RHAuth] Sessão demo rejeitada — modo removido por segurança.');
+      _limparLocal();
+      window.location.href = 'login.html';
+      return null;
     }
     // Renovar JWT se necessário e revalidar perfil do banco
-    else if (_authToken) {
+    if (_authToken) {
       const refreshed = await _refreshToken();
       if (!refreshed) { _limparLocal(); window.location.href = 'login_rh.html'; return null; }
       const perfilDB = await _revalidarPerfil();

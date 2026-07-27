@@ -124,9 +124,21 @@ const RHAuth = (function () {
   function _limparLocal() {
     clearTimeout(_tExp); clearTimeout(_tWarn);
     localStorage.removeItem(STORE_KEY);
-    // Limpar chave antiga também
     localStorage.removeItem('rh_sess_v1');
     _user = null; _token = null; _authToken = null;
+
+    try {
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+      if ('indexedDB' in window) {
+        indexedDB.databases().then(function(dbs) {
+          dbs.forEach(function(db) { indexedDB.deleteDatabase(db.name); });
+        });
+      }
+    } catch(e) {}
   }
 
   // ═══ API PÚBLICA ═══

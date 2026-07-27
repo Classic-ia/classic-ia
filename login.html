@@ -3,83 +3,77 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Login · Classic Couros</title>
+<title>Login &middot; Classic Couros</title>
 <link rel="icon" type="image/jpeg" href="assets/logo-classic-icon.png.jpg">
 <script src="config.js"></script>
 <script src="cq_auth.js"></script>
-<link rel="stylesheet" href="ds.css">
+<link rel="stylesheet" href="landing.css">
 </head>
-<body class="page-bg">
-<div class="card">
-  <div class="logo-wrap">
-    <img class="logo-img" id="logoImg" src="" alt="Classic Couros"
-      onerror="this.style.display='none'">
-    <div class="logo-title">Classic Couros</div>
-    <div class="logo-sub">Acesso Restrito</div>
+<body class="auth-page">
+
+<main class="auth-card" role="main">
+
+  <div class="auth-brand">
+    <img class="auth-brand-logo" id="logoImg" src="assets/logo-classic-icon.png.jpg"
+         alt="Classic Couros" onerror="this.style.display='none'">
+    <div class="auth-brand-title">Classic Couros</div>
+    <div class="auth-brand-sub">Acesso Restrito</div>
   </div>
 
-  <div class="expired-banner" id="expiredBanner">
-    ⏰ Sessão expirada por inatividade. Faça login novamente.
+  <div class="auth-expired" id="expiredBanner">
+    &#9200; Sessao expirada por inatividade. Faca login novamente.
   </div>
 
-  <div class="field">
-    <label for="inp-email">E-mail</label>
-    <input type="email" id="inp-email" placeholder="usuario@classic.com.br"
-      autocomplete="email" onkeydown="if(event.key==='Enter') document.getElementById('inp-senha').focus()">
+  <form class="auth-form" onsubmit="fazerLogin(); return false;" novalidate>
+
+    <div class="auth-field">
+      <label for="inp-email">E-mail</label>
+      <input type="email" id="inp-email" placeholder="usuario@classiccouros.com.br"
+             autocomplete="email" autofocus>
+    </div>
+
+    <div class="auth-field">
+      <label for="inp-senha">Senha</label>
+      <input type="password" id="inp-senha" placeholder="Sua senha"
+             autocomplete="current-password">
+    </div>
+
+    <div class="auth-error" id="errMsg" role="alert">
+      <span>&#9888;</span>
+      <span id="errTxt"></span>
+    </div>
+
+    <button class="auth-btn" type="submit" id="btnLogin">
+      <div class="spinner" id="spinner"></div>
+      <span id="btnTxt">Entrar</span>
+    </button>
+
+  </form>
+
+  <div class="auth-links">
+    <button onclick="entrarModoDemo()">Modo demonstracao (sem servidor)</button>
+    <a href="rh/login.html">Ir para RH &amp; Seguranca do Trabalho</a>
   </div>
 
-  <div class="field">
-    <label for="inp-senha">Senha</label>
-    <input type="password" id="inp-senha" placeholder="••••••••"
-      autocomplete="current-password"
-      onkeydown="if(event.key==='Enter') fazerLogin()">
-  </div>
+  <div class="auth-footer">Classic Couros &middot; 2026</div>
 
-  <button class="btn-login" id="btnLogin" onclick="fazerLogin()">
-    <div class="spinner" id="spinner"></div>
-    <span id="btnTxt">Entrar</span>
-  </button>
-
-  <div class="error-msg" id="errMsg">
-    <span>⚠️</span><span id="errTxt"></span>
-  </div>
-
-  <div id="demoDiv" style="text-align:center;margin-top:16px;">
-  <button onclick="entrarModoDemo()" style="
-    background:none;border:none;color:#2a2a2a;cursor:pointer;
-    font-size:11px;font-family:var(--font-mono);
-    text-decoration:underline;padding:4px;
-  ">Modo demonstracao (sem servidor)</button>
-</div>
-<div style="text-align:center;margin-top:16px;">
-  <a href="login_rh.html" style="font-size:11px;color:#2a2a2a;text-decoration:none;transition:color 0.2s;"
-     onmouseover="this.style.color='#c8a96e'" onmouseout="this.style.color='#2a2a2a'">
-    Ir para RH & Seguranca do Trabalho
-  </a>
-</div>
-<div class="version">Classic Couros · 2026</div>
-</div>
+</main>
 
 <script>
-// Logo
 (function(){
-  const s = localStorage.getItem('classic_logo');
-  const el = document.getElementById('logoImg');
-  if (s) el.src = s; else el.style.display = 'none';
+  var el = document.getElementById('logoImg');
+  var s = localStorage.getItem('classic_logo');
+  if (s) el.src = s;
 
-  // Se já tem sessão no localStorage → ir para o sistema
-  // Verificar token E timestamp para evitar redirect loop
   try {
-    const raw = localStorage.getItem('cq_sess_v2');
+    var raw = localStorage.getItem('cq_sess_v2');
     if (raw) {
-      const sess = JSON.parse(raw);
+      var sess = JSON.parse(raw);
       if (sess.token && sess.user && sess.ts) {
-        const umHora = 60 * 60 * 1000;
-        const idade  = Date.now() - (sess.ts || 0);
-        // Só redirecionar se tem access_token (JWT) válido E não expirou localmente
-        // Sessões demo (sem access_token) passam direto pois são validadas de outra forma
-        const temJwt = !!sess.access_token;
-        const isDemoToken = sess.token && sess.token.startsWith('demo-');
+        var umHora = 60 * 60 * 1000;
+        var idade  = Date.now() - (sess.ts || 0);
+        var temJwt = !!sess.access_token;
+        var isDemoToken = sess.token && sess.token.startsWith('demo-');
         if (idade < umHora && (temJwt || isDemoToken)) {
           window.location.href = 'app.html';
           return;
@@ -90,31 +84,28 @@
         localStorage.removeItem('cq_sess_v2');
       }
     }
-  } catch {
+  } catch(e) {
     localStorage.removeItem('cq_sess_v2');
   }
 
-  // Verificar se veio de sessão expirada
-  const params = new URLSearchParams(window.location.search);
+  var params = new URLSearchParams(window.location.search);
   if (params.get('exp') === '1') {
-    document.getElementById('expiredBanner').style.display = 'flex';
+    document.getElementById('expiredBanner').classList.add('visible');
   }
 })();
 
 async function fazerLogin() {
-  const email = document.getElementById('inp-email').value.trim();
-  const senha = document.getElementById('inp-senha').value;
-  const btn   = document.getElementById('btnLogin');
-  const err   = document.getElementById('errMsg');
-  const spin  = document.getElementById('spinner');
-  const txt   = document.getElementById('btnTxt');
+  var email = document.getElementById('inp-email').value.trim();
+  var senha = document.getElementById('inp-senha').value;
+  var btn   = document.getElementById('btnLogin');
+  var err   = document.getElementById('errMsg');
+  var spin  = document.getElementById('spinner');
+  var txt   = document.getElementById('btnTxt');
 
-  // Limpar erro
-  err.style.display = 'none';
+  err.classList.remove('visible');
   document.getElementById('inp-email').classList.remove('error');
   document.getElementById('inp-senha').classList.remove('error');
 
-  // Validar
   if (!email) {
     document.getElementById('inp-email').classList.add('error');
     mostrarErro('Informe o e-mail'); return;
@@ -124,17 +115,14 @@ async function fazerLogin() {
     mostrarErro('Informe a senha'); return;
   }
 
-  // Loading
   btn.disabled = true;
   spin.style.display = 'block';
   txt.textContent = 'Entrando...';
 
   try {
-    const user = await CQAuth.login(email, senha);
-    // Redirecionar para página de origem ou index
-    const params = new URLSearchParams(window.location.search);
-    const dest = params.get('next') || 'app.html';
-    window.location.href = dest;
+    await CQAuth.login(email, senha);
+    var params = new URLSearchParams(window.location.search);
+    window.location.href = params.get('next') || 'app.html';
   } catch (e) {
     mostrarErro(e.message || 'Erro ao conectar. Tente novamente.');
     btn.disabled = false;
@@ -144,9 +132,8 @@ async function fazerLogin() {
 }
 
 function mostrarErro(msg) {
-  const err = document.getElementById('errMsg');
   document.getElementById('errTxt').textContent = msg;
-  err.style.display = 'flex';
+  document.getElementById('errMsg').classList.add('visible');
 }
 </script>
 </body>

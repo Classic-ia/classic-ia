@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic RH - Gestao de Armarios</title>
+<link rel="stylesheet" href="ds.css">
+<script src="config.js"></script>
+<script src="rh_auth.js"></script>
+<script src="api.js"></script>
+<script src="ui_components.js"></script>
+<script src="shell.js"></script>
+</head>
+<body class="page-bg">
+
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
+
+  <!-- KPIs -->
+  <div class="kpi-row mb-6" id="kpiRow">
+    <div class="kpi-card">
+      <div class="kpi-icon blue">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="9"/><rect x="3" y="15" width="7" height="6"/><rect x="14" y="15" width="7" height="6"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-total">--</div>
+      <div class="kpi-label">Total Armarios</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-ocupados">--</div>
+      <div class="kpi-label">Ocupados</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon amber">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="9" x2="15" y2="15"/><line x1="15" y1="9" x2="9" y2="15"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-vagos">--</div>
+      <div class="kpi-label">Vagos</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-icon green">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      </div>
+      <div class="kpi-value" id="kpi-taxa">--%</div>
+      <div class="kpi-label">Taxa Ocupacao</div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-row mb-4">
+    <select class="form-select" id="filtroTipo" style="width:auto">
+      <option value="">Todos</option>
+      <option value="feminino">Feminino</option>
+      <option value="masculino">Masculino</option>
+    </select>
+    <select class="form-select" id="filtroStatus" style="width:auto">
+      <option value="">Todas situacoes</option>
+      <option value="ocupado">Ocupados</option>
+      <option value="disponivel">Vagos</option>
+      <option value="bloqueado">Bloqueados</option>
+    </select>
+    <input type="text" class="search-input" id="busca" placeholder="Buscar colaborador...">
+    <div style="margin-left:auto;display:flex;gap:8px">
+      <button class="btn btn-ghost btn-sm" id="btnExcel">&#8595; Excel</button>
+      <button class="btn btn-ghost btn-sm" id="btnPDF">&#128438; Imprimir/PDF</button>
+      <button class="btn btn-primary btn-sm" id="btnAtribuir">+ Atribuir Armario</button>
+    </div>
+  </div>
+
+  <!-- Tabs por tipo -->
+  <div class="tabs mb-4">
+    <button class="tab-item active" data-tipo="">Todos</button>
+    <button class="tab-item" data-tipo="feminino">Feminino</button>
+    <button class="tab-item" data-tipo="masculino">Masculino</button>
+  </div>
+
+  <!-- Tabela -->
+  <div class="card">
+    <div class="data-table-wrapper" style="border:none;">
+      <table class="data-table" id="tblArmarios">
+        <thead>
+          <tr>
+            <th style="width:60px">N</th>
+            <th>Colaborador</th>
+            <th>Setor</th>
+            <th>Tipo</th>
+            <th style="width:120px">Situacao</th>
+            <th style="width:120px">Desde</th>
+            <th style="width:80px">Acoes</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyArmarios">
+          <tr><td colspan="7" class="table-empty"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Modal Atribuir -->
+<div class="modal-overlay" id="modalAtribuir" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Atribuir Armario</h3>
+      <button class="modal-close" id="modalClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">Armario</label>
+        <select class="form-select" id="selArmario">
+          <option value="">Selecione um armario vago...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Colaborador</label>
+        <select class="form-select" id="selColaborador">
+          <option value="">Selecione um colaborador...</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Chave entregue?</label>
+        <select class="form-select" id="selChave">
+          <option value="true">Sim</option>
+          <option value="false">Nao</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Observacoes</label>
+        <textarea class="form-input" id="txtObs" rows="2"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnSalvar">Atribuir</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Liberar -->
+<div class="modal-overlay" id="modalLiberar" style="display:none">
+  <div class="modal">
+    <div class="modal-header">
+      <h3>Liberar Armario</h3>
+      <button class="modal-close" id="modalLiberarClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <p id="liberarMsg"></p>
+      <div class="form-group">
+        <label class="form-label">Motivo</label>
+        <select class="form-select" id="selMotivo">
+          <option value="devolucao">Devolucao voluntaria</option>
+          <option value="desligamento">Desligamento</option>
+          <option value="transferencia">Transferencia de setor</option>
+          <option value="manutencao">Manutencao</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" id="btnLiberarCancelar">Cancelar</button>
+      <button class="btn btn-danger" id="btnLiberarConfirmar">Liberar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(async () => {
+  const user = await Shell.init({ page: 'armarios', title: 'Gestao de Armarios' });
+  if (!user) return;
+  API.setPerfil(user.perfil);
+
+  // =========================================================
+  // STATE
+  // =========================================================
+  let armarios = [];
+  let ocupacoes = [];
+  let funcionarios = [];
+  let blocos = [];
+  let filtroTipo = '';
+  let filtroStatus = '';
+  let filtroBusca = '';
+
+  // =========================================================
+  // LOAD DATA
+  // =========================================================
+  async function loadAll() {
+    const [rArm, rOcup, rFunc, rBlocos] = await Promise.all([
+      API.get('arm_armarios?ativo=eq.true&select=id,codigo,bloco_id,tipo,turno,status,observacoes&order=codigo.asc'),
+      API.get('arm_ocupacoes?data_devolucao=is.null&select=id,armario_id,funcionario_id,data_atribuicao,chave_entregue,chave_numero'),
+      API.get('vw_funcionario_base?status=in.(ativo,afastado,ferias,experiencia)&select=id,nome,setor&order=nome.asc'),
+      API.get('arm_blocos?ativo=eq.true&select=id,codigo,nome,tipo'),
+    ]);
+
+    armarios = rArm.ok ? rArm.data : [];
+    ocupacoes = rOcup.ok ? rOcup.data : [];
+    funcionarios = rFunc.ok ? rFunc.data : [];
+    blocos = rBlocos.ok ? rBlocos.data : [];
+
+    render();
+  }
+
+  // =========================================================
+  // RENDER
+  // =========================================================
+  function render() {
+    // Build lookup maps
+    const ocupMap = {};
+    ocupacoes.forEach(o => { ocupMap[o.armario_id] = o; });
+    const funcMap = {};
+    funcionarios.forEach(f => { funcMap[f.id] = f; });
+    const blocoMap = {};
+    blocos.forEach(b => { blocoMap[b.id] = b; });
+
+    // Filter
+    let filtered = armarios.filter(a => {
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      if (filtroTipo && tipo !== filtroTipo) return false;
+      if (filtroStatus && a.status !== filtroStatus) return false;
+      if (filtroBusca) {
+        const ocup = ocupMap[a.id];
+        if (ocup) {
+          const func = funcMap[ocup.funcionario_id];
+          if (func && func.nome.toLowerCase().includes(filtroBusca)) return true;
+        }
+        if (a.codigo.includes(filtroBusca)) return true;
+        return false;
+      }
+      return true;
+    });
+
+    // Sort by tipo then codigo numerico
+    filtered.sort((a, b) => {
+      const tipoA = (blocoMap[a.bloco_id] || {}).tipo || a.tipo || '';
+      const tipoB = (blocoMap[b.bloco_id] || {}).tipo || b.tipo || '';
+      if (tipoA !== tipoB) return tipoA.localeCompare(tipoB);
+      return parseInt(a.codigo) - parseInt(b.codigo);
+    });
+
+    // KPIs
+    const total = armarios.length;
+    const ocupados = armarios.filter(a => a.status === 'ocupado').length;
+    const vagos = armarios.filter(a => a.status === 'disponivel').length;
+    const taxa = total > 0 ? Math.round((ocupados / total) * 100) : 0;
+    document.getElementById('kpi-total').textContent = total;
+    document.getElementById('kpi-ocupados').textContent = ocupados;
+    document.getElementById('kpi-vagos').textContent = vagos;
+    document.getElementById('kpi-taxa').textContent = taxa + '%';
+
+    // Table
+    const tbody = document.getElementById('tbodyArmarios');
+    if (!filtered.length) {
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum armario encontrado</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = filtered.map(a => {
+      const ocup = ocupMap[a.id];
+      const func = ocup ? funcMap[ocup.funcionario_id] : null;
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      const tipoLabel = tipo === 'feminino' ? 'Feminino' : tipo === 'masculino' ? 'Masculino' : tipo || '--';
+
+      let statusBadge, nomeCol, setorCol, desdeCol, acoes;
+      if (a.status === 'ocupado' && func) {
+        statusBadge = '<span class="badge badge-success">Ocupado</span>';
+        const nomeEsc = API.esc(func.nome).replace(/'/g, "\\'");
+        nomeCol = `<a href="ficha_360.html?id=${func.id}" class="text-link">${API.esc(func.nome)}</a>`;
+        setorCol = API.esc(func.setor || '--');
+        desdeCol = ocup ? API.fmtData(ocup.data_atribuicao) : '--';
+        acoes = `<button class="btn btn-ghost btn-sm" onclick="liberar('${a.id}','${nomeEsc}')">Liberar</button>`;
+      } else if (a.status === 'ocupado' && !func) {
+        statusBadge = '<span class="badge badge-warning">Ocupado (sem registro)</span>';
+        nomeCol = '<span class="text-muted">Dados inconsistentes</span>';
+        setorCol = '--';
+        desdeCol = ocup ? API.fmtData(ocup.data_atribuicao) : '--';
+        acoes = `<button class="btn btn-ghost btn-sm" onclick="liberar('${a.id}','Desconhecido')">Liberar</button>`;
+      } else if (a.status === 'bloqueado') {
+        statusBadge = '<span class="badge badge-danger">Bloqueado</span>';
+        nomeCol = '<span class="text-muted">--</span>';
+        setorCol = '--';
+        desdeCol = '--';
+        acoes = '';
+      } else {
+        statusBadge = '<span class="badge badge-gray">Vago</span>';
+        nomeCol = '<span class="text-muted">--</span>';
+        setorCol = '--';
+        desdeCol = '--';
+        acoes = '';
+      }
+
+      const sufixo = tipo === 'feminino' ? 'F' : tipo === 'masculino' ? 'M' : '';
+      const codigoDisplay = API.esc(a.codigo) + sufixo;
+
+      return `<tr>
+        <td class="font-medium">${codigoDisplay}</td>
+        <td>${nomeCol}</td>
+        <td class="text-sm text-muted">${setorCol}</td>
+        <td><span class="badge badge-${tipo === 'feminino' ? 'info' : 'gray'}">${tipoLabel}</span></td>
+        <td>${statusBadge}</td>
+        <td class="text-sm text-muted">${desdeCol}</td>
+        <td>${acoes}</td>
+      </tr>`;
+    }).join('');
+  }
+
+  // =========================================================
+  // FILTERS
+  // =========================================================
+  document.getElementById('filtroTipo').addEventListener('change', e => {
+    filtroTipo = e.target.value;
+    render();
+  });
+  document.getElementById('filtroStatus').addEventListener('change', e => {
+    filtroStatus = e.target.value;
+    render();
+  });
+  document.getElementById('busca').addEventListener('input', e => {
+    filtroBusca = e.target.value.toLowerCase().trim();
+    render();
+  });
+
+  // Tabs
+  document.querySelectorAll('.tab-item[data-tipo]').forEach(tab => {
+    tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab-item[data-tipo]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      filtroTipo = tab.dataset.tipo;
+      document.getElementById('filtroTipo').value = filtroTipo;
+      render();
+    });
+  });
+
+  // =========================================================
+  // MODAL ATRIBUIR
+  // =========================================================
+  const modal = document.getElementById('modalAtribuir');
+
+  document.getElementById('btnAtribuir').addEventListener('click', () => {
+    // Populate armarios vagos
+    const sel = document.getElementById('selArmario');
+    const blocoMap = {};
+    blocos.forEach(b => { blocoMap[b.id] = b; });
+    sel.innerHTML = '<option value="">Selecione um armario vago...</option>' +
+      armarios.filter(a => a.status === 'disponivel').map(a => {
+        const bloco = blocoMap[a.bloco_id];
+        const tipo = bloco ? bloco.tipo : a.tipo;
+        const sufixo = tipo === 'feminino' ? 'F' : tipo === 'masculino' ? 'M' : '';
+        return `<option value="${a.id}">${a.codigo}${sufixo} - ${tipo}</option>`;
+      }).join('');
+
+    // Populate colaboradores sem armario
+    const ocupFuncIds = new Set(ocupacoes.map(o => o.funcionario_id));
+    const selCol = document.getElementById('selColaborador');
+    selCol.innerHTML = '<option value="">Selecione um colaborador...</option>' +
+      funcionarios.filter(f => !ocupFuncIds.has(f.id)).map(f =>
+        `<option value="${f.id}">${API.esc(f.nome)}</option>`
+      ).join('');
+
+    modal.style.display = 'flex';
+  });
+
+  function closeModal() { modal.style.display = 'none'; }
+  document.getElementById('modalClose').addEventListener('click', closeModal);
+  document.getElementById('btnCancelar').addEventListener('click', closeModal);
+
+  document.getElementById('btnSalvar').addEventListener('click', async () => {
+    const armarioId = document.getElementById('selArmario').value;
+    const funcId = document.getElementById('selColaborador').value;
+    const chave = document.getElementById('selChave').value === 'true';
+    const obs = document.getElementById('txtObs').value;
+
+    if (!armarioId || !funcId) {
+      alert('Selecione armario e colaborador.');
+      return;
+    }
+
+    const res = await API.post('arm_ocupacoes', {
+      armario_id: armarioId,
+      funcionario_id: funcId,
+      chave_entregue: chave,
+      observacoes: obs || null,
+      atribuido_por: user.id || null,
+    });
+
+    if (res.ok) {
+      // Update armario status
+      await API.patch(`arm_armarios?id=eq.${armarioId}`, { status: 'ocupado' });
+      closeModal();
+      await loadAll();
+    } else {
+      alert('Erro ao atribuir: ' + (res.error || 'Tente novamente'));
+    }
+  });
+
+  // =========================================================
+  // MODAL LIBERAR
+  // =========================================================
+  const modalLib = document.getElementById('modalLiberar');
+  let liberarArmarioId = null;
+
+  window.liberar = function(armarioId, nome) {
+    liberarArmarioId = armarioId;
+    document.getElementById('liberarMsg').textContent = `Liberar armario do colaborador ${nome}?`;
+    modalLib.style.display = 'flex';
+  };
+
+  function closeModalLib() { modalLib.style.display = 'none'; liberarArmarioId = null; }
+  document.getElementById('modalLiberarClose').addEventListener('click', closeModalLib);
+  document.getElementById('btnLiberarCancelar').addEventListener('click', closeModalLib);
+
+  document.getElementById('btnLiberarConfirmar').addEventListener('click', async () => {
+    if (!liberarArmarioId) return;
+    const motivo = document.getElementById('selMotivo').value;
+
+    // Find active occupation
+    const ocup = ocupacoes.find(o => o.armario_id === liberarArmarioId);
+    if (ocup) {
+      await API.patch(`arm_ocupacoes?id=eq.${ocup.id}`, {
+        data_devolucao: new Date().toISOString().slice(0, 10),
+        motivo_devolucao: motivo,
+        devolvido_por: user.id || null,
+      });
+    }
+    await API.patch(`arm_armarios?id=eq.${liberarArmarioId}`, { status: 'disponivel' });
+
+    closeModalLib();
+    await loadAll();
+  });
+
+  // =========================================================
+  // EXPORT HELPERS
+  // =========================================================
+  function getExportRows() {
+    const ocupMap = {};
+    ocupacoes.forEach(o => { ocupMap[o.armario_id] = o; });
+    const funcMap = {};
+    funcionarios.forEach(f => { funcMap[f.id] = f; });
+    const blocoMap = {};
+    blocos.forEach(b => { blocoMap[b.id] = b; });
+
+    return armarios.filter(a => {
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      if (filtroTipo && tipo !== filtroTipo) return false;
+      if (filtroStatus && a.status !== filtroStatus) return false;
+      return true;
+    }).sort((a, b) => {
+      const tA = (blocoMap[a.bloco_id] || {}).tipo || '';
+      const tB = (blocoMap[b.bloco_id] || {}).tipo || '';
+      if (tA !== tB) return tA.localeCompare(tB);
+      return parseInt(a.codigo) - parseInt(b.codigo);
+    }).map(a => {
+      const ocup = ocupMap[a.id];
+      const func = ocup ? funcMap[ocup.funcionario_id] : null;
+      const bloco = blocoMap[a.bloco_id];
+      const tipo = bloco ? bloco.tipo : a.tipo;
+      return {
+        numero: a.codigo + (tipo === 'feminino' ? 'F' : tipo === 'masculino' ? 'M' : ''),
+        colaborador: func ? func.nome : '',
+        setor: func ? (func.setor || '') : '',
+        tipo: tipo === 'feminino' ? 'Feminino' : tipo === 'masculino' ? 'Masculino' : tipo || '',
+        situacao: a.status === 'ocupado' ? 'OK' : a.status === 'bloqueado' ? 'Bloqueado' : 'VAGO',
+        desde: ocup ? (ocup.data_atribuicao || '') : '',
+      };
+    });
+  }
+
+  // =========================================================
+  // EXPORT EXCEL (CSV com BOM para Excel)
+  // =========================================================
+  document.getElementById('btnExcel').addEventListener('click', () => {
+    const rows = getExportRows();
+    const header = ['Numero', 'Colaborador', 'Setor', 'Tipo', 'Situacao', 'Desde'];
+    const csv = [
+      header.join(';'),
+      ...rows.map(r => [r.numero, r.colaborador, r.setor, r.tipo, r.situacao, r.desde].map(v => '"' + (v || '').replace(/"/g, '""') + '"').join(';'))
+    ].join('\r\n');
+
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const tipoLabel = filtroTipo ? '_' + filtroTipo : '';
+    a.download = `armarios${tipoLabel}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  });
+
+  // =========================================================
+  // EXPORT PDF (via impressao do navegador)
+  // =========================================================
+  document.getElementById('btnPDF').addEventListener('click', () => {
+    const rows = getExportRows();
+    const tipoLabel = filtroTipo ? (filtroTipo === 'feminino' ? 'Feminino' : 'Masculino') : 'Todos';
+    const hoje = new Date().toLocaleDateString('pt-BR');
+    const ocupados = rows.filter(r => r.situacao === 'OK').length;
+    const vagos = rows.filter(r => r.situacao === 'VAGO').length;
+
+    const printWin = window.open('', '_blank');
+    printWin.document.write(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<title>Relacao de Armarios - ${tipoLabel}</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:Arial,Helvetica,sans-serif; font-size:11px; color:#1e293b; padding:20px; }
+  .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; border-bottom:2px solid #2563eb; padding-bottom:12px; }
+  .header h1 { font-size:16px; color:#2563eb; }
+  .header .sub { font-size:10px; color:#64748b; margin-top:2px; }
+  .header .right { text-align:right; font-size:10px; color:#64748b; }
+  .kpis { display:flex; gap:24px; margin-bottom:12px; font-size:11px; }
+  .kpis b { font-size:14px; }
+  table { width:100%; border-collapse:collapse; margin-top:8px; }
+  th { background:#f1f5f9; font-size:10px; text-transform:uppercase; letter-spacing:0.04em; padding:6px 8px; text-align:left; border-bottom:2px solid #cbd5e1; }
+  td { padding:5px 8px; border-bottom:1px solid #e2e8f0; font-size:11px; }
+  tr:nth-child(even) { background:#f8fafc; }
+  .vago { color:#94a3b8; font-style:italic; }
+  .footer { margin-top:16px; text-align:center; font-size:9px; color:#94a3b8; border-top:1px solid #e2e8f0; padding-top:8px; }
+  @media print { body { padding:10px; } }
+</style>
+</head><body>
+  <div class="header">
+    <div>
+      <h1>Relacao de Armarios — ${tipoLabel}</h1>
+      <div class="sub">Classic Importacao e Exportacao de Couros Ltda — CNPJ 08.849.964/0001-10</div>
+    </div>
+    <div class="right">Data: ${hoje}<br>Total: ${rows.length} armarios</div>
+  </div>
+  <div class="kpis">
+    <div>Ocupados: <b>${ocupados}</b></div>
+    <div>Vagos: <b>${vagos}</b></div>
+    <div>Taxa: <b>${rows.length ? Math.round(ocupados/rows.length*100) : 0}%</b></div>
+  </div>
+  <table>
+    <thead><tr><th style="width:40px">N</th><th>Colaborador</th><th>Setor</th><th>Tipo</th><th style="width:70px">Situacao</th><th style="width:80px">Desde</th></tr></thead>
+    <tbody>
+      ${rows.map(r => `<tr>
+        <td>${r.numero}</td>
+        <td${!r.colaborador?' class="vago"':''}>${r.colaborador || '--'}</td>
+        <td>${r.setor || '--'}</td>
+        <td>${r.tipo}</td>
+        <td>${r.situacao}</td>
+        <td>${r.desde ? new Date(r.desde+'T00:00:00').toLocaleDateString('pt-BR') : '--'}</td>
+      </tr>`).join('')}
+    </tbody>
+  </table>
+  <div class="footer">Classic RH & SST — Gestao de Armarios — Impresso em ${hoje}</div>
+</body></html>`);
+    printWin.document.close();
+    setTimeout(() => printWin.print(), 300);
+  });
+
+  // =========================================================
+  // INIT
+  // =========================================================
+  await loadAll();
+})();
+</script>
+</body>
+</html>

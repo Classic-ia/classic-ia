@@ -55,11 +55,12 @@
     </select>
   </div>
   <div><label>Competencia</label><input type="month" id="fCompetencia" onchange="renderTable()"></div>
-  <div style="margin-left:auto">
-    <label>&nbsp;</label>
+  <div style="margin-left:auto;display:flex;gap:8px;align-items:flex-end;">
+    <button class="btn btn-secondary" id="btnSyncConvenia" title="Importar atestados/afastamentos da API Convenia" style="padding:8px 14px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;">↻ Sincronizar Convenia</button>
     <button class="btn btn-primary" onclick="openModal()" style="padding:8px 18px;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;background:var(--primary);color:#fff;border:none">+ Nova Ocorrencia</button>
   </div>
 </div>
+<div id="syncStatus" style="font-size:12px;color:var(--text-muted);margin:-8px 0 12px 0;display:none;"></div>
 
 <!-- Table -->
 <div class="card">
@@ -198,28 +199,141 @@ function calcDias() {
 }
 
 /* ===== Load ===== */
+async function loadAll() {
+  const [rOc, rFunc, rCol, rSet] = await Promise.all([
+    API.get('rh_ocorrencias?order=data_inicio.desc&limit=2000'),
+    API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&order=nome_completo'),
+    API.get('rh_colaboradores?select=id,nome,setor_id,status&order=nome'),
+    API.get('rh_setores?select=id,nome&order=nome')
+  ]);
+
+  ocorrencias = rOc.ok ? rOc.data : [];
+  funcionarios = rFunc.ok ? rFunc.data : [];
+  setores = rSet.ok ? rSet.data : [];
+
+  funcMap = {};
+  setorMap = {};
+  funcionarios.forEach(f => { funcMap[f.id] = f; });
+  /* rh_ocorrencias.colaborador_id aponta para rh_colaboradores; indexamos tambem */
+  if (rCol.ok) {
+    rCol.data.forEach(c => {
+      funcMap[c.id] = { id: c.id, nome_completo: c.nome, setor_id: c.setor_id, status: c.status };
+    });
+  }
+  setores.forEach(s => { setorMap[s.id] = s; });
+}
+
 (async function init() {
   try {
-    const [rOc, rFunc, rSet] = await Promise.all([
-      API.get('rh_ocorrencias?order=data_inicio.desc&limit=500'),
-      API.get('rh_funcionarios?select=id,nome_completo,setor_id,status&status=in.(ativo,afastado,ferias)&order=nome_completo'),
-      API.get('rh_setores?select=id,nome&order=nome')
-    ]);
-
-    ocorrencias = rOc.ok ? rOc.data : [];
-    funcionarios = rFunc.ok ? rFunc.data : [];
-    setores = rSet.ok ? rSet.data : [];
-
-    funcionarios.forEach(f => { funcMap[f.id] = f; });
-    setores.forEach(s => { setorMap[s.id] = s; });
-
+    await loadAll();
     populateColaboradorSelect();
+    /* Auto-preenche competencia com o mes mais recente com dados, pra KPI
+       e tabela mostrarem o mesmo conjunto e evitar "Nenhuma ocorrencia" */
+    const meses = [...new Set(ocorrencias.map(o => (o.competencia || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+    if (meses.length) document.getElementById('fCompetencia').value = meses[0];
     renderKPIs();
     renderTable();
   } catch (err) {
     console.error('Erro ao carregar dados de absenteismo:', err);
   }
 })();
+
+/* ===== Sync Convenia (afastamentos/atestados) ===== */
+document.getElementById('btnSyncConvenia').addEventListener('click', async () => {
+  const btn = document.getElementById('btnSyncConvenia');
+  const st = document.getElementById('syncStatus');
+  st.style.display = '';
+
+  const cfg = JSON.parse(localStorage.getItem('convenia_config') || '{}');
+  if (!cfg.token) {
+    if (confirm('Token da API Convenia nao configurado. Abrir a pagina de configuracao?')) {
+      window.location.href = 'convenia_integracao.html';
+    }
+    st.style.display = 'none';
+    return;
+  }
+
+  btn.disabled = true;
+  st.textContent = 'Buscando afastamentos na Convenia...';
+
+  try {
+    const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
+    const headers = { 'api-token': cfg.token, 'Accept': 'application/json' };
+    let todos = [], page = 1, totalPages = 1;
+    do {
+      const res = await fetch(`${CONVENIA_BASE}/leaves?page=${page}&per_page=100`, { headers });
+      if (!res.ok) throw new Error('HTTP ' + res.status + ' (verifique o token)');
+      const json = await res.json();
+      const lista = json.data || json.leaves || json || [];
+      if (!Array.isArray(lista)) break;
+      todos = todos.concat(lista);
+      if (json.meta) totalPages = json.meta.last_page || json.meta.total_pages || 1;
+      page++;
+      st.textContent = `Pagina ${page - 1}/${totalPages} — ${todos.length} registros`;
+    } while (page <= totalPages && page <= 30);
+
+    st.textContent = `${todos.length} afastamentos encontrados. Processando...`;
+
+    /* Indexar colaboradores por CPF/nome para achar colaborador_id */
+    const rCol = await API.get('rh_colaboradores?select=id,nome,cpf&limit=5000');
+    const colabPorCpf = {}, colabPorNome = {};
+    if (rCol.ok) rCol.data.forEach(c => {
+      if (c.cpf) colabPorCpf[c.cpf.replace(/\D/g, '')] = c;
+      if (c.nome) colabPorNome[c.nome.toUpperCase().trim()] = c;
+    });
+
+    const tipoMap = (t) => {
+      const x = (t || '').toLowerCase();
+      if (x.includes('atestad') || x.includes('medical') || x.includes('doenc')) return 'atestado';
+      if (x.includes('maternidade') || x.includes('maternity')) return 'licenca_maternidade';
+      if (x.includes('paternidade') || x.includes('paternity')) return 'licenca_paternidade';
+      if (x.includes('inss') || x.includes('previdenc')) return 'afastamento_inss';
+      if (x.includes('injustif')) return 'falta_injustificada';
+      if (x.includes('falta') || x.includes('justif')) return 'falta_justificada';
+      return 'atestado';
+    };
+
+    let inseridos = 0, dup = 0, erro = 0, semFunc = 0;
+    const erros = [];
+    for (const lv of todos) {
+      const dataIni = lv.start_date || lv.data_inicio || lv.inicio || '';
+      const dataFim = lv.end_date || lv.data_fim || lv.fim || null;
+      if (!dataIni) continue;
+      const iniISO = dataIni.includes('/') ? dataIni.split('/').reverse().join('-') : dataIni.slice(0, 10);
+      const fimISO = dataFim ? (dataFim.includes('/') ? dataFim.split('/').reverse().join('-') : dataFim.slice(0, 10)) : null;
+
+      const cpfRaw = (lv.employee?.cpf || lv.cpf || '').replace(/\D/g, '');
+      const nomeEmp = (lv.employee?.name || lv.funcionario || lv.nome || '').toUpperCase().trim();
+      const colab = colabPorCpf[cpfRaw] || colabPorNome[nomeEmp];
+      if (!colab) { semFunc++; continue; }
+
+      const tipo = tipoMap(lv.leave_type?.name || lv.tipo || lv.type || '');
+      const dias = fimISO && iniISO ? Math.round((new Date(fimISO) - new Date(iniISO)) / 86400000) + 1 : (lv.days || 1);
+      const competencia = iniISO.slice(0, 7);
+
+      /* Dedup: mesmo colaborador + mesma data inicio + mesmo tipo */
+      const chk = await API.get(`rh_ocorrencias?colaborador_id=eq.${colab.id}&data_inicio=eq.${iniISO}&tipo=eq.${tipo}&select=id&limit=1`);
+      if (chk.ok && chk.data && chk.data.length > 0) { dup++; continue; }
+
+      const payload = {
+        colaborador_id: colab.id,
+        tipo, data_inicio: iniISO, data_fim: fimISO, dias, competencia,
+        observacoes: lv.reason || lv.motivo || lv.description || null,
+      };
+      const r = await API.post('rh_ocorrencias', payload);
+      if (r.ok) inseridos++;
+      else { erro++; if (erros.length < 5) erros.push(r.error || 'Erro'); }
+    }
+
+    st.textContent = `Sync concluido: ${inseridos} inserido(s), ${dup} ja existiam, ${semFunc} sem funcionario vinculado, ${erro} erro(s).${erros.length ? ' Erros: ' + erros.join(' | ') : ''}`;
+    await loadAll();
+    renderKPIs();
+    renderTable();
+  } catch (e) {
+    st.textContent = 'Erro: ' + e.message;
+  }
+  btn.disabled = false;
+});
 
 /* ===== Populate select ===== */
 function populateColaboradorSelect() {
@@ -234,7 +348,9 @@ function populateColaboradorSelect() {
 
 /* ===== KPIs ===== */
 function renderKPIs() {
-  const ym = currentYM();
+  /* Usa a competencia mais recente com dados (em vez do mes atual se vazio) */
+  const todosMeses = [...new Set(ocorrencias.map(o => (o.competencia || '').slice(0, 7)).filter(Boolean))].sort().reverse();
+  const ym = todosMeses[0] || currentYM();
   const mesData = ocorrencias.filter(o => (o.competencia || '').startsWith(ym));
 
   const faltas = mesData.filter(o => (o.tipo || '').startsWith('falta')).length;

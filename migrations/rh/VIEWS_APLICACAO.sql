@@ -336,3 +336,28 @@ SELECT funcionario_id, nome_completo, cargo, setor, salario_base,
 FROM vw_absenteismo_real
 GROUP BY funcionario_id, nome_completo, cargo, setor, salario_base
 ORDER BY sum(custo_empresa_real) DESC;
+
+-- ============================================================================
+-- GRUPO 4: Views utilitarias de uso geral
+-- ============================================================================
+
+-- --------------------------------------------------------------------------
+-- vw_funcionario_base
+-- View base usada por multiplas paginas (armarios, shell search, selects)
+-- Campos: id, nome (alias de nome_completo), cargo, setor, status
+-- Dependencia: rh_funcionarios, rh_cargos, rh_setores
+-- --------------------------------------------------------------------------
+CREATE OR REPLACE VIEW public.vw_funcionario_base AS
+SELECT
+  f.id,
+  f.nome_completo AS nome,
+  c.nome AS cargo,
+  s.nome AS setor,
+  f.status,
+  f.setor_id,
+  f.cargo_id,
+  f.data_admissao,
+  f.sexo
+FROM rh_funcionarios f
+  LEFT JOIN rh_cargos c ON c.id = f.cargo_id
+  LEFT JOIN rh_setores s ON s.id = f.setor_id;

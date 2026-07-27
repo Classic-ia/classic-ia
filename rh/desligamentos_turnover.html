@@ -15,18 +15,9 @@
 </head>
 <body class="page-bg">
 
-<div class="header">
-  <div class="header-left">
-    <a href="app.html" class="back-link">&#8592; Painel</a>
-    <div>
-      <div class="header-title">Analise de Desligamentos &amp; Turnover</div>
-      <div class="header-sub">Causa raiz, indicadores e analise cruzada</div>
-    </div>
-  </div>
-  <div id="rh-user-chip"></div>
-</div>
+<div id="shell"></div>
+<div id="shell-content" class="content-area page-padding">
 
-<div class="main">
   <div id="loading-state" class="loading-state">
     <div class="loading-spinner"></div>
     Carregando dados...
@@ -43,9 +34,22 @@
       <button class="period-btn" data-meses="24">24 meses</button>
     </div>
 
+    <!-- Alerta de dados -->
+    <div id="alerta-dados" style="display:none;background:var(--warning-light);border:1px solid var(--warning);border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:13px;">
+      <strong>&#9888; Dados incompletos:</strong> <span id="alerta-dados-msg"></span>
+      <div style="margin-top:8px;display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-primary btn-small" id="btn-classificar-auto" type="button">Classificar automaticamente</button>
+        <span id="classificar-status" style="font-size:12px;color:var(--muted);"></span>
+      </div>
+    </div>
+
     <!-- KPIs -->
     <div class="kpi-row">
       <div class="kpi-card"><div class="num red" id="kpi-deslig">0</div><div class="lbl">Desligamentos</div></div>
+      <div class="kpi-card"><div class="num orange" id="kpi-pedido">0</div><div class="lbl">Pediu demissao</div></div>
+      <div class="kpi-card"><div class="num red" id="kpi-empresa">0</div><div class="lbl">Empresa demitiu</div></div>
+      <div class="kpi-card"><div class="num blue" id="kpi-termino">0</div><div class="lbl">Fim contrato</div></div>
+      <div class="kpi-card" id="kpi-semtipo-card" style="display:none"><div class="num gold" id="kpi-semtipo">0</div><div class="lbl">Sem classificacao</div></div>
       <div class="kpi-card"><div class="num orange" id="kpi-turnover">0%</div><div class="lbl">Turnover Geral</div></div>
       <div class="kpi-card"><div class="num red" id="kpi-curto">0%</div><div class="lbl">Turnover &lt;90d</div></div>
       <div class="kpi-card"><div class="num gold" id="kpi-tempo">0</div><div class="lbl">Tempo Medio (dias)</div></div>
@@ -55,8 +59,10 @@
     <!-- Tabs -->
     <div class="tabs">
       <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="inteligencia">Inteligencia RH</button>
       <button class="tab-btn" data-tab="lista">Lista Desligamentos</button>
       <button class="tab-btn" data-tab="cruzada">Analise Cruzada</button>
+      <button class="tab-btn" data-tab="importar">Importar Convenia</button>
       <button class="tab-btn" data-tab="registrar">+ Registrar</button>
     </div>
 
@@ -74,17 +80,38 @@
       </div>
       <div class="grid-2">
         <div class="card">
-          <div class="card-title">Turnover por Setor</div>
-          <div class="chart-box"><canvas id="chart-setor"></canvas></div>
+          <div class="card-title">Tipo de Desligamento</div>
+          <div class="chart-box"><canvas id="chart-tipo"></canvas></div>
         </div>
         <div class="card">
           <div class="card-title">Distribuicao por Tempo de Casa</div>
           <div class="chart-box"><canvas id="chart-tempo"></canvas></div>
         </div>
       </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Turnover por Setor</div>
+          <div class="chart-box"><canvas id="chart-setor"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Pedido vs Demissao por Mes</div>
+          <div class="chart-box"><canvas id="chart-tipo-mensal"></canvas></div>
+        </div>
+      </div>
       <div class="card" id="insights-box">
-        <div class="card-title">Insights Automaticos</div>
+        <div class="card-title" style="font-size:16px;margin-bottom:16px;">Diagnostico Inteligente — Analise e Oportunidades</div>
         <div id="insights-content"></div>
+      </div>
+      <div class="card" id="plano-box" style="display:none;">
+        <div class="card-title" style="font-size:16px;margin-bottom:16px;">Plano de Acao Sugerido</div>
+        <div id="plano-content"></div>
+      </div>
+    </div>
+
+    <!-- Tab: Inteligencia RH -->
+    <div class="tab-content" id="tab-inteligencia">
+      <div id="intel-content">
+        <div class="loading-state"><div class="loading-spinner"></div> Gerando analise...</div>
       </div>
     </div>
 
@@ -144,6 +171,65 @@
           <div class="card-title">Correlacao Absenteismo x Desligamento</div>
           <div id="cruzada-absenteismo"></div>
         </div>
+      </div>
+    </div>
+
+    <!-- Tab: Importar Convenia -->
+    <div class="tab-content" id="tab-importar">
+      <!-- Diagnostico / Fix -->
+      <div class="card mb-4" id="fix-card" style="display:none;">
+        <div class="card-title">&#9888; Registros sem classificacao detectados</div>
+        <p class="text-muted" style="margin:8px 0 12px;font-size:13px;" id="fix-msg"></p>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-primary btn-sm" id="btn-detect-schema">Detectar estrutura da tabela</button>
+          <button class="btn btn-ghost btn-sm" id="btn-fix-limpar">Limpar duplicatas</button>
+        </div>
+        <div id="fix-result" style="margin-top:12px;"></div>
+      </div>
+
+      <!-- Sync via API -->
+      <div class="card mb-4">
+        <div class="card-title">Sincronizar via API Convenia</div>
+        <p class="text-muted" style="margin:8px 0 16px;font-size:13px;">
+          Busca os funcionarios desligados diretamente pela API do Convenia e importa com tipo classificado.
+        </p>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary btn-sm" id="btn-sync-api">Buscar Desligados da API</button>
+          <span id="sync-api-status" class="text-muted" style="font-size:12px;"></span>
+        </div>
+        <div id="sync-api-result" style="display:none;margin-top:12px;"></div>
+      </div>
+
+      <!-- Import CSV -->
+      <div class="card">
+        <div class="card-title">Importar via CSV/Excel</div>
+        <p class="text-muted" style="margin:8px 0 16px;font-size:13px;">
+          Alternativa: exporte do Convenia (Desligados → Exportar) e arraste o arquivo CSV/Excel aqui.
+          O sistema classifica automaticamente o tipo e a causa.
+        </p>
+        <div class="upload-zone" id="import-zone">
+          <div class="drop-icon">&#128196;</div>
+          <div class="drop-title">Arraste o CSV do Convenia aqui</div>
+          <div class="drop-sub">ou clique para selecionar o arquivo</div>
+          <input type="file" id="import-file" accept=".csv,.txt,.tsv" style="display:none">
+        </div>
+        <div id="import-preview" style="display:none;margin-top:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div><strong id="import-count">0</strong> desligamentos encontrados</div>
+            <div style="display:flex;gap:8px;">
+              <button class="btn btn-ghost btn-sm" id="import-cancel">Cancelar</button>
+              <button class="btn btn-primary btn-sm" id="import-confirm">Importar Todos</button>
+            </div>
+          </div>
+          <div id="import-stats" style="margin-bottom:12px;"></div>
+          <div class="table-wrap" style="max-height:400px;overflow-y:auto;">
+            <table class="tbl" id="import-table">
+              <thead><tr><th>Nome</th><th>Data</th><th>Tipo Convenia</th><th>Tipo Classificado</th><th>Causa</th><th>Tempo</th></tr></thead>
+              <tbody id="import-tbody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="import-result" style="display:none;margin-top:16px;"></div>
       </div>
     </div>
 
@@ -235,15 +321,14 @@
     </div>
 
   </div>
-</div>
-
-<div class="footer">Classic RH &amp; SST v2026.03 — Analise de Desligamentos e Turnover</div>
+</div><!-- /shell-content -->
 
 <script>
 (async () => {
 
-  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh','gestor','admin','diretoria','visualizador'] });
+  const user = await Shell.init({ page: 'desligamentos', title: 'Desligamentos & Turnover' });
   if (!user) return;
+  API.setPerfil(user.perfil);
 
   let colaboradores = [];
   let desligamentos = [];
@@ -275,15 +360,64 @@
     dataInicio.setMonth(dataInicio.getMonth() - periodoMeses);
     const isoInicio = dataInicio.toISOString().split('T')[0];
 
-    const [_resColabs, _resDesligs, _resOcorrs] = await Promise.all([
+    const [_resColabs, _resDesligs, _resOcorrs, _resFuncDeslig] = await Promise.all([
       API.get('rh_colaboradores?select=id,nome,cargo,setor,data_admissao,status,salario_base'),
       API.get('rh_desligamentos?select=*&order=data_desligamento.desc'),
       API.get('rh_ocorrencias?select=colaborador_id,tipo,dias,data_inicio&tipo=eq.atestado'),
+      // Buscar tambem funcionarios marcados como desligados (fonte principal)
+      API.get('rh_funcionarios?status=eq.desligado&data_desligamento=gte.' + isoInicio + '&select=id,nome_completo,data_admissao,data_desligamento,cargo_id,setor_id,salario_base&order=data_desligamento.desc'),
     ]);
 
     colaboradores = _resColabs.ok ? _resColabs.data : [];
-    desligamentos = (_resDesligs.ok ? _resDesligs.data : []).filter(d => d.data_desligamento >= isoInicio);
     ocorrencias = _resOcorrs.ok ? _resOcorrs.data : [];
+
+    // Normalizar dados de rh_desligamentos (campo pode ser tipo ou tipo_desligamento)
+    const desligTabela = (_resDesligs.ok ? _resDesligs.data : [])
+      .filter(d => d.data_desligamento >= isoInicio)
+      .map(d => ({
+        ...d,
+        tipo: d.tipo || d.tipo_desligamento || null,
+        categoria: d.categoria || d.categoria_causa || null,
+        nome: d.nome || d.colaborador_nome || '',
+        motivo: d.motivo || d.descricao || '',
+      }));
+
+    const funcDeslig = _resFuncDeslig.ok ? _resFuncDeslig.data : [];
+
+    // Deduplicar: criar chave nome+data dos que ja estao em rh_desligamentos
+    const chaveDeslig = new Set(desligTabela.map(d =>
+      (d.nome || d.colaborador_nome || '').toUpperCase().trim() + '|' + (d.data_desligamento || '')
+    ));
+    const idsDeslig = new Set(desligTabela.map(d => d.colaborador_id || d.funcionario_id).filter(Boolean));
+
+    // Adicionar funcionarios desligados que NAO estao em rh_desligamentos
+    const funcExtras = funcDeslig.filter(f => {
+      if (idsDeslig.has(f.id)) return false;
+      const chave = (f.nome_completo || '').toUpperCase().trim() + '|' + (f.data_desligamento || '');
+      return !chaveDeslig.has(chave);
+    }).map(f => {
+      const colab = colaboradores.find(c => c.id === f.id) || {};
+      const tempoDias = f.data_admissao && f.data_desligamento
+        ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
+        : 0;
+      return {
+        colaborador_id: f.id,
+        nome: f.nome_completo,
+        data_desligamento: f.data_desligamento,
+        data_admissao: f.data_admissao,
+        cargo: colab.cargo || '',
+        setor: colab.setor || '',
+        salario: f.salario_base,
+        tipo: null,
+        motivo: null,
+        tempo_empresa_dias: tempoDias,
+        _origem: 'rh_funcionarios',
+      };
+    });
+
+    desligamentos = [...desligTabela, ...funcExtras].sort((a, b) =>
+      (b.data_desligamento || '').localeCompare(a.data_desligamento || '')
+    );
 
     // Populate selects
     const selColab = document.getElementById('des-colaborador');
@@ -301,14 +435,22 @@
     renderDashboard();
     renderLista();
     renderCruzada();
+    renderInteligencia();
 
     document.getElementById('loading-state').style.display = 'none';
     document.getElementById('content').style.display = 'block';
+    checkFixCard();
   }
 
   function computeKPIs() {
     const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
     const totalDeslig = desligamentos.length;
+    // Normalizar tipo (pode vir como tipo ou tipo_desligamento)
+    desligamentos.forEach(d => { if (!d.tipo && d.tipo_desligamento) d.tipo = d.tipo_desligamento; });
+    const pedidos = desligamentos.filter(d => d.tipo === 'pedido_demissao').length;
+    const empresa = desligamentos.filter(d => d.tipo === 'demissao_empresa' || d.tipo === 'justa_causa').length;
+    const termino = desligamentos.filter(d => d.tipo === 'termino_contrato').length;
+    const semTipo = desligamentos.filter(d => !d.tipo || !['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo','morte','outros'].includes(d.tipo)).length;
     const curto = desligamentos.filter(d => (d.tempo_empresa_dias || 0) < 90).length;
     const tempoMedio = totalDeslig > 0
       ? Math.round(desligamentos.reduce((s, d) => s + (d.tempo_empresa_dias || 0), 0) / totalDeslig)
@@ -317,10 +459,24 @@
     const turnoverCurto = totalDeslig > 0 ? ((curto / totalDeslig) * 100).toFixed(0) : 0;
 
     document.getElementById('kpi-deslig').textContent = totalDeslig;
+    document.getElementById('kpi-pedido').textContent = pedidos;
+    document.getElementById('kpi-empresa').textContent = empresa;
+    document.getElementById('kpi-termino').textContent = termino;
     document.getElementById('kpi-turnover').textContent = turnover + '%';
     document.getElementById('kpi-curto').textContent = turnoverCurto + '%';
     document.getElementById('kpi-tempo').textContent = tempoMedio;
     document.getElementById('kpi-ativos').textContent = totalAtivos;
+
+    // Mostrar alerta e KPI de registros sem tipo
+    if (semTipo > 0) {
+      document.getElementById('kpi-semtipo').textContent = semTipo;
+      document.getElementById('kpi-semtipo-card').style.display = '';
+      const alertEl = document.getElementById('alerta-dados');
+      alertEl.style.display = '';
+      document.getElementById('alerta-dados-msg').innerHTML =
+        semTipo + ' de ' + totalDeslig + ' desligamentos (' + ((semTipo/totalDeslig)*100).toFixed(0) + '%) estao <strong>sem tipo classificado</strong> (pedido/empresa/termino). ' +
+        'Os dados podem ter vindo do Convenia sem essa informacao. <strong>Classifique na aba "+ Registrar" ou edite diretamente no Supabase</strong> (tabela rh_desligamentos, coluna "tipo").';
+    }
   }
 
   function renderDashboard() {
@@ -367,24 +523,44 @@
     });
 
     // 2. Distribuição por Causa (donut)
-    const causas = { admissao: 0, operacional: 0, financeiro: 0, pessoal: 0 };
+    const causas = { admissao: 0, operacional: 0, financeiro: 0, pessoal: 0, sem_classificacao: 0 };
     desligamentos.forEach(d => {
-      // Extract category from motivo field
-      const mot = (d.motivo || '').toLowerCase();
-      if (mot.includes('admiss') || mot.includes('adapt') || mot.includes('expectativa')) causas.admissao++;
-      else if (mot.includes('opera') || mot.includes('lider') || mot.includes('ambiente') || mot.includes('carga') || mot.includes('conflito')) causas.operacional++;
-      else if (mot.includes('financ') || mot.includes('salari') || mot.includes('benefic')) causas.financeiro++;
-      else if (mot.includes('pessoal') || mot.includes('famil') || mot.includes('mudanc') || mot.includes('saude')) causas.pessoal++;
-      else causas.pessoal++; // default
+      // 1) Tentar campo 'categoria' direto (se existir na tabela)
+      const cat = (d.categoria || '').toLowerCase();
+      if (cat && causas.hasOwnProperty(cat)) { causas[cat]++; return; }
+
+      // 2) Tentar extrair do prefixo [CATEGORIA] no motivo
+      const mot = (d.motivo || '');
+      const match = mot.match(/^\[([A-Z]+)\]/);
+      if (match) {
+        const prefix = match[1].toLowerCase();
+        if (causas.hasOwnProperty(prefix)) { causas[prefix]++; return; }
+      }
+
+      // 3) Busca por palavras-chave no texto do motivo
+      const motL = mot.toLowerCase();
+      if (motL.includes('admiss') || motL.includes('adapt') || motL.includes('expectativa') || motL.includes('experiencia') || motL.includes('nao se adaptou')) causas.admissao++;
+      else if (motL.includes('opera') || motL.includes('lider') || motL.includes('ambiente') || motL.includes('carga') || motL.includes('conflito') || motL.includes('gestor') || motL.includes('chefe')) causas.operacional++;
+      else if (motL.includes('financ') || motL.includes('salari') || motL.includes('benefic') || motL.includes('proposta') || motL.includes('remuner')) causas.financeiro++;
+      else if (motL.includes('pessoal') || motL.includes('famil') || motL.includes('mudanc') || motL.includes('saude') || motL.includes('cidade')) causas.pessoal++;
+      else causas.sem_classificacao++;
     });
+
+    // Incluir sem_classificacao no grafico se houver
+    const CATEGORIAS_CHART = { ...CATEGORIAS };
+    if (causas.sem_classificacao > 0) {
+      CATEGORIAS_CHART.sem_classificacao = { label: 'Sem classificacao', color: '#94a3b8' };
+    } else {
+      delete causas.sem_classificacao;
+    }
 
     charts.causas = new Chart(document.getElementById('chart-causas'), {
       type: 'doughnut',
       data: {
-        labels: Object.keys(causas).map(k => CATEGORIAS[k].label),
+        labels: Object.keys(causas).map(k => (CATEGORIAS_CHART[k] || {}).label || k),
         datasets: [{
           data: Object.values(causas),
-          backgroundColor: Object.keys(causas).map(k => CATEGORIAS[k].color),
+          backgroundColor: Object.keys(causas).map(k => (CATEGORIAS_CHART[k] || {}).color || '#94a3b8'),
           borderWidth: 0,
         }]
       },
@@ -396,7 +572,63 @@
       }
     });
 
-    // 3. Turnover por Setor (horizontal bar)
+    // 3. Tipo de Desligamento (donut)
+    const tipos = {
+      pedido_demissao: desligamentos.filter(d => d.tipo === 'pedido_demissao').length,
+      demissao_empresa: desligamentos.filter(d => d.tipo === 'demissao_empresa').length,
+      termino_contrato: desligamentos.filter(d => d.tipo === 'termino_contrato').length,
+      outro: desligamentos.filter(d => !d.tipo || !['pedido_demissao','demissao_empresa','termino_contrato'].includes(d.tipo)).length,
+    };
+    if (tipos.outro === 0) delete tipos.outro;
+
+    const tipoLabels = { pedido_demissao: 'Pediu demissao', demissao_empresa: 'Empresa demitiu', termino_contrato: 'Fim contrato', outro: 'Outro' };
+    const tipoCores = { pedido_demissao: '#f39c12', demissao_empresa: '#e74c3c', termino_contrato: '#3498db', outro: '#94a3b8' };
+
+    charts.tipo = new Chart(document.getElementById('chart-tipo'), {
+      type: 'doughnut',
+      data: {
+        labels: Object.keys(tipos).map(k => tipoLabels[k] || k),
+        datasets: [{
+          data: Object.values(tipos),
+          backgroundColor: Object.keys(tipos).map(k => tipoCores[k] || '#94a3b8'),
+          borderWidth: 0,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'right', labels: { color: '#5d7f95', font: { size: 10 }, padding: 12 } } }
+      }
+    });
+
+    // 4. Pedido vs Demissao por Mes (stacked bar)
+    const mesesTipo = {};
+    for (let i = periodoMeses - 1; i >= 0; i--) {
+      const dt = new Date(HOJE); dt.setMonth(dt.getMonth() - i);
+      mesesTipo[dt.getFullYear() + '-' + String(dt.getMonth()+1).padStart(2,'0')] = { pedido: 0, empresa: 0, termino: 0 };
+    }
+    desligamentos.forEach(d => {
+      const key = d.data_desligamento ? d.data_desligamento.substring(0,7) : null;
+      if (key && mesesTipo[key]) {
+        if (d.tipo === 'pedido_demissao') mesesTipo[key].pedido++;
+        else if (d.tipo === 'demissao_empresa') mesesTipo[key].empresa++;
+        else mesesTipo[key].termino++;
+      }
+    });
+
+    charts.tipoMensal = new Chart(document.getElementById('chart-tipo-mensal'), {
+      type: 'bar',
+      data: {
+        labels: Object.keys(mesesTipo).map(k => { const p = k.split('-'); return p[1]+'/'+p[0].substring(2); }),
+        datasets: [
+          { label: 'Pediu demissao', data: Object.values(mesesTipo).map(v => v.pedido), backgroundColor: 'rgba(243,156,18,.7)', borderRadius: 2 },
+          { label: 'Empresa demitiu', data: Object.values(mesesTipo).map(v => v.empresa), backgroundColor: 'rgba(231,76,60,.7)', borderRadius: 2 },
+          { label: 'Fim contrato', data: Object.values(mesesTipo).map(v => v.termino), backgroundColor: 'rgba(52,152,219,.5)', borderRadius: 2 },
+        ]
+      },
+      options: { ...chartOpts, plugins: { ...chartOpts.plugins, legend: { labels: { color: '#5d7f95', font: { size: 9 } } } }, scales: { ...chartOpts.scales, x: { ...chartOpts.scales.x, stacked: true }, y: { ...chartOpts.scales.y, stacked: true } } }
+    });
+
+    // 5. Turnover por Setor (horizontal bar)
     const setorCount = {};
     const setorTotal = {};
     desligamentos.forEach(d => { if (d.setor) setorCount[d.setor] = (setorCount[d.setor] || 0) + 1; });
@@ -452,47 +684,267 @@
   }
 
   function renderInsights(causas, faixas, setorCount, setorTotal) {
-    const insights = [];
     const totalDeslig = desligamentos.length;
     if (totalDeslig === 0) {
-      document.getElementById('insights-content').innerHTML = '<div class="empty">Sem dados suficientes para gerar insights</div>';
+      document.getElementById('insights-content').innerHTML = '<div class="empty">Sem dados suficientes para gerar diagnostico</div>';
       return;
     }
 
-    // Causa principal
-    const maxCausa = Object.entries(causas).sort((a,b) => b[1] - a[1])[0];
-    if (maxCausa[1] > 0) {
+    const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
+    const pedidos = desligamentos.filter(d => d.tipo === 'pedido_demissao').length;
+    const empresa = desligamentos.filter(d => d.tipo === 'demissao_empresa').length;
+    const termino = desligamentos.filter(d => d.tipo === 'termino_contrato').length;
+    const curto30 = faixas['0-30d'] || 0;
+    const curto90 = (faixas['0-30d'] || 0) + (faixas['31-90d'] || 0);
+    const semClass = causas.sem_classificacao || 0;
+
+    const setorArr = Object.entries(setorCount)
+      .map(([s, n]) => ({ setor: s, deslig: n, total: setorTotal[s] || 0, taxa: setorTotal[s] ? ((n / setorTotal[s]) * 100) : 0 }))
+      .sort((a, b) => b.taxa - a.taxa);
+
+    const pedidosPorSetor = {};
+    desligamentos.filter(d => d.tipo === 'pedido_demissao').forEach(d => {
+      if (d.setor) pedidosPorSetor[d.setor] = (pedidosPorSetor[d.setor] || 0) + 1;
+    });
+    const empresaPorSetor = {};
+    desligamentos.filter(d => d.tipo === 'demissao_empresa').forEach(d => {
+      if (d.setor) empresaPorSetor[d.setor] = (empresaPorSetor[d.setor] || 0) + 1;
+    });
+
+    const causasReais = Object.entries(causas).filter(([k]) => k !== 'sem_classificacao').sort((a,b) => b[1] - a[1]);
+
+    // ══════════════════════════════════════════════════
+    // DIAGNOSTICO
+    // ══════════════════════════════════════════════════
+    let html = '';
+
+    // ── 1. RESUMO EXECUTIVO ──
+    const turnoverGeral = totalAtivos > 0 ? ((totalDeslig / totalAtivos) * 100).toFixed(1) : 0;
+    const nivelTurnover = parseFloat(turnoverGeral) > 40 ? 'CRITICO' : parseFloat(turnoverGeral) > 20 ? 'ALTO' : parseFloat(turnoverGeral) > 10 ? 'MODERADO' : 'SAUDAVEL';
+    const corNivel = nivelTurnover === 'CRITICO' ? 'var(--danger)' : nivelTurnover === 'ALTO' ? 'var(--warning)' : nivelTurnover === 'MODERADO' ? '#D97706' : 'var(--success)';
+
+    html += '<div style="background:var(--bg);border-radius:8px;padding:16px 20px;margin-bottom:16px;border:1px solid var(--border);">';
+    html += '<div style="font-size:13px;font-weight:700;margin-bottom:8px;">RESUMO EXECUTIVO</div>';
+    html += '<div style="font-size:13px;line-height:1.8;">';
+    html += 'No periodo analisado, <strong>' + totalDeslig + ' colaboradores</strong> foram desligados de um total de <strong>' + totalAtivos + ' ativos</strong>. ';
+    html += 'Turnover de <strong style="color:'+corNivel+'">' + turnoverGeral + '% (' + nivelTurnover + ')</strong>. ';
+    html += 'Destes: <strong style="color:#f39c12">' + pedidos + ' pediram demissao</strong>, ';
+    html += '<strong style="color:var(--danger)">' + empresa + ' foram demitidos</strong>';
+    if (termino > 0) html += ', <strong style="color:var(--primary)">' + termino + ' fim de contrato</strong>';
+    html += '.</div></div>';
+
+    // ── 2. ONDE O RH ESTA ERRANDO ──
+    html += '<div style="font-size:14px;font-weight:700;color:#475569;margin:20px 0 12px;border-bottom:2px solid var(--border);padding-bottom:6px;">&#128269; PONTOS DE ATENCAO</div>';
+
+    let erros = [];
+
+    // Ponto: Processo seletivo (muitas saidas < 90 dias)
+    if (curto90 > 0) {
+      const pct90 = ((curto90/totalDeslig)*100).toFixed(0);
+      const nomes = desligamentos.filter(d => (d.tempo_empresa_dias||0) <= 90).slice(0,3).map(d => d.nome || d.colaborador_nome || '').filter(Boolean).join(', ');
+      erros.push({
+        titulo: 'Saidas nos primeiros 90 dias',
+        gravidade: curto30 >= 3 ? 'critico' : 'atencao',
+        detalhe: curto90 + ' colaborador(es) saiu(ram) nos primeiros 90 dias (' + pct90 + '% do total). Destes, ' + curto30 + ' nao completou(aram) nem 30 dias.',
+        causa: 'Possibilidades: descricao de vaga diferente da realidade, falta de acompanhamento nos primeiros dias, ou integracao insuficiente.',
+        evidencia: nomes || 'Verificar na aba Lista Desligamentos',
+      });
+    }
+
+    // Ponto: Muitos pedidos de demissao
+    if (pedidos > empresa && pedidos >= 3) {
+      const pctPed = ((pedidos/totalDeslig)*100).toFixed(0);
+      const setorTop = Object.entries(pedidosPorSetor).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s,n])=>s+' ('+n+')').join(', ');
+      erros.push({
+        titulo: 'Colaboradores pedindo para sair',
+        gravidade: pedidos > totalDeslig * 0.6 ? 'critico' : 'atencao',
+        detalhe: pedidos + ' colaborador(es) pediram demissao (' + pctPed + '%). Mais gente esta saindo por vontade propria do que sendo desligada.',
+        causa: 'Verificar: remuneracao esta compativel com a regiao? Ha reconhecimento? Lideranca esta presente? Existe perspectiva de crescimento?',
+        evidencia: 'Setores mais afetados: ' + (setorTop || 'distribuido entre setores'),
+      });
+    }
+
+    // Ponto: Demissoes pela empresa — analise profunda do ciclo
+    if (empresa >= 1) {
+      const pctEmp = ((empresa/totalDeslig)*100).toFixed(0);
+      const demitidos = desligamentos.filter(d => d.tipo === 'demissao_empresa');
+      const setorTop = Object.entries(empresaPorSetor).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([s,n])=>s+' ('+n+')').join(', ');
+
+      // Classificar por tempo de empresa para identificar ONDE no ciclo falhou
+      const dem30 = demitidos.filter(d => (d.tempo_empresa_dias||0) <= 30).length;
+      const dem90 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 30 && (d.tempo_empresa_dias||0) <= 90).length;
+      const dem180 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 90 && (d.tempo_empresa_dias||0) <= 180).length;
+      const dem1a = demitidos.filter(d => (d.tempo_empresa_dias||0) > 180 && (d.tempo_empresa_dias||0) <= 365).length;
+      const demMais = demitidos.filter(d => (d.tempo_empresa_dias||0) > 365).length;
+
+      let analise = empresa + ' colaborador(es) foram desligados pela empresa (' + pctEmp + '%). ';
+      analise += 'Quando a empresa precisa demitir, o problema pode ter comecado muito antes:';
+
+      let ciclo = '<table class="tbl" style="margin-top:8px;margin-bottom:8px;">';
+      ciclo += '<thead><tr><th>Fase</th><th>Qtd</th><th>O que indica</th><th>Onde verificar</th></tr></thead><tbody>';
+
+      if (dem30 > 0) ciclo += '<tr><td><span class="badge badge-danger">Ate 30 dias</span></td><td style="font-weight:700;color:var(--danger);">'+dem30+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Contratacao errada. O perfil nao bateu com a vaga, ou a realidade do trabalho era diferente do prometido.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Descricao de vaga, entrevista, validacao de perfil tecnico e comportamental, tour pela fabrica antes de contratar.</td></tr>';
+
+      if (dem90 > 0) ciclo += '<tr><td><span class="badge badge-warning">31-90 dias</span></td><td style="font-weight:700;color:var(--warning);">'+dem90+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Integracao falhou. O colaborador entrou mas nao recebeu suporte, treinamento ou acompanhamento suficiente.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Programa de onboarding, acompanhamento pelo gestor no periodo de experiencia, feedback no 15o, 30o e 60o dia.</td></tr>';
+
+      if (dem180 > 0) ciclo += '<tr><td><span class="badge badge-info">91-180 dias</span></td><td style="font-weight:700;">'+dem180+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Gestao de desempenho falhou. O colaborador nao atingiu o esperado, mas sera que recebeu metas claras e feedback?</td>' +
+        '<td style="white-space:normal;font-size:11px;">Avaliacao de experiencia, PDI, conversa 1:1, metas escritas, registro de feedbacks dados.</td></tr>';
+
+      if (dem1a > 0) ciclo += '<tr><td><span class="badge badge-blue">6m-1 ano</span></td><td style="font-weight:700;">'+dem1a+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Problema de longa data. O colaborador ficou, mas nao evoluiu. Questionar: houve oportunidade de desenvolvimento?</td>' +
+        '<td style="white-space:normal;font-size:11px;">Plano de desenvolvimento, treinamentos oferecidos, avaliacao de desempenho formal, conversas de carreira.</td></tr>';
+
+      if (demMais > 0) ciclo += '<tr><td><span class="badge badge-green">Mais de 1 ano</span></td><td style="font-weight:700;">'+demMais+'</td>' +
+        '<td style="white-space:normal;font-size:11px;">Colaborador antigo que nao se adaptou a mudancas, ou gestao tolerou baixo desempenho por muito tempo.</td>' +
+        '<td style="white-space:normal;font-size:11px;">Avaliacao periodica de desempenho, feedback contínuo, plano de melhoria com prazo antes de desligar.</td></tr>';
+
+      ciclo += '</tbody></table>';
+
+      erros.push({
+        titulo: 'A empresa esta precisando demitir — em que momento o problema comecou?',
+        gravidade: empresa > totalDeslig * 0.4 ? 'critico' : 'atencao',
+        detalhe: analise,
+        causa: ciclo,
+        evidencia: 'Setores com mais demissoes: ' + (setorTop || 'distribuido') + '. Cada fase exige uma acao diferente — nao existe solucao unica.',
+      });
+    }
+
+    // Ponto: Setores criticos
+    const setCriticos = setorArr.filter(s => s.taxa > 25);
+    if (setCriticos.length > 0) {
+      erros.push({
+        titulo: 'Setores com rotatividade acima da media',
+        gravidade: setCriticos.some(s => s.taxa > 40) ? 'critico' : 'atencao',
+        detalhe: setCriticos.map(s => s.setor + ': ' + s.taxa.toFixed(0) + '% (' + s.deslig + ' de ' + s.total + ')').join(' | '),
+        causa: 'Investigar o que diferencia esses setores dos demais: lideranca, condicoes fisicas, carga de trabalho, turno, remuneracao.',
+        evidencia: 'Comparar com setores que tem baixa rotatividade para identificar boas praticas.',
+      });
+    }
+
+    // Ponto: Causa classificada
+    const maxCausa = causasReais[0];
+    if (maxCausa && maxCausa[1] > 0 && maxCausa[0] !== 'pessoal') {
       const pct = ((maxCausa[1]/totalDeslig)*100).toFixed(0);
-      insights.push('<div class="insight-box"><strong>Causa principal:</strong> ' + CATEGORIAS[maxCausa[0]].label + ' (' + pct + '% dos desligamentos). ' +
-        (maxCausa[0] === 'admissao' ? 'Sugere revisar processo seletivo e alinhamento de expectativas na contratacao.' :
-         maxCausa[0] === 'operacional' ? 'Sugere avaliar liderancas, ambiente de trabalho e carga nos setores criticos.' :
-         maxCausa[0] === 'financeiro' ? 'Sugere benchmark salarial e revisao de beneficios.' :
-         'Motivos pessoais sao menos controlaveis, mas vale verificar se ha padrao por setor.') + '</div>');
-    }
-
-    // Turnover de curto prazo
-    const curto30 = faixas['0-30d'];
-    if (curto30 > 0) {
-      const pct = ((curto30/totalDeslig)*100).toFixed(0);
-      insights.push('<div class="insight-box"><strong>Alerta — ' + curto30 + ' desligamento(s) em menos de 30 dias (' + pct + '%).</strong> ' +
-        'Isso indica possivel falha no processo de admissao: expectativa desalinhada, falta de integracao ou perfil inadequado. Revisar processo seletivo urgente.</div>');
-    }
-
-    // Setor crítico
-    const setorCritico = Object.entries(setorCount).sort((a,b) => b[1]-a[1])[0];
-    if (setorCritico) {
-      const tot = setorTotal[setorCritico[0]] || 1;
-      const taxa = ((setorCritico[1]/tot)*100).toFixed(0);
-      if (parseInt(taxa) > 20) {
-        insights.push('<div class="insight-box"><strong>Setor critico: ' + setorCritico[0] + '</strong> — ' + setorCritico[1] + ' desligamento(s) de ' + tot + ' colaboradores (' + taxa + '% de turnover). Investigar lideranca, ambiente e condicoes de trabalho neste setor.</div>');
+      const causaMsg = {
+        admissao: { titulo: 'Causa concentrada: Admissao', causa: 'Os dados indicam que a maioria das saidas tem relacao com o processo de entrada. Vale revisar vagas, entrevistas e primeiras semanas.' },
+        operacional: { titulo: 'Causa concentrada: Operacional', causa: 'Os dados apontam para questoes do dia a dia: lideranca, ambiente, carga ou conflitos. Pesquisa de clima pode confirmar.' },
+        financeiro: { titulo: 'Causa concentrada: Financeiro', causa: 'Os dados sugerem que a remuneracao nao esta competitiva. Uma pesquisa salarial regional pode confirmar e direcionar ajustes.' },
+      };
+      const msg = causaMsg[maxCausa[0]];
+      if (msg) {
+        erros.push({
+          titulo: msg.titulo,
+          gravidade: parseInt(pct) > 40 ? 'critico' : 'atencao',
+          detalhe: (CATEGORIAS[maxCausa[0]]||{}).label + ' aparece como fator predominante: ' + pct + '% dos desligamentos.',
+          causa: msg.causa,
+          evidencia: 'Baseado na classificacao dos motivos registrados.',
+        });
       }
     }
 
-    if (insights.length === 0) {
-      insights.push('<div class="insight-box"><strong>Situacao estavel.</strong> Nenhum indicador critico identificado no periodo.</div>');
+    if (semClass > 0) {
+      erros.push({
+        titulo: 'Registros incompletos',
+        gravidade: semClass > totalDeslig * 0.5 ? 'critico' : 'atencao',
+        detalhe: semClass + ' desligamento(s) sem classificacao de causa (' + ((semClass/totalDeslig)*100).toFixed(0) + '%). A qualidade da analise depende da qualidade dos dados.',
+        causa: 'Garantir que todo desligamento passe pelo formulario completo (tipo + categoria + descricao + entrevista).',
+        evidencia: 'Revisar registros antigos na aba Lista Desligamentos.',
+      });
     }
 
-    document.getElementById('insights-content').innerHTML = insights.join('');
+    if (erros.length === 0) {
+      html += '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);"><strong>Indicadores estaveis.</strong> Nenhum ponto critico identificado no periodo. Continue monitorando.</div>';
+    } else {
+      erros.forEach(e => {
+        const cor = e.gravidade === 'critico' ? 'var(--danger)' : 'var(--warning)';
+        const bgCor = e.gravidade === 'critico' ? 'var(--danger-light)' : 'var(--warning-light)';
+        const icone = e.gravidade === 'critico' ? '&#10060;' : '&#9888;';
+        html += '<div style="border-left:3px solid '+cor+';background:'+bgCor+';border-radius:0 8px 8px 0;padding:12px 16px;margin-bottom:10px;">';
+        html += '<div style="font-weight:700;font-size:13px;margin-bottom:4px;">'+icone+' '+e.titulo+' <span class="badge badge-'+(e.gravidade==='critico'?'danger':'warning')+'">'+e.gravidade.toUpperCase()+'</span></div>';
+        html += '<div style="font-size:12px;margin-bottom:4px;">'+e.detalhe+'</div>';
+        if (e.causa.includes('<table')) {
+          html += '<div style="margin:8px 0;">'+e.causa+'</div>';
+        } else {
+          html += '<div style="font-size:11px;color:var(--text-secondary);"><strong>Possibilidades:</strong> '+e.causa+'</div>';
+        }
+        html += '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;"><strong>Evidencia:</strong> '+e.evidencia+'</div>';
+        html += '</div>';
+      });
+    }
+
+    // ── 3. O QUE FAZER PARA MELHORAR ──
+    html += '<div style="font-size:14px;font-weight:700;color:var(--success-dark);margin:24px 0 12px;border-bottom:2px solid var(--success-light);padding-bottom:6px;">&#10004; O QUE FAZER PARA MELHORAR</div>';
+
+    const acoes = [];
+
+    if (curto90 > 0) {
+      acoes.push({ area: 'Selecao', prazo: 'Imediato', acao: 'Revisar descricao de vagas (clareza sobre funcao, turno, ambiente). Incluir teste pratico e dinamica de grupo. Envolver gestor direto na entrevista final.', impacto: 'Reduzir desligamentos nos primeiros 90 dias' });
+      acoes.push({ area: 'Integracao', prazo: '2 semanas', acao: 'Criar programa de onboarding de 30 dias: padrinho/madrinha, checklist de 1a semana, feedback no 15o e 30o dia. Acompanhamento obrigatorio pelo RH.', impacto: 'Aumentar retencao nos primeiros meses' });
+    }
+
+    if (pedidos > empresa) {
+      acoes.push({ area: 'Remuneracao', prazo: '30 dias', acao: 'Pesquisa salarial regional (Jardim Alegre e cidades vizinhas). Comparar cargos criticos com mercado. Propor ajustes para funcoes com mais evasao.', impacto: 'Reduzir pedidos de demissao por motivo financeiro' });
+      acoes.push({ area: 'Clima', prazo: '15 dias', acao: 'Aplicar pesquisa de clima anonima (5 perguntas) nos setores com mais pedidos. Conversa individual com colaboradores de +1 ano. Verificar relacao com lideranca.', impacto: 'Identificar causa raiz da insatisfacao' });
+      acoes.push({ area: 'Carreira', prazo: '60 dias', acao: 'Implementar plano de desenvolvimento individual (PDI) para colaboradores-chave. Criar trilha de crescimento visivel (auxiliar → operador → lider).', impacto: 'Dar perspectiva de futuro e reduzir saidas voluntarias' });
+    }
+
+    if (empresa >= 1) {
+      const demitidos = desligamentos.filter(d => d.tipo === 'demissao_empresa');
+      const dem30 = demitidos.filter(d => (d.tempo_empresa_dias||0) <= 30).length;
+      const dem90 = demitidos.filter(d => (d.tempo_empresa_dias||0) > 30 && (d.tempo_empresa_dias||0) <= 90).length;
+      const demDepois = demitidos.filter(d => (d.tempo_empresa_dias||0) > 90).length;
+
+      if (dem30 > 0) {
+        acoes.push({ area: 'Selecao', prazo: 'Imediato', acao: 'Se demitimos ' + dem30 + ' pessoa(s) em menos de 30 dias, o problema esta NA CONTRATACAO. Revisar: descricao da vaga bate com a realidade? Candidato fez teste pratico? Conheceu o ambiente antes? Gestor participou da entrevista?', impacto: 'Parar de contratar errado = parar de demitir cedo' });
+      }
+      if (dem90 > 0) {
+        acoes.push({ area: 'Integracao', prazo: '2 semanas', acao: 'Se demitimos ' + dem90 + ' pessoa(s) entre 30-90 dias, o problema esta NA INTEGRACAO. Criar: padrinho no setor, checklist de 1a semana, feedback obrigatorio no 15o e 45o dia, acompanhamento formal do gestor direto.', impacto: 'Dar chance real ao colaborador antes de desligar' });
+      }
+      if (demDepois > 0) {
+        acoes.push({ area: 'Gestao', prazo: '30 dias', acao: 'Se demitimos ' + demDepois + ' pessoa(s) com mais de 90 dias, o problema esta NA GESTAO. Verificar: existia PDI? Houve feedback formal antes? Metas estavam escritas? O gestor tentou recuperar? Implementar: conversa 1:1 mensal, avaliacao trimestral, plano de melhoria de 30 dias ANTES de qualquer demissao.', impacto: 'Evitar demissoes que poderiam ser evitadas com gestao' });
+      }
+    }
+
+    if (setCriticos.length > 0) {
+      acoes.push({ area: 'Setores', prazo: 'Imediato', acao: 'Reuniao com lideranca dos setores ' + setCriticos.map(s=>s.setor).join(', ') + '. Levantar: carga de trabalho, condicoes fisicas, relacionamento, remuneracao. Plano de acao especifico por setor em 15 dias.', impacto: 'Estabilizar rotatividade nos setores criticos' });
+    }
+
+    if (semClass > totalDeslig * 0.3) {
+      acoes.push({ area: 'Processos RH', prazo: 'Imediato', acao: 'Todo desligamento DEVE passar pelo formulario completo (3 niveis + entrevista). Classificar desligamentos antigos sem categoria. Sem dados, nao ha diagnostico.', impacto: 'Ter dados confiaveis para tomar decisao' });
+    }
+
+    // Acoes genericas sempre uteis
+    acoes.push({ area: 'Monitoramento', prazo: 'Contínuo', acao: 'Acompanhar este dashboard mensalmente. Meta: reduzir turnover em 20% nos proximos 6 meses. Reuniao mensal RH + diretoria para analisar indicadores.', impacto: 'Cultura de dados para decisao de RH' });
+
+    if (acoes.length > 0) {
+      html += '<table class="tbl"><thead><tr><th style="width:100px">Area</th><th style="width:90px">Prazo</th><th>Acao</th><th style="width:200px">Impacto Esperado</th></tr></thead><tbody>';
+      acoes.forEach(a => {
+        const prazoCor = a.prazo === 'Imediato' ? 'badge-danger' : a.prazo.includes('15') || a.prazo.includes('2 sem') ? 'badge-warning' : 'badge-info';
+        html += '<tr><td><strong>' + a.area + '</strong></td><td><span class="badge ' + prazoCor + '">' + a.prazo + '</span></td><td style="font-size:12px;white-space:normal;line-height:1.5;">' + a.acao + '</td><td style="font-size:11px;color:var(--text-secondary);white-space:normal;">' + a.impacto + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    // ── 4. ROTATIVIDADE POR SETOR ──
+    html += '<div style="font-size:14px;font-weight:700;color:#7c3aed;margin:24px 0 12px;border-bottom:2px solid #f5f3ff;padding-bottom:6px;">&#128202; ROTATIVIDADE POR SETOR</div>';
+    if (setorArr.length > 0) {
+      html += '<table class="tbl"><thead><tr><th>Setor</th><th>Desligados</th><th>Pediram</th><th>Demitidos</th><th>Ativos</th><th>Taxa</th><th>Situacao</th></tr></thead><tbody>';
+      setorArr.forEach(s => {
+        const ped = pedidosPorSetor[s.setor] || 0;
+        const emp = empresaPorSetor[s.setor] || 0;
+        const cor = s.taxa > 30 ? 'color:var(--danger);font-weight:700;' : s.taxa > 15 ? 'color:var(--warning);font-weight:600;' : '';
+        const badge = s.taxa > 30 ? '<span class="badge badge-danger">Critico</span>' : s.taxa > 15 ? '<span class="badge badge-warning">Atencao</span>' : '<span class="badge badge-success">Normal</span>';
+        html += '<tr><td>' + s.setor + '</td><td>' + s.deslig + '</td><td style="color:#f39c12;font-weight:600;">' + ped + '</td><td style="color:var(--danger);font-weight:600;">' + emp + '</td><td>' + s.total + '</td><td style="font-variant-numeric:tabular-nums;'+cor+'">' + s.taxa.toFixed(1) + '%</td><td>' + badge + '</td></tr>';
+      });
+      html += '</tbody></table>';
+    }
+
+    document.getElementById('insights-content').innerHTML = html;
   }
 
   function renderLista() {
@@ -579,6 +1031,241 @@
         '<div class="insight-box" style="margin-top:12px;"><strong>Interpretacao:</strong> Alto absenteismo antes do desligamento pode indicar desmotivacao progressiva ou problemas de saude nao tratados. Cruzar com dados do Programa de Saude Mental.</div>';
   }
 
+  // ── Inteligencia RH ──
+  async function renderInteligencia() {
+    const el = document.getElementById('intel-content');
+    const totalDeslig = desligamentos.length;
+    const totalAtivos = colaboradores.filter(c => c.status === 'ativo').length;
+
+    if (totalDeslig === 0) {
+      el.innerHTML = '<div class="empty">Sem desligamentos no periodo para analisar</div>';
+      return;
+    }
+
+    // Consultas leves a outros modulos (em paralelo)
+    const [rScores, rAsos, rTreinos] = await Promise.all([
+      API.get('motor_score?select=funcionario_id,score_final,classificacao&order=periodo_referencia.desc&limit=500'),
+      API.get('rh_asos?select=colaborador_id,data_vencimento,resultado&order=data_vencimento.desc'),
+      API.get('rh_treinamentos?select=colaborador_id,data_vencimento&order=data_vencimento.desc'),
+    ]);
+
+    const scores = rScores.ok ? rScores.data : [];
+    const asos = rAsos.ok ? rAsos.data : [];
+    const treinos = rTreinos.ok ? rTreinos.data : [];
+
+    // Maps
+    const scoreMap = {};
+    scores.forEach(s => { if (!scoreMap[s.funcionario_id]) scoreMap[s.funcionario_id] = s; });
+    const asoMap = {};
+    asos.forEach(a => { if (!asoMap[a.colaborador_id]) asoMap[a.colaborador_id] = a; });
+    const treinoCount = {};
+    const hoje = new Date().toISOString().slice(0,10);
+    treinos.forEach(t => {
+      if (!treinoCount[t.colaborador_id]) treinoCount[t.colaborador_id] = { total: 0, vencidos: 0 };
+      treinoCount[t.colaborador_id].total++;
+      if (t.data_vencimento && t.data_vencimento < hoje) treinoCount[t.colaborador_id].vencidos++;
+    });
+
+    let html = '';
+
+    // ── 1. CUSTO DO TURNOVER ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128176; Custo Estimado do Turnover</div>';
+    const salarioMedio = totalDeslig > 0
+      ? desligamentos.reduce((s, d) => s + (d.salario || d.salario_base || 2000), 0) / totalDeslig
+      : 2000;
+    const custoRecrutamento = salarioMedio * 0.5;
+    const custoTreinamento = salarioMedio * 1.0;
+    const custoProdutividade = salarioMedio * 1.5;
+    const custoPorDeslig = custoRecrutamento + custoTreinamento + custoProdutividade;
+    const custoTotal = custoPorDeslig * totalDeslig;
+
+    html += '<div class="kpi-row mb-4">';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(custoTotal).toLocaleString('pt-BR') + '</div><div class="lbl">Custo Total Estimado</div></div>';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(custoPorDeslig).toLocaleString('pt-BR') + '</div><div class="lbl">Custo por Desligamento</div></div>';
+    html += '<div class="kpi-card"><div class="num">R$ ' + Math.round(salarioMedio).toLocaleString('pt-BR') + '</div><div class="lbl">Salario Medio</div></div>';
+    html += '</div>';
+    html += '<div class="insight-box">Cada desligamento custa em media <strong>3x o salario</strong> (recrutamento 0.5x + treinamento 1x + perda de produtividade 1.5x). ';
+    html += 'No periodo, o turnover custou aproximadamente <strong>R$ ' + Math.round(custoTotal).toLocaleString('pt-BR') + '</strong> para a empresa.</div>';
+    html += '</div>';
+
+    // ── 2. PERFIL DO DESLIGADO ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128100; Perfil do Colaborador que Sai</div>';
+
+    // Por tempo de casa
+    const faixasTempo = { 'Ate 30d': 0, '31-90d': 0, '91-180d': 0, '6m-1a': 0, '1-2a': 0, '2a+': 0 };
+    desligamentos.forEach(d => {
+      const t = d.tempo_empresa_dias || 0;
+      if (t <= 30) faixasTempo['Ate 30d']++;
+      else if (t <= 90) faixasTempo['31-90d']++;
+      else if (t <= 180) faixasTempo['91-180d']++;
+      else if (t <= 365) faixasTempo['6m-1a']++;
+      else if (t <= 730) faixasTempo['1-2a']++;
+      else faixasTempo['2a+']++;
+    });
+    const faixaMax = Object.entries(faixasTempo).sort((a,b)=>b[1]-a[1])[0];
+
+    // Por setor
+    const setorDeslig = {};
+    desligamentos.forEach(d => { if (d.setor) setorDeslig[d.setor] = (setorDeslig[d.setor] || 0) + 1; });
+    const topSetores = Object.entries(setorDeslig).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+    // Por cargo
+    const cargoDeslig = {};
+    desligamentos.forEach(d => { if (d.cargo) cargoDeslig[d.cargo] = (cargoDeslig[d.cargo] || 0) + 1; });
+    const topCargos = Object.entries(cargoDeslig).sort((a,b)=>b[1]-a[1]).slice(0,5);
+
+    html += '<div class="grid-2 mb-4">';
+    html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;">Tempo de Casa ao Sair</div>';
+    html += '<table class="tbl"><tbody>';
+    Object.entries(faixasTempo).forEach(([f,n]) => {
+      const pct = ((n/totalDeslig)*100).toFixed(0);
+      const bar = '<div style="background:var(--bg-alt);border-radius:4px;height:16px;width:100%;"><div style="background:' + (f === faixaMax[0] ? 'var(--danger)' : 'var(--primary)') + ';height:100%;border-radius:4px;width:' + pct + '%;"></div></div>';
+      html += '<tr><td style="width:70px;">' + f + '</td><td>' + bar + '</td><td style="width:50px;text-align:right;font-weight:600;">' + n + ' (' + pct + '%)</td></tr>';
+    });
+    html += '</tbody></table></div>';
+
+    html += '<div><div style="font-size:12px;font-weight:600;margin-bottom:6px;">Setores que mais perdem</div>';
+    html += '<table class="tbl"><thead><tr><th>Setor</th><th>Saidas</th><th>% do total</th></tr></thead><tbody>';
+    topSetores.forEach(([s,n]) => {
+      html += '<tr><td>' + esc(s) + '</td><td style="font-weight:600;">' + n + '</td><td>' + ((n/totalDeslig)*100).toFixed(0) + '%</td></tr>';
+    });
+    html += '</tbody></table>';
+    if (topCargos.length > 0) {
+      html += '<div style="font-size:12px;font-weight:600;margin:12px 0 6px;">Cargos que mais perdem</div>';
+      html += topCargos.map(([c,n]) => '<span class="badge badge-gray" style="margin:2px;">' + esc(c) + ' (' + n + ')</span>').join(' ');
+    }
+    html += '</div></div>';
+
+    html += '<div class="insight-box">A maioria dos desligamentos acontece na faixa <strong>' + faixaMax[0] + '</strong> (' + faixaMax[1] + ' de ' + totalDeslig + '). ';
+    if (faixaMax[0] === 'Ate 30d' || faixaMax[0] === '31-90d') {
+      html += 'Isso indica que o problema esta <strong>no inicio do ciclo</strong> — contratacao e/ou integracao precisam de revisao urgente.';
+    } else if (faixaMax[0] === '91-180d' || faixaMax[0] === '6m-1a') {
+      html += 'Isso indica que o problema esta <strong>na gestao do dia a dia</strong> — lideranca, ambiente, reconhecimento e perspectiva de crescimento.';
+    } else {
+      html += 'Perder colaboradores antigos e caro — experiencia e conhecimento vao embora. Verificar remuneracao e oportunidades de carreira.';
+    }
+    html += '</div></div>';
+
+    // ── 3. SAZONALIDADE ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128197; Sazonalidade — Quando as saidas acontecem</div>';
+    const porMes = {};
+    for (let m = 1; m <= 12; m++) porMes[m] = 0;
+    desligamentos.forEach(d => {
+      if (d.data_desligamento) {
+        const mes = parseInt(d.data_desligamento.substring(5,7));
+        porMes[mes]++;
+      }
+    });
+    const mesesNome = ['','Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    const mesMax = Object.entries(porMes).sort((a,b)=>b[1]-a[1])[0];
+    html += '<div style="display:flex;gap:4px;align-items:flex-end;height:80px;margin-bottom:8px;">';
+    const maxVal = Math.max(...Object.values(porMes), 1);
+    for (let m = 1; m <= 12; m++) {
+      const h = Math.max((porMes[m] / maxVal) * 70, 2);
+      const cor = parseInt(mesMax[0]) === m ? 'var(--danger)' : 'var(--primary-200)';
+      html += '<div style="flex:1;text-align:center;"><div style="background:'+cor+';height:'+h+'px;border-radius:3px 3px 0 0;margin:0 auto;width:80%;"></div><div style="font-size:9px;color:var(--text-muted);margin-top:2px;">'+mesesNome[m]+'</div><div style="font-size:10px;font-weight:600;">'+porMes[m]+'</div></div>';
+    }
+    html += '</div>';
+    html += '<div class="insight-box">O mes com mais saidas e <strong>' + mesesNome[parseInt(mesMax[0])] + '</strong> (' + mesMax[1] + ' desligamentos). ';
+    html += 'Antecipar acoes de retencao (pesquisa de clima, conversa 1:1) nos meses anteriores ao pico.</div></div>';
+
+    // ── 4. CRUZAMENTO COM SCORE ──
+    const desligComScore = desligamentos.filter(d => scoreMap[d.colaborador_id]);
+    if (desligComScore.length > 0) {
+      html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#127919; Score dos Desligados — Perdemos bons colaboradores?</div>';
+      const scoreMedio = desligComScore.reduce((s,d) => s + (scoreMap[d.colaborador_id].score_final || 0), 0) / desligComScore.length;
+      const bons = desligComScore.filter(d => (scoreMap[d.colaborador_id].score_final || 0) >= 70).length;
+      const ruins = desligComScore.filter(d => (scoreMap[d.colaborador_id].score_final || 0) < 50).length;
+
+      html += '<div class="kpi-row mb-4">';
+      html += '<div class="kpi-card"><div class="num">' + scoreMedio.toFixed(1) + '</div><div class="lbl">Score Medio dos Desligados</div></div>';
+      html += '<div class="kpi-card"><div class="num green">' + bons + '</div><div class="lbl">Bons (score &ge;70)</div></div>';
+      html += '<div class="kpi-card"><div class="num red">' + ruins + '</div><div class="lbl">Baixo desempenho (&lt;50)</div></div>';
+      html += '</div>';
+
+      if (bons > ruins) {
+        html += '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);"><strong>Alerta:</strong> Estamos perdendo mais colaboradores BOM do que de baixo desempenho. Isso e critico — indica falha de retencao, nao de selecao. Priorizar: pesquisa salarial, reconhecimento e plano de carreira.</div>';
+      } else if (ruins > bons) {
+        html += '<div class="insight-box"><strong>Positivo:</strong> A maioria dos desligados tinha score baixo. O processo de gestao de desempenho esta funcionando. Verificar se a selecao pode melhorar para evitar essas contratacoes.</div>';
+      }
+      html += '</div>';
+    }
+
+    // ── 5. CRUZAMENTO COM ASO ──
+    const desligSemAso = desligamentos.filter(d => {
+      const aso = asoMap[d.colaborador_id];
+      return !aso || (aso.data_vencimento && aso.data_vencimento < (d.data_desligamento || hoje));
+    }).length;
+    if (desligSemAso > 0) {
+      html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#9764; Conformidade SST dos Desligados</div>';
+      html += '<div class="insight-box">' + desligSemAso + ' de ' + totalDeslig + ' desligados (' + ((desligSemAso/totalDeslig)*100).toFixed(0) + '%) estavam com <strong>ASO vencido ou sem ASO</strong> no momento do desligamento. ';
+      html += 'Riscos: passivo trabalhista em caso de reclamacao, multa do MTE. Garantir ASO demissional em TODOS os desligamentos.</div>';
+      html += '</div>';
+    }
+
+    // ── 6. ENTREVISTA DE DESLIGAMENTO ──
+    const comEntrevista = desligamentos.filter(d => d.entrevista_p1 || d.entrevista_p2 || d.entrevista_p3 || d.entrevista_p4 || d.entrevista_p5);
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#128221; Entrevistas de Desligamento</div>';
+    if (comEntrevista.length === 0) {
+      html += '<div class="insight-box" style="border-left-color:var(--warning);background:var(--warning-light);"><strong>' + totalDeslig + ' desligamentos e NENHUMA entrevista de saida registrada.</strong> ';
+      html += 'A entrevista de desligamento e a ferramenta mais importante para entender por que as pessoas saem. Sem ela, todo diagnostico e suposicao. ';
+      html += 'Acao: tornar obrigatoria para 100% dos desligamentos, usando a aba "+ Registrar".</div>';
+    } else {
+      const pctEntrevista = ((comEntrevista.length/totalDeslig)*100).toFixed(0);
+      html += '<div style="margin-bottom:8px;font-size:13px;">' + comEntrevista.length + ' de ' + totalDeslig + ' desligamentos tem entrevista (' + pctEntrevista + '%)</div>';
+
+      // Analisar P4: "Voltaria a trabalhar aqui?"
+      const voltaria = comEntrevista.filter(d => d.entrevista_p4 && d.entrevista_p4.toLowerCase().includes('sim')).length;
+      const naoVoltaria = comEntrevista.filter(d => d.entrevista_p4 && !d.entrevista_p4.toLowerCase().includes('sim')).length;
+      if (voltaria + naoVoltaria > 0) {
+        html += '<div class="insight-box"><strong>"Voce voltaria?"</strong> — ' + voltaria + ' disseram SIM, ' + naoVoltaria + ' disseram NAO. ';
+        if (voltaria > naoVoltaria) html += 'A maioria voltaria — estamos perdendo gente por motivos que poderiam ser resolvidos (salario, beneficio, flexibilidade).';
+        else html += 'A maioria NAO voltaria — indica problemas estruturais (lideranca, ambiente, cultura).';
+        html += '</div>';
+      }
+
+      // Analisar P2: "O que mais incomodava"
+      const incomodos = comEntrevista.filter(d => d.entrevista_p2).map(d => d.entrevista_p2.toLowerCase());
+      if (incomodos.length > 0) {
+        const temas = { 'salario/financeiro': 0, 'lideranca/gestor': 0, 'ambiente/colegas': 0, 'carga/horario': 0, 'transporte': 0, 'crescimento': 0 };
+        incomodos.forEach(t => {
+          if (t.match(/salari|dinheir|pagament|benefi|vale/)) temas['salario/financeiro']++;
+          if (t.match(/chefe|gestor|lider|supervisor|coordenador/)) temas['lideranca/gestor']++;
+          if (t.match(/ambient|coleg|equip|relacion|conflit/)) temas['ambiente/colegas']++;
+          if (t.match(/horar|carga|turno|hora extra|folga/)) temas['carga/horario']++;
+          if (t.match(/transport|onibu|distanc/)) temas['transporte']++;
+          if (t.match(/cresci|promoça|carreir|oportunid/)) temas['crescimento']++;
+        });
+        const temasAtivos = Object.entries(temas).filter(([,n]) => n > 0).sort((a,b) => b[1] - a[1]);
+        if (temasAtivos.length > 0) {
+          html += '<div style="font-size:12px;font-weight:600;margin:8px 0 4px;">"O que mais incomodava?" — temas recorrentes:</div>';
+          html += temasAtivos.map(([t,n]) => '<span class="badge badge-' + (n >= 3 ? 'danger' : n >= 2 ? 'warning' : 'gray') + '" style="margin:2px;">' + t + ' (' + n + ')</span>').join(' ');
+        }
+      }
+    }
+    html += '</div>';
+
+    // ── 7. QUALIDADE DA CONTRATACAO ──
+    html += '<div class="card mb-4"><div class="card-title" style="font-size:15px;margin-bottom:12px;">&#127919; Qualidade da Contratacao</div>';
+    const curto90 = desligamentos.filter(d => (d.tempo_empresa_dias || 0) <= 90).length;
+    const pct90 = totalDeslig > 0 ? ((curto90/totalDeslig)*100).toFixed(0) : 0;
+    const nota = pct90 > 40 ? 'RUIM' : pct90 > 20 ? 'REGULAR' : pct90 > 10 ? 'BOA' : 'EXCELENTE';
+    const notaCor = pct90 > 40 ? 'var(--danger)' : pct90 > 20 ? 'var(--warning)' : 'var(--success)';
+    html += '<div style="font-size:24px;font-weight:800;color:'+notaCor+';margin-bottom:4px;">' + nota + '</div>';
+    html += '<div style="font-size:12px;color:var(--text-secondary);margin-bottom:12px;">' + pct90 + '% dos desligados saem nos primeiros 90 dias (benchmark saudavel: &lt;10%)</div>';
+    html += '<div class="insight-box">';
+    if (parseInt(pct90) > 30) {
+      html += '<strong>Mais de 30% saem em 90 dias.</strong> O processo seletivo precisa de revisao urgente: descricao de vaga realista, entrevista com gestor, teste pratico, tour pelo ambiente, programa de integracao estruturado.';
+    } else if (parseInt(pct90) > 15) {
+      html += '<strong>Taxa moderada de saidas precoces.</strong> Revisar: o candidato conhece a realidade do trabalho antes de aceitar? Existe programa de onboarding? O gestor acompanha nos primeiros 30 dias?';
+    } else {
+      html += '<strong>Boa retencao inicial.</strong> O processo seletivo parece adequado. Focar em retencao de medio/longo prazo (carreira, remuneracao, clima).';
+    }
+    html += '</div></div>';
+
+    el.innerHTML = html;
+  }
+
   // ── Save Desligamento ──
   window.salvarDesligamento = async function(e) {
     e.preventDefault();
@@ -646,6 +1333,477 @@
     return false;
   };
 
+  // ── Diagnostico e fix de registros ──
+  function checkFixCard() {
+    const semTipoCount = desligamentos.filter(d => !d.tipo).length;
+    if (semTipoCount > 0) {
+      document.getElementById('fix-card').style.display = '';
+      document.getElementById('fix-msg').textContent = semTipoCount + ' registros sem tipo classificado. Clique em "Detectar estrutura" e depois reimporte o CSV.';
+    } else {
+      document.getElementById('fix-card').style.display = 'none';
+    }
+  }
+
+  document.getElementById('btn-detect-schema').addEventListener('click', async () => {
+    const result = document.getElementById('fix-result');
+    result.innerHTML = '<div class="loading">Detectando...</div>';
+
+    // Pegar 1 registro para ver as colunas
+    const sample = await API.get('rh_desligamentos?select=*&limit=1');
+    if (!sample.ok || !sample.data || !sample.data.length) {
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">Erro ao acessar tabela rh_desligamentos</div>';
+      return;
+    }
+
+    const cols = Object.keys(sample.data[0]);
+    const temTipo = cols.includes('tipo');
+    const temTipoDeslig = cols.includes('tipo_desligamento');
+    const temCategoria = cols.includes('categoria');
+    const temCategoriaCausa = cols.includes('categoria_causa');
+    const temNome = cols.includes('nome');
+    const temColabNome = cols.includes('colaborador_nome');
+    const temMotivo = cols.includes('motivo');
+    const temDescricao = cols.includes('descricao');
+
+    let html = '<div style="font-size:12px;margin-bottom:12px;"><strong>Colunas encontradas:</strong> ' + cols.join(', ') + '</div>';
+    html += '<div style="font-size:12px;margin-bottom:8px;">';
+    html += 'Campo tipo: <strong>' + (temTipoDeslig ? 'tipo_desligamento' : temTipo ? 'tipo' : 'NAO ENCONTRADO') + '</strong><br>';
+    html += 'Campo causa: <strong>' + (temCategoriaCausa ? 'categoria_causa' : temCategoria ? 'categoria' : 'NAO ENCONTRADO') + '</strong><br>';
+    html += 'Campo nome: <strong>' + (temNome ? 'nome' : temColabNome ? 'colaborador_nome' : 'NAO ENCONTRADO') + '</strong>';
+    html += '</div>';
+
+    // Salvar no estado para uso na importacao
+    window._dbSchema = { temTipo, temTipoDeslig, temCategoria, temCategoriaCausa, temNome, temColabNome, temMotivo, temDescricao };
+
+    html += '<div class="insight-box">Use esses nomes de coluna ao importar. O importador foi atualizado para usar automaticamente os nomes corretos.</div>';
+    result.innerHTML = html;
+  });
+
+  document.getElementById('btn-fix-limpar').addEventListener('click', async () => {
+    if (!confirm('Isso vai remover registros duplicados (mesmo nome + mesma data). Continuar?')) return;
+    const result = document.getElementById('fix-result');
+    result.innerHTML = '<div class="loading">Buscando duplicatas...</div>';
+
+    const all = await API.get('rh_desligamentos?select=id,nome,colaborador_nome,data_desligamento&order=data_desligamento.desc');
+    if (!all.ok) { result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">Erro ao buscar registros</div>'; return; }
+
+    const seen = new Set();
+    let deleted = 0;
+    for (const r of all.data) {
+      const chave = ((r.nome || r.colaborador_nome || '') + '|' + (r.data_desligamento || '')).toUpperCase();
+      if (seen.has(chave)) {
+        await API.del('rh_desligamentos?id=eq.' + r.id);
+        deleted++;
+      } else {
+        seen.add(chave);
+      }
+    }
+
+    result.innerHTML = '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' + deleted + ' duplicata(s) removida(s). Recarregando...</div>';
+    setTimeout(() => loadData(), 1000);
+  });
+
+  // ── Sync via Convenia API ──
+  document.getElementById('btn-sync-api').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-sync-api');
+    const status = document.getElementById('sync-api-status');
+    const result = document.getElementById('sync-api-result');
+
+    // Buscar config do Convenia
+    const cfg = JSON.parse(localStorage.getItem('convenia_config') || '{}');
+    if (!cfg.token) {
+      if (confirm('Token da API Convenia nao configurado.\n\nDeseja abrir a pagina de configuracao agora?')) {
+        window.location.href = 'convenia_integracao.html';
+      }
+      return;
+    }
+
+    btn.disabled = true;
+    status.textContent = 'Buscando funcionarios da API...';
+
+    try {
+      const CONVENIA_BASE = 'https://public-api.convenia.com.br/api/v3';
+      const hdrs = { 'api-token': cfg.token, 'Content-Type': 'application/json', 'Accept': 'application/json' };
+
+      // Buscar todos os funcionarios (incluindo desligados)
+      let todos = [], page = 1, totalPages = 1;
+      do {
+        status.textContent = 'Pagina ' + page + '...';
+        const res = await fetch(CONVENIA_BASE + '/employees?page=' + page + '&per_page=100', { headers: hdrs });
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - Verifique o token');
+        const json = await res.json();
+        const lista = json.data || json.employees || json || [];
+        if (!Array.isArray(lista)) break;
+        todos = todos.concat(lista);
+        if (json.meta) totalPages = json.meta.last_page || json.meta.total_pages || 1;
+        page++;
+      } while (page <= totalPages && page <= 30);
+
+      // Filtrar desligados (situation === 'dismissed' ou status similar)
+      const desligados = todos.filter(e => {
+        const sit = (e.situation || e.status || '').toLowerCase();
+        return sit === 'dismissed' || sit === 'desligado' || sit === 'terminated' ||
+               e.dismissed_at || e.termination_date || e.data_desligamento;
+      });
+
+      status.textContent = desligados.length + ' desligado(s) encontrado(s) de ' + todos.length + ' total';
+
+      if (desligados.length === 0) {
+        result.style.display = '';
+        result.innerHTML = '<div class="insight-box" style="border-left-color:var(--warning);background:var(--warning-light);">' +
+          '<strong>Nenhum desligado encontrado via API.</strong> ' +
+          'A API retornou ' + todos.length + ' funcionarios mas nenhum com status "dismissed". ' +
+          'Possiveis causas: a API pode nao retornar desligados no endpoint padrao, ou o campo de status tem outro nome. ' +
+          'Use a importacao via CSV como alternativa.</div>';
+        btn.disabled = false;
+        return;
+      }
+
+      // Processar e importar
+      let ok = 0, skip = 0, err = 0;
+      for (const emp of desligados) {
+        const nome = emp.name || emp.nome || emp.full_name || '';
+        const dataDeslig = emp.dismissed_at || emp.termination_date || emp.data_desligamento || '';
+        const dataAdm = emp.admission_date || emp.hired_at || emp.data_admissao || '';
+        const cargo = emp.role || emp.position || emp.cargo || '';
+        const setor = emp.department || emp.setor || '';
+        const salario = emp.salary || emp.salario || 0;
+        const tipoConvenia = emp.dismissal_type || emp.tipo_desligamento || emp.termination_type || '';
+        const motivo = emp.dismissal_reason || emp.motivo_desligamento || '';
+
+        if (!nome || !dataDeslig) continue;
+
+        const dataISO = dataDeslig.includes('/') ?
+          dataDeslig.split('/').reverse().join('-') : dataDeslig.substring(0, 10);
+        const admISO = dataAdm ? (dataAdm.includes('/') ?
+          dataAdm.split('/').reverse().join('-') : dataAdm.substring(0, 10)) : null;
+
+        const tempoDias = admISO && dataISO ?
+          Math.ceil((new Date(dataISO) - new Date(admISO)) / 86400000) : null;
+        const tipo = classificarTipo(tipoConvenia);
+        const causa = classificarCausa(motivo, '', tipo, tempoDias);
+
+        // Check duplicata
+        const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(nome) + '&data_desligamento=eq.' + dataISO + '&select=id&limit=1');
+        if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
+
+        const res = await API.post('rh_desligamentos', {
+          colaborador_nome: nome, nome: nome,
+          data_desligamento: dataISO, data_admissao: admISO,
+          tipo: tipo, categoria: causa,
+          motivo: motivo || tipoConvenia || 'Via API Convenia',
+          cargo: cargo, setor: setor,
+          salario: parseFloat(salario) || null,
+          tempo_empresa_dias: tempoDias,
+        });
+        if (res.ok) ok++; else err++;
+      }
+
+      result.style.display = '';
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--success);background:var(--success-light);">' +
+        '<strong>Sync concluido!</strong> ' + ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)</div>';
+
+      if (ok > 0) setTimeout(() => loadData(), 1000);
+    } catch (e) {
+      result.style.display = '';
+      result.innerHTML = '<div class="insight-box" style="border-left-color:var(--danger);background:var(--danger-light);">' +
+        '<strong>Erro:</strong> ' + e.message + '</div>';
+    }
+    btn.disabled = false;
+  });
+
+  // ── Import Convenia CSV ──
+  function classificarTipo(tipoConvenia) {
+    const t = (tipoConvenia || '').toLowerCase();
+    if (t.includes('pedido do empregado') || t.includes('antecipado pelo empregado')) return 'pedido_demissao';
+    if (t.includes('pedido da empresa') || t.includes('antecipado pelo empregador')) return 'demissao_empresa';
+    if (t.includes('justa causa') && t.includes('empresa')) return 'justa_causa';
+    if (t.includes('acordo')) return 'acordo_mutuo';
+    if (t.includes('morte')) return 'morte';
+    if (t.includes('término') || t.includes('termino') || t.includes('tempo determinado')) return 'termino_contrato';
+    if (t.includes('quebra') && t.includes('empregado')) return 'pedido_demissao';
+    if (t.includes('quebra') && (t.includes('empresa') || t.includes('estágio') || t.includes('estagio'))) return 'demissao_empresa';
+    if (t.includes('outros')) return 'outros';
+    return 'outros';
+  }
+
+  function classificarCausa(motivo, obs, tipo, tempoDias) {
+    const txt = ((motivo || '') + ' ' + (obs || '')).toLowerCase();
+    if (tempoDias != null && tempoDias <= 90) return 'admissao';
+    if (txt.match(/salari|financ|proposta|benefic|remuner/)) return 'financeiro';
+    if (txt.match(/lider|gestor|chefe|ambient|carga|turno|conflito/)) return 'operacional';
+    if (txt.match(/famil|pessoal|mudanc|saude|cidade/)) return 'pessoal';
+    if (txt.match(/adapt|expectativa/)) return 'admissao';
+    if (tipo === 'termino_contrato') return 'admissao';
+    return null;
+  }
+
+  const TIPO_LABELS = {
+    pedido_demissao: 'Pedido demissao',
+    demissao_empresa: 'Empresa demitiu',
+    justa_causa: 'Justa causa',
+    acordo_mutuo: 'Acordo mutuo',
+    termino_contrato: 'Fim contrato',
+    morte: 'Morte',
+    outros: 'Outros',
+  };
+
+  let importRows = [];
+
+  const importZone = document.getElementById('import-zone');
+  const importFile = document.getElementById('import-file');
+
+  importZone.addEventListener('click', () => importFile.click());
+  importZone.addEventListener('dragover', e => { e.preventDefault(); importZone.classList.add('dragover'); });
+  importZone.addEventListener('dragleave', () => importZone.classList.remove('dragover'));
+  importZone.addEventListener('drop', e => { e.preventDefault(); importZone.classList.remove('dragover'); processFile(e.dataTransfer.files[0]); });
+  importFile.addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+  function processFile(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const text = e.target.result;
+      // Detect separator (tab or semicolon or comma)
+      const firstLine = text.split('\n')[0];
+      const sep = firstLine.includes('\t') ? '\t' : firstLine.includes(';') ? ';' : ',';
+      const lines = text.split('\n').map(l => l.split(sep).map(c => c.replace(/^"|"$/g, '').trim()));
+
+      // Find header indices
+      const headers = lines[0].map(h => h.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+      const iNome = headers.findIndex(h => h.includes('nome do colaborador'));
+      const iData = headers.findIndex(h => h.includes('data de desligamento'));
+      const iTipo = headers.findIndex(h => h.includes('tipo de desligamento'));
+      const iMotivo = headers.findIndex(h => h.includes('motivo do desligamento'));
+      const iObs = headers.findIndex(h => h.includes('observacoes') || h.includes('observações'));
+      const iCargo = headers.findIndex(h => h.includes('cargo'));
+      const iSetor = headers.findIndex(h => h.includes('departamento'));
+      const iAdmissao = headers.findIndex(h => h.includes('data de admissao') || h.includes('data de admissão'));
+      const iSalario = headers.findIndex(h => h.includes('salario') || h.includes('salário'));
+      const iId = headers.findIndex(h => h.includes('id (identificador'));
+      const iStatus = headers.findIndex(h => h.includes('status de desligamento'));
+
+      if (iNome < 0 || iData < 0 || iTipo < 0) {
+        alert('CSV invalido. Verifique se contem as colunas: Nome do colaborador, Data de desligamento, Tipo de desligamento');
+        return;
+      }
+
+      importRows = [];
+      for (let i = 1; i < lines.length; i++) {
+        const row = lines[i];
+        if (!row || row.length < 3) continue;
+        const nome = row[iNome];
+        const dataDeslig = row[iData];
+        if (!nome || !dataDeslig || dataDeslig === 'Não informado') continue;
+
+        // Parse date (DD/MM/YYYY or YYYY-MM-DD)
+        let dataISO = dataDeslig;
+        if (dataDeslig.includes('/')) {
+          const p = dataDeslig.split('/');
+          dataISO = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+        }
+
+        const tipoConvenia = row[iTipo] || '';
+        const motivo = iMotivo >= 0 ? row[iMotivo] : '';
+        const obs = iObs >= 0 ? row[iObs] : '';
+        const cargo = iCargo >= 0 ? row[iCargo] : '';
+        const setor = iSetor >= 0 ? row[iSetor] : '';
+        const admissao = iAdmissao >= 0 ? row[iAdmissao] : '';
+        const salarioStr = iSalario >= 0 ? row[iSalario] : '';
+        const idConvenia = iId >= 0 ? row[iId] : '';
+        const statusDeslig = iStatus >= 0 ? row[iStatus] : '';
+
+        // Only import "Concluida"
+        if (statusDeslig && !statusDeslig.toLowerCase().includes('conclu')) continue;
+
+        let admISO = admissao;
+        if (admissao && admissao.includes('/')) {
+          const p = admissao.split('/');
+          admISO = p[2] + '-' + p[1].padStart(2,'0') + '-' + p[0].padStart(2,'0');
+        }
+
+        const salario = salarioStr ? parseFloat(salarioStr.replace(/\./g, '').replace(',', '.')) || 0 : 0;
+        const tempoDias = admISO && dataISO ? Math.ceil((new Date(dataISO) - new Date(admISO)) / 86400000) : null;
+
+        const tipo = classificarTipo(tipoConvenia);
+        const causa = classificarCausa(motivo, obs, tipo, tempoDias);
+
+        importRows.push({
+          nome, data_desligamento: dataISO, tipo_convenia: tipoConvenia,
+          tipo, causa, motivo: motivo || tipoConvenia, cargo, setor,
+          data_admissao: admISO || null, salario, tempo_empresa_dias: tempoDias,
+          id_convenia: idConvenia,
+        });
+      }
+
+      // Show preview
+      document.getElementById('import-zone').style.display = 'none';
+      document.getElementById('import-preview').style.display = '';
+      document.getElementById('import-count').textContent = importRows.length;
+
+      // Stats
+      const stats = {};
+      importRows.forEach(r => { stats[r.tipo] = (stats[r.tipo] || 0) + 1; });
+      document.getElementById('import-stats').innerHTML = Object.entries(stats)
+        .map(([t, n]) => '<span class="badge badge-' + (t === 'pedido_demissao' ? 'warning' : t === 'demissao_empresa' ? 'danger' : 'info') + '" style="margin:2px;">' + (TIPO_LABELS[t] || t) + ': ' + n + '</span>').join(' ');
+
+      // Table
+      document.getElementById('import-tbody').innerHTML = importRows.slice(0, 100).map(r => {
+        const tipoBadge = r.tipo === 'pedido_demissao' ? 'warning' : r.tipo === 'demissao_empresa' ? 'danger' : r.tipo === 'acordo_mutuo' ? 'blue' : 'info';
+        return '<tr><td>' + esc(r.nome) + '</td><td>' + fmtDate(r.data_desligamento) + '</td><td style="font-size:10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;">' + esc(r.tipo_convenia) + '</td><td><span class="badge badge-' + tipoBadge + '">' + (TIPO_LABELS[r.tipo] || r.tipo) + '</span></td><td>' + esc(r.causa || '--') + '</td><td>' + (r.tempo_empresa_dias != null ? r.tempo_empresa_dias + 'd' : '--') + '</td></tr>';
+      }).join('');
+    };
+    reader.readAsText(file, 'UTF-8');
+  }
+
+  document.getElementById('import-cancel').addEventListener('click', () => {
+    document.getElementById('import-zone').style.display = '';
+    document.getElementById('import-preview').style.display = 'none';
+    importRows = [];
+  });
+
+  document.getElementById('import-confirm').addEventListener('click', async () => {
+    const btn = document.getElementById('import-confirm');
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+
+    // Helper: faz POST e devolve a mensagem de erro do PostgREST quando falha
+    async function postDeslig(payload) {
+      try {
+        const token = (() => {
+          try { return JSON.parse(localStorage.getItem('rh_sess_v2') || '{}').access_token || SB_KEY; }
+          catch { return SB_KEY; }
+        })();
+        const res = await fetch(SB_URL + '/rest/v1/rh_desligamentos', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': SB_KEY,
+            'Authorization': 'Bearer ' + token,
+            'Prefer': 'return=minimal',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (res.ok) return { ok: true };
+        let msg = 'Erro ' + res.status;
+        try {
+          const body = await res.json();
+          msg = body.message || body.details || body.hint || msg;
+        } catch {}
+        return { ok: false, error: msg, status: res.status };
+      } catch (e) { return { ok: false, error: e.message || 'Erro de rede' }; }
+    }
+
+    // CHECK constraints do rh_desligamentos:
+    //   tipo_desligamento IN (pedido_demissao, demissao_empresa, termino_contrato, justa_causa, acordo_mutuo)
+    //   categoria_causa   IN (admissao, operacional, financeiro, pessoal)
+    // Remapear valores do classificador que nao batem com o CHECK
+    const mapTipo = (t) => {
+      if (t === 'morte') return 'demissao_empresa';     // Convenia usa morte, schema nao; cai como baixa pela empresa
+      if (t === 'outros' || !t) return 'demissao_empresa';
+      return t;
+    };
+    const mapCausa = (c) => {
+      if (c && ['admissao','operacional','financeiro','pessoal'].includes(c)) return c;
+      return 'pessoal';  // default quando a deteccao nao encontra palavra-chave
+    };
+
+    let ok = 0, skip = 0, err = 0;
+    const errDetails = [];
+    for (const r of importRows) {
+      try {
+        // Check if already exists
+        const check = await API.get('rh_desligamentos?nome=eq.' + encodeURIComponent(r.nome) + '&data_desligamento=eq.' + r.data_desligamento + '&select=id&limit=1');
+        if (check.ok && check.data && check.data.length > 0) { skip++; continue; }
+
+        const tipoFinal = mapTipo(r.tipo);
+        const causaFinal = mapCausa(r.causa);
+
+        // Construir payload dinamico baseado no schema detectado
+        const sc = window._dbSchema || {};
+        const payload = { data_desligamento: r.data_desligamento };
+
+        // Nome
+        if (sc.temNome !== false) payload.nome = r.nome;
+        if (sc.temColabNome !== false) payload.colaborador_nome = r.nome;
+
+        // Tipo (usar o campo correto da tabela)
+        if (sc.temTipoDeslig) { payload.tipo_desligamento = tipoFinal; }
+        else if (sc.temTipo) { payload.tipo = tipoFinal; }
+        else { payload.tipo = tipoFinal; payload.tipo_desligamento = tipoFinal; }
+
+        // Causa
+        if (sc.temCategoriaCausa) { payload.categoria_causa = causaFinal; }
+        else if (sc.temCategoria) { payload.categoria = causaFinal; }
+        else { payload.categoria = causaFinal; payload.categoria_causa = causaFinal; }
+
+        // Motivo / descricao (NOT NULL no schema oficial)
+        const descricao = r.motivo || r.tipo_convenia || 'Importado via CSV';
+        if (sc.temDescricao !== false) payload.descricao = descricao;
+        if (sc.temMotivo !== false) payload.motivo = descricao;
+
+        // Demais campos
+        payload.data_admissao = r.data_admissao;
+        payload.cargo = r.cargo;
+        payload.setor = r.setor;
+        payload.salario = r.salario || null;
+        payload.tempo_empresa_dias = r.tempo_empresa_dias;
+
+        let res = await postDeslig(payload);
+        // Fallback: se falhou, tentar sem campos opcionais
+        if (!res.ok) {
+          const fallback = {
+            nome: r.nome,
+            colaborador_nome: r.nome,
+            data_desligamento: r.data_desligamento,
+            tipo: tipoFinal,
+            tipo_desligamento: tipoFinal,
+            categoria: causaFinal,
+            categoria_causa: causaFinal,
+            motivo: descricao,
+            descricao: descricao,
+          };
+          res = await postDeslig(fallback);
+        }
+        if (res.ok) ok++;
+        else {
+          err++;
+          errDetails.push({ nome: r.nome, data: r.data_desligamento, motivo: res.error || 'Erro desconhecido' });
+        }
+      } catch (e) {
+        err++;
+        errDetails.push({ nome: r.nome, data: r.data_desligamento, motivo: e.message });
+      }
+    }
+
+    document.getElementById('import-result').style.display = '';
+    const cor = err > 0 ? 'var(--warning)' : 'var(--success)';
+    const bgCor = err > 0 ? 'var(--warning-light)' : 'var(--success-light)';
+    let html = '<div class="insight-box" style="border-left-color:' + cor + ';background:' + bgCor + ';">' +
+      '<strong>Importacao concluida!</strong><br>' +
+      ok + ' inserido(s) | ' + skip + ' ja existiam | ' + err + ' erro(s)';
+    if (errDetails.length > 0) {
+      const resumo = {};
+      errDetails.forEach(e => { resumo[e.motivo] = (resumo[e.motivo] || 0) + 1; });
+      html += '<br><br><strong>Motivos dos erros:</strong><ul style="margin:4px 0 0 20px;padding:0;font-size:12px;">';
+      Object.entries(resumo).forEach(([motivo, qtd]) => {
+        html += '<li>' + esc(motivo) + ' — ' + qtd + ' registro(s)</li>';
+      });
+      html += '</ul>';
+      html += '<details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Ver registros com erro (' + errDetails.length + ')</summary>';
+      html += '<div style="max-height:200px;overflow:auto;font-size:11px;margin-top:6px;">';
+      errDetails.slice(0, 50).forEach(e => {
+        html += '<div>' + esc(e.nome) + ' (' + e.data + '): ' + esc(e.motivo) + '</div>';
+      });
+      if (errDetails.length > 50) html += '<div>...e mais ' + (errDetails.length - 50) + '</div>';
+      html += '</div></details>';
+    }
+    html += '</div>';
+    document.getElementById('import-result').innerHTML = html;
+
+    btn.textContent = 'Concluido';
+    setTimeout(() => loadData(), 1000);
+  });
+
   // ── Tab switching ──
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -669,6 +1827,149 @@
   // ── Filters ──
   document.getElementById('filtro-tipo').addEventListener('change', renderLista);
   document.getElementById('filtro-setor').addEventListener('change', renderLista);
+
+  // ── Classificar automaticamente (popula tipo_desligamento/categoria_causa) ──
+  document.getElementById('btn-classificar-auto').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-classificar-auto');
+    const st = document.getElementById('classificar-status');
+    if (!confirm('Isso vai classificar automaticamente todos os desligamentos sem tipo, usando o texto de motivo/descricao e o tempo de empresa. Continuar?')) return;
+
+    btn.disabled = true;
+    st.textContent = 'Carregando registros...';
+
+    // Buscar todas as colunas (schema pode variar entre ambientes)
+    const resAll = await API.get('rh_desligamentos?select=*');
+    if (!resAll.ok) { st.textContent = 'Erro ao carregar: ' + resAll.error; btn.disabled = false; return; }
+
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    const pendentes = (resAll.data || []).filter(d => {
+      const t = d.tipo_desligamento || d.tipo;
+      return !t || !validos.includes(t);
+    });
+
+    if (pendentes.length === 0) {
+      st.textContent = 'Nada a classificar em rh_desligamentos.';
+      // Ainda podem existir extras em rh_funcionarios que nao estao em rh_desligamentos
+      await sincronizarFuncionariosExtras(st);
+      btn.disabled = false;
+      setTimeout(() => loadData(), 800);
+      return;
+    }
+
+    st.textContent = 'Classificando ' + pendentes.length + ' registro(s)...';
+
+    // Detectar quais colunas existem a partir de um registro qualquer
+    const sample = (resAll.data && resAll.data[0]) || {};
+    const colNomes = Object.keys(sample);
+    const temTipoDeslig = colNomes.includes('tipo_desligamento');
+    const temTipo       = colNomes.includes('tipo');
+    const temCatCausa   = colNomes.includes('categoria_causa');
+    const temCategoria  = colNomes.includes('categoria');
+
+    let ok = 0, err = 0;
+    for (const d of pendentes) {
+      const motivo = d.motivo || d.descricao || '';
+      const tempoDias = d.tempo_empresa_dias != null ? d.tempo_empresa_dias :
+        (d.data_admissao && d.data_desligamento
+          ? Math.ceil((new Date(d.data_desligamento) - new Date(d.data_admissao)) / 86400000)
+          : null);
+      const tipo = mapTipoValido(classificarTipo(motivo));
+      const causa = mapCausaValida(classificarCausa(motivo, '', tipo, tempoDias));
+
+      const patch = {};
+      if (temTipoDeslig) patch.tipo_desligamento = tipo;
+      if (temTipo)       patch.tipo = tipo;
+      if (temCatCausa)   patch.categoria_causa = causa;
+      if (temCategoria)  patch.categoria = causa;
+      // Fallback: se nenhuma coluna de tipo foi detectada, tenta ambas
+      if (!temTipoDeslig && !temTipo) { patch.tipo_desligamento = tipo; patch.tipo = tipo; }
+      if (!temCatCausa && !temCategoria) { patch.categoria_causa = causa; patch.categoria = causa; }
+
+      const r = await API.patch('rh_desligamentos?id=eq.' + d.id, patch);
+      if (r.ok) ok++; else err++;
+    }
+
+    st.textContent = ok + ' classificado(s), ' + err + ' erro(s). Sincronizando funcionarios extras...';
+    await sincronizarFuncionariosExtras(st);
+
+    st.textContent = 'Concluido: ' + ok + ' classificado(s), ' + err + ' erro(s). Recarregando...';
+    btn.disabled = false;
+    setTimeout(() => loadData(), 800);
+  });
+
+  function mapTipoValido(t) {
+    const validos = ['pedido_demissao','demissao_empresa','termino_contrato','justa_causa','acordo_mutuo'];
+    if (validos.includes(t)) return t;
+    if (t === 'morte') return 'demissao_empresa';
+    return 'demissao_empresa';
+  }
+  function mapCausaValida(c) {
+    const validos = ['admissao','operacional','financeiro','pessoal'];
+    return validos.includes(c) ? c : 'pessoal';
+  }
+
+  // Sincroniza rh_funcionarios (status=desligado) que nao estao em rh_desligamentos:
+  // cria os registros faltantes ja classificados.
+  async function sincronizarFuncionariosExtras(st) {
+    const resFunc = await API.get('rh_funcionarios?status=eq.desligado&select=*');
+    if (!resFunc.ok) return;
+    const resDel = await API.get('rh_desligamentos?select=*&limit=5000');
+    if (!resDel.ok) return;
+
+    const chavesExistentes = new Set(resDel.data.map(d =>
+      ((d.nome || d.colaborador_nome || '').toUpperCase().trim() + '|' + (d.data_desligamento || ''))
+    ));
+    const idsExistentes = new Set(resDel.data.map(d => d.colaborador_id || d.funcionario_id).filter(Boolean));
+
+    const faltantes = resFunc.data.filter(f => {
+      if (!f.data_desligamento) return false;
+      if (idsExistentes.has(f.id)) return false;
+      const chave = (f.nome_completo || '').toUpperCase().trim() + '|' + f.data_desligamento;
+      return !chavesExistentes.has(chave);
+    });
+
+    if (faltantes.length === 0) return;
+    if (st) st.textContent = 'Inserindo ' + faltantes.length + ' desligamento(s) de rh_funcionarios...';
+
+    // Detectar colunas existentes em rh_desligamentos
+    const sampleDel = (resDel.data && resDel.data[0]) || {};
+    const colsDel = Object.keys(sampleDel);
+    const has = (c) => colsDel.length === 0 || colsDel.includes(c);
+
+    let inseridos = 0, erros = 0;
+    for (const f of faltantes) {
+      const tempoDias = f.data_admissao && f.data_desligamento
+        ? Math.ceil((new Date(f.data_desligamento) - new Date(f.data_admissao)) / 86400000)
+        : null;
+      const tipo = mapTipoValido(tempoDias != null && tempoDias <= 90 ? 'termino_contrato' : 'demissao_empresa');
+      const causa = mapCausaValida(tempoDias != null && tempoDias <= 90 ? 'admissao' : 'pessoal');
+      const descricao = 'Classificado automaticamente';
+
+      const full = {
+        nome: f.nome_completo,
+        colaborador_nome: f.nome_completo,
+        funcionario_id: f.id,
+        colaborador_id: f.id,
+        data_admissao: f.data_admissao,
+        data_desligamento: f.data_desligamento,
+        tempo_empresa_dias: tempoDias,
+        tipo: tipo,
+        tipo_desligamento: tipo,
+        categoria: causa,
+        categoria_causa: causa,
+        motivo: descricao,
+        descricao: descricao,
+        salario: f.salario_base || null,
+      };
+      // Filtra so as colunas que existem no schema
+      const payload = {};
+      Object.keys(full).forEach(k => { if (has(k) && full[k] != null) payload[k] = full[k]; });
+
+      const r = await API.post('rh_desligamentos', payload);
+      if (r.ok) inseridos++; else erros++;
+    }
+    if (st) st.textContent = inseridos + ' desligamento(s) sincronizado(s)' + (erros ? ' | ' + erros + ' erro(s)' : '');
+  }
 
   // ── Load ──
   await loadData();

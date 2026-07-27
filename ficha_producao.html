@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ficha de Produção · Classic CQ</title>
+<script src="config.js"></script>
+<script src="cq_api.js"></script>
+<script src="cq_auth.js"></script>
+<link rel="stylesheet" href="ds.css">
+</head>
+<body class="page-bg">
+
+<div class="header">
+  <img id="logoImg" src="assets/logo-classic-icon.png.jpg" alt="" style="width:32px;height:32px;object-fit:contain;" onerror="this.style.display='none'">
+  <div>
+    <div class="ht">Classic CQ</div>
+    <div class="hs">Ficha de Produção</div>
+  </div>
+  <div id="cq-user-chip" style="margin-left:auto;margin-right:12px;"></div>
+  <a href="app.html" class="btn-back">← Menu</a>
+</div>
+
+<div style="max-width:900px;margin:0 auto;padding:18px 16px;">
+
+  <!-- PRODUÇÃO DE HOJE (tempo real) -->
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><div class="card-title">Produção de hoje</div>
+      <button class="btn btn-sm btn-secondary" style="margin-left:auto;" onclick="carregarHoje()">↻ Atualizar</button>
+    </div>
+    <div class="card-body">
+      <div style="text-align:center;margin-bottom:10px;">
+        <div style="font-size:12px;color:var(--muted,#64748b);text-transform:uppercase;letter-spacing:.04em;">Total geral</div>
+        <div id="hojeTotal" style="font-size:34px;font-weight:800;color:var(--blue,#2563eb);">0</div>
+        <div style="font-size:12px;color:var(--muted,#64748b);" id="hojeSub">— peças</div>
+      </div>
+      <div class="data-table-wrapper">
+        <table class="data-table">
+          <thead><tr><th>#</th><th>Colaborador</th><th style="text-align:right;">Peças hoje</th></tr></thead>
+          <tbody id="hojeBody"><tr><td colspan="3">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOVA FICHA -->
+  <div class="card" style="margin-bottom:18px;">
+    <div class="card-header"><div class="card-title">Nova ficha</div></div>
+    <div class="card-body">
+      <form id="formFicha" onsubmit="return salvarFicha(event)">
+        <div class="form-grid">
+          <div class="form-field"><label>Data</label><input type="date" id="fData" required></div>
+          <div class="form-field"><label>Setor</label>
+            <select id="fSetor"><option>Sebo</option><option>Omaso</option><option>Classificação</option><option>Salga</option><option>Outro</option></select>
+          </div>
+          <div class="form-field"><label>Cliente / Fornecedor *</label><input type="text" id="fCliente" required placeholder="Ex.: Dasko"></div>
+          <div class="form-field"><label>Lote / Palete *</label><input type="text" id="fLote" required placeholder="Ex.: 1638"></div>
+          <div class="form-field"><label>Quantidade do lote (peças) *</label><input type="number" id="fQtd" step="any" required placeholder="Ex.: 1630"></div>
+          <div class="form-field"><label>Nº de paletes</label><input type="number" id="fNumPlt" min="1" value="1"></div>
+        </div>
+
+        <div style="margin:14px 0 6px;font-weight:700;font-size:13px;">Produção por colaborador</div>
+        <div class="data-table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Colaborador</th><th style="width:120px;">Peças</th><th style="width:48px;"></th></tr></thead>
+            <tbody id="colabBody"></tbody>
+            <tfoot><tr><td style="font-weight:700;">TOTAL</td><td id="colabTotal" style="font-weight:700;">0</td><td></td></tr></tfoot>
+          </table>
+        </div>
+        <button type="button" class="btn btn-sm btn-outline" style="margin-top:8px;" onclick="addColab()">+ Adicionar colaborador</button>
+
+        <div class="form-field form-field-full" style="margin-top:12px;"><label>Observação</label><input type="text" id="fObs" placeholder="opcional"></div>
+
+        <div class="form-actions" style="margin-top:12px;">
+          <button type="submit" class="btn btn-primary" id="btnSalvar">Salvar ficha</button>
+          <span id="msg" style="margin-left:12px;font-size:13px;"></span>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- HISTÓRICO -->
+  <div class="card">
+    <div class="card-header"><div class="card-title">Fichas recentes</div></div>
+    <div class="data-table-wrapper">
+      <table class="data-table">
+        <thead><tr><th>Data</th><th>Cliente</th><th>Lote</th><th>Setor</th><th style="text-align:right;">Total</th></tr></thead>
+        <tbody id="fichaBody"><tr><td colspan="5">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function esc(s){ return (s==null?'':String(s)).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function fmt(n){ return (Number(n)||0).toLocaleString('pt-BR',{maximumFractionDigits:0}); }
+function fmtData(d){ if(!d)return''; const p=String(d).slice(0,10).split('-'); return p.length===3?`${p[2]}/${p[1]}/${p[0]}`:d; }
+function hojeISO(){ const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+
+let _colabs = [];  // [{nome,pecas}]
+function renderColabs(){
+  const b=document.getElementById('colabBody');
+  b.innerHTML = _colabs.map((c,i)=>`<tr>
+    <td><input type="text" value="${esc(c.nome)}" oninput="_colabs[${i}].nome=this.value" style="width:100%" placeholder="nome"></td>
+    <td><input type="number" value="${c.pecas||''}" step="any" oninput="_colabs[${i}].pecas=Number(this.value)||0;totalColab()" style="width:100%" placeholder="0"></td>
+    <td><button type="button" class="btn-icon" title="Remover" onclick="_colabs.splice(${i},1);renderColabs()">🗑️</button></td>
+  </tr>`).join('') || '<tr><td colspan="3" style="color:var(--muted,#64748b);">Adicione os colaboradores.</td></tr>';
+  totalColab();
+}
+function addColab(){ _colabs.push({nome:'',pecas:0}); renderColabs(); }
+function totalColab(){ const t=_colabs.reduce((s,c)=>s+(Number(c.pecas)||0),0); document.getElementById('colabTotal').textContent=fmt(t); return t; }
+
+async function carregarHoje(){
+  const hoje = hojeISO();
+  const rows = await CQ_API.get(`cq_ficha_prod_colaborador?data=eq.${hoje}&order=pecas.desc`) || [];
+  const total = rows.reduce((s,r)=>s+(Number(r.pecas)||0),0);
+  document.getElementById('hojeTotal').textContent = fmt(total);
+  document.getElementById('hojeSub').textContent = `${fmt(total)} peças · ${rows.length} colaborador(es)`;
+  document.getElementById('hojeBody').innerHTML = rows.length
+    ? rows.map((r,i)=>`<tr><td>${i+1}º</td><td>${esc(r.colaborador)}</td><td style="text-align:right;font-weight:700;">${fmt(r.pecas)}</td></tr>`).join('')
+    : '<tr><td colspan="3" style="color:var(--muted,#64748b);">Nenhuma produção lançada hoje.</td></tr>';
+}
+
+async function carregarFichas(){
+  const rows = await CQ_API.get('cq_ficha_producao?order=data.desc,criado_em.desc&limit=80') || [];
+  document.getElementById('fichaBody').innerHTML = rows.length
+    ? rows.map(f=>`<tr><td>${fmtData(f.data)}</td><td>${esc(f.cliente||'')}</td><td>${esc(f.lote||'')}</td><td>${esc(f.setor||'')}</td><td style="text-align:right;">${fmt(f.total)}</td></tr>`).join('')
+    : '<tr><td colspan="5" style="color:var(--muted,#64748b);">Nenhuma ficha registrada.</td></tr>';
+}
+
+async function salvarFicha(ev){
+  ev.preventDefault();
+  const cliente=document.getElementById('fCliente').value.trim();
+  const lote=document.getElementById('fLote').value.trim();
+  const qtd=Number(document.getElementById('fQtd').value);
+  if(!cliente){ return msg('Informe o Cliente / Fornecedor.','#dc2626'); }
+  if(!lote){ return msg('Informe o Lote / Palete.','#dc2626'); }
+  if(!(qtd>0)){ return msg('Informe a Quantidade do lote.','#dc2626'); }
+  const colabs=_colabs.filter(c=>(c.nome||'').trim() && (Number(c.pecas)||0)>0).map(c=>({nome:c.nome.trim(),pecas:Number(c.pecas)||0}));
+  const total=colabs.reduce((s,c)=>s+c.pecas,0);
+  const dados={
+    data:document.getElementById('fData').value,
+    setor:document.getElementById('fSetor').value,
+    cliente, lote, quantidade:qtd,
+    num_paletes:Number(document.getElementById('fNumPlt').value)||1,
+    colaboradores:colabs, total,
+    obs:document.getElementById('fObs').value.trim()||null,
+    ...(typeof CQAuth!=='undefined'?CQAuth.dadosRegistro():{}),
+  };
+  const btn=document.getElementById('btnSalvar'); btn.disabled=true;
+  const ok=(await CQ_API.post('cq_ficha_producao', dados, 'return=minimal')).ok;
+  btn.disabled=false;
+  if(ok){
+    msg('✓ Ficha salva.','#16a34a');
+    _colabs=[]; renderColabs();
+    document.getElementById('fCliente').value=''; document.getElementById('fLote').value=''; document.getElementById('fQtd').value=''; document.getElementById('fObs').value='';
+    await carregarHoje(); await carregarFichas();
+  } else { msg('Erro ao salvar.','#dc2626'); }
+  return false;
+}
+function msg(t,c){ const e=document.getElementById('msg'); e.textContent=t; e.style.color=c; setTimeout(()=>{if(e.textContent===t)e.textContent='';},4000); return false; }
+
+(async function init(){
+  const user = await CQAuth.init({ perfisPermitidos:['administrador','admin','qualidade','producao'] });
+  if(!user) return;
+  document.getElementById('fData').value = hojeISO();
+  addColab();
+  await carregarHoje();
+  await carregarFichas();
+})();
+</script>
+</body>
+</html>

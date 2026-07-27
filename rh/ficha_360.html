@@ -67,10 +67,28 @@ function buildTable(headers, rows, opts) {
   }
 
   document.getElementById('loadingState').style.display = '';
-  const {ok, data} = await API.rpc('ficha_360_colaborador', {p_funcionario_id: id});
+  const [{ok, data}, armRes] = await Promise.all([
+    API.rpc('ficha_360_colaborador', {p_funcionario_id: id}),
+    API.get(`arm_ocupacoes?funcionario_id=eq.${id}&data_devolucao=is.null&select=id,armario_id,data_atribuicao,chave_entregue,arm_armarios(codigo,tipo,status,arm_blocos(nome,tipo))`)
+  ]);
   if (!ok || !data || data.erro) { showError(); return; }
 
   const d = data;
+  // Attach armario data
+  d._armario = null;
+  if (armRes.ok && armRes.data && armRes.data.length > 0) {
+    const oc = armRes.data[0];
+    const arm = oc.arm_armarios || {};
+    const bloco = arm.arm_blocos || {};
+    d._armario = {
+      numero: arm.codigo || '--',
+      tipo: bloco.tipo || arm.tipo || '--',
+      bloco: bloco.nome || '--',
+      desde: oc.data_atribuicao,
+      chave: oc.chave_entregue,
+    };
+  }
+
   document.getElementById('loadingState').style.display = 'none';
   document.getElementById('mainContent').style.display = 'block';
   document.getElementById('mainContent').innerHTML = renderPage(d);
@@ -154,6 +172,7 @@ function renderPage(d) {
       <div class="hm-item"><div class="hm-label">CPF</div><div class="hm-value">${d.cpf ? API.fmtCPF(d.cpf) : '--'}</div></div>
       <div class="hm-item"><div class="hm-label">Tempo Empresa</div><div class="hm-value">${fmtT(d.tempo_empresa_dias)}</div></div>
       <div class="hm-item"><div class="hm-label">Admissao</div><div class="hm-value">${fmtD(d.data_admissao)}</div></div>
+      <div class="hm-item"><div class="hm-label">Armario</div><div class="hm-value">${d._armario ? '<a href="armarios.html" class="text-link">N ' + esc(d._armario.numero) + ' (' + esc(d._armario.tipo) + ')</a>' : '<span class="text-muted">Sem armario</span>'}</div></div>
     </div>
     ${exp.em_experiencia ? '<div class="hero-alert warn">&#9888; Colaborador em periodo de experiencia</div>' : ''}
     ${af ? '<div class="hero-alert danger">&#9888; Colaborador afastado: '+esc(fmt(af.motivo || af.tipo || 'Afastamento'))+' desde '+fmtD(af.data_inicio || af.inicio)+'</div>' : ''}
@@ -163,12 +182,12 @@ function renderPage(d) {
   const asoUlt = asos.ultimo || {};
   const asoVenc = asos.vencido;
   html += `<div class="kpi-row mb-6">
-    <div class="kpi-card">
+    <div class="kpi-card" style="cursor:pointer" onclick="document.getElementById('score-detail').style.display=document.getElementById('score-detail').style.display==='none'?'block':'none'">
       <div class="kpi-icon ${sVal==null?'blue':sVal>=80?'green':sVal>=60?'amber':'red'}">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
       </div>
       <div class="kpi-value">${sVal != null ? sVal : '--'}</div>
-      <div class="kpi-label">Score</div>
+      <div class="kpi-label">Score &#9660;</div>
       ${sVal != null ? `<div class="score-bar"><div class="score-bar-fill" style="width:${sVal}%;background:${sColor}"></div></div>` : ''}
     </div>
     <div class="kpi-card">
@@ -208,6 +227,51 @@ function renderPage(d) {
     </div>
   </div>`;
 
+  // ── SCORE DETAIL (expandivel) ──
+  const scoreD = sc.dimensoes || sc;
+  html += '<div id="score-detail" class="card mb-6" style="display:none;">';
+  html += '<div class="card-header"><h3>Detalhamento do Score — ' + (sVal != null ? sVal : '--') + ' pontos</h3></div>';
+  html += '<div class="card-body">';
+
+  // Dimensoes do score
+  const dims = [
+    { key: 'presenca', label: 'Presenca / Assiduidade', icon: '&#128197;' },
+    { key: 'producao', label: 'Producao / Produtividade', icon: '&#9881;' },
+    { key: 'treinamento', label: 'Treinamentos / NRs', icon: '&#128218;' },
+    { key: 'estabilidade', label: 'Estabilidade / Tempo de Casa', icon: '&#128336;' },
+    { key: 'epi', label: 'EPI / Conformidade SST', icon: '&#128737;' },
+    { key: 'qualidade', label: 'Qualidade', icon: '&#11088;' },
+  ];
+
+  html += '<table class="data-table"><thead><tr><th>Dimensao</th><th style="text-align:right">Score</th><th style="width:40%">Barra</th></tr></thead><tbody>';
+  dims.forEach(dim => {
+    const val = scoreD['score_' + dim.key] ?? scoreD[dim.key] ?? null;
+    const pct = val != null ? Math.min(val, 100) : 0;
+    const cor = val == null ? '#CBD5E1' : val >= 80 ? '#22c55e' : val >= 60 ? '#eab308' : '#ef4444';
+    html += '<tr>';
+    html += '<td>' + dim.icon + ' ' + dim.label + '</td>';
+    html += '<td style="text-align:right;font-weight:700;color:' + cor + '">' + (val != null ? val.toFixed ? val.toFixed(1) : val : '--') + '</td>';
+    html += '<td><div style="background:#F1F5F9;height:12px;border-radius:6px;overflow:hidden;"><div style="width:' + pct + '%;height:100%;background:' + cor + ';border-radius:6px;transition:width 0.3s;"></div></div></td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+
+  // Classificacao e cobertura
+  const classif = sc.classificacao || scoreD.classificacao || '';
+  const conf = sc.confiabilidade || scoreD.confiabilidade || '';
+  if (classif || conf) {
+    html += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">';
+    if (classif) {
+      const clsBadge = classif === 'consistente' ? 'success' : classif === 'regular' ? 'info' : classif === 'monitorar' ? 'warning' : 'danger';
+      html += '<span class="badge badge-' + clsBadge + '">' + esc(classif) + '</span>';
+    }
+    if (conf) html += '<span class="badge badge-gray">Confiabilidade: ' + esc(conf) + '</span>';
+    html += '</div>';
+  }
+
+  html += '<div style="margin-top:12px;font-size:11px;color:var(--text-muted);">Score calculado pelo Motor v2. Clique no card para fechar. <a href="motor_v2.html" class="text-link">Ver Motor Completo</a></div>';
+  html += '</div></div>';
+
   // ── TABS ──
   const tabs = ['Dados Gerais','RH','SST','Ponto','Beneficios','Documentos','Custos','Historico'];
   html += '<div class="ficha-tabs">';
@@ -243,6 +307,15 @@ function renderPage(d) {
   ${d.transporte_onibus ? `<div class="card"><div class="card-header"><h3>Transporte</h3></div><div class="card-body"><div class="info-grid">
     ${ig('Onibus', d.transporte_onibus)}${ig('Rota', d.transporte_rota)}${ig('Custo', fmtM(d.transporte_custo))}
   </div></div></div>` : ''}
+  <div class="card"><div class="card-header"><h3>Armario</h3></div><div class="card-body">
+    ${d._armario ? `<div class="info-grid">
+      ${ig('Numero', d._armario.numero)}
+      ${ig('Vestiario', d._armario.bloco)}
+      ${ig('Tipo', d._armario.tipo === 'feminino' ? 'Feminino' : d._armario.tipo === 'masculino' ? 'Masculino' : d._armario.tipo)}
+      ${ig('Desde', fmtD(d._armario.desde))}
+      ${ig('Chave Entregue', d._armario.chave ? 'Sim' : 'Nao')}
+    </div>` : '<p class="text-muted">Nenhum armario atribuido. <a href="armarios.html" class="text-link">Atribuir</a></p>'}
+  </div></div>
   </div>`;
 
   // TAB 1: RH
@@ -362,12 +435,31 @@ function renderPage(d) {
   if (custos.restrito) {
     html += '<div class="card"><div class="card-body"><p class="text-muted">Voce nao tem permissao para visualizar custos deste colaborador.</p></div></div>';
   } else {
-    html += `<div class="cost-cards mb-4">
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.salario)}</div><div class="cc-lbl">Salario</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.transporte_mensal)}</div><div class="cc-lbl">Transporte</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.beneficios_total)}</div><div class="cc-lbl">Beneficios</div></div>
-      <div class="cost-card"><div class="cc-val">${fmtM(custos.sst_12m)}</div><div class="cc-lbl">SST 12m</div></div>
-    </div>`;
+    // Calcular beneficios_total a partir dos beneficios ativos reais
+    const benAtivos = (d.beneficios || []).filter(b => b.status === 'ativo' && b.valor);
+    const benTotal = benAtivos.reduce((s, b) => s + (parseFloat(b.valor) || 0), 0);
+    const benTotalDisplay = benTotal > 0 ? benTotal : custos.beneficios_total;
+
+    html += '<div class="cost-cards mb-4">';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.salario) + '</div><div class="cc-lbl">Salario</div></div>';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.transporte_mensal) + '</div><div class="cc-lbl">Transporte</div></div>';
+    html += '<div class="cost-card" style="cursor:pointer" onclick="document.querySelectorAll(\'[data-tab]\')[4].click()"><div class="cc-val">' + fmtM(benTotalDisplay) + '</div><div class="cc-lbl">Beneficios &#8599;</div></div>';
+    html += '<div class="cost-card"><div class="cc-val">' + fmtM(custos.sst_12m) + '</div><div class="cc-lbl">SST 12m</div></div>';
+    html += '</div>';
+
+    if (benTotal > 0 && custos.beneficios_total && Math.abs(benTotal - custos.beneficios_total) > 1) {
+      html += '<div class="insight-box" style="margin-bottom:16px;border-left-color:var(--warning);background:var(--warning-light);font-size:12px;"><strong>Divergencia:</strong> Valor no banco: ' + fmtM(custos.beneficios_total) + ' | Soma dos beneficios ativos: ' + fmtM(benTotal) + '. Verificar se ha encargos ou valores historicos incluidos no calculo.</div>';
+    }
+
+    // Detalhe dos beneficios dentro da aba Custos
+    html += '<div class="card mb-4"><div class="card-header"><h3>Composicao dos Beneficios — ' + fmtM(benTotalDisplay) + '</h3></div><div class="card-body">';
+    html += buildTable(['Tipo','Status','Valor Mensal','Desde'], (d.beneficios||[]).map(r=>({cells:[
+      esc(fmt(r.tipo)),
+      r.status === 'ativo' ? '<span class="badge badge-success">Ativo</span>' : '<span class="badge badge-gray">' + esc(fmt(r.status)) + '</span>',
+      fmtM(r.valor),
+      fmtD(r.data_inicio)
+    ]})), {rightCols:[2]});
+    html += '</div></div>';
     html += '<div class="card mb-4"><div class="card-header"><h3>Historico de Custos</h3></div><div class="card-body">';
     html += buildTable(['Competencia','Custo Total'], (custos.historico||[]).map(r=>({cells:[
       esc(fmt(r.competencia)), fmtM(r.custo_total)

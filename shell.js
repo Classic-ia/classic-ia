@@ -25,11 +25,11 @@ const Shell = (() => {
     return `
     <header class="topbar">
       <div class="topbar-left">
-        <a href="home.html" class="topbar-back" title="Voltar ao Hub">
+        <a href="app.html" class="topbar-back" title="Voltar ao Hub">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         </a>
         <div class="topbar-breadcrumb">
-          <a href="home.html">Inicio</a> &rsaquo; <span>${breadcrumb || title}</span>
+          <a href="app.html">Inicio</a> &rsaquo; <span>${breadcrumb || title}</span>
         </div>
       </div>
       <div class="topbar-right">

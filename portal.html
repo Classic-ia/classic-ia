@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Classic Couros &middot; Portal</title>
+<link rel="icon" type="image/jpeg" href="assets/logo-classic-icon.png.jpg">
+<link rel="stylesheet" href="landing.css">
+<style>
+/* ── PORTAL LAYOUT ──────────────────────────────────────── */
+.portal-top {
+  position:sticky; top:0; z-index:100;
+  background:rgba(10,10,10,0.92); backdrop-filter:blur(20px);
+  border-bottom:1px solid var(--border);
+  padding:0 24px; height:56px;
+  display:flex; align-items:center; justify-content:space-between;
+}
+.portal-brand {
+  display:flex; align-items:center; gap:10px;
+}
+.portal-brand img {
+  height:32px; width:auto; border-radius:6px;
+}
+.portal-brand span {
+  font-weight:800; font-size:15px; letter-spacing:0.04em;
+}
+.portal-brand em { font-style:normal; color:var(--accent); }
+
+.portal-right {
+  display:flex; align-items:center; gap:16px;
+}
+.portal-user {
+  text-align:right;
+}
+.portal-user-name {
+  font-size:13px; font-weight:600; color:var(--text);
+}
+.portal-user-role {
+  font-size:10px; color:var(--muted); letter-spacing:0.06em; text-transform:uppercase;
+}
+.portal-avatar {
+  width:36px; height:36px; border-radius:50%;
+  background:var(--accent-dim); border:1px solid var(--accent-border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:700; color:var(--accent);
+}
+.portal-logout {
+  font-size:10px; color:var(--muted); letter-spacing:0.08em;
+  text-transform:uppercase; cursor:pointer;
+  padding:6px 12px; border:1px solid var(--border);
+  border-radius:3px; background:none;
+  font-family:inherit; transition:all 0.2s;
+}
+.portal-logout:hover {
+  color:var(--accent); border-color:var(--accent-border);
+}
+
+/* ── PORTAL CONTENT ─────────────────────────────────────── */
+.portal-content {
+  max-width:1100px; margin:0 auto; padding:48px 24px 80px;
+}
+.portal-welcome {
+  margin-bottom:48px;
+}
+.portal-welcome h1 {
+  font-size:clamp(24px,3.5vw,36px); font-weight:800;
+  margin-bottom:8px;
+}
+.portal-welcome p {
+  font-size:15px; color:var(--text2); line-height:1.7;
+}
+
+/* ── SECTION ────────────────────────────────────────────── */
+.portal-section {
+  margin-bottom:48px;
+}
+.portal-section-title {
+  font-size:11px; letter-spacing:0.16em; text-transform:uppercase;
+  color:var(--accent); margin-bottom:20px; padding-bottom:10px;
+  border-bottom:1px solid var(--border);
+}
+
+/* ── MODULE CARDS ───────────────────────────────────────── */
+.portal-grid {
+  display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));
+  gap:16px;
+}
+.portal-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:8px; padding:32px 28px;
+  display:flex; flex-direction:column; gap:14px;
+  transition:border-color 0.3s, transform 0.2s;
+  text-decoration:none; color:inherit; position:relative;
+}
+.portal-card:hover {
+  border-color:var(--accent-border);
+  transform:translateY(-2px);
+}
+.portal-card.disabled {
+  opacity:0.35; pointer-events:none; filter:grayscale(0.5);
+}
+.portal-card.disabled .portal-card-enter {
+  display:none;
+}
+.portal-card-lock {
+  display:none; font-size:11px; color:var(--muted);
+  letter-spacing:0.06em; margin-top:auto; padding-top:8px;
+  align-items:center; gap:6px;
+}
+.portal-card.disabled .portal-card-lock {
+  display:flex;
+}
+
+.portal-card-header {
+  display:flex; align-items:center; gap:14px;
+}
+.portal-card-icon {
+  width:48px; height:48px; border-radius:12px;
+  display:flex; align-items:center; justify-content:center;
+  flex-shrink:0;
+}
+.portal-card-icon svg {
+  width:24px; height:24px; stroke:currentColor;
+  fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round;
+}
+
+/* Cores dos icones */
+.icon-blue    { background:rgba(37,99,235,0.12); color:#60a5fa; border:1px solid rgba(37,99,235,0.2); }
+.icon-emerald { background:rgba(16,185,129,0.12); color:#34d399; border:1px solid rgba(16,185,129,0.2); }
+.icon-amber   { background:rgba(245,158,11,0.12); color:#fbbf24; border:1px solid rgba(245,158,11,0.2); }
+.icon-red     { background:rgba(239,68,68,0.12); color:#f87171; border:1px solid rgba(239,68,68,0.2); }
+.icon-violet  { background:rgba(139,92,246,0.12); color:#a78bfa; border:1px solid rgba(139,92,246,0.2); }
+.icon-slate   { background:rgba(148,163,184,0.12); color:#94a3b8; border:1px solid rgba(148,163,184,0.2); }
+
+.portal-card-title {
+  font-size:16px; font-weight:700;
+}
+.portal-card-desc {
+  font-size:13px; color:var(--text2); line-height:1.7;
+}
+.portal-card-tag {
+  display:inline-block; font-size:9px; letter-spacing:0.12em;
+  text-transform:uppercase; padding:3px 10px;
+  border-radius:3px; border:1px solid; width:fit-content;
+}
+.tag-cq     { color:#34d399; border-color:rgba(16,185,129,0.3); }
+.tag-rh     { color:#60a5fa; border-color:rgba(37,99,235,0.3); }
+.tag-fin    { color:#fbbf24; border-color:rgba(245,158,11,0.3); }
+.tag-sst    { color:#f87171; border-color:rgba(239,68,68,0.3); }
+.tag-export { color:#a78bfa; border-color:rgba(139,92,246,0.3); }
+.tag-admin  { color:#94a3b8; border-color:rgba(148,163,184,0.3); }
+
+.portal-card-enter {
+  font-size:11px; color:var(--accent); letter-spacing:0.08em;
+  text-transform:uppercase; margin-top:auto; padding-top:8px;
+  display:flex; align-items:center; gap:6px;
+  opacity:0; transition:opacity 0.2s;
+}
+.portal-card:hover .portal-card-enter { opacity:1; }
+
+/* ── FOOTER ─────────────────────────────────────────────── */
+.portal-footer {
+  text-align:center; padding:24px;
+  font-size:11px; color:var(--muted); letter-spacing:0.04em;
+  border-top:1px solid var(--border);
+}
+
+/* ── RESPONSIVE ─────────────────────────────────────────── */
+@media (max-width:640px) {
+  .portal-grid { grid-template-columns:1fr; }
+  .portal-user { display:none; }
+  .portal-welcome h1 { font-size:22px; }
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="portal-top">
+  <div class="portal-brand">
+    <img src="assets/logo-classic-icon.png.jpg" alt="Classic" onerror="this.style.display='none'">
+    <span>CLASSIC <em>ERP</em></span>
+  </div>
+  <div class="portal-right">
+    <div class="portal-user">
+      <div class="portal-user-name" id="userName">Carregando...</div>
+      <div class="portal-user-role" id="userRole"></div>
+    </div>
+    <div class="portal-avatar" id="userAvatar">--</div>
+    <button class="portal-logout" id="logoutBtn">Sair</button>
+  </div>
+</div>
+
+<!-- CONTENT -->
+<div class="portal-content">
+
+  <div class="portal-welcome">
+    <h1>Selecione um modulo</h1>
+    <p>Escolha o sistema que deseja acessar.</p>
+  </div>
+
+  <!-- MODULOS PRINCIPAIS -->
+  <div class="portal-section">
+    <div class="portal-section-title">Modulos</div>
+    <div class="portal-grid">
+
+      <a class="portal-card" href="rh/hub.html" id="cardRH" data-modulo="rh">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-blue">
+            <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">RH &amp; SST</div>
+            <span class="portal-card-tag tag-rh">RECURSOS HUMANOS</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Gestao de funcionarios, folha, ferias, ASOs, treinamentos, EPIs, acidentes, desligamentos e eSocial.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="dashboard_cq.html" id="cardCQ" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-emerald">
+            <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><path d="M8 11l2 2 4-4"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Controle de Qualidade</div>
+            <span class="portal-card-tag tag-cq">CQ</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Inspecoes, recebimentos, classificacao de fornecedores, PCRs, lotes e rastreabilidade.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="layout_exportacao.html" id="cardExport" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-violet">
+            <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Exportacao</div>
+            <span class="portal-card-tag tag-export">COMERCIO EXTERIOR</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Layouts de exportacao, documentacao e operacoes de comercio exterior.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="sal.html" id="cardSal" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-amber">
+            <svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/><path d="M12 11v10"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Controle de Sal</div>
+            <span class="portal-card-tag tag-cq">ESTOQUE</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Estoque de sal por tipo (fino, grosso, usado), entradas, saidas, consumo por setor, ajustes e transferencias.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="ficha_producao.html" id="cardFicha" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-emerald">
+            <svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Ficha de Produção</div>
+            <span class="portal-card-tag tag-cq">PRODUÇÃO</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Produtividade do chao por colaborador e palete, lancada no celular, com producao do dia em tempo real.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="rnc.html" id="cardRnc" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-red">
+            <svg viewBox="0 0 24 24"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">RNC — Não Conformidade</div>
+            <span class="portal-card-tag tag-cq">QUALIDADE</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">
+          Abrir registro de nao conformidade ao fornecedor, gerar o documento em PDF e enviar.
+        </p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- DASHBOARDS -->
+  <div class="portal-section">
+    <div class="portal-section-title">Dashboards</div>
+    <div class="portal-grid">
+
+      <a class="portal-card" href="dashboard_cq.html" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-emerald">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Dashboard CQ</div>
+            <span class="portal-card-tag tag-cq">CQ</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">Indicadores de qualidade, fornecedores e producao.</p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="dashboard_cargas.html" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-amber">
+            <svg viewBox="0 0 24 24"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 4v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Dashboard Cargas</div>
+            <span class="portal-card-tag tag-fin">LOGISTICA</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">Embarques, rotas, CT-e e custos de transporte.</p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+      <a class="portal-card" href="dashboard_fornecedores.html" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-slate">
+            <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="8.5" cy="7" r="4"/><path d="M20 8v6"/><path d="M23 11h-6"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Fornecedores</div>
+            <span class="portal-card-tag tag-cq">CQ</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">Ranking, score e analise por estado e produto.</p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+    </div>
+  </div>
+
+  <!-- ADMINISTRACAO -->
+  <div class="portal-section" id="sectionAdmin" style="display:none">
+    <div class="portal-section-title">Administracao</div>
+    <div class="portal-grid">
+
+      <a class="portal-card" href="gestao_usuarios.html" data-modulo="cq">
+        <div class="portal-card-header">
+          <div class="portal-card-icon icon-slate">
+            <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <div>
+            <div class="portal-card-title">Gestao de Usuarios</div>
+            <span class="portal-card-tag tag-admin">ADMIN</span>
+          </div>
+        </div>
+        <p class="portal-card-desc">Cadastro, perfis e permissoes de acesso.</p>
+        <div class="portal-card-enter">Acessar &rarr;</div>
+        <div class="portal-card-lock">Sem acesso</div>
+      </a>
+
+    </div>
+  </div>
+
+</div>
+
+<!-- FOOTER -->
+<div class="portal-footer">
+  Classic Importacao e Exportacao de Couros Ltda &middot; CNPJ 08.849.964/0001-10 &middot; 2026
+</div>
+
+<script>
+(function() {
+  // ── CHECK SESSION ────────────────────────────────────────
+  var sessCQ = null, sessRH = null;
+  try { var raw = localStorage.getItem('cq_sess_v2'); if (raw) sessCQ = JSON.parse(raw); } catch(e) {}
+  try { var raw2 = localStorage.getItem('rh_sess_v2'); if (raw2) sessRH = JSON.parse(raw2); } catch(e) {}
+
+  // Verificar validade
+  var agora = Date.now();
+  var umHora = 3600000;
+  if (sessCQ && (!sessCQ.ts || agora - sessCQ.ts > umHora)) { localStorage.removeItem('cq_sess_v2'); sessCQ = null; }
+  if (sessRH && (!sessRH.ts || agora - sessRH.ts > umHora)) { localStorage.removeItem('rh_sess_v2'); sessRH = null; }
+
+  if (!sessCQ && !sessRH) {
+    window.location.href = 'login.html';
+    return;
+  }
+
+  // ── USER INFO ────────────────────────────────────────────
+  var user = (sessRH && sessRH.user) || (sessCQ && sessCQ.user) || {};
+  var nome = user.nome || user.nome_completo || user.email || 'Usuario';
+  var perfil = user.perfil || '';
+  var initials = nome.split(' ').filter(Boolean).slice(0,2).map(function(w){ return w[0]; }).join('').toUpperCase();
+
+  document.getElementById('userName').textContent = nome;
+  document.getElementById('userRole').textContent = perfil.toUpperCase();
+  document.getElementById('userAvatar').textContent = initials || '--';
+
+  // ── PERMISSOES POR MODULO ──────────────────────────────────
+  var temCQ = !!sessCQ;
+  var temRH = !!sessRH;
+
+  // Desabilitar cards sem acesso
+  document.querySelectorAll('.portal-card[data-modulo]').forEach(function(card) {
+    var modulo = card.getAttribute('data-modulo');
+    var liberado = false;
+    if (modulo === 'cq' && temCQ) liberado = true;
+    if (modulo === 'rh' && temRH) liberado = true;
+    if (!liberado) {
+      card.classList.add('disabled');
+      card.removeAttribute('href');
+    }
+  });
+
+  // Mostrar secao admin para administradores
+  if (perfil === 'administrador' || perfil === 'admin') {
+    document.getElementById('sectionAdmin').style.display = 'block';
+  }
+
+  // ── LOGOUT ───────────────────────────────────────────────
+  document.getElementById('logoutBtn').addEventListener('click', function() {
+    localStorage.removeItem('cq_sess_v2');
+    localStorage.removeItem('rh_sess_v2');
+    window.location.href = 'login.html';
+  });
+})();
+</script>
+</body>
+</html>

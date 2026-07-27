@@ -51,6 +51,7 @@ const Shell = (() => {
     { group: 'Operacional', id: 'ponto', label: 'Ponto', href: 'importar_secullum.html', icon: 'clock', perfis: ['administrador','rh'] },
     { group: 'Operacional', id: 'beneficios', label: 'Beneficios', href: 'beneficios.html', icon: 'heart', perfis: ['administrador','rh'] },
     { group: 'Operacional', id: 'ferias', label: 'Ferias', href: 'ferias.html', icon: 'sun', perfis: ['administrador','rh'] },
+    { group: 'Operacional', id: 'armarios', label: 'Armarios', href: 'armarios.html', icon: 'box', perfis: ['administrador','rh','sst'] },
 
     // GESTAO
     { group: 'Gestao', id: 'motor_decisoes', label: 'Motor Decisao', href: 'motor_decisoes.html', icon: 'layers', perfis: ['administrador','rh'] },

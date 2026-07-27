@@ -128,8 +128,8 @@ LEFT JOIN public.rh_filiais  fl ON fl.id = f.filial_id;
 COMMENT ON VIEW public.rh_colaboradores IS
   'View de compatibilidade. NAO inserir/atualizar diretamente — escreva em rh_funcionarios. Consumida por 25+ telas RH legadas.';
 
-GRANT SELECT ON public.vw_funcionario_base TO anon, authenticated;
-GRANT SELECT ON public.rh_colaboradores    TO anon, authenticated;
+GRANT SELECT ON public.vw_funcionario_base TO authenticated;
+GRANT SELECT ON public.rh_colaboradores    TO authenticated;
 
 DO $verify$
 BEGIN

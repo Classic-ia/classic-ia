@@ -134,8 +134,8 @@ COMMENT ON VIEW public.rh_colaboradores IS
 
 
 -- ── 4. Permissoes (consumida por anon e authenticated via PostgREST) ───────
-GRANT SELECT ON public.vw_funcionario_base TO anon, authenticated;
-GRANT SELECT ON public.rh_colaboradores    TO anon, authenticated;
+GRANT SELECT ON public.vw_funcionario_base TO authenticated;
+GRANT SELECT ON public.rh_colaboradores    TO authenticated;
 
 
 -- ── 5. Validacao final — campos do contrato com o frontend ─────────────────

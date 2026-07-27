@@ -399,6 +399,21 @@ const CQAuth = (function () {
     clearTimeout(_tExp); clearTimeout(_tWarn); clearInterval(_tBeat);
     localStorage.removeItem(STORE_KEY);
     _user = null; _token = null; _geo = null;
+
+    // A-06: limpar caches e IndexedDB no logout para evitar
+    // dados de sessao anterior acessiveis por outro usuario
+    try {
+      if ('caches' in window) {
+        caches.keys().then(function(names) {
+          names.forEach(function(name) { caches.delete(name); });
+        });
+      }
+      if ('indexedDB' in window) {
+        indexedDB.databases().then(function(dbs) {
+          dbs.forEach(function(db) { indexedDB.deleteDatabase(db.name); });
+        });
+      }
+    } catch(e) { /* silenciar em browsers que nao suportam */ }
   }
 
   // ═════════════════════════════════════════════════════════
@@ -427,13 +442,15 @@ const CQAuth = (function () {
       return null;
     }
 
-    // 3. Sessão demo — aceitar diretamente sem validação do servidor
+    // 3. Sessão demo REMOVIDA (auditoria C-01: bypass de autenticação)
     if (_token && _token.startsWith('demo-')) {
-      console.info('[CQAuth] Sessão demo ativa — sem validação do servidor.');
-      // Aceitar perfil do localStorage como está
+      console.warn('[CQAuth] Sessão demo rejeitada — modo removido por segurança.');
+      _limparLocal();
+      window.location.href = 'login.html';
+      return null;
     }
     // 4. Renovar JWT se necessário e revalidar perfil do banco
-    else if (_authToken) {
+    if (_authToken) {
       // Tentar refresh do token para garantir que está válido
       const refreshed = await _refreshToken();
       if (!refreshed) {

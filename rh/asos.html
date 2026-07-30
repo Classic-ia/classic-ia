@@ -479,8 +479,20 @@ async function loadColaboradores() {
 
 async function loadASOs() {
   try {
-    const _res = await API.get('rh_asos?select=*&order=data_realizacao.desc');
-    asos = _res.ok ? _res.data : [];
+    // UNIFICACAO_SST: sst_aso e a tabela canonica (leitura e gravacao na mesma).
+    // Adaptador mapeia as colunas sst_* para os nomes que o render usa.
+    const _res = await API.get('sst_aso?select=*&order=data_exame.desc');
+    const raw = _res.ok ? _res.data : [];
+    asos = raw.map(r => ({
+      ...r,
+      colaborador_id: r.funcionario_id,
+      tipo_aso: r.tipo_exame === 'retorno_trabalho' ? 'retorno' : r.tipo_exame,
+      data_realizacao: r.data_exame,
+      data_vencimento: r.data_validade,
+      medico_nome: r.medico_responsavel,
+      medico_crm: r.crm,
+      riscos_avaliados: r.restricoes
+    }));
   } catch (e) {
     console.warn('[ASOs] Erro ao carregar ASOs:', e);
     asos = [];
@@ -489,7 +501,7 @@ async function loadASOs() {
 
 async function loadConfigRiscos() {
   try {
-    const _res = await API.get('rh_asos_config?select=*&order=cargo');
+    const _res = await API.get('sst_aso_config?select=*&order=cargo');
     configRiscos = _res.ok ? _res.data : [];
   } catch (e) {
     console.warn('[ASOs] Erro ao carregar config riscos:', e);
@@ -833,20 +845,20 @@ async function salvarASO() {
   if (!crm) { toast('Informe o CRM do medico.', 'err'); return; }
   if (!vencimento) { toast('Data de vencimento nao calculada. Informe a data do exame.', 'err'); return; }
 
-  // Schema rh_asos (SEGURANCA_SUPABASE.sql): colaborador_id, tipo_aso, data_realizacao,
-  // data_vencimento, resultado, medico_nome, medico_crm, riscos_avaliados, observacoes, status
-  const examesTxt = examesSel.length > 0 ? '\n[Exames complementares] ' + examesSel.join(', ') : '';
+  // UNIFICACAO_SST: gravar em sst_aso com as colunas canonicas (funcionario_id,
+  // tipo_exame, data_exame, data_validade, restricoes, medico_responsavel, crm).
+  // Exames complementares em coluna propria (TEXT[]), nao mais em observacoes.
   const payload = {
-    colaborador_id: colabId,
-    tipo_aso: tipo,
-    data_realizacao: dataExame,
-    medico_nome: medico,
-    medico_crm: crm,
+    funcionario_id: colabId,
+    tipo_exame: tipo === 'retorno' ? 'retorno_trabalho' : tipo,
+    data_exame: dataExame,
+    medico_responsavel: medico,
+    crm,
     resultado,
-    riscos_avaliados: resultado === 'apto_restricao' ? restricoes : null,
-    data_vencimento: vencimento,
-    observacoes: (observacoes || '') + examesTxt || null,
-    criado_em: new Date().toISOString()
+    restricoes: resultado === 'apto_restricao' ? restricoes : null,
+    data_validade: vencimento,
+    exames_complementares: examesSel.length > 0 ? examesSel : null,
+    observacoes: observacoes || null
   };
 
   const btn = document.getElementById('cad-salvar-btn');
@@ -1011,12 +1023,11 @@ async function addConfigRisco() {
   const payload = {
     cargo,
     cbo: cbo || null,
-    risco,
-    criado_em: new Date().toISOString()
+    risco
   };
 
   try {
-    const res = await API.post('rh_asos_config', payload, 'return=minimal');
+    const res = await API.post('sst_aso_config', payload, 'return=minimal');
     if (res.ok) {
       toast('Cargo configurado com sucesso!', 'ok');
       document.getElementById('cfg-cargo').value = '';
@@ -1035,7 +1046,7 @@ async function addConfigRisco() {
 async function removeConfigRisco(id) {
   if (!confirm('Remover esta configuracao de risco?')) return;
   try {
-    const res = await API.del(`rh_asos_config?id=eq.${id}`);
+    const res = await API.del(`sst_aso_config?id=eq.${id}`);
     if (res.ok) {
       toast('Configuracao removida.', 'ok');
       await loadConfigRiscos();

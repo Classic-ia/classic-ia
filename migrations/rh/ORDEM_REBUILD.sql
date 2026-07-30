@@ -98,9 +98,18 @@
 --                                                          (backend da aba
 --                                                          "Ações" em cipa.html)
 --
+-- 22  UNIFICACAO_SST.sql                    1 tabela       Sprint 1 P0: família
+--                                           (sst_aso_config) sst_* vira canônica
+--                                           ALTERs em      (ASOs, treinamentos,
+--                                           sst_acidente/  acidentes); migra
+--                                           sst_aso/       dados das rh_* legadas
+--                                           sst_tipo_trein e revoga escrita nelas
+--                                           4 RLS policies (PLANO_CORRECOES_SIGA)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   179 tabelas | 33 views | 70 functions | 62 triggers
---   66 tabelas com RLS | 226 policies
+--   180 tabelas | 33 views | 70+ functions | 63 triggers
+--   67 tabelas com RLS | 230 policies
+--   (totais a revalidar após UNIFICACAO_SST — rebuild local + contagem)
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

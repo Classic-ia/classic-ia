@@ -390,6 +390,53 @@
 <!-- ═══════════════════════════════════════════════════ -->
 <!-- MODAL: MOVER ETAPA (com notas e parecer) -->
 <!-- ═══════════════════════════════════════════════════ -->
+<!-- WORKFLOW_ADMISSAO_V2: modal de admissao ao aprovar candidato -->
+<div class="modal-overlay" id="modalAdmissao">
+  <div class="modal-box">
+    <div class="modal-title">
+      <span>Admitir Candidato</span>
+      <button class="modal-close" onclick="fecharModal('modalAdmissao')">×</button>
+    </div>
+    <input type="hidden" id="admPipeId">
+    <div class="field-row">
+      <div class="field"><label>Nome Completo *</label><input id="admNome" type="text"></div>
+      <div class="field"><label>CPF (11 dígitos) *</label><input id="admCpf" type="text" maxlength="11"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Empresa *</label><select id="admEmpresa" onchange="onAdmEmpresaChange()"></select></div>
+      <div class="field"><label>Filial *</label><select id="admFilial" onchange="onAdmFilialChange()"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Setor *</label><select id="admSetor"></select></div>
+      <div class="field"><label>Cargo *</label><select id="admCargo"></select></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Data de Admissão *</label><input id="admData" type="date"></div>
+      <div class="field"><label>Salário (R$)</label><input id="admSalario" type="number" step="0.01" min="0"></div>
+    </div>
+    <div class="field-row">
+      <div class="field"><label>Tipo de Vínculo</label>
+        <select id="admVinculo">
+          <option value="CLT">CLT</option>
+          <option value="APAC">APAC</option>
+          <option value="PJ">PJ</option>
+          <option value="Terceiro">Terceiro</option>
+        </select>
+      </div>
+      <div class="field"><label>Turno</label><input id="admTurno" type="text" value="comercial"></div>
+      <div class="field"><label>Carga Semanal (h)</label><input id="admCarga" type="number" step="0.5" value="44"></div>
+    </div>
+    <p style="font-size:11px; color:var(--muted); margin-top:8px;">
+      Cria o funcionário via processo de admissão (rh_abrir_admissao + rh_executar_admissao)
+      e vincula o candidato ao colaborador criado.
+    </p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="fecharModal('modalAdmissao')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarAdmissao()">Admitir</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modalMoverEtapa">
   <div class="modal-box">
     <div class="modal-title">
@@ -1163,7 +1210,136 @@ async function salvarMoverEtapa() {
     fecharModal('modalMoverEtapa');
     await Promise.all([carregarPipeline(), carregarCandidatos()]);
     carregarKPIs();
+
+    // WORKFLOW_ADMISSAO_V2: aprovado -> abrir modal de admissao (cria o funcionario)
+    if (etapa === 'aprovado') {
+      await abrirModalAdmissao(id);
+    }
   } catch(e) { alert('Erro: ' + e.message); }
+}
+
+// ── Admissao (WORKFLOW_ADMISSAO_V2) ─────────────────────────────
+let orgData = null; // { empresas, filiais, setores, cargos }
+
+async function rpcRH(nome, body) {
+  const res = await RH_API.fetch('rpc/' + nome, { method: 'POST', body: JSON.stringify(body) });
+  let data = null;
+  try { data = await res.json(); } catch(e) {}
+  return { ok: res.ok, data };
+}
+
+async function carregarOrgData() {
+  if (orgData) return orgData;
+  const [empresas, filiais, setores, cargos] = await Promise.all([
+    RH_API.get('rh_empresas?select=id,razao_social&order=razao_social'),
+    RH_API.get('rh_filiais?select=id,razao_social,empresa_id&order=razao_social'),
+    RH_API.get('rh_setores?select=id,nome,filial_id&order=nome'),
+    RH_API.get('rh_cargos?select=id,nome&order=nome'),
+  ]);
+  orgData = { empresas, filiais, setores, cargos };
+  return orgData;
+}
+
+function fillSelect(id, items, labelFn, placeholder) {
+  const sel = document.getElementById(id);
+  sel.innerHTML = '<option value="">' + (placeholder || '— Selecionar —') + '</option>' +
+    items.map(i => `<option value="${i.id}">${labelFn(i)}</option>`).join('');
+}
+
+async function abrirModalAdmissao(pipeId) {
+  const pipe = pipelines.find(p => p.id === pipeId);
+  if (!pipe) return;
+  const cand = candidatos.find(c => c.id === pipe.candidato_id);
+
+  await carregarOrgData();
+  document.getElementById('admPipeId').value = pipeId;
+  document.getElementById('admNome').value = cand ? (cand.nome_completo || '') : '';
+  document.getElementById('admCpf').value = cand ? ((cand.cpf || '').replace(/\D/g, '')) : '';
+  document.getElementById('admData').value = new Date().toISOString().slice(0, 10);
+  document.getElementById('admSalario').value = '';
+  document.getElementById('admVinculo').value = 'CLT';
+  document.getElementById('admTurno').value = 'comercial';
+  document.getElementById('admCarga').value = '44';
+
+  fillSelect('admEmpresa', orgData.empresas, e => e.razao_social);
+  fillSelect('admFilial', [], f => f.razao_social);
+  fillSelect('admSetor', [], s => s.nome);
+  fillSelect('admCargo', orgData.cargos, c => c.nome);
+
+  document.getElementById('modalAdmissao').classList.add('show');
+}
+
+function onAdmEmpresaChange() {
+  const empId = document.getElementById('admEmpresa').value;
+  const filiais = (orgData.filiais || []).filter(f => f.empresa_id === empId);
+  fillSelect('admFilial', filiais, f => f.razao_social);
+  fillSelect('admSetor', [], s => s.nome);
+}
+
+function onAdmFilialChange() {
+  const filId = document.getElementById('admFilial').value;
+  const setores = (orgData.setores || []).filter(s => s.filial_id === filId);
+  fillSelect('admSetor', setores, s => s.nome);
+}
+
+async function salvarAdmissao() {
+  const pipeId = document.getElementById('admPipeId').value;
+  const nome = document.getElementById('admNome').value.trim();
+  const cpf = document.getElementById('admCpf').value.replace(/\D/g, '');
+  const empresaId = document.getElementById('admEmpresa').value;
+  const filialId = document.getElementById('admFilial').value;
+  const setorId = document.getElementById('admSetor').value;
+  const cargoId = document.getElementById('admCargo').value;
+  const dataAdm = document.getElementById('admData').value;
+
+  if (!nome || cpf.length !== 11 || !empresaId || !filialId || !setorId || !cargoId || !dataAdm) {
+    alert('Preencha nome, CPF (11 dígitos), empresa, filial, setor, cargo e data de admissão.');
+    return;
+  }
+
+  const abrir = await rpcRH('rh_abrir_admissao', {
+    p_nome_completo: nome,
+    p_cpf: cpf,
+    p_empresa_id: empresaId,
+    p_filial_id: filialId,
+    p_setor_id: setorId,
+    p_cargo_id: cargoId,
+    p_data_admissao: dataAdm,
+    p_salario: parseFloat(document.getElementById('admSalario').value) || null,
+    p_tipo_vinculo: document.getElementById('admVinculo').value,
+    p_turno: document.getElementById('admTurno').value.trim() || 'comercial',
+    p_carga_horaria: parseFloat(document.getElementById('admCarga').value) || 44,
+  });
+  if (!abrir.ok || !abrir.data || !abrir.data.ok) {
+    alert('Erro ao abrir admissão: ' + ((abrir.data && abrir.data.error) || 'falha na chamada'));
+    return;
+  }
+
+  const exec = await rpcRH('rh_executar_admissao', { p_processo_id: abrir.data.processo_id });
+  if (!exec.ok || !exec.data || !exec.data.ok) {
+    alert('Processo aberto (' + abrir.data.processo_id + '), mas a execução falhou: '
+      + ((exec.data && exec.data.error) || 'falha na chamada')
+      + '\nCorrija e execute novamente via rh_executar_admissao.');
+    return;
+  }
+
+  // Rastreabilidade candidato -> colaborador
+  const pipe = pipelines.find(p => p.id === pipeId);
+  try {
+    await RH_API.fetch(`rs_pipeline?id=eq.${pipeId}`, {
+      method:'PATCH', body: JSON.stringify({ processo_admissao_id: abrir.data.processo_id })
+    });
+    if (pipe) {
+      await RH_API.fetch(`rs_candidatos?id=eq.${pipe.candidato_id}`, {
+        method:'PATCH', body: JSON.stringify({ funcionario_criado_id: exec.data.funcionario_id })
+      });
+    }
+  } catch(e) { console.warn('Rastreabilidade candidato->funcionario falhou:', e); }
+
+  fecharModal('modalAdmissao');
+  alert('Funcionário criado com sucesso: ' + (exec.data.nome || nome));
+  await Promise.all([carregarPipeline(), carregarCandidatos()]);
+  carregarKPIs();
 }
 
 function preencherSelectPipeline() {

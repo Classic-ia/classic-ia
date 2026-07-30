@@ -127,6 +127,13 @@
 --                                                          log de exportação) com
 --                                                          RLS RBAC
 --
+-- 26  WORKFLOW_ADMISSAO_V2.sql              2 functions,   Sprint 2 P1: admissão
+--                                           2 colunas de   via processo (candidato
+--                                           rastreio,      aprovado -> funcionário);
+--                                           1 ALTER        rh_processo.funcionario_id
+--                                                          nullable; rastreio
+--                                                          candidato -> colaborador
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

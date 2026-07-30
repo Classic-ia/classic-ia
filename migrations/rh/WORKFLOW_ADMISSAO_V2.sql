@@ -214,6 +214,16 @@ BEGIN
          executado_por = v_uid, executado_em = now()
    WHERE id = p_processo_id;
 
+  -- trilha de auditoria (AUDITORIA_TRILHA, script 30)
+  BEGIN
+    INSERT INTO rh_audit_log (tabela, registro_id, acao, dados_novos, usuario_id)
+    VALUES ('rh_funcionarios', v_func_id::text, 'rh_executar_admissao',
+            jsonb_build_object('processo_id', p_processo_id, 'nome', v_adm.nome_completo, 'cpf', v_adm.cpf),
+            v_uid);
+  EXCEPTION WHEN OTHERS THEN
+    RAISE WARNING 'Audit log rh_executar_admissao falhou: %', SQLERRM;
+  END;
+
   RETURN jsonb_build_object(
     'ok', true, 'funcionario_id', v_func_id, 'processo_id', p_processo_id,
     'nome', v_adm.nome_completo, 'error', null

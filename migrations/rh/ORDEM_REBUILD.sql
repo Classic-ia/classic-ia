@@ -161,6 +161,17 @@
 --                                                          de perfil no
 --                                                          motor_decisoes()
 --
+-- 30  AUDITORIA_TRILHA.sql                  colunas +      Sprint 3 P2: unifica os
+--                                           2 RLS policies dois shapes divergentes
+--                                                          de rh_audit_log (frontend
+--                                                          RHAuth.log falhava
+--                                                          silenciosamente); trilha
+--                                                          append-only (sem UPDATE/
+--                                                          DELETE); RPCs de execução
+--                                                          (motor_v2_executar,
+--                                                          rh_executar_admissao)
+--                                                          passam a logar
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

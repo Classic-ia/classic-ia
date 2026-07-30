@@ -373,9 +373,10 @@ let colaboradores = [];
 let mandatos = [];
 let membros = [];
 let reunioes = [];
+let presencas = [];
 let acoes = [];
 let currentMandato = null;
-let selectedPresentes = [];
+let selectedPresentes = [];   // ids de cipa_membros (persistidos em cipa_presencas)
 let editingMembroId = null;
 
 const CARGOS_CIPA = {
@@ -444,7 +445,7 @@ function initTabs() {
 //  DATA LOADING
 // ============================================================
 async function loadAll() {
-  await Promise.all([loadColaboradores(), loadMandatos(), loadMembros(), loadReunioes(), loadAcoes()]);
+  await Promise.all([loadColaboradores(), loadMandatos(), loadMembros(), loadReunioes(), loadPresencas(), loadAcoes()]);
   findCurrentMandato();
   renderKPIs();
   renderMembros();
@@ -472,6 +473,17 @@ async function loadMembros() {
 async function loadReunioes() {
   const res = await API.get('cipa_reunioes?select=*&order=data.desc');
   reunioes = res.ok ? res.data : [];
+}
+
+async function loadPresencas() {
+  const res = await API.get('cipa_presencas?select=*');
+  presencas = res.ok ? res.data : [];
+}
+
+function getMembroNome(membroId) {
+  const m = membros.find(x => x.id === membroId);
+  if (!m) return '(desconhecido)';
+  return m.nome || getColabName(m.funcionario_id || m.colaborador_id);
 }
 
 async function loadAcoes() {
@@ -534,8 +546,8 @@ function renderKPIs() {
   const reus = getCurrentReunioes();
   let proxima = null;
   reus.forEach(r => {
-    if (r.proxima_reuniao && (!proxima || r.proxima_reuniao > proxima)) {
-      proxima = r.proxima_reuniao;
+    if (r.proxima_data && (!proxima || r.proxima_data > proxima)) {
+      proxima = r.proxima_data;
     }
   });
   document.getElementById('kpi-proxima').textContent = proxima ? fmtDate(proxima) : '--';
@@ -612,8 +624,8 @@ function openModalMembro(id) {
     const m = membros.find(x => x.id === id);
     if (m) {
       document.getElementById('memb-colab-id').value = m.funcionario_id || m.colaborador_id;
-      document.getElementById('memb-colab-search').value = getColabName(m.colaborador_id);
-      document.getElementById('memb-colab-name').textContent = getColabName(m.colaborador_id);
+      document.getElementById('memb-colab-search').value = getColabName(m.funcionario_id || m.colaborador_id);
+      document.getElementById('memb-colab-name').textContent = getColabName(m.funcionario_id || m.colaborador_id);
       document.getElementById('memb-cargo').value = m.cargo_cipa;
       document.getElementById('memb-tipo').value = m.tipo;
       document.getElementById('memb-estabilidade').value = m.estabilidade_ate || '';
@@ -724,9 +736,10 @@ function renderPresDropdown() {
   const q = input.value.toLowerCase().trim();
   const membrosList = getCurrentMembros();
 
+  // id = cipa_membros.id (e o que cipa_presencas.membro_id referencia)
   let items = membrosList.map(m => ({
-    id: m.colaborador_id,
-    nome: getColabName(m.colaborador_id),
+    id: m.id,
+    nome: m.nome || getColabName(m.funcionario_id || m.colaborador_id),
     cargo: CARGOS_CIPA[m.cargo_cipa] || m.cargo_cipa
   }));
 
@@ -761,7 +774,7 @@ function renderPresDropdown() {
 function renderPresTags() {
   const container = document.getElementById('reu-pres-tags');
   container.innerHTML = selectedPresentes.map(id => {
-    const nome = getColabName(id);
+    const nome = getMembroNome(id);
     return `<span class="tag">${nome} <span class="tag-remove" data-id="${id}">&times;</span></span>`;
   }).join('');
   container.querySelectorAll('.tag-remove').forEach(btn => {
@@ -793,13 +806,8 @@ async function salvarReuniao() {
   btn.innerHTML = '<span class="spinner"></span> Salvando...';
 
   try {
-    // Schema cipa_reunioes (prod): mandato_id, numero (text NOT NULL), data, tipo,
-    // local, pauta, ata_texto, status, proxima_data. Nao tem `presentes` nem
-    // `deliberacoes` (estao em cipa_presencas e cipa_acoes respectivamente).
-    // Presenças e deliberações seguem fluxos separados; aqui concatenamos
-    // deliberacoes em ata_texto para nao perder a informacao.
-    const ataFull = [ata, deliberacoes ? '\n--- Deliberacoes ---\n' + deliberacoes : '']
-      .filter(Boolean).join('');
+    // CORRECOES_CIPA: deliberacoes em coluna propria; presencas persistidas
+    // em cipa_presencas (membro_id = cipa_membros.id).
     const numero = 'R-' + (data || '').replace(/-/g, '');
     const res = await API.post('cipa_reunioes', {
       mandato_id: currentMandato.id,
@@ -808,15 +816,25 @@ async function salvarReuniao() {
       tipo: 'ordinaria',
       local: local || null,
       pauta,
-      ata_texto: ataFull || null,
+      deliberacoes: deliberacoes || null,
+      ata_texto: ata || null,
       status: 'aprovada',
       proxima_data: proxima
     });
 
     if (!res.ok) { toast('Erro ao salvar reuniao: ' + res.error, 'err'); return; }
+
+    const reuniaoId = Array.isArray(res.data) ? res.data[0]?.id : res.data?.id;
+    if (reuniaoId && selectedPresentes.length > 0) {
+      const presRes = await API.post('cipa_presencas',
+        selectedPresentes.map(mid => ({ reuniao_id: reuniaoId, membro_id: mid, presente: true })),
+        'return=minimal');
+      if (!presRes.ok) toast('Reuniao salva, mas houve erro ao gravar presencas.', 'err');
+    }
+
     toast('Reuniao registrada com sucesso!');
     limparFormReuniao();
-    await loadReunioes();
+    await Promise.all([loadReunioes(), loadPresencas()]);
     renderReunioes();
     renderKPIs();
     populateReuniaoSelects();
@@ -853,13 +871,13 @@ function renderReunioes() {
 
   empty.style.display = 'none';
   tbody.innerHTML = list.map(r => {
-    const pres = Array.isArray(r.presentes) ? r.presentes : [];
+    const pres = presencas.filter(p => p.reuniao_id === r.id && p.presente !== false);
     return `<tr style="cursor:pointer;" onclick="openReuniaoDetalhe('${r.id}')">
       <td class="mono">${fmtDate(r.data)}</td>
       <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${r.pauta || '--'}</td>
       <td style="text-align:center;"><span class="badge badge-accent">${pres.length}</span></td>
       <td>${r.local || '--'}</td>
-      <td class="mono">${fmtDate(r.proxima_reuniao)}</td>
+      <td class="mono">${fmtDate(r.proxima_data)}</td>
     </tr>`;
   }).join('');
 }
@@ -867,14 +885,14 @@ function renderReunioes() {
 function openReuniaoDetalhe(id) {
   const r = reunioes.find(x => x.id === id);
   if (!r) return;
-  const pres = Array.isArray(r.presentes) ? r.presentes : [];
-  const presNames = pres.map(pid => getColabName(pid));
+  const pres = presencas.filter(p => p.reuniao_id === r.id && p.presente !== false);
+  const presNames = pres.map(p => getMembroNome(p.membro_id));
 
   document.getElementById('modal-reuniao-content').innerHTML = `
     <div class="detail-row">
       <div class="detail-item"><div class="label">Data</div><div class="value">${fmtDate(r.data)}</div></div>
       <div class="detail-item"><div class="label">Local</div><div class="value">${r.local || '--'}</div></div>
-      <div class="detail-item"><div class="label">Proxima Reuniao</div><div class="value">${fmtDate(r.proxima_reuniao)}</div></div>
+      <div class="detail-item"><div class="label">Proxima Reuniao</div><div class="value">${fmtDate(r.proxima_data)}</div></div>
     </div>
     <div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Pauta</div>
     <div style="font-size:12px;line-height:1.6;color:var(--text);">${r.pauta || '--'}</div></div>
@@ -882,8 +900,8 @@ function openReuniaoDetalhe(id) {
     <div class="selected-tags">${presNames.map(n => `<span class="tag">${n}</span>`).join('')}</div></div>
     ${r.deliberacoes ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Deliberacoes</div>
     <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">${r.deliberacoes}</div></div>` : ''}
-    ${r.ata ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ata</div>
-    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:var(--font-mono);">${r.ata}</div></div>` : ''}
+    ${r.ata_texto ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ata</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:var(--font-mono);">${r.ata_texto}</div></div>` : ''}
   `;
   document.getElementById('modal-reuniao').classList.add('open');
 }
@@ -1040,6 +1058,7 @@ async function salvarAcao() {
   try {
     const res = await API.post('cipa_acoes', {
       reuniao_id: reuniaoId,
+      mandato_id: currentMandato ? currentMandato.id : null,
       acao,
       responsavel,
       prazo,
@@ -1060,7 +1079,8 @@ function renderAcoes() {
   const statusFilter = document.getElementById('acoes-filter-status').value;
   const reuniaoFilter = document.getElementById('acoes-filter-reuniao').value;
 
-  let filtered = acoes;
+  // Acoes do mandato corrente (linhas legadas sem mandato_id continuam visiveis)
+  let filtered = acoes.filter(a => !currentMandato || !a.mandato_id || a.mandato_id === currentMandato.id);
   if (statusFilter) filtered = filtered.filter(a => a.status === statusFilter);
   if (reuniaoFilter) filtered = filtered.filter(a => a.reuniao_id === reuniaoFilter);
 

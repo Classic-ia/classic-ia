@@ -106,6 +106,11 @@
 --                                           sst_tipo_trein e revoga escrita nelas
 --                                           4 RLS policies (PLANO_CORRECOES_SIGA)
 --
+-- 23  CORRECOES_CIPA.sql                    2 colunas      Sprint 1 P0: CIPA
+--                                           (deliberacoes, (deliberações em coluna
+--                                           empresa_slug)  própria; empresa no
+--                                                          canal de denúncias)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

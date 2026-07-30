@@ -134,6 +134,15 @@
 --                                                          nullable; rastreio
 --                                                          candidato -> colaborador
 --
+-- 27  FERIAS_OPERACIONAL.sql                2 functions,   Sprint 2 P1: férias
+--                                           1 CHECK,       operacional — job de
+--                                           1 FK NOT VALID vencimento (pendente->
+--                                           1 trigger      vencida, CLT 134/137),
+--                                                          RPC ferias_programar
+--                                                          (abono 1/3 CLT 143);
+--                                                          ETL Convenia adiado
+--                                                          (payload sem amostra)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

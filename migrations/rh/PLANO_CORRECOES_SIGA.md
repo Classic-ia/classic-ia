@@ -108,6 +108,7 @@ Em `recrutamento_selecao.html`, ao mover para `aprovado`:
 1. **Migration:** `CHECK (status IN ('vencida','pendente','programada','em_gozo','gozada'))` em `rh_ferias` + function `ferias_atualizar_vencidas()` (promove `pendente`→`vencida` quando `periodo_aquisitivo_fim + interval '12 months' < CURRENT_DATE`) agendada via pg_cron/n8n diario;
 2. **Tela:** aba "Programar" em `ferias.html` (form sobre rh_ferias: periodo, data inicio, dias, abono/dias vendidos) — CRUD simples;
 3. **ETL:** ativar o sync `stg_convenia_ferias` → `rh_ferias` (mapeamento payload_json→colunas, dedup por hash).
+   > **ADIADO (execução do sprint):** o shape do `payload_json` da Convenia não está versionado no repo e o staging local está vazio — mapear as colunas exige uma amostra real de produção (`SELECT payload_json FROM stg_convenia_ferias LIMIT 5`). Itens 1 e 2 entregues em `FERIAS_OPERACIONAL.sql` (script 27) + aba de programação em ferias.html; retomar o ETL quando houver amostra.
 
 ### 3.3 Triagem de denuncias (F-46)
 

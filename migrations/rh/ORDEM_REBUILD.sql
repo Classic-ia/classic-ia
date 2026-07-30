@@ -152,6 +152,15 @@
 --                                                          aberta -> em_analise ->
 --                                                          respondida|arquivada
 --
+-- 29  HARDENING_RLS_MODULOS.sql             ~80 policies   Sprint 3 P2: remove
+--                                           1 wrapper fn   TODAS as policies anon;
+--                                                          padrão RBAC cipa_acoes
+--                                                          em desligamentos, rs_*,
+--                                                          benefícios, sst_*,
+--                                                          eSocial e CIPA; guard
+--                                                          de perfil no
+--                                                          motor_decisoes()
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

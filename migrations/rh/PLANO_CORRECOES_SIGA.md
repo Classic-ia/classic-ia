@@ -132,6 +132,8 @@ Aplicar o **padrao do `cipa_acoes`** (o melhor do sistema: SELECT autenticado; e
 | CQ (projeto CQ) | cq_sal_*, cq_ficha_producao | remover SELECT anon; escrita producao/qualidade/admin |
 
 **Remover TODAS as policies `anon`** exceto `cipa_denuncias INSERT` (canal publico por design).
+> **Execução (script 29 — HARDENING_RLS_MODULOS.sql):** todas as policies anon removidas SEM exceção — o canal público de denúncias passou a operar via RPC SECURITY DEFINER (`cipa_registrar_denuncia`, script 28), então nenhuma policy anon é mais necessária. CIPA ganhou escrita também para `sst` (a CIPA é operada pela equipe SST, mesma regra da triagem).
+> **ADIADO — grupo CQ:** `cq_sal_*`/`cq_ficha_producao` vivem no projeto Supabase CQ (`nvqxsulntpftcwtkjedu`), que não tem scripts de rebuild versionados no repo; o hardening exige snapshot do schema de produção. Retomar quando o schema CQ for versionado.
 
 ### 4.2 Guards de perfil
 

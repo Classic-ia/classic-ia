@@ -143,6 +143,15 @@
 --                                                          ETL Convenia adiado
 --                                                          (payload sem amostra)
 --
+-- 28  TRIAGEM_DENUNCIAS.sql                 3 functions,   Sprint 2 P1: triagem de
+--                                           1 CHECK,       denúncias CIPA — RLS
+--                                           2 RLS policies (leitura admin/rh/sst;
+--                                           1 trigger      anon só via RPC c/
+--                                                          protocolo); consulta
+--                                                          pública por protocolo;
+--                                                          aberta -> em_analise ->
+--                                                          respondida|arquivada
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

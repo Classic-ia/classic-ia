@@ -111,6 +111,15 @@
 --                                           empresa_slug)  própria; empresa no
 --                                                          canal de denúncias)
 --
+-- 24  WORKFLOW_DESLIGAMENTO_V2.sql          3 functions,   Sprint 1 P0: workflow
+--                                           1 trigger,     de desligamento
+--                                           10 colunas em  versionado (antes na
+--                                           rh_desligamentos raiz, fora da ordem);
+--                                                          executar grava registro
+--                                                          analítico; deprecia
+--                                                          registrar_desligamento_
+--                                                          completo (status inativo)
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

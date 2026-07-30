@@ -6,8 +6,8 @@
 <title>Gestão de Pagamentos · Classic</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="config.js"></script>
-<script src="rh_api.js"></script>
 <script src="rh_auth.js"></script>
+<script src="api.js"></script>
 <link rel="stylesheet" href="ds.css">
 </head>
 <body class="standalone-bg">
@@ -293,11 +293,11 @@ function toggleCamposPag() {
 }
 
 async function carregar() {
-  const load = async (t) => { try { return await RH_API.get(t + '?order=created_at.desc&limit=2000') || []; } catch { return []; } };
+  const load = async (t) => { const r = await API.get(t + '?order=created_at.desc&limit=2000'); return r.ok ? r.data : []; };
   [FUNC, DADOS_BANC, LOTES] = await Promise.all([
     load('rh_funcionarios'), load('rh_dados_bancarios'), load('rh_lotes_pagamento')
   ]);
-  try { LOG_EXPORT = await RH_API.get('rh_log_exportacao?order=created_at.desc&limit=100') || []; } catch { LOG_EXPORT = []; }
+  { const r = await API.get('rh_log_exportacao?order=created_at.desc&limit=100'); LOG_EXPORT = r.ok ? r.data : []; }
 }
 
 function popularSelects() {
@@ -417,8 +417,8 @@ async function salvarDados(e) {
   };
   try {
     let ok;
-    if (id) { ok = (await RH_API.fetch('rh_dados_bancarios?id=eq.' + id, { method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: dados })).ok; }
-    else { ok = (await RH_API.post('rh_dados_bancarios', dados, 'return=minimal')).ok; }
+    if (id) { ok = (await API.patch('rh_dados_bancarios?id=eq.' + id, dados)).ok; }
+    else { ok = (await API.post('rh_dados_bancarios', dados)).ok; }
     if (ok) { toast(id ? 'Dados atualizados' : 'Dados cadastrados'); fecharModal('modalDados'); await recarregar(); }
     else toast('Erro ao salvar', true);
   } catch (err) { toast('Erro: ' + err.message, true); }
@@ -426,9 +426,7 @@ async function salvarDados(e) {
 
 async function validarDados(id) {
   try {
-    const ok = (await RH_API.fetch('rh_dados_bancarios?id=eq.' + id, {
-      method: 'PATCH', headers: { 'Prefer': 'return=minimal' }, body: { status_validacao: 'validado' }
-    })).ok;
+    const ok = (await API.patch('rh_dados_bancarios?id=eq.' + id, { status_validacao: 'validado' })).ok;
     if (ok) { toast('Dados validados'); await recarregar(); }
   } catch (err) { toast('Erro', true); }
 }
@@ -474,7 +472,7 @@ async function salvarLote(e) {
     status: 'rascunho',
   };
   try {
-    const ok = (await RH_API.post('rh_lotes_pagamento', dados, 'return=minimal')).ok;
+    const ok = (await API.post('rh_lotes_pagamento', dados)).ok;
     if (ok) { toast('Lote criado com ' + funcLote.length + ' funcionários'); fecharModal('modalLote'); await recarregar(); }
     else toast('Erro ao criar lote', true);
   } catch (err) { toast('Erro: ' + err.message, true); }
@@ -563,11 +561,11 @@ function exportarLista(tipo, formato) {
   // Log de exportação
   const user = RHAuth.getUser();
   try {
-    RH_API.post('rh_log_exportacao', {
+    API.post('rh_log_exportacao', {
       usuario_id: user?.id, usuario_nome: user?.nome,
       tipo_lista: tipo, formato, total_registros: lista.length,
       filtros: JSON.stringify({ tipo, formato }),
-    }, 'return=minimal');
+    });
   } catch (e) { console.warn('Log export error:', e); }
 }
 
@@ -594,7 +592,8 @@ async function recarregar() {
 }
 
 (async () => {
-  const user = await RHAuth.init();
+  // dados bancarios (LGPD): mesma regra da RLS de rh_dados_bancarios
+  const user = await RHAuth.init({ perfisPermitidos: ['administrador','rh'] });
   if (!user) return;
   await recarregar();
 })();

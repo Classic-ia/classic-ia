@@ -400,6 +400,7 @@
 <script>
 // =============== STATE ===============
 let allTipos = [];
+let canWrite = false;
 let allTreinamentos = [];
 let allColaboradores = [];
 let bulkColabs = []; // ids for bulk registration
@@ -410,6 +411,12 @@ let painelSortDir = 'asc';
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await RHAuth.init();
   if (!user) return;
+
+  canWrite = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWrite) {
+    document.querySelectorAll('.tab-btn[data-tab="cadastrar"], .tab-btn[data-tab="tipos"]')
+      .forEach(b => { b.style.display = 'none'; });
+  }
 
   initTabs();
   await carregarDados();
@@ -674,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function salvarTreinamento() {
+  if (!canWrite) { toast('Somente administrador, RH ou SST podem cadastrar treinamentos.', 'err'); return; }
   const isBulk = document.getElementById('modo-bulk').checked;
   const tipoId = document.getElementById('cad-tipo').value;
   const data = document.getElementById('cad-data').value;
@@ -868,6 +876,7 @@ function editarTipo(id) {
 }
 
 async function salvarTipo() {
+  if (!canWrite) { toast('Somente administrador, RH ou SST podem gerenciar tipos.', 'err'); return; }
   const id = document.getElementById('tipo-edit-id').value;
   const nome = document.getElementById('tipo-nome').value.trim();
   const nr = document.getElementById('tipo-nr').value.trim();

@@ -440,6 +440,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════════
+let canWrite = false;
 let allAcidentes = [];
 let allColaboradores = [];
 let chartMes, chartSetor, chartTipo, chartCorpo;
@@ -468,6 +469,17 @@ const STATUS_LABELS = { registrado: 'Registrado', investigando: 'Investigando', 
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await RHAuth.init();
   if (!user) return;
+
+  canWrite = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWrite) {
+    document.querySelectorAll('.tab-btn[data-tab="registrar"], .tab-btn[data-tab="investigacao"]')
+      .forEach(b => { b.style.display = 'none'; });
+    // aba inicial e "registrar" — leva leitores direto ao historico
+    const histBtn = document.querySelector('.tab-btn[data-tab="historico"]');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    if (histBtn) { histBtn.classList.add('active'); document.getElementById('tab-historico').classList.add('active'); }
+  }
 
   setupTabs();
   setupCatToggle();
@@ -640,6 +652,7 @@ function populateYearSelects() {
 // ══════════════════════════════════════════════════════════
 document.addEventListener('click', async e => {
   if (e.target.id !== 'btn-salvar-acidente') return;
+  if (!canWrite) return showToast('Somente administrador, RH ou SST podem registrar acidentes.', 'err');
 
   const tipo = document.getElementById('reg-tipo').value;
   const colabId = document.getElementById('reg-colab-id').value;
@@ -1018,6 +1031,7 @@ document.addEventListener('click', e => {
 // Save investigacao
 document.addEventListener('click', async e => {
   if (e.target.id !== 'btn-salvar-inv') return;
+  if (!canWrite) return showToast('Somente administrador, RH ou SST podem salvar investigacoes.', 'err');
 
   const id = document.getElementById('inv-acidente').value;
   if (!id) return showToast('Selecione um acidente.', 'warn');

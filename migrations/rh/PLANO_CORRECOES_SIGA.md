@@ -81,7 +81,16 @@ Correcao em 1 arquivo (`cipa.html`), sem migration:
 
 ### 2.4 Pagamentos (F-41)
 
-**Decisao:** nao deployar as `rh_*` fantasma — **migrar a tela para a familia `fp_*`** (`fp_lote_pagamento`, `fp_pagamento_funcionario`), que e o modelo que a folha ja usa. Dados bancarios: deployar apenas `rh_dados_bancarios` (unica sem equivalente em `fp_*`), via migration versionada com RLS restrita (rh/admin/financeiro).
+**Decisao (refinada na execucao — ver DEPLOY_PAGAMENTOS_RH.sql):** o lote desta
+tela e um agrupador leve de listas de exportacao (sem valores); forcar o
+mapeamento em `fp_lote_pagamento` (que exige `lote_folha_id` de folha
+processada) criaria semantica errada. Correcao P0 aplicada: **deploy das 3
+tabelas fantasma** (`rh_dados_bancarios`, `rh_lotes_pagamento`,
+`rh_log_exportacao`) via migration versionada (script 25) com **RLS RBAC** —
+dados bancarios restritos a administrador/rh (LGPD). A consolidacao com a
+familia `fp_*` fica para a **Fase 3** do PLANO_MIGRACAO_SIGA, quando os lotes
+ganharem valores e remessa bancaria (CNAB). Nenhuma mudanca de frontend
+necessaria.
 
 ---
 

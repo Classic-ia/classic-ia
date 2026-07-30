@@ -120,6 +120,13 @@
 --                                                          registrar_desligamento_
 --                                                          completo (status inativo)
 --
+-- 25  DEPLOY_PAGAMENTOS_RH.sql              3 tabelas,     Sprint 1 P0: deploy das
+--                                           8 RLS policies tabelas fantasma de
+--                                                          pagamentos (dados
+--                                                          bancários LGPD, lotes,
+--                                                          log de exportação) com
+--                                                          RLS RBAC
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
 --   180 tabelas | 33 views | 70+ functions | 63 triggers

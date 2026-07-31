@@ -96,12 +96,19 @@
 <script>
 /* ── state ── */
 let allEvents = [], funcMap = {}, setorMap = {}, expandedId = null, selectedId = null, pendingGen = [];
+let canWrite = false;
 
 /* ── init ── */
 (async function(){
   const user = await Shell.init({ page: 'monitor_esocial', title: 'Monitor eSocial SST' });
   if (!user) return;
   API.setPerfil(user.perfil);
+  canWrite = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWrite) {
+    document.querySelectorAll('button').forEach(b => {
+      if ((b.getAttribute('onclick') || '') === 'startAutoGen()') b.style.display = 'none';
+    });
+  }
   await loadMaps();
   await load();
 })();
@@ -190,7 +197,7 @@ function renderTable(){
       <td class="text-sm">${API.esc(e.subtipo||'-')}</td>
       <td>${statusBadge}</td>
       <td onclick="event.stopPropagation()">
-        ${e.status !== 'enviado' && e.status !== 'cancelado' ? `<button class="btn btn-primary btn-sm" onclick="openEnviado('${e.id}')">Enviar</button> ` : ''}
+        ${canWrite && e.status !== 'enviado' && e.status !== 'cancelado' ? `<button class="btn btn-primary btn-sm" onclick="openEnviado('${e.id}')">Enviar</button> ` : ''}
         <button class="btn btn-ghost btn-sm" onclick="openObs('${e.id}')">Obs</button>
       </td>
     </tr>`;
@@ -250,6 +257,7 @@ function openObs(id){
   openModal('modalObs');
 }
 document.getElementById('btnSaveObs').addEventListener('click', async function(){
+  if (!canWrite) { alert('Somente administrador, RH ou SST podem editar observacoes.'); return; }
   const obs = document.getElementById('inpObs').value.trim();
   this.disabled = true; this.textContent = 'Salvando...';
   const res = await API.patch('esocial_eventos?id=eq.' + selectedId, { observacoes: obs });
@@ -261,6 +269,7 @@ document.getElementById('btnSaveObs').addEventListener('click', async function()
 
 /* ── Auto-generate events ── */
 async function startAutoGen(){
+  if (!canWrite) { alert('Somente administrador, RH ou SST podem gerar eventos.'); return; }
   pendingGen = [];
   document.getElementById('gerarMsg').textContent = 'Analisando dados...';
   document.getElementById('btnConfirmGerar').disabled = true;
@@ -292,7 +301,9 @@ async function startAutoGen(){
   });
 
   /* S-2220: ASOs */
-  const validTypes = ['admissional','periodico','retorno','demissional'];
+  // UNIFICACAO_SST: sst_aso usa 'retorno_trabalho' (nao 'retorno'); incluir
+  // tambem mudanca_funcao (S-2220 cobre todos os exames de monitoramento)
+  const validTypes = ['admissional','periodico','retorno','retorno_trabalho','mudanca_funcao','demissional'];
   asos.data.filter(a => validTypes.includes(a.tipo_exame)).forEach(a => {
     const key = `S-2220|${a.funcionario_id}|${a.data_exame}`;
     if (existSet.has(key)) return;
@@ -344,6 +355,7 @@ function calcPrazoASO(aso){
       return nextMonth.toISOString().slice(0,10);
     }
     case 'retorno':
+    case 'retorno_trabalho':
       return aso.data_exame;
     case 'demissional':
       return addDays(aso.data_exame, 15);

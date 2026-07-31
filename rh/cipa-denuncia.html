@@ -42,6 +42,14 @@
     <button type="submit" class="btn" id="btnSubmit">Enviar Denúncia</button>
   </form>
   <div id="msg" class="msg"></div>
+
+  <form id="formProtocolo" style="margin-top:24px;border-top:1px solid var(--border,#e2e8f0);padding-top:16px;">
+    <label for="protocolo">Já enviou uma denúncia? Consulte pelo protocolo</label>
+    <input type="text" id="protocolo" placeholder="Cole aqui o código do protocolo" autocomplete="off">
+    <button type="submit" class="btn" style="margin-top:8px;">Consultar Protocolo</button>
+  </form>
+  <div id="msgProtocolo" class="msg"></div>
+
   <div class="footer">
     <p>Sua denúncia é anônima e não registra nenhum dado pessoal.</p>
     <p>CIPA — Classic Importação e Exportação de Couros Ltda</p>
@@ -79,26 +87,60 @@
     msg.className='msg'; msg.style.display='none';
 
     try{
-      const res = await fetch(SB_URL+'/rest/v1/cipa_denuncias',{
+      const res = await fetch(SB_URL+'/rest/v1/rpc/cipa_registrar_denuncia',{
         method:'POST',
         headers:{
           'Content-Type':'application/json',
           'apikey': SB_KEY,
-          'Authorization':'Bearer '+SB_KEY,
-          'Prefer':'return=representation'
+          'Authorization':'Bearer '+SB_KEY
         },
-        body: JSON.stringify({ setor, descricao: texto, anonima: true })
+        body: JSON.stringify({
+          p_setor: setor,
+          p_descricao: texto,
+          p_empresa_slug: document.getElementById('empresa').value || null
+        })
       });
       if(!res.ok) throw new Error('Erro '+res.status);
       const data = await res.json();
-      const id = data[0]?.id || crypto.randomUUID().split('-')[0];
+      if(!data || data.ok === false) throw new Error(data?.error || 'Erro ao registrar');
       msg.className='msg ok';
-      msg.textContent='Denúncia registrada com sucesso. Protocolo: '+id;
+      msg.textContent='Denúncia registrada com sucesso. Protocolo: '+data.protocolo+' — guarde este código para consultar a resposta.';
       document.getElementById('formDenuncia').querySelectorAll('select,textarea,button').forEach(el=>el.disabled=true);
     }catch(err){
       msg.className='msg err';
       msg.textContent='Erro ao enviar denúncia. Tente novamente.';
       btn.disabled=false; btn.textContent='Enviar Denúncia';
+    }
+  });
+
+  // Consulta de protocolo
+  document.getElementById('formProtocolo').addEventListener('submit', async(e)=>{
+    e.preventDefault();
+    const out = document.getElementById('msgProtocolo');
+    const cod = document.getElementById('protocolo').value.trim();
+    if(!/^[0-9a-fA-F-]{36}$/.test(cod)){
+      out.className='msg err'; out.textContent='Protocolo inválido — informe o código completo recebido no envio.'; return;
+    }
+    out.className='msg'; out.textContent='Consultando...';
+    try{
+      const res = await fetch(SB_URL+'/rest/v1/rpc/cipa_consultar_protocolo',{
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey': SB_KEY,
+          'Authorization':'Bearer '+SB_KEY
+        },
+        body: JSON.stringify({ p_protocolo: cod })
+      });
+      const data = await res.json();
+      if(!res.ok || !data || data.ok === false) throw new Error(data?.error || 'Erro '+res.status);
+      const statusLabel = { aberta:'Recebida — aguardando análise', em_analise:'Em análise pela CIPA', respondida:'Respondida', arquivada:'Arquivada' };
+      let txt = 'Situação: ' + (statusLabel[data.status] || data.status);
+      if(data.resposta){ txt += ' — Resposta: ' + data.resposta; }
+      out.className='msg ok'; out.textContent = txt;
+    }catch(err){
+      out.className='msg err';
+      out.textContent = err.message === 'Protocolo nao encontrado' ? 'Protocolo não encontrado.' : 'Erro ao consultar. Tente novamente.';
     }
   });
 })();

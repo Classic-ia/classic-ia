@@ -314,9 +314,19 @@
           </div>
 
           <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:20px;">
-            <button type="submit" class="btn btn-primary">Registrar Desligamento</button>
+            <button type="submit" class="btn btn-primary">Abrir Processo de Desligamento</button>
           </div>
         </form>
+
+        <!-- WORKFLOW_DESLIGAMENTO_V2: checklist rescisorio dos processos em execucao -->
+        <div class="card" id="proc-pendentes-card" style="display:none; margin-top:20px;">
+          <h3 style="margin-bottom:4px;">Processos em Execucao — Checklist Rescisorio</h3>
+          <p style="font-size:12px; color:var(--muted); margin-bottom:12px;">
+            O desligamento so e efetivado (status do funcionario + registro no dashboard)
+            apos os 4 itens obrigatorios do checklist.
+          </p>
+          <div id="proc-pendentes-list"></div>
+        </div>
       </div>
     </div>
 
@@ -1273,11 +1283,6 @@
     const sel = document.getElementById('des-colaborador');
     const opt = sel.options[sel.selectedIndex];
     const colabId = sel.value;
-    const colabNome = opt.getAttribute('data-nome');
-    const cargo = opt.getAttribute('data-cargo');
-    const setor = opt.getAttribute('data-setor');
-    const admissao = opt.getAttribute('data-admissao');
-    const salario = parseFloat(opt.getAttribute('data-salario')) || 0;
     const dataDeslig = document.getElementById('des-data').value;
     const tipo = document.getElementById('des-tipo').value;
     const categoria = document.getElementById('des-categoria').value;
@@ -1288,49 +1293,110 @@
       return false;
     }
 
-    // Calculate tempo empresa
-    let tempoDias = 0;
-    if (admissao) {
-      const dAdm = new Date(admissao + 'T00:00:00');
-      const dDes = new Date(dataDeslig + 'T00:00:00');
-      tempoDias = Math.ceil((dDes - dAdm) / (1000 * 60 * 60 * 24));
-    }
+    // WORKFLOW_DESLIGAMENTO_V2: abre o processo via RPC (rh_processo +
+    // rh_proc_desligamento). O status do funcionario e o registro analitico
+    // em rh_desligamentos sao gravados por rh_executar_desligamento apos o
+    // checklist rescisorio (secao abaixo do formulario).
+    const res = await API.rpc('rh_abrir_desligamento', {
+      p_funcionario_id: colabId,
+      p_tipo_desligamento: tipo,
+      p_data_desligamento: dataDeslig,
+      p_categoria_causa: categoria,
+      p_motivo_detalhado: descricao,
+      p_entrevista_p1: document.getElementById('des-p1').value || null,
+      p_entrevista_p2: document.getElementById('des-p2').value || null,
+      p_entrevista_p3: document.getElementById('des-p3').value || null,
+      p_entrevista_p4: document.getElementById('des-p4').value || null,
+      p_entrevista_p5: document.getElementById('des-p5').value || null,
+    });
+    const rpcData = res.ok ? (Array.isArray(res.data) ? res.data[0] : res.data) : null;
 
-    const payload = {
-      colaborador_id: colabId,
-      colaborador_nome: colabNome,
-      data_desligamento: dataDeslig,
-      tipo: tipo,
-      motivo: '[' + categoria.toUpperCase() + '] ' + descricao,
-      data_admissao: admissao || null,
-      cargo: cargo || null,
-      salario: salario || null,
-      setor: setor || null,
-      tempo_empresa_dias: tempoDias,
-      entrevista_p1: document.getElementById('des-p1').value || null,
-      entrevista_p2: document.getElementById('des-p2').value || null,
-      entrevista_p3: document.getElementById('des-p3').value || null,
-      entrevista_p4: document.getElementById('des-p4').value || null,
-      entrevista_p5: document.getElementById('des-p5').value || null,
-    };
-
-    // TODO: Registro de desligamento via módulo de processos (rh_proc_desligamento)
-    const res = await API.post('rh_desligamentos', payload, 'return=representation');
-    if (res.ok) {
-      // Update funcionario status
-      await API.patch('rh_funcionarios?id=eq.' + colabId, {
-        status: 'desligado',
-        data_desligamento: dataDeslig,
-      });
-
-      alert('Desligamento registrado com sucesso!');
+    if (res.ok && rpcData && rpcData.ok) {
+      alert('Processo de desligamento aberto. Complete o checklist rescisorio abaixo e efetive.');
       document.getElementById('form-deslig').reset();
-      document.querySelector('[data-tab="dashboard"]').click();
-      await loadData();
+      await loadProcessosPendentes();
+      document.getElementById('proc-pendentes-card').scrollIntoView({ behavior: 'smooth' });
     } else {
-      alert('Erro: ' + (res.error || 'Tabela rh_desligamentos em migração para módulo de processos'));
+      const msg = (rpcData && rpcData.error) ? rpcData.error : (res.error || 'Falha ao abrir processo de desligamento');
+      alert('Erro: ' + msg);
     }
     return false;
+  };
+
+  // ── Checklist rescisorio: processos em execucao ──
+  async function loadProcessosPendentes() {
+    const card = document.getElementById('proc-pendentes-card');
+    const list = document.getElementById('proc-pendentes-list');
+    if (!card || !list) return;
+
+    const resP = await API.get('rh_processo?tipo=eq.desligamento&status=eq.em_execucao&select=id,funcionario_id&order=created_at.desc');
+    const procs = resP.ok ? resP.data : [];
+    if (!procs.length) { card.style.display = 'none'; list.innerHTML = ''; return; }
+
+    const ids = procs.map(p => p.id).join(',');
+    const resD = await API.get('rh_proc_desligamento?processo_id=in.(' + ids + ')&select=*');
+    const dets = resD.ok ? resD.data : [];
+    const detMap = {};
+    dets.forEach(d => { detMap[d.processo_id] = d; });
+
+    const nomeMap = {};
+    (colaboradores || []).forEach(c => { nomeMap[c.id] = c.nome; });
+
+    const CHK_ITEMS = [
+      ['exame_demissional_ok', 'chk-exame', 'Exame demissional realizado'],
+      ['devolucao_epis_ok', 'chk-epis', 'EPIs devolvidos'],
+      ['devolucao_patrimonio_ok', 'chk-patrimonio', 'Patrimonio devolvido (uniforme, cracha, equipamentos)'],
+      ['bloqueio_acessos_ok', 'chk-acessos', 'Acessos bloqueados (sistemas, portaria)'],
+      ['calculo_rescisao_ok', 'chk-calculo', 'Calculo de rescisao conferido (opcional)'],
+    ];
+
+    card.style.display = '';
+    list.innerHTML = procs.map(p => {
+      const d = detMap[p.id] || {};
+      const dataFmt = d.data_desligamento ? d.data_desligamento.split('-').reverse().join('/') : '--';
+      const checks = CHK_ITEMS.map(([col, cls, label]) =>
+        '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:4px 0;cursor:pointer;">' +
+        '<input type="checkbox" class="' + cls + '"' + (d[col] ? ' checked' : '') + '> ' + label + '</label>'
+      ).join('');
+      return '<div class="proc-chk" data-proc="' + p.id + '" style="border:1px solid var(--border);border-radius:8px;padding:14px;margin-bottom:10px;">' +
+        '<div style="font-weight:600;margin-bottom:8px;">' + (nomeMap[p.funcionario_id] || p.funcionario_id) +
+        ' — ' + (d.tipo_desligamento || '') + ' em ' + dataFmt + '</div>' +
+        checks +
+        '<div style="margin-top:10px;"><button class="btn btn-primary" onclick="efetivarDesligamento(\'' + p.id + '\')">Salvar checklist e efetivar</button></div>' +
+        '</div>';
+    }).join('');
+  }
+  window.loadProcessosPendentes = loadProcessosPendentes;
+
+  window.efetivarDesligamento = async function(procId) {
+    const el = document.querySelector('.proc-chk[data-proc="' + procId + '"]');
+    if (!el) return;
+    const chk = {
+      exame_demissional_ok: el.querySelector('.chk-exame').checked,
+      devolucao_epis_ok: el.querySelector('.chk-epis').checked,
+      devolucao_patrimonio_ok: el.querySelector('.chk-patrimonio').checked,
+      bloqueio_acessos_ok: el.querySelector('.chk-acessos').checked,
+      calculo_rescisao_ok: el.querySelector('.chk-calculo').checked,
+    };
+
+    const up = await API.patch('rh_proc_desligamento?processo_id=eq.' + procId, chk);
+    if (!up.ok) { alert('Erro ao salvar checklist: ' + (up.error || '')); return; }
+
+    if (!(chk.exame_demissional_ok && chk.devolucao_epis_ok && chk.devolucao_patrimonio_ok && chk.bloqueio_acessos_ok)) {
+      alert('Checklist salvo. Para efetivar, os 4 itens obrigatorios devem estar marcados (exame, EPIs, patrimonio, acessos).');
+      return;
+    }
+
+    if (!confirm('Efetivar o desligamento? O funcionario sera marcado como desligado.')) return;
+
+    const ex = await API.rpc('rh_executar_desligamento', { p_processo_id: procId });
+    if (ex.ok) {
+      alert('Desligamento efetivado com sucesso.');
+      await loadData();
+      await loadProcessosPendentes();
+    } else {
+      alert('Erro ao efetivar: ' + (ex.error || ''));
+    }
   };
 
   // ── Diagnostico e fix de registros ──
@@ -1973,6 +2039,7 @@
 
   // ── Load ──
   await loadData();
+  await loadProcessosPendentes();
 
 })();
 </script>

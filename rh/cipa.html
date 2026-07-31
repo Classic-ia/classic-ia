@@ -71,6 +71,7 @@
     <button class="tab-btn" data-tab="reunioes">Reunioes</button>
     <button class="tab-btn" data-tab="mandatos">Mandatos</button>
     <button class="tab-btn" data-tab="acoes">Acoes</button>
+    <button class="tab-btn" data-tab="denuncias" id="tab-btn-denuncias" style="display:none;">Denuncias</button>
   </div>
 
   <!-- ============ TAB: MEMBROS ============ -->
@@ -263,6 +264,39 @@
     </div>
   </div>
 
+  <!-- ============ TAB: DENUNCIAS ============ -->
+  <div id="tab-denuncias" class="tab-pane">
+    <div class="section">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+        <div class="section-title" style="margin-bottom:0;">Triagem do Canal de Denuncias</div>
+        <select id="denuncias-filter-status">
+          <option value="">Todos os status</option>
+          <option value="aberta">Aberta</option>
+          <option value="em_analise">Em Analise</option>
+          <option value="respondida">Respondida</option>
+          <option value="arquivada">Arquivada</option>
+        </select>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Recebida</th>
+              <th>Empresa</th>
+              <th>Setor</th>
+              <th>Descricao</th>
+              <th>Status</th>
+              <th>Acoes</th>
+            </tr>
+          </thead>
+          <tbody id="denuncias-tbody"></tbody>
+        </table>
+      </div>
+      <div id="denuncias-empty" class="empty-state" style="display:none;">Nenhuma denuncia recebida.</div>
+    </div>
+  </div>
+
 </div>
 
 <!-- Modal Membro -->
@@ -350,6 +384,27 @@
   </div>
 </div>
 
+<!-- Modal Triagem Denuncia -->
+<div class="modal-overlay" id="modal-denuncia">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModalDenuncia()">&times;</button>
+    <div class="modal-title">Triagem de Denuncia</div>
+    <div id="modal-denuncia-info" style="margin-bottom:12px;"></div>
+    <div class="form-row" id="denuncia-resposta-wrap">
+      <div class="form-group full">
+        <label>Resposta / Justificativa</label>
+        <textarea id="denuncia-resposta" placeholder="Providencias tomadas ou justificativa de arquivamento..." style="min-height:80px;"></textarea>
+      </div>
+    </div>
+    <div style="margin-top:18px;display:flex;gap:10px;flex-wrap:wrap;" id="denuncia-botoes">
+      <button class="btn btn-outline" id="denuncia-analisar-btn">Marcar Em Analise</button>
+      <button class="btn btn-ok" id="denuncia-responder-btn">Responder e Concluir</button>
+      <button class="btn btn-outline" id="denuncia-arquivar-btn">Arquivar</button>
+      <button class="btn btn-outline" onclick="closeModalDenuncia()">Fechar</button>
+    </div>
+  </div>
+</div>
+
 <!-- Modal Reuniao Detalhe -->
 <div class="modal-overlay" id="modal-reuniao">
   <div class="modal">
@@ -373,10 +428,14 @@ let colaboradores = [];
 let mandatos = [];
 let membros = [];
 let reunioes = [];
+let presencas = [];
 let acoes = [];
 let currentMandato = null;
-let selectedPresentes = [];
+let selectedPresentes = [];   // ids de cipa_membros (persistidos em cipa_presencas)
 let editingMembroId = null;
+let denuncias = [];
+let podeTriarDenuncias = false;
+let triagemDenunciaId = null;
 
 const CARGOS_CIPA = {
   presidente: 'Presidente',
@@ -393,12 +452,34 @@ const STATUS_ACAO = {
   concluido: { label: 'Concluido', cls: 'badge-ok' }
 };
 
+const STATUS_DENUNCIA = {
+  aberta: { label: 'Aberta', cls: 'badge-danger' },
+  em_analise: { label: 'Em Analise', cls: 'badge-warning' },
+  respondida: { label: 'Respondida', cls: 'badge-success' },
+  arquivada: { label: 'Arquivada', cls: 'badge-gray' }
+};
+
 // ============================================================
 //  INIT
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await RHAuth.init();
   if (!user) return;
+
+  const canWriteCipa = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWriteCipa) {
+    ['btn-add-membro','reu-salvar-btn','reu-limpar-btn','mand-criar-btn','btn-add-acao']
+      .forEach(id => { const el = document.getElementById(id); if (el) el.style.display = 'none'; });
+  }
+
+  podeTriarDenuncias = ['administrador','rh','sst'].includes(user.perfil);
+  if (podeTriarDenuncias) {
+    document.getElementById('tab-btn-denuncias').style.display = '';
+    document.getElementById('denuncias-filter-status').addEventListener('change', renderDenuncias);
+    document.getElementById('denuncia-analisar-btn').addEventListener('click', () => triagemAtualizar('em_analise'));
+    document.getElementById('denuncia-responder-btn').addEventListener('click', () => triagemAtualizar('respondida'));
+    document.getElementById('denuncia-arquivar-btn').addEventListener('click', () => triagemAtualizar('arquivada'));
+  }
 
   initTabs();
   await loadAll();
@@ -444,13 +525,16 @@ function initTabs() {
 //  DATA LOADING
 // ============================================================
 async function loadAll() {
-  await Promise.all([loadColaboradores(), loadMandatos(), loadMembros(), loadReunioes(), loadAcoes()]);
+  const loads = [loadColaboradores(), loadMandatos(), loadMembros(), loadReunioes(), loadPresencas(), loadAcoes()];
+  if (podeTriarDenuncias) loads.push(loadDenuncias());
+  await Promise.all(loads);
   findCurrentMandato();
   renderKPIs();
   renderMembros();
   renderReunioes();
   renderMandatos();
   renderAcoes();
+  if (podeTriarDenuncias) renderDenuncias();
   populateReuniaoSelects();
 }
 
@@ -474,9 +558,115 @@ async function loadReunioes() {
   reunioes = res.ok ? res.data : [];
 }
 
+async function loadPresencas() {
+  const res = await API.get('cipa_presencas?select=*');
+  presencas = res.ok ? res.data : [];
+}
+
+function getMembroNome(membroId) {
+  const m = membros.find(x => x.id === membroId);
+  if (!m) return '(desconhecido)';
+  return m.nome || getColabName(m.funcionario_id || m.colaborador_id);
+}
+
 async function loadAcoes() {
   const res = await API.get('cipa_acoes?select=*&order=prazo');
   acoes = res.ok ? res.data : [];
+}
+
+async function loadDenuncias() {
+  const res = await API.get('cipa_denuncias?select=*&order=created_at.desc');
+  denuncias = res.ok ? res.data : [];
+}
+
+// ============================================================
+//  DENUNCIAS (triagem — admin/rh/sst)
+// ============================================================
+const EMPRESAS_SLUG = { classic: 'Classic Couros', mundial: 'Mundial Couros', transanacleto: 'Trans Anacleto', ja: 'J.A. Agroindustrial' };
+
+function renderDenuncias() {
+  const tbody = document.getElementById('denuncias-tbody');
+  const filtro = document.getElementById('denuncias-filter-status').value;
+  const list = filtro ? denuncias.filter(d => d.status === filtro) : denuncias;
+
+  document.getElementById('denuncias-empty').style.display = list.length ? 'none' : 'block';
+  if (!list.length) { tbody.innerHTML = ''; return; }
+
+  tbody.innerHTML = list.map(d => {
+    const st = STATUS_DENUNCIA[d.status] || { label: d.status, cls: 'badge-gray' };
+    const descCurta = (d.descricao || '').length > 90 ? d.descricao.slice(0, 90) + '...' : (d.descricao || '');
+    const acao = ['respondida','arquivada'].includes(d.status) ? 'Ver' : 'Triar';
+    return `
+      <tr>
+        <td>${fmtDate(d.created_at)}</td>
+        <td>${API.esc(EMPRESAS_SLUG[d.empresa_slug] || d.empresa_slug || '--')}</td>
+        <td>${API.esc(d.setor || '--')}</td>
+        <td>${API.esc(descCurta)}</td>
+        <td><span class="badge ${st.cls}">${st.label}</span></td>
+        <td><button class="btn btn-outline btn-sm" onclick="openModalDenuncia('${d.id}')">${acao}</button></td>
+      </tr>
+    `;
+  }).join('');
+}
+
+window.openModalDenuncia = function (id) {
+  const d = denuncias.find(x => x.id === id);
+  if (!d) return;
+  triagemDenunciaId = id;
+
+  const st = STATUS_DENUNCIA[d.status] || { label: d.status, cls: 'badge-gray' };
+  const finalizada = ['respondida','arquivada'].includes(d.status);
+  document.getElementById('modal-denuncia-info').innerHTML = `
+    <div style="font-size:12px;color:var(--muted);margin-bottom:6px;">
+      Protocolo: ${d.id} &mdash; recebida em ${fmtDate(d.created_at)}
+      &mdash; <span class="badge ${st.cls}">${st.label}</span>
+    </div>
+    <div style="font-size:12px;margin-bottom:6px;"><b>Empresa:</b> ${API.esc(EMPRESAS_SLUG[d.empresa_slug] || d.empresa_slug || '--')}
+      &nbsp; <b>Setor:</b> ${API.esc(d.setor || '--')}</div>
+    <div style="white-space:pre-wrap;background:var(--bg);border-radius:6px;padding:10px;font-size:13px;">${API.esc(d.descricao || '')}</div>
+    ${finalizada && d.resposta ? `<div style="margin-top:8px;font-size:13px;"><b>Resposta:</b> ${API.esc(d.resposta)}</div>` : ''}
+  `;
+
+  document.getElementById('denuncia-resposta').value = '';
+  document.getElementById('denuncia-resposta-wrap').style.display = finalizada ? 'none' : '';
+  document.getElementById('denuncia-analisar-btn').style.display = d.status === 'aberta' ? '' : 'none';
+  document.getElementById('denuncia-responder-btn').style.display = finalizada ? 'none' : '';
+  document.getElementById('denuncia-arquivar-btn').style.display = finalizada ? 'none' : '';
+
+  document.getElementById('modal-denuncia').classList.add('active');
+};
+
+window.closeModalDenuncia = function () {
+  document.getElementById('modal-denuncia').classList.remove('active');
+  triagemDenunciaId = null;
+};
+
+async function triagemAtualizar(novoStatus) {
+  if (!triagemDenunciaId) return;
+  const resposta = document.getElementById('denuncia-resposta').value.trim();
+
+  if (novoStatus === 'respondida' && resposta.length < 5) {
+    toast('Escreva a resposta antes de concluir.', 'err');
+    return;
+  }
+  if (novoStatus === 'arquivada' && !confirm('Arquivar esta denuncia?')) return;
+
+  const res = await API.rpc('cipa_atualizar_denuncia', {
+    p_id: triagemDenunciaId,
+    p_status: novoStatus,
+    p_resposta: resposta || null
+  });
+  const payload = res.data;
+  if (!res.ok || !payload?.ok) {
+    toast(payload?.error || res.error || 'Erro ao atualizar denuncia', 'err');
+    return;
+  }
+
+  RHAuth.log && RHAuth.log('cipa_triagem_denuncia', { denuncia_id: triagemDenunciaId, status: novoStatus });
+  toast('Denuncia atualizada: ' + (STATUS_DENUNCIA[novoStatus]?.label || novoStatus));
+  closeModalDenuncia();
+  await loadDenuncias();
+  renderDenuncias();
 }
 
 // ============================================================
@@ -534,8 +724,8 @@ function renderKPIs() {
   const reus = getCurrentReunioes();
   let proxima = null;
   reus.forEach(r => {
-    if (r.proxima_reuniao && (!proxima || r.proxima_reuniao > proxima)) {
-      proxima = r.proxima_reuniao;
+    if (r.proxima_data && (!proxima || r.proxima_data > proxima)) {
+      proxima = r.proxima_data;
     }
   });
   document.getElementById('kpi-proxima').textContent = proxima ? fmtDate(proxima) : '--';
@@ -612,8 +802,8 @@ function openModalMembro(id) {
     const m = membros.find(x => x.id === id);
     if (m) {
       document.getElementById('memb-colab-id').value = m.funcionario_id || m.colaborador_id;
-      document.getElementById('memb-colab-search').value = getColabName(m.colaborador_id);
-      document.getElementById('memb-colab-name').textContent = getColabName(m.colaborador_id);
+      document.getElementById('memb-colab-search').value = getColabName(m.funcionario_id || m.colaborador_id);
+      document.getElementById('memb-colab-name').textContent = getColabName(m.funcionario_id || m.colaborador_id);
       document.getElementById('memb-cargo').value = m.cargo_cipa;
       document.getElementById('memb-tipo').value = m.tipo;
       document.getElementById('memb-estabilidade').value = m.estabilidade_ate || '';
@@ -679,6 +869,7 @@ async function salvarMembro() {
     }
 
     if (!res.ok) { toast('Erro ao salvar membro: ' + res.error, 'err'); return; }
+    RHAuth.log && RHAuth.log('cipa_membro_salvar', { membro_id: editingMembroId || null, mandato_id: currentMandato.id, cargo_cipa: cargo });
     toast('Membro salvo com sucesso!');
     closeModalMembro();
     await loadMembros();
@@ -724,9 +915,10 @@ function renderPresDropdown() {
   const q = input.value.toLowerCase().trim();
   const membrosList = getCurrentMembros();
 
+  // id = cipa_membros.id (e o que cipa_presencas.membro_id referencia)
   let items = membrosList.map(m => ({
-    id: m.colaborador_id,
-    nome: getColabName(m.colaborador_id),
+    id: m.id,
+    nome: m.nome || getColabName(m.funcionario_id || m.colaborador_id),
     cargo: CARGOS_CIPA[m.cargo_cipa] || m.cargo_cipa
   }));
 
@@ -761,7 +953,7 @@ function renderPresDropdown() {
 function renderPresTags() {
   const container = document.getElementById('reu-pres-tags');
   container.innerHTML = selectedPresentes.map(id => {
-    const nome = getColabName(id);
+    const nome = getMembroNome(id);
     return `<span class="tag">${nome} <span class="tag-remove" data-id="${id}">&times;</span></span>`;
   }).join('');
   container.querySelectorAll('.tag-remove').forEach(btn => {
@@ -793,13 +985,8 @@ async function salvarReuniao() {
   btn.innerHTML = '<span class="spinner"></span> Salvando...';
 
   try {
-    // Schema cipa_reunioes (prod): mandato_id, numero (text NOT NULL), data, tipo,
-    // local, pauta, ata_texto, status, proxima_data. Nao tem `presentes` nem
-    // `deliberacoes` (estao em cipa_presencas e cipa_acoes respectivamente).
-    // Presenças e deliberações seguem fluxos separados; aqui concatenamos
-    // deliberacoes em ata_texto para nao perder a informacao.
-    const ataFull = [ata, deliberacoes ? '\n--- Deliberacoes ---\n' + deliberacoes : '']
-      .filter(Boolean).join('');
+    // CORRECOES_CIPA: deliberacoes em coluna propria; presencas persistidas
+    // em cipa_presencas (membro_id = cipa_membros.id).
     const numero = 'R-' + (data || '').replace(/-/g, '');
     const res = await API.post('cipa_reunioes', {
       mandato_id: currentMandato.id,
@@ -808,15 +995,26 @@ async function salvarReuniao() {
       tipo: 'ordinaria',
       local: local || null,
       pauta,
-      ata_texto: ataFull || null,
+      deliberacoes: deliberacoes || null,
+      ata_texto: ata || null,
       status: 'aprovada',
       proxima_data: proxima
     });
 
     if (!res.ok) { toast('Erro ao salvar reuniao: ' + res.error, 'err'); return; }
+
+    const reuniaoId = Array.isArray(res.data) ? res.data[0]?.id : res.data?.id;
+    if (reuniaoId && selectedPresentes.length > 0) {
+      const presRes = await API.post('cipa_presencas',
+        selectedPresentes.map(mid => ({ reuniao_id: reuniaoId, membro_id: mid, presente: true })),
+        'return=minimal');
+      if (!presRes.ok) toast('Reuniao salva, mas houve erro ao gravar presencas.', 'err');
+    }
+
+    RHAuth.log && RHAuth.log('cipa_reuniao_registrar', { reuniao_id: reuniaoId, mandato_id: currentMandato.id, data });
     toast('Reuniao registrada com sucesso!');
     limparFormReuniao();
-    await loadReunioes();
+    await Promise.all([loadReunioes(), loadPresencas()]);
     renderReunioes();
     renderKPIs();
     populateReuniaoSelects();
@@ -853,13 +1051,13 @@ function renderReunioes() {
 
   empty.style.display = 'none';
   tbody.innerHTML = list.map(r => {
-    const pres = Array.isArray(r.presentes) ? r.presentes : [];
+    const pres = presencas.filter(p => p.reuniao_id === r.id && p.presente !== false);
     return `<tr style="cursor:pointer;" onclick="openReuniaoDetalhe('${r.id}')">
       <td class="mono">${fmtDate(r.data)}</td>
       <td style="max-width:300px;overflow:hidden;text-overflow:ellipsis;">${r.pauta || '--'}</td>
       <td style="text-align:center;"><span class="badge badge-accent">${pres.length}</span></td>
       <td>${r.local || '--'}</td>
-      <td class="mono">${fmtDate(r.proxima_reuniao)}</td>
+      <td class="mono">${fmtDate(r.proxima_data)}</td>
     </tr>`;
   }).join('');
 }
@@ -867,14 +1065,14 @@ function renderReunioes() {
 function openReuniaoDetalhe(id) {
   const r = reunioes.find(x => x.id === id);
   if (!r) return;
-  const pres = Array.isArray(r.presentes) ? r.presentes : [];
-  const presNames = pres.map(pid => getColabName(pid));
+  const pres = presencas.filter(p => p.reuniao_id === r.id && p.presente !== false);
+  const presNames = pres.map(p => getMembroNome(p.membro_id));
 
   document.getElementById('modal-reuniao-content').innerHTML = `
     <div class="detail-row">
       <div class="detail-item"><div class="label">Data</div><div class="value">${fmtDate(r.data)}</div></div>
       <div class="detail-item"><div class="label">Local</div><div class="value">${r.local || '--'}</div></div>
-      <div class="detail-item"><div class="label">Proxima Reuniao</div><div class="value">${fmtDate(r.proxima_reuniao)}</div></div>
+      <div class="detail-item"><div class="label">Proxima Reuniao</div><div class="value">${fmtDate(r.proxima_data)}</div></div>
     </div>
     <div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Pauta</div>
     <div style="font-size:12px;line-height:1.6;color:var(--text);">${r.pauta || '--'}</div></div>
@@ -882,8 +1080,8 @@ function openReuniaoDetalhe(id) {
     <div class="selected-tags">${presNames.map(n => `<span class="tag">${n}</span>`).join('')}</div></div>
     ${r.deliberacoes ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Deliberacoes</div>
     <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">${r.deliberacoes}</div></div>` : ''}
-    ${r.ata ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ata</div>
-    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:var(--font-mono);">${r.ata}</div></div>` : ''}
+    ${r.ata_texto ? `<div style="margin-top:12px;"><div class="label" style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;">Ata</div>
+    <div style="font-size:12px;line-height:1.6;color:var(--text);background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;font-family:var(--font-mono);">${r.ata_texto}</div></div>` : ''}
   `;
   document.getElementById('modal-reuniao').classList.add('open');
 }
@@ -919,6 +1117,7 @@ async function criarMandato() {
       status: 'ativo',
     });
     if (!res.ok) { toast('Erro ao criar mandato: ' + res.error, 'err'); return; }
+    RHAuth.log && RHAuth.log('cipa_mandato_criar', { numero, data_inicio: inicio, data_fim: fim });
     toast('Mandato criado com sucesso!');
     await loadMandatos();
     findCurrentMandato();
@@ -1040,6 +1239,7 @@ async function salvarAcao() {
   try {
     const res = await API.post('cipa_acoes', {
       reuniao_id: reuniaoId,
+      mandato_id: currentMandato ? currentMandato.id : null,
       acao,
       responsavel,
       prazo,
@@ -1060,7 +1260,8 @@ function renderAcoes() {
   const statusFilter = document.getElementById('acoes-filter-status').value;
   const reuniaoFilter = document.getElementById('acoes-filter-reuniao').value;
 
-  let filtered = acoes;
+  // Acoes do mandato corrente (linhas legadas sem mandato_id continuam visiveis)
+  let filtered = acoes.filter(a => !currentMandato || !a.mandato_id || a.mandato_id === currentMandato.id);
   if (statusFilter) filtered = filtered.filter(a => a.status === statusFilter);
   if (reuniaoFilter) filtered = filtered.filter(a => a.reuniao_id === reuniaoFilter);
 

@@ -240,25 +240,11 @@ function clsColor(c) {
   return m[(c||'').toLowerCase()] || 'var(--muted)';
 }
 
-/* ---- RPC ---- */
+/* ---- RPC (cliente padrao api.js — trata sessao expirada/renovacao) ---- */
 async function rpc(fnName, params) {
-  const raw = localStorage.getItem('rh_sess_v2');
-  if (!raw) throw new Error('Sessao nao encontrada');
-  const sess = JSON.parse(raw);
-  const r = await fetch(SB_URL + '/rest/v1/rpc/' + fnName, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + sess.access_token
-    },
-    body: JSON.stringify(params || {})
-  });
-  if (!r.ok) {
-    const e = await r.json().catch(() => ({}));
-    throw new Error(e.message || e.error || 'Erro ' + r.status);
-  }
-  return r.json();
+  const res = await API.rpc(fnName, params || {});
+  if (!res.ok) throw new Error(res.error || ('Erro ao chamar ' + fnName));
+  return res.data;
 }
 
 /* ---- Render KPIs ---- */

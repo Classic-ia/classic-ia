@@ -455,6 +455,15 @@ BEGIN
     WHERE id = v_exec_id;
 
     v_result := jsonb_build_object('execucao_id', v_exec_id, 'status', 'concluido', 'scores', v_scores, 'indicadores', v_indicadores, 'padroes', v_padroes, 'alertas', v_alertas, 'periodo', p_periodo);
+
+    -- trilha de auditoria (AUDITORIA_TRILHA, script 30)
+    BEGIN
+      INSERT INTO rh_audit_log (tabela, registro_id, acao, dados_novos, usuario_id)
+      VALUES ('motor_execucao', v_exec_id::text, 'motor_v2_executar', v_result,
+              NULLIF(current_setting('request.jwt.claim.sub', true), '')::uuid);
+    EXCEPTION WHEN OTHERS THEN
+      RAISE WARNING 'Audit log motor_v2_executar falhou: %', SQLERRM;
+    END;
   EXCEPTION WHEN OTHERS THEN
     UPDATE motor_execucao SET status = 'erro', fim = now(), erro = SQLERRM WHERE id = v_exec_id;
     RAISE;

@@ -98,9 +98,84 @@
 --                                                          (backend da aba
 --                                                          "Ações" em cipa.html)
 --
+-- 22  UNIFICACAO_SST.sql                    1 tabela       Sprint 1 P0: família
+--                                           (sst_aso_config) sst_* vira canônica
+--                                           ALTERs em      (ASOs, treinamentos,
+--                                           sst_acidente/  acidentes); migra
+--                                           sst_aso/       dados das rh_* legadas
+--                                           sst_tipo_trein e revoga escrita nelas
+--                                           4 RLS policies (PLANO_CORRECOES_SIGA)
+--
+-- 23  CORRECOES_CIPA.sql                    2 colunas      Sprint 1 P0: CIPA
+--                                           (deliberacoes, (deliberações em coluna
+--                                           empresa_slug)  própria; empresa no
+--                                                          canal de denúncias)
+--
+-- 24  WORKFLOW_DESLIGAMENTO_V2.sql          3 functions,   Sprint 1 P0: workflow
+--                                           1 trigger,     de desligamento
+--                                           10 colunas em  versionado (antes na
+--                                           rh_desligamentos raiz, fora da ordem);
+--                                                          executar grava registro
+--                                                          analítico; deprecia
+--                                                          registrar_desligamento_
+--                                                          completo (status inativo)
+--
+-- 25  DEPLOY_PAGAMENTOS_RH.sql              3 tabelas,     Sprint 1 P0: deploy das
+--                                           8 RLS policies tabelas fantasma de
+--                                                          pagamentos (dados
+--                                                          bancários LGPD, lotes,
+--                                                          log de exportação) com
+--                                                          RLS RBAC
+--
+-- 26  WORKFLOW_ADMISSAO_V2.sql              2 functions,   Sprint 2 P1: admissão
+--                                           2 colunas de   via processo (candidato
+--                                           rastreio,      aprovado -> funcionário);
+--                                           1 ALTER        rh_processo.funcionario_id
+--                                                          nullable; rastreio
+--                                                          candidato -> colaborador
+--
+-- 27  FERIAS_OPERACIONAL.sql                2 functions,   Sprint 2 P1: férias
+--                                           1 CHECK,       operacional — job de
+--                                           1 FK NOT VALID vencimento (pendente->
+--                                           1 trigger      vencida, CLT 134/137),
+--                                                          RPC ferias_programar
+--                                                          (abono 1/3 CLT 143);
+--                                                          ETL Convenia adiado
+--                                                          (payload sem amostra)
+--
+-- 28  TRIAGEM_DENUNCIAS.sql                 3 functions,   Sprint 2 P1: triagem de
+--                                           1 CHECK,       denúncias CIPA — RLS
+--                                           2 RLS policies (leitura admin/rh/sst;
+--                                           1 trigger      anon só via RPC c/
+--                                                          protocolo); consulta
+--                                                          pública por protocolo;
+--                                                          aberta -> em_analise ->
+--                                                          respondida|arquivada
+--
+-- 29  HARDENING_RLS_MODULOS.sql             ~80 policies   Sprint 3 P2: remove
+--                                           1 wrapper fn   TODAS as policies anon;
+--                                                          padrão RBAC cipa_acoes
+--                                                          em desligamentos, rs_*,
+--                                                          benefícios, sst_*,
+--                                                          eSocial e CIPA; guard
+--                                                          de perfil no
+--                                                          motor_decisoes()
+--
+-- 30  AUDITORIA_TRILHA.sql                  colunas +      Sprint 3 P2: unifica os
+--                                           2 RLS policies dois shapes divergentes
+--                                                          de rh_audit_log (frontend
+--                                                          RHAuth.log falhava
+--                                                          silenciosamente); trilha
+--                                                          append-only (sem UPDATE/
+--                                                          DELETE); RPCs de execução
+--                                                          (motor_v2_executar,
+--                                                          rh_executar_admissao)
+--                                                          passam a logar
+--
 -- ════════════════════════════════════════════════════════════════════════════
 -- TOTAIS ESPERADOS APÓS REBUILD LIMPO:
---   179 tabelas | 33 views | 70 functions | 62 triggers
---   66 tabelas com RLS | 226 policies
+--   180 tabelas | 33 views | 70+ functions | 63 triggers
+--   67 tabelas com RLS | 230 policies
+--   (totais a revalidar após UNIFICACAO_SST — rebuild local + contagem)
 --   0 erros | 0 tabelas sensíveis expostas
 -- ════════════════════════════════════════════════════════════════════════════

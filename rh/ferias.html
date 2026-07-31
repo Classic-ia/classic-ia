@@ -281,6 +281,40 @@
       </div>
     </div>
 
+    <!-- PROGRAMACAO DE FERIAS (admin/rh) -->
+    <div class="card mb-6" id="sectionProgramacao" style="display:none;">
+      <div class="card-header">
+        <div>
+          <h3>Programacao de Ferias</h3>
+          <p class="text-sm text-muted">Programe ou reprograme periodos pendentes, vencidos e programados</p>
+        </div>
+        <div style="display:flex;gap:var(--space-2);align-items:center;">
+          <button class="btn btn-secondary btn-sm" id="btnAtualizarStatus" title="Executa as transicoes automaticas (pendente->vencida, programada->em gozo, em gozo->gozada)">
+            Atualizar status
+          </button>
+          <span class="badge badge-info" id="badgeProgramacao">0</span>
+        </div>
+      </div>
+      <div class="data-table-wrapper" style="border:none;border-radius:0;">
+        <table class="data-table" id="tblProgramacao">
+          <thead>
+            <tr>
+              <th>Colaborador</th>
+              <th>Periodo Aquisitivo</th>
+              <th>Status</th>
+              <th>Direito</th>
+              <th>Gozo</th>
+              <th>Vendidos</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbodyProgramacao">
+            <tr><td colspan="7" class="table-empty"><div class="spinner" style="margin:0 auto;"></div></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
     <!-- LGPD -->
     <div class="lgpd-notice">
       Dados pessoais protegidos pela LGPD (Lei 13.709/2018). Uso restrito ao setor de RH para fins de gestao de ferias.
@@ -290,6 +324,58 @@
     <!-- Footer -->
     <div style="text-align:center;padding:var(--space-6) 0;font-size:var(--text-xs);color:var(--text-muted);">
       Classic RH &amp; SST v2026.03 &mdash; Classic Importacao e Exportacao de Couros Ltda
+    </div>
+  </div>
+</div>
+
+<!-- MODAL PROGRAMAR FERIAS -->
+<div class="modal-overlay" id="modalProgramar">
+  <div class="modal">
+    <div class="modal-header">
+      <h2>Programar Ferias</h2>
+      <button class="modal-close" id="modalProgramarClose">&times;</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="progFeriasId">
+      <div class="form-group">
+        <label class="form-label">Colaborador</label>
+        <input type="text" class="form-input" id="progColaborador" disabled>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Periodo Aquisitivo</label>
+          <input type="text" class="form-input" id="progPeriodo" disabled>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dias de Direito</label>
+          <input type="text" class="form-input" id="progDireito" disabled>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Data de Inicio<span class="required">*</span></label>
+          <input type="date" class="form-input" id="progDataInicio">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Dias de Gozo<span class="required">*</span></label>
+          <input type="number" class="form-input" id="progDias" min="5" max="30">
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Dias Vendidos (abono, max 1/3)</label>
+          <input type="number" class="form-input" id="progDiasVendidos" min="0" max="10" value="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Observacoes</label>
+          <input type="text" class="form-input" id="progObservacoes" placeholder="Opcional">
+        </div>
+      </div>
+      <p class="text-sm text-muted" id="progResumo"></p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" id="btnProgCancelar">Cancelar</button>
+      <button class="btn btn-primary" id="btnProgSalvar">Programar</button>
     </div>
   </div>
 </div>
@@ -355,7 +441,12 @@
   // =========================================================
   // 4. LOAD DATA
   // =========================================================
+  const podeProgramar = ['administrador','rh'].includes(perfil);
   loadFerias();
+  if (podeProgramar) {
+    document.getElementById('sectionProgramacao').style.display = '';
+    loadProgramacao();
+  }
 
   async function loadFerias() {
     try {
@@ -438,6 +529,132 @@
       `;
     }).join('');
   }
+
+  // =========================================================
+  // 5. PROGRAMACAO DE FERIAS (admin/rh)
+  // =========================================================
+  let feriasProgramaveis = [];
+
+  async function loadProgramacao() {
+    const tbody = document.getElementById('tbodyProgramacao');
+    try {
+      const res = await API.get('rh_ferias?select=*,rh_funcionarios(nome_completo,status)&status=in.(pendente,vencida,programada)&order=periodo_aquisitivo_fim.asc&limit=300');
+      if (!res.ok) throw new Error(res.error || 'Erro ao carregar periodos');
+
+      feriasProgramaveis = (res.data || []).filter(r => (r.rh_funcionarios?.status || 'ativo') === 'ativo');
+      document.getElementById('badgeProgramacao').textContent = feriasProgramaveis.length;
+
+      if (feriasProgramaveis.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="table-empty">Nenhum periodo pendente, vencido ou programado</td></tr>';
+        return;
+      }
+
+      const statusBadge = { vencida: 'badge-danger', pendente: 'badge-warning', programada: 'badge-info' };
+      tbody.innerHTML = feriasProgramaveis.map(r => `
+        <tr>
+          <td>${esc(r.rh_funcionarios?.nome_completo || '--')}</td>
+          <td>${formatDate(r.periodo_aquisitivo_inicio)} a ${formatDate(r.periodo_aquisitivo_fim)}</td>
+          <td><span class="badge ${statusBadge[r.status] || 'badge-info'}">${capitalize(r.status)}</span></td>
+          <td class="cell-center">${r.dias_direito || 30}</td>
+          <td>${r.data_inicio ? formatDate(r.data_inicio) + ' a ' + formatDate(r.data_fim) : '--'}</td>
+          <td class="cell-center">${r.dias_vendidos || 0}</td>
+          <td class="cell-center">
+            <button class="btn btn-secondary btn-sm" onclick="abrirModalProgramar('${r.id}')">
+              ${r.status === 'programada' ? 'Reprogramar' : 'Programar'}
+            </button>
+          </td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      console.warn('Programacao error:', e.message);
+      tbody.innerHTML = '<tr><td colspan="7" class="table-empty text-muted">Erro ao carregar periodos de ferias</td></tr>';
+    }
+  }
+
+  const modalProgramar = document.getElementById('modalProgramar');
+
+  window.abrirModalProgramar = function (id) {
+    const r = feriasProgramaveis.find(x => x.id === id);
+    if (!r) return;
+    document.getElementById('progFeriasId').value = r.id;
+    document.getElementById('progColaborador').value = r.rh_funcionarios?.nome_completo || '--';
+    document.getElementById('progPeriodo').value = formatDate(r.periodo_aquisitivo_inicio) + ' a ' + formatDate(r.periodo_aquisitivo_fim);
+    document.getElementById('progDireito').value = r.dias_direito || 30;
+    document.getElementById('progDataInicio').value = r.data_inicio || '';
+    document.getElementById('progDias').value = r.data_inicio && r.data_fim
+      ? (Math.round((new Date(r.data_fim) - new Date(r.data_inicio)) / 86400000) + 1)
+      : (r.dias_direito || 30) - (r.dias_vendidos || 0);
+    document.getElementById('progDiasVendidos').value = r.dias_vendidos || 0;
+    document.getElementById('progObservacoes').value = '';
+    document.getElementById('progResumo').textContent = '';
+    modalProgramar.classList.add('active');
+  };
+
+  function fecharModalProgramar() {
+    modalProgramar.classList.remove('active');
+  }
+  document.getElementById('modalProgramarClose').addEventListener('click', fecharModalProgramar);
+  document.getElementById('btnProgCancelar').addEventListener('click', fecharModalProgramar);
+  modalProgramar.addEventListener('click', e => { if (e.target === modalProgramar) fecharModalProgramar(); });
+
+  document.getElementById('btnProgSalvar').addEventListener('click', async () => {
+    const id = document.getElementById('progFeriasId').value;
+    const dataInicio = document.getElementById('progDataInicio').value;
+    const dias = parseInt(document.getElementById('progDias').value, 10);
+    const diasVendidos = parseInt(document.getElementById('progDiasVendidos').value, 10) || 0;
+    const resumo = document.getElementById('progResumo');
+
+    if (!dataInicio || !dias) {
+      resumo.textContent = 'Preencha data de inicio e dias de gozo.';
+      return;
+    }
+
+    const btn = document.getElementById('btnProgSalvar');
+    btn.disabled = true;
+    try {
+      const res = await API.rpc('ferias_programar', {
+        p_ferias_id: id,
+        p_data_inicio: dataInicio,
+        p_dias: dias,
+        p_dias_vendidos: diasVendidos,
+        p_abono: diasVendidos > 0,
+        p_observacoes: document.getElementById('progObservacoes').value || null
+      });
+      const payload = res.data;
+      if (!res.ok || !payload?.ok) {
+        resumo.textContent = payload?.error || res.error || 'Erro ao programar ferias';
+        return;
+      }
+      RHAuth.log && RHAuth.log('ferias_programar', { ferias_id: id, data_inicio: dataInicio, dias, dias_vendidos: diasVendidos });
+      fecharModalProgramar();
+      await Promise.all([loadFerias(), loadProgramacao()]);
+    } catch (e) {
+      resumo.textContent = 'Erro: ' + e.message;
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  document.getElementById('btnAtualizarStatus').addEventListener('click', async () => {
+    const btn = document.getElementById('btnAtualizarStatus');
+    btn.disabled = true;
+    try {
+      const res = await API.rpc('ferias_atualizar_vencidas', {});
+      const p = res.data;
+      if (!res.ok || !p?.ok) {
+        alert(p?.error || res.error || 'Erro ao atualizar status de ferias');
+        return;
+      }
+      alert('Status atualizados — vencidas: ' + (p.promovidas_vencida || 0) +
+            ', em gozo: ' + (p.iniciadas_gozo || 0) +
+            ', gozadas: ' + (p.concluidas_gozada || 0));
+      await Promise.all([loadFerias(), loadProgramacao()]);
+    } catch (e) {
+      alert('Erro: ' + e.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
 
   function showEmptyAll() {
     ['kpi-vencidas','kpi-pendentes','kpi-programadas','kpi-emgozo','kpi-gozadas'].forEach(id => setKPI(id, 0));

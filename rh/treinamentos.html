@@ -400,6 +400,7 @@
 <script>
 // =============== STATE ===============
 let allTipos = [];
+let canWrite = false;
 let allTreinamentos = [];
 let allColaboradores = [];
 let bulkColabs = []; // ids for bulk registration
@@ -410,6 +411,12 @@ let painelSortDir = 'asc';
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await RHAuth.init();
   if (!user) return;
+
+  canWrite = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWrite) {
+    document.querySelectorAll('.tab-btn[data-tab="cadastrar"], .tab-btn[data-tab="tipos"]')
+      .forEach(b => { b.style.display = 'none'; });
+  }
 
   initTabs();
   await carregarDados();
@@ -433,21 +440,29 @@ function initTabs() {
 // =============== DATA LOADING ===============
 async function carregarDados() {
   try {
+    // UNIFICACAO_SST: sst_treinamento / sst_tipo_treinamento sao as tabelas
+    // canonicas (leitura e gravacao na mesma). Adaptador mapeia as colunas
+    // sst_* para os nomes que o render usa.
     const [_resTipos, _resTrein, _resColab] = await Promise.all([
-      API.get('rh_treinamentos_tipos?ativo=eq.true&order=nome.asc'),
-      API.get('rh_treinamentos?select=*,rh_treinamentos_tipos(nome,nr,validade_meses),rh_colaboradores(nome)&order=data_vencimento.asc'),
+      API.get('sst_tipo_treinamento?ativo=eq.true&order=nome.asc'),
+      API.get('sst_treinamento?select=*,sst_tipo_treinamento(nome,norma_regulamentadora,validade_meses),rh_funcionarios(nome_completo)&order=data_validade.asc'),
       API.get('rh_colaboradores?status=eq.ativo&select=id,nome,cargo,setor&order=nome.asc'),
     ]);
     const tipos = _resTipos.ok ? _resTipos.data : [];
     const treinamentos = _resTrein.ok ? _resTrein.data : [];
     const colaboradores = _resColab.ok ? _resColab.data : [];
-    allTipos = tipos || [];
+    allTipos = (tipos || []).map(t => ({ ...t, nr: t.norma_regulamentadora }));
     allTreinamentos = (treinamentos || []).map(t => ({
       ...t,
-      _nome_colab: t.rh_colaboradores?.nome || '(sem nome)',
-      _nome_tipo: t.rh_treinamentos_tipos?.nome || '(sem tipo)',
-      _nr: t.rh_treinamentos_tipos?.nr || '',
-      _validade_meses: t.rh_treinamentos_tipos?.validade_meses ?? 0,
+      colaborador_id: t.funcionario_id,
+      tipo_id: t.tipo_treinamento_id,
+      data_vencimento: t.data_validade,
+      instituicao: t.instrutor,
+      numero_certificado: t.certificado_numero,
+      _nome_colab: t.rh_funcionarios?.nome_completo || '(sem nome)',
+      _nome_tipo: t.sst_tipo_treinamento?.nome || '(sem tipo)',
+      _nr: t.sst_tipo_treinamento?.norma_regulamentadora || '',
+      _validade_meses: t.sst_tipo_treinamento?.validade_meses ?? 0,
     }));
     allColaboradores = colaboradores || [];
   } catch (e) {
@@ -666,6 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 async function salvarTreinamento() {
+  if (!canWrite) { toast('Somente administrador, RH ou SST podem cadastrar treinamentos.', 'err'); return; }
   const isBulk = document.getElementById('modo-bulk').checked;
   const tipoId = document.getElementById('cad-tipo').value;
   const data = document.getElementById('cad-data').value;
@@ -701,13 +717,14 @@ async function salvarTreinamento() {
       data_realizacao: data,
       carga_horaria: carga ? parseFloat(carga) : null,
       instrutor: inst || null,
-      numero_certificado: cert || null,
+      certificado_numero: cert || null,
       data_validade: vencimento || null,
       observacoes: obs || null,
     }));
 
     const res = await API.post('sst_treinamento', registros, 'return=minimal');
     if (res.ok) {
+      RHAuth.log && RHAuth.log('sst_treinamento_cadastrar', { qtd: registros.length, tipo_treinamento_id: tipoId, data_realizacao: data });
       toast(`${registros.length} treinamento(s) registrado(s) com sucesso!`, 'ok');
       limparFormCadastro();
       await carregarDados();
@@ -860,6 +877,7 @@ function editarTipo(id) {
 }
 
 async function salvarTipo() {
+  if (!canWrite) { toast('Somente administrador, RH ou SST podem gerenciar tipos.', 'err'); return; }
   const id = document.getElementById('tipo-edit-id').value;
   const nome = document.getElementById('tipo-nome').value.trim();
   const nr = document.getElementById('tipo-nr').value.trim();
@@ -869,15 +887,15 @@ async function salvarTipo() {
 
   if (!nome) { toast('Informe o nome do tipo.', 'warn'); return; }
 
-  const payload = { nome, nr: nr || null, validade_meses: validade, obrigatorio, descricao: descricao || null };
+  const payload = { nome, norma_regulamentadora: nr || null, validade_meses: validade, obrigatorio, descricao: descricao || null };
 
   try {
     let res;
     if (id) {
-      res = await API.patch(`rh_treinamentos_tipos?id=eq.${id}`, payload);
+      res = await API.patch(`sst_tipo_treinamento?id=eq.${id}`, payload);
     } else {
       payload.ativo = true;
-      res = await API.post('rh_treinamentos_tipos', payload, 'return=minimal');
+      res = await API.post('sst_tipo_treinamento', payload, 'return=minimal');
     }
     if (res.ok) {
       toast(id ? 'Tipo atualizado!' : 'Tipo criado!', 'ok');
@@ -895,7 +913,7 @@ async function salvarTipo() {
 
 async function desativarTipo(id, ativoAtual) {
   try {
-    const res = await API.patch(`rh_treinamentos_tipos?id=eq.${id}`, { ativo: !ativoAtual });
+    const res = await API.patch(`sst_tipo_treinamento?id=eq.${id}`, { ativo: !ativoAtual });
     if (res.ok) {
       toast(ativoAtual ? 'Tipo desativado.' : 'Tipo reativado.', 'ok');
       await carregarDados();

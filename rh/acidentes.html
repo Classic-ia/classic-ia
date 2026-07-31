@@ -440,6 +440,7 @@
 // ══════════════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════════════
+let canWrite = false;
 let allAcidentes = [];
 let allColaboradores = [];
 let chartMes, chartSetor, chartTipo, chartCorpo;
@@ -468,6 +469,17 @@ const STATUS_LABELS = { registrado: 'Registrado', investigando: 'Investigando', 
 document.addEventListener('DOMContentLoaded', async () => {
   const user = await RHAuth.init();
   if (!user) return;
+
+  canWrite = ['administrador','rh','sst'].includes(user.perfil);
+  if (!canWrite) {
+    document.querySelectorAll('.tab-btn[data-tab="registrar"], .tab-btn[data-tab="investigacao"]')
+      .forEach(b => { b.style.display = 'none'; });
+    // aba inicial e "registrar" — leva leitores direto ao historico
+    const histBtn = document.querySelector('.tab-btn[data-tab="historico"]');
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    if (histBtn) { histBtn.classList.add('active'); document.getElementById('tab-historico').classList.add('active'); }
+  }
 
   setupTabs();
   setupCatToggle();
@@ -505,8 +517,23 @@ async function loadColaboradores() {
 }
 
 async function loadAcidentes() {
-  const res = await API.get('rh_acidentes?select=*,rh_colaboradores(nome,setor,cargo)&order=data_hora.desc');
-  allAcidentes = res.ok ? res.data : [];
+  // UNIFICACAO_SST: sst_acidente e a tabela canonica (leitura e gravacao na
+  // mesma). Adaptador mapeia as colunas sst_* para os nomes que o render usa;
+  // dados do colaborador vem do allColaboradores ja carregado (mesmos ids).
+  const res = await API.get('sst_acidente?select=*&order=data_ocorrencia.desc,created_at.desc');
+  const raw = res.ok ? res.data : [];
+  const colabMap = {};
+  (allColaboradores || []).forEach(c => { colabMap[c.id] = c; });
+  allAcidentes = raw.map(a => ({
+    ...a,
+    colaborador_id: a.funcionario_id,
+    tipo: a.tipo_acidente,
+    data_hora: a.data_ocorrencia ? a.data_ocorrencia + 'T' + (a.hora_ocorrencia || '00:00:00') : null,
+    local_setor: a.local_ocorrencia,
+    numero_cat: a.cat_numero,
+    dias_afastados: a.dias_afastamento,
+    rh_colaboradores: colabMap[a.funcionario_id] || null
+  }));
 }
 
 // ══════════════════════════════════════════════════════════
@@ -625,6 +652,7 @@ function populateYearSelects() {
 // ══════════════════════════════════════════════════════════
 document.addEventListener('click', async e => {
   if (e.target.id !== 'btn-salvar-acidente') return;
+  if (!canWrite) return showToast('Somente administrador, RH ou SST podem registrar acidentes.', 'err');
 
   const tipo = document.getElementById('reg-tipo').value;
   const colabId = document.getElementById('reg-colab-id').value;
@@ -635,18 +663,21 @@ document.addEventListener('click', async e => {
     return showToast('Preencha os campos obrigatorios: tipo, colaborador, data/hora e gravidade.', 'err');
   }
 
+  // UNIFICACAO_SST: colunas canonicas de sst_acidente (data/hora separadas,
+  // cat_numero, dias_afastamento; CHECKs de tipo/status ampliados na migration)
   const payload = {
     funcionario_id: colabId,
     tipo_acidente: tipo,
-    data_ocorrencia: new Date(dataHora).toISOString(),
+    data_ocorrencia: dataHora.slice(0, 10),
+    hora_ocorrencia: dataHora.length >= 16 ? dataHora.slice(11, 16) : null,
     local_ocorrencia: document.getElementById('reg-local').value || null,
     descricao: document.getElementById('reg-descricao').value || null,
     parte_corpo: document.getElementById('reg-parte-corpo').value || null,
     agente_causador: document.getElementById('reg-agente').value || null,
     gravidade,
     cat_emitida: document.getElementById('reg-cat-emitida').value === 'true',
-    numero_cat: document.getElementById('reg-numero-cat').value || null,
-    dias_afastados: parseInt(document.getElementById('reg-dias-afastados').value) || 0,
+    cat_numero: document.getElementById('reg-numero-cat').value || null,
+    dias_afastamento: parseInt(document.getElementById('reg-dias-afastados').value) || 0,
     testemunhas: document.getElementById('reg-testemunhas').value || null,
     medidas_imediatas: document.getElementById('reg-medidas').value || null,
     status: 'registrado',
@@ -1000,6 +1031,7 @@ document.addEventListener('click', e => {
 // Save investigacao
 document.addEventListener('click', async e => {
   if (e.target.id !== 'btn-salvar-inv') return;
+  if (!canWrite) return showToast('Somente administrador, RH ou SST podem salvar investigacoes.', 'err');
 
   const id = document.getElementById('inv-acidente').value;
   if (!id) return showToast('Selecione um acidente.', 'warn');
